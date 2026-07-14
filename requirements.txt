@@ -1,0 +1,9 @@
+# Python dependencies for SolidVision
+# This file will be expanded as the backend evolves.
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+pytest
+pytest-mock
+python-dotenv
