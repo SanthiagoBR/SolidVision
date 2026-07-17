@@ -1,0 +1,20 @@
+# Runtime dependencies for the backend infrastructure and API stack
+fastapi
+uvicorn
+sqlalchemy
+psycopg[binary]
+pgvector
+alembic
+pydantic
+pydantic-settings
+python-dotenv
+pillow
+
+# Testing dependencies for unit and integration test execution
+pytest
+pytest-cov
+
+# Development dependencies for formatting, linting, and type checking
+black
+ruff
+mypy

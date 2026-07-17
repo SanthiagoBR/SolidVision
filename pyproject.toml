@@ -1,0 +1,63 @@
+[project]
+name = "solidvision"
+version = "0.1.0"
+description = "SolidVision backend development environment"
+requires-python = ">=3.12"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | __pycache__
+  | migrations
+  | alembic
+)/
+'''
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+fix = true
+show-fixes = true
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "alembic",
+    "migrations",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+files = ["backend/app", "backend/tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers"
+pythonpath = [".", "backend"]

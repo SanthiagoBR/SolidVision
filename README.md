@@ -1,7 +1,7 @@
 # SolidVision 📷 🚀
 > **Plataforma Inteligente de Recuperação de Imagens para Acervos Fotográficos Baseada em Embeddings**
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Container-2496ED.svg)](https://www.docker.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791.svg)](https://github.com/pgvector/pgvector)
@@ -33,6 +33,48 @@ O projeto destaca-se pelo rigor técnico e sustentabilidade arquitetural [12, 13
 
 ---
 
+## 🐍 Ambiente de Desenvolvimento Python
+
+Este projeto requer Python 3.12 para desenvolvimento local.
+
+### Criar e ativar um ambiente virtual
+No PowerShell do Windows:
+```bash
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+No Linux/macOS:
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+### Instalar dependências
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r backend/requirements.txt
+```
+
+### Executar verificações de qualidade
+```bash
+ruff check backend
+black --check backend
+mypy backend
+pytest
+```
+
+### Configuração de ambiente
+Os valores de configuração são carregados a partir de um arquivo `.env` por meio da camada de settings em `backend/app/infrastructure/config/settings.py`.
+
+### Logging
+A infraestrutura de logging centraliza a criação de loggers em `backend/app/infrastructure/logging/`. Os módulos devem usar `get_logger(__name__)` para obter um logger configurado sem criar handlers manualmente.
+
+### Formatar código
+```bash
+black backend
+```
+
 ## ⚙️ Funcionamento do Pipeline
 
 O sistema processa a informação em quatro fases fundamentais [7, 10, 14, 15]:
@@ -59,5 +101,56 @@ O projeto monitora a eficiência da solução através de métricas como [17]:
 
 ---
 
-## 📄 Licença
+## � Infraestrutura Docker
+
+### Pré-requisitos
+- Docker Desktop ou Docker Engine instalado e em execução.
+- Docker Compose disponível no ambiente.
+
+### Iniciar o banco PostgreSQL com pgvector
+```bash
+docker compose up -d
+```
+
+### Parar o banco PostgreSQL
+```bash
+docker compose down
+```
+
+### Reconstruir os containers
+```bash
+docker compose up -d --build
+```
+
+### Conectar ao PostgreSQL
+Use as credenciais padrão abaixo:
+- Host: `postgres`
+- Porta: `5432`
+- Banco: `solidvision`
+- Usuário: `solidvision`
+- Senha: `solidvision`
+
+Você também pode acessar o container com:
+```bash
+docker compose exec postgres psql -U solidvision -d solidvision
+```
+
+### Scripts de inicialização
+Os scripts de inicialização do PostgreSQL ficam em:
+```text
+docker/postgres/init/
+```
+Atualmente, o script `init-pgvector.sql` cria a extensão `vector` automaticamente.
+
+### Verificar se o pgvector está instalado
+```bash
+docker compose exec postgres psql -U solidvision -d solidvision -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+Você também pode verificar o status do container e do healthcheck com:
+```bash
+docker compose ps
+```
+
+## �📄 Licença
 Este projeto está licenciado sob a **Creative Commons Attribution 4.0 International License** [1, 18].
