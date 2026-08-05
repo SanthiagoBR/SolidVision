@@ -261,6 +261,16 @@ Repository Interfaces
 domain/repositories/image_repository.py
 ```
 
+Domain Services (non-persistence contracts, e.g. AI model ports)
+
+```
+domain/services/embedding_model_port.py
+```
+
+One service contract per file. Domain Services differ from Repositories:
+repositories persist/retrieve existing entities; services represent
+behavior or transformation contracts (e.g. generating an embedding).
+
 Concrete implementations
 
 ```
