@@ -5,7 +5,6 @@ from app.domain.exceptions import (
     DomainError,
     ImageAlreadyExistsError,
     ImageNotFoundError,
-    InvalidEmbeddingVectorError,
     InvalidImageIdentifierError,
     InvalidImagePathError,
     UnsupportedImageExtensionError,
