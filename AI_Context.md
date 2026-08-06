@@ -258,7 +258,8 @@ One value object per file.
 Repository Interfaces
 
 ```
-domain/repositories/image_repository.py
+domain/repositories/
+image_repository.py
 ```
 
 Domain Services (non-persistence contracts, e.g. AI model ports)
