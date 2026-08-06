@@ -1,1 +1,0 @@
-"""Application ports package."""
