@@ -58,6 +58,18 @@ def test_save_leaves_embedding_none(db_session: Session) -> None:
     assert row.embedding is None
 
 
+def test_save_leaves_incremental_metadata_none(db_session: Session) -> None:
+    repository = PostgresImageRepository(db_session)
+    image = _build_image()
+
+    repository.save(image)
+
+    row = db_session.get(ImageModel, image.id.value)
+    assert row is not None
+    assert row.file_size is None
+    assert row.file_modified_at is None
+
+
 def test_get_returns_domain_image_not_orm_model(db_session: Session) -> None:
     repository = PostgresImageRepository(db_session)
     image = _build_image()
@@ -81,6 +93,20 @@ def test_get_preserves_all_domain_fields(db_session: Session) -> None:
     assert result.path == image.path
     assert result.filename == image.filename
     assert result.extension == image.extension
+
+
+def test_get_result_is_independent_of_persistence_metadata(
+    db_session: Session,
+) -> None:
+    repository = PostgresImageRepository(db_session)
+    image = _build_image()
+    repository.save(image)
+
+    result = repository.get(image.id)
+
+    assert result is not None
+    assert not hasattr(result, "file_size")
+    assert not hasattr(result, "file_modified_at")
 
 
 def test_get_missing_image_returns_none(db_session: Session) -> None:

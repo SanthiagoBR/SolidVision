@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import BigInteger, DateTime
 
 from app.infrastructure.database.models.image_model import ImageModel
 
@@ -21,6 +22,21 @@ def test_image_model_embedding_column_matches_pgvector_schema() -> None:
     assert isinstance(embedding_column.type, Vector)
     assert embedding_column.type.dim == 1152
     assert embedding_column.nullable is True
+
+
+def test_image_model_file_size_column_matches_schema() -> None:
+    file_size_column = ImageModel.__table__.c.file_size
+
+    assert isinstance(file_size_column.type, BigInteger)
+    assert file_size_column.nullable is True
+
+
+def test_image_model_file_modified_at_column_matches_schema() -> None:
+    file_modified_at_column = ImageModel.__table__.c.file_modified_at
+
+    assert isinstance(file_modified_at_column.type, DateTime)
+    assert file_modified_at_column.type.timezone is True
+    assert file_modified_at_column.nullable is True
 
 
 def test_domain_imports_do_not_depend_on_sqlalchemy() -> None:

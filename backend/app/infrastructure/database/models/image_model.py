@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import String, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, String, UniqueConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +30,10 @@ class ImageModel(Base):
     filename: Mapped[str] = mapped_column(String, nullable=False)
     extension: Mapped[str] = mapped_column(String, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1152), nullable=True)
+    file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    file_modified_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (UniqueConstraint("path", name="uq_images_path"),)
 
@@ -36,9 +41,9 @@ class ImageModel(Base):
     def from_domain(cls, image: Image) -> ImageModel:
         """Create an ORM model from a domain entity.
 
-        The Domain `Image` entity has no embedding field, so the persisted
-        embedding is left unset here; it is populated separately by the
-        indexing pipeline once it exists.
+        The Domain `Image` entity has no embedding or filesystem metadata
+        fields, so those persistence-only columns are left unset here; they
+        are populated separately by the indexing pipeline once it exists.
         """
         return cls(
             id=image.id.value,
@@ -46,6 +51,8 @@ class ImageModel(Base):
             filename=image.filename,
             extension=image.extension,
             embedding=None,
+            file_size=None,
+            file_modified_at=None,
         )
 
     def to_domain(self) -> Image:
