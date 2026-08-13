@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from pgvector.sqlalchemy import Vector
+
 from app.infrastructure.database.models.image_model import ImageModel
 
 
@@ -10,8 +12,15 @@ def test_image_model_uses_expected_table_metadata() -> None:
     assert ImageModel.__tablename__ == "images"
     assert ImageModel.__table__.primary_key is not None
     assert ImageModel.__table__.c.path.unique is True
-    assert "embedding" not in ImageModel.__table__.c
     assert "collection_name" not in ImageModel.__table__.c
+
+
+def test_image_model_embedding_column_matches_pgvector_schema() -> None:
+    embedding_column = ImageModel.__table__.c.embedding
+
+    assert isinstance(embedding_column.type, Vector)
+    assert embedding_column.type.dim == 1152
+    assert embedding_column.nullable is True
 
 
 def test_domain_imports_do_not_depend_on_sqlalchemy() -> None:

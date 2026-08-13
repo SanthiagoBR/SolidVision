@@ -57,3 +57,14 @@ def test_image_has_no_infrastructure_behavior() -> None:
 
     assert not hasattr(image, "database")
     assert not hasattr(image, "session")
+
+
+def test_image_has_no_embedding_field() -> None:
+    image = Image(
+        id=ImageId(uuid.uuid4()),
+        path=ImagePath("images/example.png"),
+        filename="example",
+        extension="png",
+    )
+
+    assert not hasattr(image, "embedding")

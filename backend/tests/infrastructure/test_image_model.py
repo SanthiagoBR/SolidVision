@@ -24,6 +24,19 @@ def test_from_domain_copies_fields() -> None:
     assert model.extension == image.extension
 
 
+def test_from_domain_leaves_embedding_unset() -> None:
+    image = Image(
+        id=ImageId(uuid.uuid4()),
+        path=ImagePath("images/example.png"),
+        filename="example",
+        extension="png",
+    )
+
+    model = ImageModel.from_domain(image)
+
+    assert model.embedding is None
+
+
 def test_to_domain_reconstructs_value_objects() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
@@ -41,6 +54,38 @@ def test_to_domain_reconstructs_value_objects() -> None:
     assert reconstructed.extension == image.extension
     assert isinstance(reconstructed.id, ImageId)
     assert isinstance(reconstructed.path, ImagePath)
+
+
+def test_to_domain_ignores_unset_embedding() -> None:
+    image = Image(
+        id=ImageId(uuid.uuid4()),
+        path=ImagePath("images/example.png"),
+        filename="example",
+        extension="png",
+    )
+    model = ImageModel.from_domain(image)
+    assert model.embedding is None
+
+    reconstructed = model.to_domain()
+
+    assert not hasattr(reconstructed, "embedding")
+    assert reconstructed == image
+
+
+def test_to_domain_ignores_populated_embedding() -> None:
+    image = Image(
+        id=ImageId(uuid.uuid4()),
+        path=ImagePath("images/example.png"),
+        filename="example",
+        extension="png",
+    )
+    model = ImageModel.from_domain(image)
+    model.embedding = [0.1] * 1152
+
+    reconstructed = model.to_domain()
+
+    assert not hasattr(reconstructed, "embedding")
+    assert reconstructed == image
 
 
 def test_round_trip_preserves_fields_individually() -> None:

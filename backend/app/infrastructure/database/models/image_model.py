@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,17 +28,24 @@ class ImageModel(Base):
     path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     extension: Mapped[str] = mapped_column(String, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1152), nullable=True)
 
     __table_args__ = (UniqueConstraint("path", name="uq_images_path"),)
 
     @classmethod
     def from_domain(cls, image: Image) -> ImageModel:
-        """Create an ORM model from a domain entity."""
+        """Create an ORM model from a domain entity.
+
+        The Domain `Image` entity has no embedding field, so the persisted
+        embedding is left unset here; it is populated separately by the
+        indexing pipeline once it exists.
+        """
         return cls(
             id=image.id.value,
             path=str(image.path),
             filename=image.filename,
             extension=image.extension,
+            embedding=None,
         )
 
     def to_domain(self) -> Image:
