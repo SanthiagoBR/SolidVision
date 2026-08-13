@@ -7,17 +7,24 @@ from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
-from app.infrastructure.persistence.in_memory_image_repository import (
-    InMemoryImageRepository,
+from app.infrastructure.persistence.postgres_image_repository import (
+    PostgresImageRepository,
 )
+from app.infrastructure.persistence.session import SessionLocal
 
-_image_repository = InMemoryImageRepository()
 _embedding_model = FakeEmbeddingModel()
 
 
 def get_image_repository() -> ImageRepository:
-    """Return the shared in-memory repository instance."""
-    return _image_repository
+    """Return a PostgreSQL-backed repository bound to a new session.
+
+    A new session is opened per call rather than shared as a singleton,
+    since a SQLAlchemy Session is not safe to reuse across concurrent
+    requests. `InMemoryImageRepository` remains available in
+    `app.infrastructure.persistence.in_memory_image_repository` for
+    Application-layer unit tests that must not depend on a real database.
+    """
+    return PostgresImageRepository(SessionLocal())
 
 
 def get_embedding_model() -> EmbeddingModelPort:
