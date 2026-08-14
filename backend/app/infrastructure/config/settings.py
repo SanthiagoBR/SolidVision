@@ -60,6 +60,10 @@ class Settings(BaseSettings):
         default=SUPPORTED_IMAGE_EXTENSIONS,
         description="Supported image extensions",
     )
+    indexing_root_path: Path = Field(
+        default=Path("data/images"),
+        description="Root directory scanned by the indexing worker",
+    )
 
     top_k_results: int = Field(
         default=10,
