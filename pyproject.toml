@@ -37,7 +37,7 @@ select = ["E", "F", "I", "N", "UP"]
 ignore = []
 
 [tool.ruff.lint.isort]
-known-first-party = ["app"]
+known-first-party = ["app", "dataset_tools"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -54,7 +54,7 @@ warn_unused_ignores = true
 warn_unreachable = true
 show_error_codes = true
 pretty = true
-files = ["backend/app", "backend/tests"]
+files = ["backend/app", "backend/tests", "backend/dataset_tools"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]

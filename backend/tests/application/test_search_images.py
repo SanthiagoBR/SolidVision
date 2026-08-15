@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import uuid
 
-from tests.application.fakes import FakeImageRepository
-
 from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.entities.image import Image
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
+from tests.application.fakes import FakeImageRepository
 
 
 def test_search_images_encodes_query_and_returns_repository_results() -> None:

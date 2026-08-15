@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "note": "Retrieval ground truth for the demo corpus (RFC-022 5.3). Dormant until a real embedding model implements EmbeddingModelPort -- see backend/tests/dataset/test_queries.py. Every relevant/hard_negative path must exist in manifest.json.",
+  "queries": [
+    {
+      "query": "rural property with a small lake",
+      "relevant": [
+        "images/aerial/rural/lake_property_01.jpg",
+        "images/aerial/rural/lake_property_02.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/rural/fish_ponds_01.jpg",
+        "images/aerial/rural/hillside_property_pool_01.jpg",
+        "images/aerial/rural/cleared_lot_forest_edge.jpg"
+      ]
+    },
+    {
+      "query": "hillside property with a swimming pool",
+      "relevant": [
+        "images/aerial/rural/hillside_property_pool_01.jpg",
+        "images/aerial/rural/hillside_property_pool_02.jpg",
+        "images/aerial/rural/hillside_property_pool_03.jpg",
+        "images/aerial/rural/hillside_property_pool_04.jpg",
+        "images/aerial/rural/hillside_property_pool_05.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/rural/lake_property_01.jpg",
+        "images/aerial/rural/cleared_lot_01.jpg"
+      ]
+    },
+    {
+      "query": "artificial fish farming ponds in a valley",
+      "relevant": [
+        "images/aerial/rural/fish_ponds_01.jpg",
+        "images/aerial/rural/fish_ponds_02.jpg",
+        "images/aerial/rural/fish_ponds_03.jpg",
+        "images/aerial/rural/fish_ponds_04.jpg",
+        "images/aerial/rural/fish_ponds_05.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/rural/lake_property_01.jpg",
+        "images/aerial/rural/cleared_lot_forest_edge.jpg"
+      ]
+    },
+    {
+      "query": "industrial warehouse beside farmland",
+      "relevant": [
+        "images/aerial/rural/rural_industrial_warehouse_01.jpg",
+        "images/aerial/rural/rural_industrial_warehouse_02.jpg",
+        "images/aerial/rural/rural_industrial_warehouse_03.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/rural/cleared_lot_01.jpg",
+        "images/aerial/urban/urban_hillside_town_03.jpg"
+      ]
+    },
+    {
+      "query": "cleared construction lot with exposed red soil",
+      "relevant": [
+        "images/aerial/rural/cleared_lot_01.jpg",
+        "images/aerial/rural/cleared_lot_02.jpg",
+        "images/aerial/rural/cleared_lot_03.jpg",
+        "images/aerial/rural/cleared_lot_04.jpg",
+        "images/aerial/rural/cleared_lot_05.jpg",
+        "images/aerial/rural/cleared_lot_forest_edge.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/rural/hillside_property_pool_01.jpg",
+        "images/aerial/rural/fish_ponds_01.jpg"
+      ]
+    },
+    {
+      "query": "town intersection with a car dealership",
+      "relevant": [
+        "images/aerial/urban/urban_intersection_dealership_01.jpg",
+        "images/aerial/urban/urban_intersection_dealership_02.jpg",
+        "images/aerial/urban/urban_intersection_dealership_03.jpg",
+        "images/aerial/urban/urban_intersection_dealership_04.jpg",
+        "images/aerial/urban/urban_intersection_dealership_05.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/urban/urban_storefront_street_01.jpg",
+        "images/aerial/urban/urban_commercial_street_01.jpg"
+      ]
+    },
+    {
+      "query": "commercial street with shops and storefronts",
+      "relevant": [
+        "images/aerial/urban/urban_storefront_street_01.jpg",
+        "images/aerial/urban/urban_storefront_street_02.jpg",
+        "images/aerial/urban/urban_storefront_street_03.jpg",
+        "images/aerial/urban/urban_storefront_street_04.jpg",
+        "images/aerial/urban/urban_commercial_street_01.jpg",
+        "images/aerial/urban/urban_commercial_street_02.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/urban/urban_intersection_dealership_01.jpg",
+        "images/aerial/urban/urban_residential_street_01.jpg"
+      ]
+    },
+    {
+      "query": "residential street lined with houses",
+      "relevant": [
+        "images/aerial/urban/urban_residential_street_01.jpg",
+        "images/aerial/urban/urban_residential_street_02.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/urban/urban_suburban_overview_01.jpg",
+        "images/aerial/urban/urban_hillside_town_01.jpg"
+      ]
+    },
+    {
+      "query": "hillside town overview with dense houses",
+      "relevant": [
+        "images/aerial/urban/urban_hillside_town_01.jpg",
+        "images/aerial/urban/urban_hillside_town_02.jpg",
+        "images/aerial/urban/urban_hillside_town_03.jpg",
+        "images/aerial/urban/urban_suburban_overview_01.jpg",
+        "images/aerial/urban/urban_suburban_overview_02.jpg",
+        "images/aerial/urban/urban_suburban_overview_03.jpg"
+      ],
+      "hard_negatives": [
+        "images/aerial/rural/rural_industrial_warehouse_01.jpg",
+        "images/aerial/urban/urban_residential_street_01.jpg"
+      ]
+    }
+  ]
+}

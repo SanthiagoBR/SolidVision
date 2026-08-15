@@ -1,0 +1,170 @@
+"""Run the real indexing pipeline against the materialized demo corpus.
+
+Uses `PostgresImageRepository` and the `db_session` fixture (SAVEPOINT-
+isolated, rolled back on teardown -- see `backend/tests/conftest.py`), so
+these tests require a running database but never leave rows behind.
+
+Assertions target specific manifest entries by their computed id rather
+than the repository's total row count, since the shared development
+database may hold unrelated rows committed by other work.
+"""
+
+from __future__ import annotations
+
+import datetime
+import os
+from pathlib import Path
+
+from sqlalchemy.orm import Session
+
+from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
+from app.domain.entities.image import Image
+from app.domain.value_objects.image_path import ImagePath
+from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
+from app.infrastructure.config.constants import SUPPORTED_IMAGE_EXTENSIONS
+from app.infrastructure.filesystem.discovered_image_file import DiscoveredImageFile
+from app.infrastructure.filesystem.filesystem_image_provider import (
+    FilesystemImageProvider,
+)
+from app.infrastructure.filesystem.image_identity import compute_image_id
+from app.infrastructure.persistence.postgres_image_repository import (
+    PostgresImageRepository,
+)
+from app.infrastructure.workers.indexing_worker import IndexingWorker
+from dataset_tools.manifest import DEMO_MANIFEST_PATH, load_manifest
+
+DEMO_MANIFEST = load_manifest(DEMO_MANIFEST_PATH)
+
+
+def _to_image(discovered: DiscoveredImageFile) -> Image:
+    """Build the domain entity the worker would build for a discovered file."""
+    path = ImagePath(str(discovered.path))
+    return Image(
+        id=compute_image_id(path),
+        path=path,
+        filename=discovered.filename,
+        extension=discovered.extension,
+    )
+
+
+def test_worker_indexes_every_manifest_entry(
+    demo_corpus: Path, db_session: Session
+) -> None:
+    """A first run indexes all 40 committed photos into PostgreSQL."""
+    repository = PostgresImageRepository(db_session)
+    worker = IndexingWorker(
+        filesystem_provider=FilesystemImageProvider(
+            demo_corpus, SUPPORTED_IMAGE_EXTENSIONS
+        ),
+        index_or_update_use_case=IndexOrUpdateImageUseCase(
+            repository=repository,
+            embedding_model=FakeEmbeddingModel(),
+        ),
+    )
+    worker.run()
+
+    for entry in DEMO_MANIFEST.images:
+        expected_path = ImagePath(str(demo_corpus / entry.relative_path))
+        expected_id = compute_image_id(expected_path)
+        assert repository.exists(expected_id), entry.relative_path
+
+
+def test_worker_persists_embeddings_of_the_configured_dimension(
+    demo_corpus: Path, db_session: Session
+) -> None:
+    """A spot check that indexing actually reaches the vector column."""
+    repository = PostgresImageRepository(db_session)
+    worker = IndexingWorker(
+        filesystem_provider=FilesystemImageProvider(
+            demo_corpus, SUPPORTED_IMAGE_EXTENSIONS
+        ),
+        index_or_update_use_case=IndexOrUpdateImageUseCase(
+            repository=repository,
+            embedding_model=FakeEmbeddingModel(),
+        ),
+    )
+    worker.run()
+
+    sample_entry = DEMO_MANIFEST.images[0]
+    sample_id = compute_image_id(
+        ImagePath(str(demo_corpus / sample_entry.relative_path))
+    )
+    metadata = repository.get_index_metadata(sample_id)
+    assert metadata is not None
+    assert metadata.file_size is not None
+    assert metadata.file_modified_at == sample_entry.file_modified_at
+
+
+def test_second_run_skips_every_unchanged_file(
+    demo_corpus: Path, db_session: Session
+) -> None:
+    """Incremental indexing re-indexes nothing when the corpus is untouched.
+
+    Calls `IndexOrUpdateImageUseCase.execute()` directly (mirroring the
+    body of `IndexingWorker.run()`) to capture the per-file skip/index
+    result, which `IndexingWorker.run()` itself only logs.
+    """
+    repository = PostgresImageRepository(db_session)
+    use_case = IndexOrUpdateImageUseCase(
+        repository=repository,
+        embedding_model=FakeEmbeddingModel(),
+    )
+    provider = FilesystemImageProvider(demo_corpus, SUPPORTED_IMAGE_EXTENSIONS)
+
+    def run_pass() -> list[bool]:
+        return [
+            use_case.execute(
+                image=_to_image(discovered),
+                file_size=discovered.file_size,
+                file_modified_at=discovered.file_modified_at,
+            )
+            for discovered in provider.discover()
+        ]
+
+    first_run = run_pass()
+    second_run = run_pass()
+
+    assert len(first_run) == len(DEMO_MANIFEST.images)
+    assert all(first_run), "every manifest entry should index on a first run"
+    assert not any(second_run), "an unchanged demo photo must not be re-indexed"
+
+
+def test_touching_one_file_reindexes_only_that_file(
+    demo_corpus: Path, db_session: Session
+) -> None:
+    """Changing one file's mtime re-indexes it without disturbing the rest."""
+    repository = PostgresImageRepository(db_session)
+    use_case = IndexOrUpdateImageUseCase(
+        repository=repository,
+        embedding_model=FakeEmbeddingModel(),
+    )
+    provider = FilesystemImageProvider(demo_corpus, SUPPORTED_IMAGE_EXTENSIONS)
+
+    def run_pass() -> dict[str, bool]:
+        return {
+            str(discovered.path): use_case.execute(
+                image=_to_image(discovered),
+                file_size=discovered.file_size,
+                file_modified_at=discovered.file_modified_at,
+            )
+            for discovered in provider.discover()
+        }
+
+    run_pass()
+
+    touched_entry = DEMO_MANIFEST.images[0]
+    touched_path = demo_corpus / touched_entry.relative_path
+    new_timestamp = (
+        touched_entry.file_modified_at + datetime.timedelta(days=1)
+    ).timestamp()
+    os.utime(touched_path, (new_timestamp, new_timestamp))
+
+    second_pass = run_pass()
+
+    assert second_pass[str(touched_path)] is True
+    untouched_results = {
+        path: result
+        for path, result in second_pass.items()
+        if path != str(touched_path)
+    }
+    assert not any(untouched_results.values())

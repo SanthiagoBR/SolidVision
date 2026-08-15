@@ -3,8 +3,6 @@ from __future__ import annotations
 import datetime
 import uuid
 
-from tests.application.fakes import FakeImageRepository
-
 from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
@@ -12,6 +10,7 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
+from tests.application.fakes import FakeImageRepository
 
 
 class _RecordingEmbeddingModel(EmbeddingModelPort):

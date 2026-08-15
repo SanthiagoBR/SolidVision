@@ -10,3 +10,6 @@ venv/
 .mypy_cache/
 .idea/
 .DS_Store
+
+# Runtime data materialized by the indexing worker / dataset_tools (RFC-022 9.1)
+data/

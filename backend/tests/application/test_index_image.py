@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import uuid
 
-from tests.application.fakes import FakeImageRepository
-
 from app.application.use_cases.index_image import IndexImageUseCase
 from app.domain.entities.image import Image
 from app.domain.exceptions import ImageAlreadyExistsError
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
+from tests.application.fakes import FakeImageRepository
 
 
 def test_index_image_saves_new_image_and_generates_embedding() -> None:
