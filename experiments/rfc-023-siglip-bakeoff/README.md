@@ -73,16 +73,46 @@ matters here on this corpus.
 
 ## `siglip_template_check.py`
 
-Follow-up check, not yet reflected in a committed results file as of
-this branch's first commit (still running when this was written -- results
-land in a follow-up commit on this same branch). Tests whether a
-CLIP-style caption template ("a photo of ...", "an aerial photo of ...")
-changes the strict-accuracy numbers above for the two poles (`so400m` and
-`base`) versus the raw captions used in the main bake-off. SigLIP's own
-paper claims no template is needed, trained as it was on raw web captions
-unlike CLIP -- this either confirms that claim against this project's
-corpus, or overturns an assumption before it becomes load-bearing in the
-RFC.
+Follow-up check on the two poles (`so400m` and `base`) from the main
+bake-off, testing whether a CLIP-style caption template changes the
+strict-accuracy numbers above. SigLIP's own paper claims no template is
+needed, trained as it was on raw web captions unlike CLIP -- this either
+confirms that claim against this project's corpus, or overturns an
+assumption before it becomes load-bearing in the RFC.
+
+### Results (`template_check_results.json`)
+
+| Checkpoint | `{query}` (raw) | `"a photo of {query}"` | `"an aerial photo of {query}"` |
+|---|---|---|---|
+| `so400m` strict | 33.3% | 33.3% | **55.6%** |
+| `so400m` pairwise | 85.4% | 85.4% | 89.0% |
+| `base` strict | **44.4%** | 33.3% | 44.4% |
+| `base` pairwise | 72.0% | 69.5% | 69.5% |
+
+**This is not a clean confirmation of the "no template needed" claim.**
+A generic CLIP-style template ("a photo of ...") does nothing for either
+checkpoint -- flat or worse. But a *domain-specific* template ("an aerial
+photo of ...") lifts `so400m` from 33.3% to 55.6% strict accuracy, which
+is now the single best result across every checkpoint/template
+combination tested, `base` included. `base` is unmoved by the aerial
+template either way (44.4% with or without it).
+
+This reopens the speed/quality tradeoff rather than closing it:
+`so400m` + the aerial template now beats `base`'s best result on the
+metric that matters, but still costs ~6.2x the per-image latency
+(22.7s vs 3.7s) and ~12.4x the load time (109s vs 8.8s) measured in the
+main bake-off. Adopting a hardcoded domain template also isn't free in
+another sense -- it would mean `SearchImagesUseCase` wraps every user
+query in "an aerial photo of ..." before encoding, which only makes
+sense while the corpus stays aerial-photography-specific; ARCHITECTURE.md
+§9's stated direction (future adapters, possibly future non-aerial
+collections) makes that a real generality cost, not just an
+implementation detail.
+
+Same small-sample caveat as the main bake-off applies with more force
+here: 9 queries means the aerial-template jump for `so400m` is exactly 2
+queries flipping from fail to pass. Real, but not a lot of queries to
+generalize a product decision from.
 
 ## Reproducing on different hardware
 

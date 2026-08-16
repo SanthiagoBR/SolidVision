@@ -1,0 +1,36 @@
+{
+  "google/siglip2-so400m-patch14-384": {
+    "raw": {
+      "template": "{query}",
+      "strict_accuracy": 0.3333333333333333,
+      "pairwise_accuracy": 0.8536585365853658
+    },
+    "a_photo_of": {
+      "template": "a photo of {query}",
+      "strict_accuracy": 0.3333333333333333,
+      "pairwise_accuracy": 0.8536585365853658
+    },
+    "aerial_photo_of": {
+      "template": "an aerial photo of {query}",
+      "strict_accuracy": 0.5555555555555556,
+      "pairwise_accuracy": 0.8902439024390244
+    }
+  },
+  "google/siglip2-base-patch16-384": {
+    "raw": {
+      "template": "{query}",
+      "strict_accuracy": 0.4444444444444444,
+      "pairwise_accuracy": 0.7195121951219512
+    },
+    "a_photo_of": {
+      "template": "a photo of {query}",
+      "strict_accuracy": 0.3333333333333333,
+      "pairwise_accuracy": 0.6951219512195121
+    },
+    "aerial_photo_of": {
+      "template": "an aerial photo of {query}",
+      "strict_accuracy": 0.4444444444444444,
+      "pairwise_accuracy": 0.6951219512195121
+    }
+  }
+}
