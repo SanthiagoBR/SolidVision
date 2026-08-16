@@ -1,0 +1,63 @@
+{
+  "image_count": 45,
+  "query_count_en": 9,
+  "query_count_pt": 9,
+  "candidates": [
+    {
+      "model_id": "google/siglip2-so400m-patch14-384",
+      "dim": 1152,
+      "load_seconds": 109.3928433000001,
+      "strict_accuracy_en": 0.3333333333333333,
+      "strict_accuracy_pt": 0.5555555555555556,
+      "pairwise_accuracy": 0.8780487804878049,
+      "image_seconds_mean": 22.716824066666717,
+      "image_seconds_median": 21.388980400000037,
+      "text_seconds_mean": 1.8676732333332842,
+      "failing_queries_en": [
+        "rural property with a small lake",
+        "industrial warehouse beside farmland",
+        "town intersection with a car dealership",
+        "commercial street with shops and storefronts",
+        "residential street lined with houses",
+        "hillside town overview with dense houses"
+      ]
+    },
+    {
+      "model_id": "google/siglip2-large-patch16-384",
+      "dim": 1024,
+      "load_seconds": 97.38864749999993,
+      "strict_accuracy_en": 0.3333333333333333,
+      "strict_accuracy_pt": 0.4444444444444444,
+      "pairwise_accuracy": 0.8109756097560976,
+      "image_seconds_mean": 11.113281224444371,
+      "image_seconds_median": 10.891276700000162,
+      "text_seconds_mean": 1.1602657777777696,
+      "failing_queries_en": [
+        "rural property with a small lake",
+        "industrial warehouse beside farmland",
+        "town intersection with a car dealership",
+        "commercial street with shops and storefronts",
+        "residential street lined with houses",
+        "hillside town overview with dense houses"
+      ]
+    },
+    {
+      "model_id": "google/siglip2-base-patch16-384",
+      "dim": 768,
+      "load_seconds": 8.763028499999564,
+      "strict_accuracy_en": 0.4444444444444444,
+      "strict_accuracy_pt": 0.5555555555555556,
+      "pairwise_accuracy": 0.7926829268292683,
+      "image_seconds_mean": 3.656071137777791,
+      "image_seconds_median": 3.0603116000002046,
+      "text_seconds_mean": 0.9643735277776513,
+      "failing_queries_en": [
+        "rural property with a small lake",
+        "industrial warehouse beside farmland",
+        "town intersection with a car dealership",
+        "commercial street with shops and storefronts",
+        "hillside town overview with dense houses"
+      ]
+    }
+  ]
+}
