@@ -12,6 +12,19 @@ none of it is meant to be merged as-is. Whatever RFC-023 actually needs
 written into the RFC and the real adapter on `develop`; this directory is
 the working notes behind that decision.
 
+## Ground truth changed partway through -- numbers below aren't all on the same corpus
+
+The bake-off and template-check results were measured against the
+*original* RFC-022 corpus: 9 queries, and (unknown at the time) two
+mislabeled images that made 2 of those 9 queries structurally unwinnable
+regardless of model quality. Both were fixed and the query set expanded
+to 25 (see the "Fix two mislabeled images" and "Expand RFC-023 bake-off
+query set" commits on this branch). The quantization check below is the
+first script run against the corrected, expanded ground truth -- its
+fp32 baseline for `base` (60.0%/64.0%/80.4%) is not directly comparable
+to `base`'s numbers in the bake-off table (44.4%/55.6%/79.3%) below; the
+corrected number is the more trustworthy one of the two.
+
 ## Why 1152 (`vector(1152)`, migration `999b801e80f4`) constrains the choice
 
 `embedding_dimension` is committed at 1152 and matches the SigLIP so400m
@@ -113,6 +126,59 @@ Same small-sample caveat as the main bake-off applies with more force
 here: 9 queries means the aerial-template jump for `so400m` is exactly 2
 queries flipping from fail to pass. Real, but not a lot of queries to
 generalize a product decision from.
+
+## `siglip_quantization_check.py`
+
+Tests whether torch's built-in INT8 dynamic quantization
+(`torch.quantization.quantize_dynamic`, `nn.Linear` layers) is a viable
+CPU speed optimization for `base` -- the checkpoint the bake-off picked.
+CPU-only by design: dynamic quantization has no meaningful CUDA path in
+stock PyTorch, unlike static/QAT quantization or GPU toolchains (TensorRT
+etc.), which are out of scope here. Auto-detects whichever quantized
+backend the local torch build actually supports (fbgemm, qnnpack, or
+oneDNN) rather than assuming one.
+
+### Results (`quantization_check_results.json`)
+
+| Metric | fp32 | INT8 | Change |
+|---|---|---|---|
+| s/image (mean) | 4.960s | 3.437s | 1.44x faster |
+| s/text (mean) | 0.504s | 0.343s | 1.47x faster |
+| strict accuracy (EN) | 60.0% | 48.0% | -12 points |
+| strict accuracy (PT) | 64.0% | 40.0% | -24 points |
+| pairwise accuracy | 80.4% | 66.4% | -14 points |
+| 100k-image projection | 5.74 days | 3.98 days | saves 1.76 days |
+
+Embedding drift (cosine similarity between the fp32 and INT8 embedding of
+the *same* input, independent of any query): images mean 0.7582 (min
+0.6779), texts mean 0.9010 (min 0.7173). For reference, unrelated content
+in this corpus typically scores well below 0.5 cosine similarity -- 0.76
+between two encodings of the *identical* image is a large, not subtle,
+perturbation.
+
+**Rejected.** The speedup (1.44x) is real but far short of the 2-4x
+usually cited for dynamic quantization -- that figure holds for models
+where only a few output logits need to survive the added noise
+(classification). SigLIP's retrieval task depends on precise relative
+angles across the entire embedding space, and `quantize_dynamic` only
+touches `nn.Linear`, leaving attention/softmax/LayerNorm/GELU in fp32;
+that mismatch compounds across a deep transformer in a way classification
+doesn't expose. Trading 1.4x speed to break roughly 1 in 4 Portuguese
+queries that worked in fp32 is not a good trade.
+
+Not tested here, and still open if CPU throughput becomes a hard blocker
+later: ONNX Runtime / OpenVINO export (`optimum` library), which
+typically stacks graph-level fusion with quantization rather than relying
+on `quantize_dynamic` alone, and might not show the same accuracy cliff --
+but that is a heavier lift (new export pipeline, new runtime dependency)
+that wasn't justified chasing after this result.
+
+One environmental caveat: this run's fp32 baseline (4.96s/image) was
+slower than the original bake-off's fp32 number for `base` (3.66s/image)
+-- almost certainly machine load variance between sessions, not a
+regression. The fp32-vs-INT8 comparison itself is unaffected, since both
+ran in the same process under the same conditions; only the cross-session
+comparison is unreliable.
 
 ## Reproducing on different hardware
 

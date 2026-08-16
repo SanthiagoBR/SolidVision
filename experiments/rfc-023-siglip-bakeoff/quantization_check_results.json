@@ -1,0 +1,36 @@
+{
+  "model_id": "google/siglip2-base-patch16-384",
+  "image_count": 45,
+  "text_count": 50,
+  "quantize_seconds": 12.076960599999438,
+  "fp32": {
+    "image_seconds_mean": 4.959959155555609,
+    "image_seconds_median": 4.68936980000035,
+    "text_seconds_mean": 0.5043410539998877,
+    "strict_accuracy_en": 0.6,
+    "strict_accuracy_pt": 0.64,
+    "pairwise_accuracy": 0.8042328042328042
+  },
+  "int8": {
+    "image_seconds_mean": 3.4370355577779668,
+    "image_seconds_median": 3.44035520000034,
+    "text_seconds_mean": 0.3427744060000623,
+    "strict_accuracy_en": 0.48,
+    "strict_accuracy_pt": 0.4,
+    "pairwise_accuracy": 0.6640211640211641
+  },
+  "image_speedup": 1.4430921857445687,
+  "text_speedup": 1.471349800836052,
+  "embedding_drift": {
+    "images": {
+      "mean": 0.7582236501905654,
+      "min": 0.6779192686080933,
+      "p05": 0.6804149150848389
+    },
+    "texts": {
+      "mean": 0.900958595275879,
+      "min": 0.7173047661781311,
+      "p05": 0.7299686670303345
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Isolated dependencies for RFC-023 exploration tooling in this directory.
+# Deliberately separate from backend/requirements.txt: none of this should
+# ever be a dependency of the actual application, and none of the scripts
+# here should be run inside the backend's own venv.
+#
+# CPU-only:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+#   pip install -r requirements.txt
+#
+# NVIDIA GPU (plain PyPI wheel auto-selects CUDA if the driver supports it):
+#   pip install torch
+#   pip install -r requirements.txt
+
+transformers>=4.49
+sentencepiece
+accelerate
+pillow
