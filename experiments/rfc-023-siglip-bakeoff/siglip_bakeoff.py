@@ -93,14 +93,30 @@ QUERIES_PATH = DEMO_MANIFEST_PATH.parent / "queries.json"
 # the PT half of the evaluation.
 PORTUGUESE_TRANSLATIONS: dict[str, str] = {
     "rural property with a small lake": "propriedade rural com um pequeno lago",
+    "small natural lake on a farm, not an artificial pond": "pequeno lago natural em uma fazenda, nao um tanque artificial",
     "hillside property with a swimming pool": "propriedade em encosta com piscina",
+    "swimming pool at a rural home, not a natural or artificial water body": "piscina em uma casa rural, nao um corpo d'agua natural ou artificial",
     "artificial fish farming ponds in a valley": "tanques artificiais de piscicultura em um vale",
+    "aquaculture ponds seen from above, not a swimming pool or lake": "tanques de piscicultura vistos de cima, nao uma piscina ou lago",
     "industrial warehouse beside farmland": "galpao industrial ao lado de uma area agricola",
+    "warehouse next to a highway, not a warehouse inside a town": "galpao ao lado de uma rodovia, nao um galpao dentro de uma cidade",
     "cleared construction lot with exposed red soil": "terreno desmatado com solo vermelho exposto",
+    "recently cleared building site with terraced red dirt": "terreno recem-desmatado com terraplenagem em solo vermelho",
     "town intersection with a car dealership": "cruzamento urbano com uma concessionaria de carros",
+    "car dealership canopy with cars for sale, not a parking lot on a plain street": "cobertura de concessionaria com carros a venda, nao um estacionamento em uma rua comum",
     "commercial street with shops and storefronts": "rua comercial com lojas e vitrines",
+    "workshops and small businesses lining a commercial street": "oficinas e pequenos comercios ao longo de uma rua comercial",
+    "low-altitude view of storefronts with pedestrians and parked cars": "vista de baixa altitude de vitrines com pedestres e carros estacionados",
     "residential street lined with houses": "rua residencial ladeada de casas",
+    "quiet neighborhood street with family houses and a workshop": "rua residencial tranquila com casas de familia e uma oficina",
     "hillside town overview with dense houses": "vista geral de uma cidade na encosta com casas densas",
+    "suburban town spread across rolling hills in a loose grid": "cidade suburbana espalhada por colinas suaves em uma malha irregular",
+    "wide drone overview of a hillside town with a large building complex": "vista aerea ampla de uma cidade na encosta com um grande complexo de edificios",
+    "a black cat resting indoors": "um gato preto descansando dentro de casa",
+    "a dog looking directly at the camera": "um cachorro olhando diretamente para a camera",
+    "a bicycle parked on a street": "uma bicicleta estacionada em uma rua",
+    "a ceramic coffee cup and saucer": "uma xicara de cafe de ceramica com pires",
+    "a person working on a laptop indoors": "uma pessoa trabalhando em um laptop dentro de casa",
 }
 
 
