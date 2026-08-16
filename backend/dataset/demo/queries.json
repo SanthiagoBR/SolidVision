@@ -5,8 +5,7 @@
     {
       "query": "rural property with a small lake",
       "relevant": [
-        "images/aerial/rural/lake_property_01.jpg",
-        "images/aerial/rural/lake_property_02.jpg"
+        "images/aerial/rural/lake_property_01.jpg"
       ],
       "hard_negatives": [
         "images/aerial/rural/fish_ponds_01.jpg",
@@ -90,6 +89,7 @@
         "images/aerial/urban/urban_storefront_street_02.jpg",
         "images/aerial/urban/urban_storefront_street_03.jpg",
         "images/aerial/urban/urban_storefront_street_04.jpg",
+        "images/aerial/urban/urban_storefront_street_05.jpg",
         "images/aerial/urban/urban_commercial_street_01.jpg",
         "images/aerial/urban/urban_commercial_street_02.jpg"
       ],
