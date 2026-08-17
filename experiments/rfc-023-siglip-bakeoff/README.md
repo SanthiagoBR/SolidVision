@@ -180,6 +180,51 @@ regression. The fp32-vs-INT8 comparison itself is unaffected, since both
 ran in the same process under the same conditions; only the cross-session
 comparison is unreliable.
 
+## `siglip_batching_check.py`
+
+Tests whether batched encoding (multiple images/texts per forward pass,
+instead of one at a time as every other script here does) helps
+throughput. Relevant only to bulk image indexing -- a live search query
+is always a single text string, batching cannot help that path.
+
+### Results (`batching_check_results.json`)
+
+| Batch size | s/image | Speedup | 100k projection |
+|---|---|---|---|
+| 1 | 3.850 | 1.00x | 4.46 days |
+| 2 | 3.435 | 1.12x | 3.98 days |
+| 4 | 3.412 | 1.13x | 3.95 days |
+| 8 | 3.492 | 1.10x | 4.04 days |
+| 16 | 3.606 | 1.07x | 4.17 days |
+| **32** | **3.282** | **1.17x** | **3.80 days** |
+
+Text batching showed a much bigger win: 0.788s/text (batch=1) down to
+0.291s/text (batch=25), a 2.7x speedup -- explained by text being
+overhead-bound at batch=1 (Python call cost, tokenization, tensor
+allocation dominate a short sequence's actual compute), which batching
+amortizes away, whereas a 384px image's forward pass is compute-bound
+from the start on this 2-core dev CPU, leaving little idle parallelism
+for batching to fill.
+
+Correctness confirmed, not assumed: cosine similarity between each
+batch-of-1 embedding and its embedding when encoded as part of a larger
+batch was exactly 1.0000 at every batch size tested. Batching is a
+computational reorganization, not a model change, and this verifies it
+behaves that way rather than silently corrupting embeddings through
+padding or batch-dependent normalization.
+
+**Kept: batch_size=32 for image encoding**, going forward into whatever
+adapter or optimization scripts follow (including the ONNX
+Runtime/OpenVINO check next). The gain (1.17x) is real but modest --
+this CPU's low core count (2 physical cores) limits how much idle
+parallelism batching can recover, and this result should not be read as
+"batching solved the 100k-image target." It didn't: 3.8 days is still
+far from viable production throughput. The more promising unexplored
+lever remains calibrated static quantization via ONNX Runtime/OpenVINO,
+targeting VNNI-capable hardware (the user's Intel Core i5-1035G1, Ice
+Lake, has AVX-512 + DL Boost/VNNI) rather than better CPU utilization of
+the same fp32 compute.
+
 ## Reproducing on different hardware
 
 `siglip_bakeoff.py` is written to run unmodified wherever it's placed

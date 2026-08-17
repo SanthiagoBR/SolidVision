@@ -15,3 +15,9 @@ transformers>=4.49
 sentencepiece
 accelerate
 pillow
+
+# For siglip_onnx_quantization_check.py: ONNX export + calibrated static
+# INT8 quantization, targeting Intel CPU acceleration (AVX-512/VNNI on
+# Ice Lake and newer) via onnxruntime's default CPU execution provider.
+onnx
+onnxruntime

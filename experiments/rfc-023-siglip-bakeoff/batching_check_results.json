@@ -1,0 +1,90 @@
+{
+  "model_id": "google/siglip2-base-patch16-384",
+  "image_count": 45,
+  "text_count": 25,
+  "image_batches": [
+    {
+      "batch_size": 1,
+      "total_seconds": 173.26746210000056,
+      "seconds_per_image": 3.850388046666679,
+      "drift_vs_batch1": {
+        "mean": 1.0,
+        "min": 1.0
+      }
+    },
+    {
+      "batch_size": 2,
+      "total_seconds": 154.5581763,
+      "seconds_per_image": 3.43462614,
+      "drift_vs_batch1": {
+        "mean": 0.9999999907281664,
+        "min": 0.9999997019767761
+      }
+    },
+    {
+      "batch_size": 4,
+      "total_seconds": 153.5544061999999,
+      "seconds_per_image": 3.4123201377777757,
+      "drift_vs_batch1": {
+        "mean": 0.999999996026357,
+        "min": 0.9999997615814209
+      }
+    },
+    {
+      "batch_size": 8,
+      "total_seconds": 157.1564182000002,
+      "seconds_per_image": 3.492364848888893,
+      "drift_vs_batch1": {
+        "mean": 0.9999999933772616,
+        "min": 0.9999997615814209
+      }
+    },
+    {
+      "batch_size": 16,
+      "total_seconds": 162.24958849999985,
+      "seconds_per_image": 3.6055464111111077,
+      "drift_vs_batch1": {
+        "mean": 0.9999999933772616,
+        "min": 0.9999997615814209
+      }
+    },
+    {
+      "batch_size": 32,
+      "total_seconds": 147.66762500000004,
+      "seconds_per_image": 3.2815027777777788,
+      "drift_vs_batch1": {
+        "mean": 0.9999999933772616,
+        "min": 0.9999997615814209
+      }
+    }
+  ],
+  "text_batches": [
+    {
+      "batch_size": 1,
+      "total_seconds": 19.687780600000224,
+      "seconds_per_text": 0.787511224000009,
+      "drift_vs_batch1": {
+        "mean": 1.0,
+        "min": 1.0
+      }
+    },
+    {
+      "batch_size": 5,
+      "total_seconds": 7.451205399999708,
+      "seconds_per_text": 0.2980482159999883,
+      "drift_vs_batch1": {
+        "mean": 0.9999999713897705,
+        "min": 0.9999997615814209
+      }
+    },
+    {
+      "batch_size": 25,
+      "total_seconds": 7.267127600000094,
+      "seconds_per_text": 0.2906851040000038,
+      "drift_vs_batch1": {
+        "mean": 0.9999999713897705,
+        "min": 0.9999997615814209
+      }
+    }
+  ]
+}
