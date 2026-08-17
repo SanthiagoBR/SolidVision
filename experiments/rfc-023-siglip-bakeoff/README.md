@@ -225,6 +225,110 @@ targeting VNNI-capable hardware (the user's Intel Core i5-1035G1, Ice
 Lake, has AVX-512 + DL Boost/VNNI) rather than better CPU utilization of
 the same fp32 compute.
 
+## `siglip_onnx_quantization_check.py` (abandonado)
+
+Tentativa de testar quantização estática calibrada via ONNX Runtime
+(`onnxruntime.quantization.quantize_static`), como alternativa à
+quantização dinâmica ingênua já rejeitada acima. Diferente de
+`quantize_dynamic` -- que estima os limites de ativação "no chute" e só
+mexe em camadas `nn.Linear` -- a quantização estática calibra os limites
+reais usando dados representativos (as próprias imagens do corpus de
+demonstração) e quantiza o grafo ONNX inteiro, não só as camadas
+lineares. Em teoria, uma técnica mecanicamente diferente o suficiente
+para merecer sua própria medição, em vez de herdar a rejeição da
+quantização dinâmica por associação.
+
+Na prática, o processo travou a máquina de desenvolvimento (Pentium
+G4560, 16GB de RAM) três vezes seguidas, e foi abandonado sem nunca
+produzir um resultado de precisão utilizável.
+
+### O que aconteceu
+
+A arquitetura de duas torres do SigLIP (`get_image_features` /
+`get_text_features` como pontos de entrada separados, sem um único
+`forward()`) exigiu exportar cada torre manualmente para ONNX via
+`torch.onnx.export`, envolvendo `vision_model` / `text_model` em um
+wrapper fino. Essa parte funcionou perfeitamente e foi verificada, não
+apenas assumida: a saída do ONNX Runtime em fp32 bateu com a do PyTorch
+eager com similaridade de cosseno de ~1,0000001 (diferença máxima
+absoluta de ~5e-7), inclusive com tamanhos de lote diferentes do usado
+na exportação.
+
+O problema apareceu na etapa seguinte, `quantize_static()`:
+
+1. **Primeira tentativa** (torre de texto + torre de visão, tudo em um
+   único script, quatro sessões do ONNX Runtime mantidas na memória ao
+   mesmo tempo): a máquina travou de verdade durante a execução em
+   segundo plano. Nada foi perdido -- o `git status` estava limpo antes
+   de começar -- mas foi um travamento real do sistema, não só um script
+   lento ou com erro.
+2. Depois de reiniciar, o script foi reescrito para isolar cada fase
+   pesada em seu próprio processo do sistema operacional (exportar,
+   quantizar, codificar), já que a limpeza dentro do processo
+   (`del`/`gc.collect()`) não garante que os alocadores nativos (C++) do
+   PyTorch e do ONNX Runtime devolvam memória ao SO de forma confiável.
+   A exportação isolada funcionou perfeitamente e liberou toda a memória
+   ao terminar.
+3. **Segunda tentativa** (só a torre de texto, isolada, 25 consultas
+   para calibração): mesmo isolada, o processo cresceu para **16,19GB**
+   de memória privada comprometida em cerca de 2 minutos, numa máquina
+   de 16GB no total. Encerrado à força antes de repetir o travamento.
+   Causa provável: o vocabulário multilíngue do SigLIP2 (~256 mil
+   tokens, tokenizador Gemma) torna o arquivo ONNX da torre de texto
+   1,05GB -- quase 3x o tamanho da torre de visão (357MB).
+4. Dado que a quantização da torre de texto nunca foi o ponto principal
+   (a busca por texto já é rápida, sub-segundo, uma vez por consulta --
+   quem importa para a meta de indexação de 100 mil imagens é a torre de
+   visão), a torre de texto foi abandonada e a torre de visão testada
+   sozinha.
+5. **Terceira tentativa** (só a torre de visão, isolada, 45 imagens de
+   calibração): cresceu para **11,84GB** de memória privada. Encerrada à
+   força de novo.
+6. Pesquisa (ver `microsoft/onnxruntime#21979` no GitHub) revelou que
+   isso é um **bug conhecido e não resolvido** na ferramenta de
+   quantização estática do ONNX Runtime: o método `collect_data` do
+   `Calibrator` retém todas as ativações intermediárias de cada imagem
+   de calibração, para cada nó do grafo, simultaneamente -- sem calcular
+   nada de forma incremental. A própria pessoa que reportou o bug disse
+   só conseguir calibrar "com um casal de imagens". Sem versão de
+   correção documentada depois de quase dois anos em aberto.
+7. **Quarta tentativa, a última combinada com o usuário antes de desistir**
+   (só a torre de visão, isolada, calibração reduzida para **8 imagens**
+   -- um único lote, aplicando diretamente a solução alternativa
+   documentada no issue): o crescimento de memória foi **igualmente
+   rápido**, chegando a território perigoso antes mesmo do processo
+   imprimir a primeira linha de log da chamada `quantize_static()` real.
+   Um simples comando de verificação de memória do PowerShell chegou a
+   travar por mais de 120 segundos -- sinal de que o sistema já estava
+   sob pressão severa de memória -- e o processo foi encerrado à força
+   via `taskkill` (mais confiável que os cmdlets do PowerShell nessas
+   condições).
+
+### Veredito final
+
+**Abandonado.** Reduzir os dados de calibração em quase 6x (45 → 8
+imagens), com base numa causa raiz real e documentada, não ajudou nada
+-- se algo, a escalada foi mais rápida na quarta tentativa. Isso indica
+que o diagnóstico do bug do GitHub provavelmente está correto mas é
+incompleto: alguma coisa neste modelo específico, nesta versão do
+`onnxruntime` (1.28.0), ou neste ambiente está causando um crescimento
+de memória descontrolado que não é simplesmente proporcional ao volume
+de dados de calibração. Três escaladas em direção a um travamento numa
+única investigação é o ponto de parar de tentar variações, não de
+insistir numa quinta.
+
+Isso deixa as duas otimizações de CPU testadas neste diretório rejeitadas
+-- por motivos diferentes, ambas válidas para o registro:
+- `torch.quantization.quantize_dynamic`: rodou sem problemas, rejeitada
+  por precisão (12-24 pontos de queda na precisão estrita por apenas
+  1,44x de velocidade).
+- Quantização estática via ONNX Runtime: rejeitada por segurança de
+  execução, antes mesmo de produzir qualquer resultado de precisão.
+
+O que resta validado para a RFC-023: `google/siglip2-base-patch16-384`,
+`batch_size=32` para codificação de imagens. Essa é a resposta real,
+comprovada, a ser levada adiante.
+
 ## Reproducing on different hardware
 
 `siglip_bakeoff.py` is written to run unmodified wherever it's placed

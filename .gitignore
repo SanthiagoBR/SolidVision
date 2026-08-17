@@ -13,3 +13,10 @@ venv/
 
 # Runtime data materialized by the indexing worker / dataset_tools (RFC-022 9.1)
 data/
+
+# Regeneratable ONNX export/quantization artifacts from RFC-023 exploration
+# (experiments/rfc-023-siglip-bakeoff/) -- large binaries, rebuilt by
+# siglip_onnx_step1_export.py and siglip_onnx_step2_quantize.py, never
+# meant to be committed.
+experiments/rfc-023-siglip-bakeoff/onnx_export/
+experiments/rfc-023-siglip-bakeoff/onnx_embeddings/

@@ -19,6 +19,14 @@ per query:
                 ordered; strict is all-or-nothing per query and can hide
                 a checkpoint that gets 9/10 pairs right
 
+After the three CANDIDATES (each one-at-a-time, batch_size=1, for a
+fair apples-to-apples comparison), a fourth run repeats the checkpoint
+this bake-off actually settled on -- base-patch16-384 -- at
+batch_size=32, the value siglip_batching_check.py found best for image
+encoding on CPU. That entry (labeled "FINAL VERSION" in the summary
+table and results.json) is the configuration that would actually ship,
+so hardware comparisons should look at it, not just the batch=1 entries.
+
 The device is auto-detected: CUDA if torch reports a usable GPU, otherwise
 CPU. Precision is kept at float32 in both cases so results stay comparable
 across machines -- this is meant to be a hardware comparison, not also a
@@ -85,6 +93,15 @@ CANDIDATES = [
     "google/siglip2-base-patch16-384",
 ]
 
+# The checkpoint and batch size RFC-023 actually settled on after this
+# bake-off (base won on both speed and strict accuracy -- see ../README.md)
+# and after siglip_batching_check.py found batch_size=32 the best tradeoff
+# for image encoding on CPU. Run once more here, at batch_size=32, so this
+# machine's numbers cover the configuration that would actually ship, not
+# just the one-at-a-time comparison every CANDIDATES entry above uses.
+FINAL_VERSION_MODEL = "google/siglip2-base-patch16-384"
+FINAL_VERSION_BATCH_SIZE = 32
+
 QUERIES_PATH = DEMO_MANIFEST_PATH.parent / "queries.json"
 
 # Hand-written Portuguese translations of the committed English queries.
@@ -142,6 +159,8 @@ class QueryResult:
 @dataclass
 class CandidateReport:
     model_id: str
+    label: str
+    batch_size: int
     dim: int
     load_seconds: float
     image_seconds: list[float] = field(default_factory=list)
@@ -164,14 +183,26 @@ def load_queries() -> list[dict]:
     return raw["queries"]
 
 
+def chunk(items: list, size: int) -> list[list]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
 def encode_images(
-    model, processor, device: torch.device, paths: list[Path]
+    model, processor, device: torch.device, paths: list[Path], batch_size: int = 1
 ) -> tuple[dict[Path, torch.Tensor], list[float]]:
+    """Encode images, batch_size at a time.
+
+    Timings are per-batch wall-clock divided evenly across that batch's
+    images -- not per-image timing at batch_size=1, but the right unit
+    for a fair s/image comparison across batch sizes, matching how
+    siglip_batching_check.py measured the same tradeoff on CPU.
+    """
     embeddings: dict[Path, torch.Tensor] = {}
     timings: list[float] = []
-    for path in paths:
-        image = Image.open(path).convert("RGB")
-        inputs = processor(images=image, return_tensors="pt").to(device)
+    images_by_path = {p: Image.open(p).convert("RGB") for p in paths}
+    for batch_paths in chunk(paths, batch_size):
+        batch_images = [images_by_path[p] for p in batch_paths]
+        inputs = processor(images=batch_images, return_tensors="pt").to(device)
         if device.type == "cuda":
             torch.cuda.synchronize()
         start = time.perf_counter()
@@ -179,12 +210,14 @@ def encode_images(
             output = model.get_image_features(**inputs)
         if device.type == "cuda":
             torch.cuda.synchronize()
-        timings.append(time.perf_counter() - start)
+        elapsed = time.perf_counter() - start
+        timings.extend([elapsed / len(batch_paths)] * len(batch_paths))
         # transformers 5.x: get_image_features returns BaseModelOutputWithPooling,
         # not a bare tensor -- the pooled embedding is .pooler_output.
         features = output.pooler_output
         normalized = features / features.norm(p=2, dim=-1, keepdim=True)
-        embeddings[path] = normalized.squeeze(0).cpu()
+        for path, vec in zip(batch_paths, normalized, strict=True):
+            embeddings[path] = vec.cpu()
     return embeddings, timings
 
 
@@ -212,9 +245,15 @@ def encode_texts(
 
 
 def run_candidate(
-    model_id: str, device: torch.device, image_paths: list[Path], queries: list[dict]
+    model_id: str,
+    device: torch.device,
+    image_paths: list[Path],
+    queries: list[dict],
+    batch_size: int = 1,
+    report_label: str | None = None,
 ) -> CandidateReport:
-    print(f"\n{'=' * 70}\n{model_id}\n{'=' * 70}")
+    label = report_label or model_id
+    print(f"\n{'=' * 70}\n{label}\n{'=' * 70}")
 
     start = time.perf_counter()
     processor = AutoProcessor.from_pretrained(model_id)
@@ -224,9 +263,11 @@ def run_candidate(
     load_seconds = time.perf_counter() - start
     print(f"  loaded in {load_seconds:.1f}s")
 
-    image_embeddings, image_timings = encode_images(model, processor, device, image_paths)
+    image_embeddings, image_timings = encode_images(
+        model, processor, device, image_paths, batch_size=batch_size
+    )
     print(
-        f"  encoded {len(image_paths)} images: "
+        f"  encoded {len(image_paths)} images (batch_size={batch_size}): "
         f"mean {statistics.mean(image_timings):.3f}s  "
         f"median {statistics.median(image_timings):.3f}s"
     )
@@ -249,6 +290,8 @@ def run_candidate(
 
     report = CandidateReport(
         model_id=model_id,
+        label=label,
+        batch_size=batch_size,
         dim=dim,
         load_seconds=load_seconds,
         image_seconds=image_timings,
@@ -314,12 +357,22 @@ def main() -> None:
         report = run_candidate(model_id, device, image_paths, queries)
         reports.append(report)
 
+    final_version_report = run_candidate(
+        FINAL_VERSION_MODEL,
+        device,
+        image_paths,
+        queries,
+        batch_size=FINAL_VERSION_BATCH_SIZE,
+        report_label=f"{FINAL_VERSION_MODEL} (FINAL VERSION, batch={FINAL_VERSION_BATCH_SIZE})",
+    )
+    reports.append(final_version_report)
+
     print(f"\n\n{'#' * 78}\nSUMMARY  (device={device}, {len(image_paths)} images, "
           f"{len(queries)} EN queries + {len(PORTUGUESE_TRANSLATIONS)} PT translations)"
           f"\n{'#' * 78}\n")
 
     header = (
-        f"{'model':42} {'dim':>5} {'strict-EN':>10} {'strict-PT':>10} "
+        f"{'model':62} {'batch':>6} {'dim':>5} {'strict-EN':>10} {'strict-PT':>10} "
         f"{'pairwise':>9} {'s/img (mean)':>13} {'s/img (p95)':>12} {'load s':>8}"
     )
     print(header)
@@ -328,7 +381,7 @@ def main() -> None:
         p95_idx = max(0, int(len(r.image_seconds) * 0.95) - 1)
         p95 = sorted(r.image_seconds)[p95_idx]
         print(
-            f"{r.model_id:42} {r.dim:>5} "
+            f"{r.label:62} {r.batch_size:>6} {r.dim:>5} "
             f"{r.strict_accuracy_for('en'):>10.1%} "
             f"{r.strict_accuracy_for('pt'):>10.1%} "
             f"{r.pairwise_accuracy:>9.1%} "
@@ -340,15 +393,17 @@ def main() -> None:
     print("\nPer-query strict failures (EN):")
     for r in reports:
         failures = [res.query for res in r.results if res.lang == "en" and not res.strict_pass]
-        print(f"  {r.model_id}: {failures if failures else '(none)'}")
+        print(f"  {r.label}: {failures if failures else '(none)'}")
 
     # Project against the ARCHITECTURE.md section 22 100k-image target.
-    # Single-process, unbatched -- matches how the original CPU run was measured.
+    # Single-process -- matches how the original CPU run was measured, at
+    # whatever batch_size that report actually used (1 for the CANDIDATES
+    # entries, FINAL_VERSION_BATCH_SIZE for the final-version entry).
     print(f"\nProjected single-process wall-clock time to encode 100,000 images ({device}):")
     for r in reports:
         mean_s = statistics.mean(r.image_seconds)
         total_hours = (mean_s * 100_000) / 3600
-        print(f"  {r.model_id}: {total_hours:.2f} hours ({total_hours / 24:.2f} days)")
+        print(f"  {r.label}: {total_hours:.2f} hours ({total_hours / 24:.2f} days)")
 
     results_path = Path(__file__).with_name("results.json")
     results_path.write_text(
@@ -364,6 +419,8 @@ def main() -> None:
                 "candidates": [
                     {
                         "model_id": r.model_id,
+                        "label": r.label,
+                        "batch_size": r.batch_size,
                         "dim": r.dim,
                         "load_seconds": r.load_seconds,
                         "strict_accuracy_en": r.strict_accuracy_for("en"),
