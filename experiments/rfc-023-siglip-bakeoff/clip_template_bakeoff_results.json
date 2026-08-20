@@ -1,0 +1,335 @@
+{
+  "device": "cpu",
+  "image_count": 45,
+  "query_count": 25,
+  "template_variants": {
+    "raw": "{query}",
+    "a_photo_of": "a photo of {query}",
+    "aerial_photo_of": "an aerial photo of {query}"
+  },
+  "candidates": {
+    "openai/clip-vit-base-patch32": {
+      "raw": {
+        "strict_accuracy_en": 0.44,
+        "strict_accuracy_pt_via_mt": 0.52,
+        "pairwise_accuracy_en": 0.7513227513227513,
+        "pairwise_accuracy_pt_via_mt": 0.7248677248677249,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "cleared construction lot with exposed red soil",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid"
+        ]
+      },
+      "a_photo_of": {
+        "strict_accuracy_en": 0.44,
+        "strict_accuracy_pt_via_mt": 0.52,
+        "pairwise_accuracy_en": 0.746031746031746,
+        "pairwise_accuracy_pt_via_mt": 0.7407407407407407,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "cleared construction lot with exposed red soil",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid"
+        ]
+      },
+      "aerial_photo_of": {
+        "strict_accuracy_en": 0.44,
+        "strict_accuracy_pt_via_mt": 0.4,
+        "pairwise_accuracy_en": 0.7037037037037037,
+        "pairwise_accuracy_pt_via_mt": 0.656084656084656,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "cleared construction lot with exposed red soil",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "a bicycle parked on a street"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "cleared construction lot with exposed red soil",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "suburban town spread across rolling hills in a loose grid",
+          "a black cat resting indoors",
+          "a bicycle parked on a street",
+          "a ceramic coffee cup and saucer"
+        ]
+      }
+    },
+    "openai/clip-vit-base-patch16": {
+      "raw": {
+        "strict_accuracy_en": 0.56,
+        "strict_accuracy_pt_via_mt": 0.52,
+        "pairwise_accuracy_en": 0.7883597883597884,
+        "pairwise_accuracy_pt_via_mt": 0.7883597883597884,
+        "failing_queries_en": [
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "hillside town overview with dense houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "recently cleared building site with terraced red dirt",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "hillside town overview with dense houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ]
+      },
+      "a_photo_of": {
+        "strict_accuracy_en": 0.52,
+        "strict_accuracy_pt_via_mt": 0.44,
+        "pairwise_accuracy_en": 0.783068783068783,
+        "pairwise_accuracy_pt_via_mt": 0.7671957671957672,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "hillside town overview with dense houses",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "recently cleared building site with terraced red dirt",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "hillside town overview with dense houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ]
+      },
+      "aerial_photo_of": {
+        "strict_accuracy_en": 0.52,
+        "strict_accuracy_pt_via_mt": 0.4,
+        "pairwise_accuracy_en": 0.7248677248677249,
+        "pairwise_accuracy_pt_via_mt": 0.6984126984126984,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "hillside town overview with dense houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "cleared construction lot with exposed red soil",
+          "recently cleared building site with terraced red dirt",
+          "car dealership canopy with cars for sale, not a parking lot on a plain street",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "hillside town overview with dense houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "a person working on a laptop indoors"
+        ]
+      }
+    },
+    "laion/CLIP-ViT-B-32-laion2B-s34B-b79K": {
+      "raw": {
+        "strict_accuracy_en": 0.56,
+        "strict_accuracy_pt_via_mt": 0.52,
+        "pairwise_accuracy_en": 0.7883597883597884,
+        "pairwise_accuracy_pt_via_mt": 0.7248677248677249,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "car dealership canopy with cars for sale, not a parking lot on a plain street",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ]
+      },
+      "a_photo_of": {
+        "strict_accuracy_en": 0.6,
+        "strict_accuracy_pt_via_mt": 0.56,
+        "pairwise_accuracy_en": 0.8042328042328042,
+        "pairwise_accuracy_pt_via_mt": 0.7513227513227513,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "car dealership canopy with cars for sale, not a parking lot on a plain street",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "residential street lined with houses",
+          "wide drone overview of a hillside town with a large building complex"
+        ]
+      },
+      "aerial_photo_of": {
+        "strict_accuracy_en": 0.52,
+        "strict_accuracy_pt_via_mt": 0.44,
+        "pairwise_accuracy_en": 0.7354497354497355,
+        "pairwise_accuracy_pt_via_mt": 0.6931216931216931,
+        "failing_queries_en": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ],
+        "failing_queries_pt_via_mt": [
+          "rural property with a small lake",
+          "small natural lake on a farm, not an artificial pond",
+          "hillside property with a swimming pool",
+          "swimming pool at a rural home, not a natural or artificial water body",
+          "industrial warehouse beside farmland",
+          "warehouse next to a highway, not a warehouse inside a town",
+          "town intersection with a car dealership",
+          "car dealership canopy with cars for sale, not a parking lot on a plain street",
+          "commercial street with shops and storefronts",
+          "workshops and small businesses lining a commercial street",
+          "low-altitude view of storefronts with pedestrians and parked cars",
+          "residential street lined with houses",
+          "suburban town spread across rolling hills in a loose grid",
+          "wide drone overview of a hillside town with a large building complex"
+        ]
+      }
+    }
+  }
+}

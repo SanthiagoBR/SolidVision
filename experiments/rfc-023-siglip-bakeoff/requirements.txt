@@ -16,6 +16,12 @@ sentencepiece
 accelerate
 pillow
 
+# For clip_jina_bakeoff.py's jinaai/jina-clip-v2 candidate (trust_remote_code
+# model, needs its own vision backbone deps beyond what CLIP/SigLIP require).
+einops
+timm
+requests
+
 # For siglip_onnx_quantization_check.py: ONNX export + calibrated static
 # INT8 quantization, targeting Intel CPU acceleration (AVX-512/VNNI on
 # Ice Lake and newer) via onnxruntime's default CPU execution provider.

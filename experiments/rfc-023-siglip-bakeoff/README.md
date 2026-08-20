@@ -1,9 +1,12 @@
 # RFC-023 pre-implementation bake-off
 
 Exploration tooling and results, not application code. This directory
-exists to answer one question before any RFC-023 (SigLIP Adapter) code is
-written: **which SigLIP 2 checkpoint should `settings.embedding_model`
-default to?**
+exists to answer, empirically, which embedding model `backend/app`'s real
+adapter should use -- the question started out as "which SigLIP 2
+checkpoint," but the CLIP comparisons below reopened the question of
+model *family*, not just checkpoint, and changed the answer. See the
+decision below before reading the rest of this document as a historical
+log of how it was reached, not as the current recommendation on its own.
 
 Kept off `develop` deliberately -- see the branch this lives on
 (`explore/siglip-bakeoff`). Nothing here is imported by `backend/app/`, and
@@ -11,6 +14,41 @@ none of it is meant to be merged as-is. Whatever RFC-023 actually needs
 (a chosen checkpoint, a verified dimension, measured latency figures) gets
 written into the RFC and the real adapter on `develop`; this directory is
 the working notes behind that decision.
+
+## Decisão final: adapter CLIP, não SigLIP
+
+Depois de todo o bake-off do SigLIP abaixo e dos experimentos de CLIP em
+`clip_jina_bakeoff.py`, `clip_small_dim_bakeoff.py`,
+`clip_pt_translation_bakeoff.py` e `clip_template_bakeoff.py`, a decisão
+para o RFC-023 é:
+
+- **Modelo:** `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` (512-dim) -- não
+  nenhum checkpoint do SigLIP, apesar de todo o trabalho abaixo ter
+  começado assumindo que seria um.
+- **Template de consulta de texto:** `"a photo of {query}"` aplicado
+  antes de codificar (ver `clip_template_bakeoff.py`). **Não** usar
+  `"an aerial photo of {query}"` -- esse template ajudou o SigLIP so400m
+  no bake-off original, mas piorou este modelo CLIP em todos os testes.
+- **Suporte a português:** tradução PT→EN antes de codificar
+  (`Helsinki-NLP/opus-mt-ROMANCE-en`, tag `>>por<<`), não suporte
+  multilíngue nativo -- ver `clip_pt_translation_bakeoff.py`. O
+  `Helsinki-NLP/opus-mt-pt-en` original não existe mais no Hub, verificado
+  antes de adotar o `ROMANCE-en` como alternativa.
+- **Por quê:** ~10x mais rápido que o `siglip2-base-patch16-384` pra
+  indexar o acervo (0,46-0,70s/imagem medido vs ~4,96s/imagem), e com o
+  template acima chega a 60,0% de acurácia estrita em inglês -- empatando
+  com o SigLIP base -- e 56,0% em português traduzido.
+- **Trade-off aceito conscientemente:** o gap de português contra o
+  SigLIP nativo (64,0%) não fecha totalmente mesmo com tradução e
+  template (fica em ~56,0%, ainda 8 pontos abaixo). Essa perda de
+  acurácia em português foi aceita em troca da velocidade de indexação.
+- **Fine-tuning:** ainda esperado como trabalho futuro, quando houver um
+  acervo real maior que as 45 imagens de demonstração -- fine-tuning
+  nesse corpus pequeno teria risco sério de overfitting, então não faz
+  parte desta decisão nem do RFC-023 em si. Ver `build-prompt.md`.
+
+Próximo passo: `build-prompt.md`, nesta mesma pasta, é o prompt para pedir
+a um agente que implemente essa decisão em `backend/app/`.
 
 ## Ground truth changed partway through -- numbers below aren't all on the same corpus
 
@@ -328,6 +366,314 @@ Isso deixa as duas otimizações de CPU testadas neste diretório rejeitadas
 O que resta validado para a RFC-023: `google/siglip2-base-patch16-384`,
 `batch_size=32` para codificação de imagens. Essa é a resposta real,
 comprovada, a ser levada adiante.
+
+## `clip_jina_bakeoff.py` -- is SigLIP even the right family?
+
+Everything above compares SigLIP 2 checkpoints against each other. This
+script asks a different question: now that `base` (768-dim) is the
+leading SigLIP 2 checkpoint, does a same-dimension model from a
+*different* family beat it? Three 768-dim, non-SigLIP candidates, run
+against the same corrected 25-query ground truth and scoring predicate as
+`quantization_check_results.json`'s fp32 baseline (the fairest
+apples-to-apples comparison available, since the original bake-off table
+above used the pre-correction 9-query ground truth):
+
+- `openai/clip-vit-large-patch14` -- the canonical CLIP ViT-L/14
+- `laion/CLIP-ViT-L-14-laion2B-s32B-b82K` -- OpenCLIP retrain of the same
+  architecture on LAION-2B
+- `jinaai/jina-clip-v2` -- multilingual, natively 1024-dim, truncated to
+  768 via Matryoshka `truncate_dim=` to match the other two
+
+### Results (`clip_jina_bakeoff_results.json`)
+
+| Model | Dim | Strict-EN | Strict-PT | Pairwise | s/image (mean) | Load time | Projected 100k images |
+|---|---|---|---|---|---|---|---|
+| `openai/clip-vit-large-patch14` | 768 | 56.0% | 44.0% | 72.5% | 7.694s | 8.1s | 8.90 days |
+| `laion/CLIP-ViT-L-14-laion2B-s32B-b82K` | 768 | 52.0% | 32.0% | 71.2% | 6.751s | 47.6s | 7.81 days |
+| `jinaai/jina-clip-v2` | 768 | 16.0% | 16.0% | 56.6% | 48.674s | 60.7s | 56.34 days |
+| **`siglip2-base-patch16-384`** (fp32, same ground truth) | 768 | **60.0%** | **64.0%** | **80.4%** | **4.960s** | -- | -- |
+
+**Finding: SigLIP 2 `base` wins outright.** It beats every non-SigLIP
+768-dim candidate tested here on strict accuracy (both languages),
+pairwise accuracy, *and* speed -- there's no tradeoff to weigh, it
+dominates on every axis measured. This is a real answer to "is SigLIP
+the right family," not just "the right checkpoint within SigLIP": at
+this dimension, on this corpus, nothing tried here comes close.
+
+**Per-candidate notes:**
+- Both CLIP variants underperform SigLIP on English strict accuracy by a
+  meaningful margin (56.0%/52.0% vs 60.0%), and drop further in
+  Portuguese (44.0%/32.0% vs 64.0%) since neither has a multilingual text
+  tower -- expected, included as the standard baseline everyone compares
+  against rather than a real contender for this product's PT requirement.
+- `laion`'s LAION-2B retrain does *not* beat the original OpenAI weights
+  on this corpus (52.0% vs 56.0% strict-EN, 32.0% vs 44.0% strict-PT) --
+  the general finding that OpenCLIP retrains often beat OpenAI CLIP on
+  public benchmarks doesn't transfer to this aerial-photography corpus's
+  specific hard negatives.
+- `jina-clip-v2` is the clear outlier: worst accuracy of all four
+  (16.0% strict, both languages) *and* by far the slowest (48.7s/image,
+  ~10x SigLIP `base` and even ~2x slower than SigLIP `so400m` at
+  22.7s/image from the main bake-off) on this 2-core CPU. Its
+  multilingual claim doesn't show up as an advantage here either -- PT
+  and EN tied at 16.0%, not PT trailing EN like the CLIP variants, but
+  also not PT *beating* EN the way it would need to for the multilingual
+  training to read as paying off. Two caveats worth naming rather than
+  concluding "jina-clip-v2 is just bad": (1) truncating its native
+  1024-dim embedding to 768 via `truncate_dim=` is a real lossy step none
+  of the other candidates have, so this may understate its
+  full-dimension capability; (2) its EVA02-backbone vision tower is
+  simply a heavier forward pass than a plain ViT-L/14 on CPU, which
+  explains the latency gap independent of the accuracy question. Neither
+  caveat changes the practical conclusion for this project -- both the
+  accuracy and the latency independently rule it out at 768-dim on this
+  hardware.
+- Environmental note, same caveat as the quantization check: this run's
+  SigLIP fp32 comparison point (4.960s/image) is from
+  `quantization_check_results.json`, a different session than this
+  script's own run -- cross-session latency comparisons on this machine
+  have shown session-to-session variance before (3.66s vs 4.96s for the
+  same checkpoint across two runs). The accuracy comparison is unaffected
+  since accuracy doesn't depend on machine load; only the exact speed
+  multiplier should be read as directional, not precise.
+
+**What this doesn't test:** larger non-SigLIP models (a 1024-dim or
+larger CLIP/OpenCLIP variant might close some of the accuracy gap, at a
+dimension cost this bake-off's 768-dim constraint was specifically
+avoiding), and jina-clip-v2 at its native 1024-dim rather than truncated.
+Neither is planned unless the 768-dim question above becomes live again
+-- SigLIP `base` already answers the question this script set out to
+ask.
+
+### Environment note
+
+Unlike every earlier script in this directory, `clip_jina_bakeoff.py` was
+run from its own isolated `.venv` in this directory (per the setup
+instructions in `siglip_bakeoff.py`'s docstring and `requirements.txt`'s
+header comment), not the shell's default Python. That default turned out
+to resolve to `backend/.venv` -- the application's own virtual
+environment -- which already had `torch`/`transformers`/`onnx`/etc.
+installed in it from earlier sessions' bake-off work, despite
+`requirements.txt`'s explicit instruction that none of this directory's
+tooling should run inside the backend's venv. That pre-existing
+contamination in `backend/.venv` was left alone rather than stripped out
+mid-task; it's a separate cleanup decision from getting this comparison
+running correctly.
+
+`jina-clip-v2`'s `trust_remote_code=True` implementation also needed a
+small compatibility shim: its remote `modeling_clip.py` imports
+`clip_loss` from `transformers.models.clip.modeling_clip`, a symbol
+present when that model card was written but removed in the transformers
+5.x rewrite this repo's SigLIP and CLIP candidates otherwise depend on
+(see `siglip_bakeoff.py`'s own note on 5.x's `BaseModelOutputWithPooling`
+change). `clip_jina_bakeoff.py` shims a `clip_loss` function into that
+module's namespace before loading jina-clip-v2, rather than pinning an
+older transformers globally, which would have broken the CLIP candidates'
+`get_image_features` return type. The shim is only exercised by
+jina-clip-v2's training-time loss computation, never by the
+`encode_image`/`encode_text` paths this script actually calls.
+
+## `clip_small_dim_bakeoff.py` -- does dropping below 768-dim change the CLIP picture?
+
+`clip_jina_bakeoff.py` found SigLIP 2 `base` beating every 768-dim CLIP
+candidate outright, no tradeoff to weigh. This script asks a narrower,
+CLIP-only follow-up: since ViT-L/14 CLIP (768-dim) already lost on both
+accuracy and speed, does dropping to ViT-B (512-dim) -- smaller and
+faster in principle -- change that picture, or just make CLIP worse
+along with making it smaller? Three 512-dim candidates, same corpus and
+ground truth, no jina-clip-v2 this time (CLIP-only by design):
+
+- `openai/clip-vit-base-patch32`
+- `openai/clip-vit-base-patch16`
+- `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` -- OpenCLIP retrain of patch32
+  on LAION-2B, mirroring the OpenAI-vs-LAION split used for the 768-dim
+  ViT-L/14 comparison above
+
+Reuses `run_candidate_clip` from `clip_jina_bakeoff.py` unchanged -- it
+already just takes a `model_id`, no dimension assumptions baked in.
+
+### Results (`clip_small_dim_bakeoff_results.json`)
+
+| Model | Dim | Strict-EN | Strict-PT | Pairwise | s/image (mean) | Load time | Projected 100k images |
+|---|---|---|---|---|---|---|---|
+| `openai/clip-vit-base-patch32` | 512 | 44.0% | 44.0% | 68.0% | 0.770s | 4.7s | 0.89 days |
+| `openai/clip-vit-base-patch16` | 512 | 56.0% | 36.0% | 70.9% | 1.745s | 4.1s | 2.02 days |
+| `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` | 512 | **56.0%** | 44.0% | **74.3%** | **0.464s** | 3.8s | **0.54 days** |
+| `siglip2-base-patch16-384` (fp32, 768-dim, for reference) | 768 | 60.0% | 64.0% | 80.4% | 4.960s | -- | -- |
+
+**Finding: unlike the 768-dim comparison, this one is a real tradeoff, not
+a rout.** `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` gives up 4 points of
+strict-EN accuracy and 20 points of strict-PT accuracy relative to SigLIP
+`base`, but runs roughly **10x faster** (0.464s/image vs 4.960s/image) --
+under a day projected for 100k images versus ~5.7 days. That's a
+meaningfully different shape of result than `clip_jina_bakeoff.py`, where
+SigLIP won every axis with nothing to weigh. Whether that tradeoff is
+worth taking depends on how hard the 100k-image throughput target from
+ARCHITECTURE.md §22 actually binds -- a question this bake-off doesn't
+answer on its own, since SigLIP `base` was never *rejected* on throughput,
+just not the fastest option available.
+
+**Per-candidate notes:**
+- The LAION-2B retrain again beats the original OpenAI weights at the
+  same architecture (patch32: 56.0%/44.0% strict vs 44.0%/44.0%), the
+  opposite of what the 768-dim ViT-L/14 comparison found (where LAION's
+  retrain *underperformed* OpenAI's). Small-sample caveat applies as
+  always, but this at minimum rules out "LAION retrains are just
+  categorically better/worse than OpenAI CLIP" as a fixed rule on this
+  corpus -- it depends on which architecture size.
+- `patch16` has the same strict-EN as the LAION patch32 model (56.0%) but
+  costs ~3.8x the per-image latency (1.745s vs 0.464s) for a *worse* PT
+  score (36.0% vs 44.0%) -- finer patches did not pay for themselves here.
+- Portuguese accuracy across all three 512-dim candidates (44.0%, 36.0%,
+  44.0%) sits well below SigLIP's 64.0%, the same English-only-text-tower
+  gap seen in the 768-dim CLIP candidates -- consistent with, not an
+  independent confirmation of, that earlier finding.
+- Same cross-session latency caveat as before: the SigLIP reference row
+  is from `quantization_check_results.json`, a different session than
+  this run. Directional, not a precise multiplier.
+
+**What this doesn't test:** whether the accuracy gap narrows or widens at
+dimensions below 512, and whether SigLIP has a comparably small/fast
+checkpoint of its own that would keep the comparison apples-to-apples on
+speed as well as family -- neither was in scope for the two questions
+this and the 768-dim comparison set out to answer (family, then
+dimension), but would be the natural next question if 100k-image
+throughput becomes a hard requirement rather than a target.
+
+## `clip_pt_translation_bakeoff.py` -- does translating PT queries to English before encoding help?
+
+Both CLIP comparisons above found every English-only CLIP candidate
+trailing SigLIP badly on Portuguese (32-44% strict-PT vs SigLIP's 64%) --
+expected, since none of those text towers were trained on Portuguese. A
+phrasing template can't fix that (it's a language-coverage gap, not a
+domain-phrasing gap), but translating the query to English *before*
+encoding plausibly could: treat the fast CLIP models as
+"translate-then-embed" rather than natively multilingual. This only adds
+a *query-time* cost (translating one short string per search request) --
+it does not touch bulk image encoding, which is where the CLIP
+candidates' real speed advantage over SigLIP lives (see the small-dim
+section above). Re-tests all five previously-run CLIP candidates against
+three text variants per query: the original English, the native
+Portuguese, and the Portuguese machine-translated back to English.
+
+Translation model: `Helsinki-NLP/opus-mt-pt-en` (the direct PT-EN pair)
+no longer resolves on the Hub -- verified, not assumed, before writing
+this script. `Helsinki-NLP/opus-mt-ROMANCE-en` (multi-source
+fr/es/it/pt/... -> en, tagged with the `>>por<<` prefix its multi-source
+models use to disambiguate) does, and produced fluent, accurate
+translations on manual inspection of the sample output.
+
+### Results (`clip_pt_translation_bakeoff_results.json`)
+
+| Model | Dim | Strict-EN | Strict-PT (native) | Strict-PT (via MT) | Pairwise-EN | Pairwise-PT(MT) |
+|---|---|---|---|---|---|---|
+| `openai/clip-vit-large-patch14` | 768 | 56.0% | 44.0% | **64.0%** | 80.4% | 81.5% |
+| `laion/CLIP-ViT-L-14-laion2B-s32B-b82K` | 768 | 52.0% | 32.0% | 60.0% | 78.3% | 74.6% |
+| `openai/clip-vit-base-patch32` | 512 | 44.0% | 44.0% | 52.0% | 75.1% | 72.5% |
+| `openai/clip-vit-base-patch16` | 512 | 56.0% | 36.0% | 52.0% | 78.8% | 78.8% |
+| `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` | 512 | 56.0% | 44.0% | 52.0% | 78.8% | 72.5% |
+
+**Finding: translation helps every candidate, but doesn't fully close the
+gap for the models that are actually fast.** All five improve on their
+native-PT strict accuracy, in some cases by a lot (`laion` ViT-L/14 goes
+from 32.0% to 60.0%, nearly doubling). The standout: `openai/clip-vit-
+large-patch14` translated (64.0%) not only beats its own native-English
+score (56.0%) but lands on *exactly* SigLIP `base`'s native-PT strict
+accuracy (64.0%) -- with the obvious small-sample caveat (25 queries,
+9pp = roughly 2 queries flipping) applying with extra force to a
+"beats its own English score" result this specific. But that candidate
+is one of the two 768-dim, ~7.5s/image models already shown to lose to
+SigLIP on speed -- translation buys accuracy there, not a speed win.
+
+For the three fast 512-dim candidates -- the ones actually worth
+`clip_small_dim_bakeoff.py`'s speed tradeoff -- translation lifts strict-
+PT from 36.0-44.0% up to a flat **52.0%** across all three, a real and
+consistent gain, but still 12 points short of SigLIP's native 64.0%.
+Translating the query doesn't fully substitute for the model having seen
+Portuguese during training, at least not with this translation model.
+
+**The catch this doesn't solve on its own:** translation is a
+*query-time* cost, invisible to bulk image indexing (the axis where the
+fast CLIP candidates actually win), but it lands on every Portuguese
+search request. Measured here at ~0.8-1.4s per query (`opus-mt-ROMANCE-
+en`, one string at a time, matching how a live search request would
+actually call it -- not a batch best case). ARCHITECTURE.md's own
+performance target is **search latency < 1 second**; a ~0.8-1.4s
+translation step alone is already close to or over that budget before
+the CLIP text encode (~0.1-0.3s) even runs. This doesn't rule out
+translate-then-embed, but it means the tradeoff isn't just
+"accuracy vs. corpus-indexing speed" -- it's also "accuracy vs.
+per-query latency," a different budget with a documented target already
+at risk. Also structurally required by ARCHITECTURE.md §11/ADR-007:
+images and queries must be embedded by the same model family for the
+vectors to be comparable, so this only works as "fast CLIP indexes the
+corpus, translated queries hit that same CLIP text tower" -- not as a
+mix of SigLIP-for-queries-only bolted onto CLIP-for-images.
+
+**What this doesn't test:** translation quality from a larger/different
+MT model (only one was tried, chosen because it was verified to load,
+not benchmarked against alternatives), and whether the <1s latency
+concern is actually disqualifying or just tight -- both open questions
+if translate-then-embed becomes a real candidate rather than an
+exploratory data point.
+
+## `clip_template_bakeoff.py` -- does a domain template help the fast CLIP candidates?
+
+`siglip_template_check.py` found a domain-specific template
+("an aerial photo of {query}") lifted SigLIP so400m from 33.3% to 55.6%
+strict-EN, but left SigLIP base flat -- not a universal trick, and never
+tested on any CLIP candidate. Since it costs nothing (no retraining, just
+a different string before encoding), it's worth checking rather than
+assuming either way. Tests the same three template variants
+(`siglip_template_check.py`'s own, for comparability) on the three
+512-dim candidates `clip_small_dim_bakeoff.py` found fast enough to be
+worth considering, against both English and the Portuguese-via-machine-
+translation queries `clip_pt_translation_bakeoff.py` validated. Native
+Portuguese is skipped -- wrapping non-English text in an English template
+phrase would just produce a code-mixed string, not a meaningful test.
+
+### Results (`clip_template_bakeoff_results.json`)
+
+| Model | Variant | Strict-EN | Strict-PT(MT) | Pairwise-EN | Pairwise-PT(MT) |
+|---|---|---|---|---|---|
+| `openai/clip-vit-base-patch32` | raw | 44.0% | 52.0% | 75.1% | 72.5% |
+| `openai/clip-vit-base-patch32` | a photo of | 44.0% | 52.0% | 74.6% | 74.1% |
+| `openai/clip-vit-base-patch32` | an aerial photo of | 44.0% | 40.0% | 70.4% | 65.6% |
+| `openai/clip-vit-base-patch16` | raw | **56.0%** | **52.0%** | **78.8%** | **78.8%** |
+| `openai/clip-vit-base-patch16` | a photo of | 52.0% | 44.0% | 78.3% | 76.7% |
+| `openai/clip-vit-base-patch16` | an aerial photo of | 52.0% | 40.0% | 72.5% | 69.8% |
+| `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` | raw | 56.0% | 52.0% | 78.8% | 72.5% |
+| `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` | **a photo of** | **60.0%** | **56.0%** | **80.4%** | **75.1%** |
+| `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` | an aerial photo of | 52.0% | 44.0% | 73.5% | 69.3% |
+
+**Finding: the template that helped SigLIP hurts every CLIP candidate
+tested here.** "an aerial photo of {query}" -- the exact template that
+lifted so400m by 22 points -- makes all three CLIP candidates worse,
+sometimes substantially (patch32: -12pp strict-PT(MT); patch16: -16pp
+strict-PT(MT); laion: -8pp strict-PT(MT)). A complete reversal from the
+SigLIP result, and a clean demonstration that this lever is not
+transferable between model families -- SigLIP and CLIP were trained on
+different data with different loss functions, so they learned different
+phrase distributions. Don't assume a template finding from one family
+carries to another; re-test it.
+
+The plain, generic "a photo of {query}" template tells a different story
+per model: flat-to-slightly-negative for both `openai` checkpoints, but a
+real, consistent gain for `laion/CLIP-ViT-B-32-laion2B-s34B-b79K` --
+strict-EN 56.0% -> 60.0%, strict-PT(MT) 52.0% -> 56.0%, both pairwise
+numbers up too. That's the checkpoint `clip_small_dim_bakeoff.py` flagged
+as ~10x faster than SigLIP `base` on this hardware. With this template,
+its strict-EN now exactly matches SigLIP `base`'s 60.0%, and its
+Portuguese-via-translation gap narrows from -12pp to -8pp relative to
+SigLIP's native 64.0% -- for free, since only the query text changes, not
+image encoding speed.
+
+**Caveat, same as everywhere in this directory:** still the 45-image,
+25-query demo corpus -- each point is worth roughly one query flipping.
+Worth re-confirming this specific combination (`laion` ViT-B/32 + "a
+photo of") before treating it as settled, especially since the effect
+was clearly not consistent across the other two candidates tested
+alongside it.
 
 ## Reproducing on different hardware
 
