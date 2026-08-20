@@ -56,8 +56,22 @@ show_error_codes = true
 pretty = true
 files = ["backend/app", "backend/tests", "backend/dataset_tools"]
 
+# langdetect ships no type information and has no stubs on typeshed.
+# Scoped to that one module so the rest of the codebase stays strict --
+# torch and transformers both ship `py.typed` and are checked normally.
+[[tool.mypy.overrides]]
+module = ["langdetect.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 python_files = ["test_*.py"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not slow'"
 pythonpath = [".", "backend"]
+markers = [
+    # Opt-in only: downloads and runs the real Hugging Face checkpoints
+    # (RFC-023 section 15). Deselected by the default `addopts` above, so
+    # a plain `pytest` stays offline, fast, and deterministic. Run them
+    # with `pytest -m slow` or `pytest -m ""`.
+    "slow: requires downloading and running real AI models",
+]

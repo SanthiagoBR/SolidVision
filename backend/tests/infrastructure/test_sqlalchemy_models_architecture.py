@@ -6,6 +6,7 @@ from pathlib import Path
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, DateTime
 
+from app.infrastructure.config.settings import settings
 from app.infrastructure.database.models.image_model import ImageModel
 
 
@@ -20,8 +21,23 @@ def test_image_model_embedding_column_matches_pgvector_schema() -> None:
     embedding_column = ImageModel.__table__.c.embedding
 
     assert isinstance(embedding_column.type, Vector)
-    assert embedding_column.type.dim == 1152
+    assert embedding_column.type.dim == 512
     assert embedding_column.nullable is True
+
+
+def test_image_model_embedding_column_matches_configured_dimension() -> None:
+    """The mapped column and the configured model must not drift apart.
+
+    The column literal is pinned by the RFC-023 migration and the setting
+    is what the CLIP adapter validates its output against, so the two are
+    written independently on purpose. This is the guard that catches a
+    change to one without the other -- which would mean the application
+    generating vectors the database cannot store.
+    """
+    embedding_type = ImageModel.__table__.c.embedding.type
+    assert isinstance(embedding_type, Vector)
+
+    assert embedding_type.dim == settings.embedding_dimension
 
 
 def test_image_model_file_size_column_matches_schema() -> None:

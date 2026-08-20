@@ -40,15 +40,19 @@ class Settings(BaseSettings):
     )
 
     embedding_model: str = Field(
-        default="google/siglip-base-patch16-224",
+        default="laion/CLIP-ViT-B-32-laion2B-s34B-b79K",
         description="Embedding model identifier",
     )
     embedding_dimension: int = Field(
-        default=1152,
+        default=512,
         ge=1,
-        description="Embedding vector size",
+        description="Embedding vector size produced by `embedding_model`",
     )
-    device: str = Field(default="cpu", description="Inference device")
+    device: str = Field(
+        default="auto",
+        description="Inference device: 'auto' (CUDA when available, else CPU), "
+        "'cpu', or an explicit torch device string",
+    )
 
     default_collection_name: str = Field(
         default="default",

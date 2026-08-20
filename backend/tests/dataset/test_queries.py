@@ -2,12 +2,22 @@
 
 Structural validity (paths exist, no overlap, no duplicates) is checked
 unconditionally. Actual retrieval quality is not -- `queries.json` ships
-dormant, since `FakeEmbeddingModel` has no semantic understanding (RFC-022
-7.3) and nothing in the codebase performs real vector-similarity search
-yet (`SearchImagesUseCase` is a stub that returns every image
-unranked). The dormant test below is expected to fail today; it exists so
-that swapping `FakeEmbeddingModel` for a real `EmbeddingModelPort`
-implementation activates it with no test-code changes.
+dormant.
+
+RFC-023 delivered the half of that blockage it owned: `ClipEmbeddingModel`
+is a real `EmbeddingModelPort` with genuine semantic understanding, so the
+"no semantic model" reason is gone. The other half remains. Retrieval
+quality is a property of *search*, and `SearchImagesUseCase` still encodes
+the query, discards the embedding, and returns `repository.list()`
+unranked -- there is no vector similarity search to measure. Implementing
+one was explicitly out of scope for RFC-023 (section 17); it belongs to
+the separate vector-search RFC.
+
+So the dormant test below stays dormant, and stays on `FakeEmbeddingModel`
+on purpose: activating it against the real checkpoint would drag a 600 MB
+download into the fast suite to measure a ranking nothing produces yet.
+When vector search lands, the test to write is one that exercises
+`SearchImagesUseCase` end to end -- not this hand-rolled cosine loop.
 """
 
 from __future__ import annotations
@@ -105,9 +115,11 @@ class TestQueriesStructuralValidity:
 
 @pytest.mark.xfail(
     reason=(
-        "FakeEmbeddingModel has no semantic understanding of image content "
-        "(RFC-022 7.3) -- activates once a real EmbeddingModelPort "
-        "implementation (e.g. SigLIP) replaces it, with no test-code change."
+        "Blocked on the vector-search RFC, not on the embedding model. "
+        "RFC-023 shipped a real semantic EmbeddingModelPort, but "
+        "SearchImagesUseCase still discards the query embedding and returns "
+        "every image unranked, so there is no retrieval to measure. Runs "
+        "here against FakeEmbeddingModel so the fast suite stays offline."
     ),
     strict=False,
 )

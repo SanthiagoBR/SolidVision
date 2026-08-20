@@ -10,6 +10,25 @@ pydantic-settings
 python-dotenv
 pillow
 
+# RFC-023 CLIP embedding adapter (app/infrastructure/ai/).
+#   torch         -- inference runtime for both checkpoints; the CPU wheel is
+#                    what a development machine installs, CUDA is picked up
+#                    automatically when a CUDA-enabled build is present.
+#   transformers  -- CLIPModel/AutoProcessor for the embedding model, and
+#                    AutoTokenizer/AutoModelForSeq2SeqLM for PT->EN translation.
+#   sentencepiece -- required by MarianTokenizer; opus-mt-ROMANCE-en ships a
+#                    SentencePiece vocabulary and will not tokenize without it.
+#   langdetect    -- small pure-Python language detector used to decide whether
+#                    a query needs translating. Chosen over a heavyweight NLP
+#                    framework per RFC-023 section 8.
+# `accelerate` is deliberately NOT listed: the adapter loads with a plain
+# `from_pretrained(...)` + `.to(device)` and never uses device_map/low_cpu_mem
+# paths, so nothing here needs it (RFC-023 section 13).
+torch
+transformers
+sentencepiece
+langdetect
+
 # Testing dependencies for unit and integration test execution
 pytest
 pytest-cov

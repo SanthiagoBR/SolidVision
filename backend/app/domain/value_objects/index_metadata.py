@@ -11,7 +11,7 @@ class IndexMetadata:
     """Filesystem metadata read back from persistence for change comparison.
 
     Deliberately excludes `embedding` and `Image` -- reconstructing a
-    1152-dimension vector just to compare two scalars would be wasteful,
+    full embedding vector just to compare two scalars would be wasteful,
     and no such reconstruction exists elsewhere in the codebase. Lives in
     Domain because it is part of the `ImageRepository` port's contract.
     """

@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from app.application.use_cases.index_image import IndexImageUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.embedding_model_port import EmbeddingModelPort
-from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
+from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
 from app.infrastructure.persistence.session import SessionLocal
-
-_embedding_model = FakeEmbeddingModel()
 
 
 def get_image_repository() -> ImageRepository:
@@ -27,9 +27,28 @@ def get_image_repository() -> ImageRepository:
     return PostgresImageRepository(SessionLocal())
 
 
+@lru_cache(maxsize=1)
 def get_embedding_model() -> EmbeddingModelPort:
-    """Return the shared fake embedding model instance."""
-    return _embedding_model
+    """Return the process-wide CLIP adapter, built on first use.
+
+    Lazy on purpose, unlike the eager module-level singleton RFC-016
+    established for `InMemoryImageRepository`. Importing this module is
+    something most of the test suite does transitively (any import of
+    `app.presentation.api` reaches it), and an eager
+    `ClipEmbeddingModel()` at import time would be a landmine the day the
+    constructor starts doing real work.
+
+    `lru_cache` gives the load-once/reuse-forever semantics RFC-023
+    section 10 requires while keeping construction itself free: the adapter
+    defers both the CLIP checkpoint and the translation model until an
+    actual `encode_*` call, so neither importing this module nor calling
+    this provider downloads anything from Hugging Face.
+
+    `FakeEmbeddingModel` is untouched in
+    `app.infrastructure.ai.fake_embedding_model` and remains the test
+    double for everything that must not load a real model.
+    """
+    return ClipEmbeddingModel()
 
 
 def get_index_image_use_case() -> IndexImageUseCase:

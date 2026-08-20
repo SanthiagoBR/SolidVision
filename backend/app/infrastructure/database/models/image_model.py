@@ -29,7 +29,13 @@ class ImageModel(Base):
     path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     extension: Mapped[str] = mapped_column(String, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1152), nullable=True)
+    # 512 is the projection width of the RFC-023 CLIP checkpoint. Written as
+    # a literal rather than read from `settings.embedding_dimension` because
+    # this is physical schema, pinned by a migration: it must not silently
+    # follow a runtime env var away from what the database actually holds.
+    # `test_image_model_embedding_column_matches_configured_dimension` asserts
+    # the two stay in agreement.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(512), nullable=True)
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     file_modified_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

@@ -37,7 +37,7 @@ def _build_image(path: str | None = None) -> Image:
 
 
 def _build_embedding(seed: float = 0.1) -> EmbeddingVector:
-    return EmbeddingVector([seed] * 1152)
+    return EmbeddingVector([seed] * 512)
 
 
 def test_save_persists_all_fields(db_session: Session) -> None:
@@ -319,7 +319,7 @@ def test_save_indexed_updates_existing_row_without_duplicating(
     assert row is not None
     assert row.file_size == 200
     assert row.file_modified_at == second_modified_at
-    assert list(row.embedding) == pytest.approx([0.9] * 1152)
+    assert list(row.embedding) == pytest.approx([0.9] * 512)
 
 
 def test_save_indexed_does_not_raise_already_exists_for_updates(

@@ -99,7 +99,7 @@ def test_to_domain_ignores_populated_embedding() -> None:
         extension="png",
     )
     model = ImageModel.from_domain(image)
-    model.embedding = [0.1] * 1152
+    model.embedding = [0.1] * 512
 
     reconstructed = model.to_domain()
 
