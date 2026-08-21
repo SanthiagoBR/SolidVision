@@ -1,0 +1,108 @@
+{
+  "model_id": "laion/CLIP-ViT-B-32-laion2B-s34B-b79K",
+  "image_count": 45,
+  "text_count": 25,
+  "image_batches": [
+    {
+      "batch_size": 1,
+      "total_seconds": 21.137160100000074,
+      "seconds_per_image": 0.4697146688888905,
+      "drift_vs_batch1": {
+        "mean": 1.0,
+        "min": 1.0
+      }
+    },
+    {
+      "batch_size": 2,
+      "total_seconds": 18.91194029999997,
+      "seconds_per_image": 0.4202653399999993,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    },
+    {
+      "batch_size": 4,
+      "total_seconds": 17.053439300000264,
+      "seconds_per_image": 0.37896531777778364,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    },
+    {
+      "batch_size": 8,
+      "total_seconds": 15.135652800000116,
+      "seconds_per_image": 0.33634784000000256,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    },
+    {
+      "batch_size": 16,
+      "total_seconds": 14.827121899999838,
+      "seconds_per_image": 0.3294915977777742,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    },
+    {
+      "batch_size": 32,
+      "total_seconds": 14.364273700000012,
+      "seconds_per_image": 0.3192060822222225,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    },
+    {
+      "batch_size": 64,
+      "total_seconds": 15.374677899999824,
+      "seconds_per_image": 0.34165950888888497,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    },
+    {
+      "batch_size": 128,
+      "total_seconds": 14.26738030000024,
+      "seconds_per_image": 0.31705289555556093,
+      "drift_vs_batch1": {
+        "mean": 1.0000000052981906,
+        "min": 0.9999998807907104
+      }
+    }
+  ],
+  "text_batches": [
+    {
+      "batch_size": 1,
+      "total_seconds": 1.7050595999999132,
+      "seconds_per_text": 0.06820238399999652,
+      "drift_vs_batch1": {
+        "mean": 1.0,
+        "min": 1.0
+      }
+    },
+    {
+      "batch_size": 5,
+      "total_seconds": 1.3329186999999365,
+      "seconds_per_text": 0.05331674799999746,
+      "drift_vs_batch1": {
+        "mean": 0.9999999976158143,
+        "min": 0.9999998211860657
+      }
+    },
+    {
+      "batch_size": 25,
+      "total_seconds": 1.5252746999999545,
+      "seconds_per_text": 0.06101098799999818,
+      "drift_vs_batch1": {
+        "mean": 1.0,
+        "min": 0.9999998807907104
+      }
+    }
+  ]
+}
