@@ -347,8 +347,13 @@ infrastructure/workers/indexing_worker.py
 Worker entry point:
 
 ```
-python -m infrastructure.workers.indexing_worker
+python -m app.infrastructure.workers.indexing_worker --root PATH
 ```
+
+The `app.` prefix is required: the package is `app.infrastructure`, and
+`pyproject.toml` puts `backend/` on `pythonpath`, not `backend/app/`. `--root`
+is required and has no default, deliberately, so the command can never begin
+indexing a real photo collection nobody pointed it at (RFC-024 section 12).
 
 ---
 

@@ -7,11 +7,12 @@ Materializes the manifest-described demo corpus into `--target` (default:
 `data/demo`, resolved relative to the current working directory) with each
 file's mtime stamped from the manifest, then runs the real indexing
 pipeline -- `FilesystemImageProvider` -> `IndexingWorker` ->
-`IndexOrUpdateImageUseCase` -> `PostgresImageRepository` -- against it,
+`IndexOrUpdateImagesUseCase` -> `PostgresImageRepository` -- against it,
 using `FakeEmbeddingModel` (no AI library is loaded).
 
 The default target is deliberately NOT `settings.indexing_root_path`, even
-though that is the directory a future production worker CLI would scan.
+though that is the directory the production worker CLI
+(`python -m app.infrastructure.workers.indexing_worker`) scans.
 Defaulting there would silently mix 40 demo photos into a user's real
 photo collection the first time they configure `INDEXING_ROOT_PATH` and
 run this script from habit. Anyone who wants the running app to actually
@@ -22,7 +23,7 @@ Unlike the test suite, which uses a SAVEPOINT-isolated session rolled back
 on teardown (see `backend/tests/conftest.py`), this commits for real: it
 is meant to leave a working demo dataset behind for manual QA and
 `/search` experimentation once that endpoint exists. Safe to re-run --
-`IndexOrUpdateImageUseCase` skips any file whose filesystem metadata is
+`IndexOrUpdateImagesUseCase` skips any file whose filesystem metadata is
 unchanged (RFC-022 section 7).
 """
 
@@ -31,12 +32,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
+from app.application.use_cases.index_or_update_images import (
+    IndexOrUpdateImagesUseCase,
+)
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.config.settings import settings
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
+from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
 from app.infrastructure.logging.logger import get_logger
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
@@ -68,9 +72,12 @@ def seed_demo(target_root: Path) -> None:
             filesystem_provider=FilesystemImageProvider(
                 target_root, settings.supported_extensions
             ),
-            index_or_update_use_case=IndexOrUpdateImageUseCase(
+            index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
                 repository=repository,
                 embedding_model=FakeEmbeddingModel(),
+                content_hasher=Sha256ContentHasher(),
+                batch_size=settings.batch_size,
+                metadata_prefetch_size=settings.metadata_prefetch_size,
             ),
         )
         worker.run()

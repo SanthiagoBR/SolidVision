@@ -14,8 +14,11 @@ against the real checkpoint is covered by `test_clip_embedding_model_slow.py`.
 
 from __future__ import annotations
 
+import gc
 import math
 import uuid
+import weakref
+import zlib
 from pathlib import Path
 from typing import Any, cast
 
@@ -65,7 +68,13 @@ class RecordingTranslator(QueryTranslator):
 
 
 class StubProcessor:
-    """Stands in for `CLIPProcessor`, capturing what it was handed."""
+    """Stands in for `CLIPProcessor`, capturing what it was handed.
+
+    The returned `pixel_values` depend on the image's actual bytes rather
+    than being a constant zero tensor. Without that, every row of a batch
+    would be identical and "batched output matches single output" would be
+    true no matter how badly the adapter sliced or reordered things.
+    """
 
     def __init__(self) -> None:
         self.images: list[PILImage.Image] = []
@@ -79,10 +88,16 @@ class StubProcessor:
     ) -> dict[str, torch.Tensor]:
         if images is not None:
             self.images.append(images)
-            return {"pixel_values": torch.zeros(1, 3, 224, 224)}
+            return {"pixel_values": _fingerprint_tensor(images)}
         assert text is not None
         self.texts.extend(text)
         return {"input_ids": torch.ones(1, 7, dtype=torch.long)}
+
+
+def _fingerprint_tensor(image: PILImage.Image) -> torch.Tensor:
+    """One fixed-size tensor whose value is derived from the image content."""
+    value = (zlib.crc32(image.tobytes()) % 100_003) / 100_003.0
+    return torch.full((1, 3, 8, 8), value, dtype=torch.float32)
 
 
 class StubClipModel:
@@ -114,9 +129,30 @@ class StubClipModel:
             pooler_output=_float(pooled),
         )
 
+    def _content_rows(self, pixel_values: torch.Tensor) -> torch.FloatTensor:
+        """Derive one un-normalized feature row per input row, from its content.
+
+        Position-independent on purpose: row `i` of a batch must come out
+        the same as the sole row of a batch of one holding the same image,
+        which is exactly what RFC-024's equivalence requirement means.
+        """
+        ramp = torch.arange(self.dimension, dtype=torch.float32) * 0.001
+        rows = [
+            (ramp + float(pixel_values[index].mean()) + 1.0) * 7.0
+            for index in range(pixel_values.shape[0])
+        ]
+        return _float(torch.stack(rows))
+
     def get_image_features(self, **kwargs: Any) -> BaseModelOutputWithPooling:
         self.image_calls += 1
-        return self._features(seed=1)
+        pixel_values = kwargs["pixel_values"]
+        pooled = self._content_rows(pixel_values)
+        return BaseModelOutputWithPooling(
+            last_hidden_state=_float(
+                torch.zeros(pooled.shape[0], 50, PRE_PROJECTION_WIDTH)
+            ),
+            pooler_output=pooled,
+        )
 
     def get_text_features(self, **kwargs: Any) -> BaseModelOutputWithPooling:
         self.text_calls += 1
@@ -476,3 +512,227 @@ class TestFeatureExtraction:
 
         with pytest.raises(ValueError, match="expected a single"):
             _adapter().encode_image(_image(jpeg_path))
+
+
+class TestBatchImageEncoding:
+    """RFC-024 section 5: the adapter's own batch path."""
+
+    @staticmethod
+    def _photos(tmp_path: Path, count: int) -> list[Image]:
+        images = []
+        for index in range(count):
+            path = tmp_path / f"photo_{index}.jpg"
+            PILImage.new(
+                "RGB", (64, 48), color=(20 + index * 20, 40, 200 - index * 15)
+            ).save(path, "JPEG", quality=95)
+            images.append(_image(path))
+        return images
+
+    def test_returns_one_embedding_per_image(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        results = _adapter().encode_images(self._photos(tmp_path, 5))
+
+        assert len(results) == 5
+        assert all(isinstance(result, EmbeddingVector) for result in results)
+        assert all(len(result.values) == DIMENSION for result in results)
+
+    def test_an_empty_batch_encodes_nothing_and_loads_nothing(
+        self, stub_clip: StubLoads
+    ) -> None:
+        assert _adapter().encode_images([]) == []
+        assert stub_clip.model_loads == 0
+
+    def test_the_whole_batch_is_one_forward_pass(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """The entire point: N images, one call into the model."""
+        _adapter().encode_images(self._photos(tmp_path, 6))
+
+        assert stub_clip.model.image_calls == 1
+
+    def test_every_image_is_preprocessed_individually(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """Preprocessing is per file so full-size decodes never accumulate."""
+        _adapter().encode_images(self._photos(tmp_path, 4))
+
+        assert len(stub_clip.processor.images) == 4
+
+    def test_batched_embeddings_match_single_image_embeddings(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """Batching changes how the work is done, never what is computed."""
+        images = self._photos(tmp_path, 5)
+        adapter = _adapter()
+
+        batched = adapter.encode_images(images)
+        one_at_a_time = [adapter.encode_image(image) for image in images]
+
+        for from_batch, alone in zip(batched, one_at_a_time, strict=True):
+            assert from_batch.values == pytest.approx(alone.values, abs=1e-6)
+
+    def test_results_come_back_in_the_order_they_were_given(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """A reordered batch would silently attach embeddings to wrong rows."""
+        images = self._photos(tmp_path, 4)
+        adapter = _adapter()
+
+        forwards = adapter.encode_images(images)
+        backwards = adapter.encode_images(list(reversed(images)))
+
+        for index, expected in enumerate(forwards):
+            assert backwards[len(images) - 1 - index].values == pytest.approx(
+                expected.values, abs=1e-6
+            )
+
+    def test_every_batched_embedding_is_l2_normalized(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        results = _adapter().encode_images(self._photos(tmp_path, 4))
+
+        for result in results:
+            norm = math.sqrt(sum(value * value for value in result.values))
+            assert norm == pytest.approx(1.0, abs=1e-6)
+
+    def test_a_broken_file_fails_the_batch_rather_than_being_swallowed(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """RFC-023 section 4 stands: the caller retries to find the culprit."""
+        images = self._photos(tmp_path, 3)
+        broken = tmp_path / "zero_byte.jpg"
+        broken.write_bytes(b"")
+
+        with pytest.raises(UnidentifiedImageError):
+            _adapter().encode_images([*images, _image(broken)])
+
+    def test_a_failed_batch_leaves_the_adapter_usable(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """The per-image retry that follows a failed batch depends on this."""
+        images = self._photos(tmp_path, 3)
+        broken = tmp_path / "zero_byte.jpg"
+        broken.write_bytes(b"")
+        adapter = _adapter()
+
+        with pytest.raises(UnidentifiedImageError):
+            adapter.encode_images([*images, _image(broken)])
+
+        assert len(adapter.encode_images(images)) == 3
+
+    def test_a_feature_row_count_mismatch_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A model returning fewer rows than images must not be silently zipped."""
+
+        class OneRowModel(StubClipModel):
+            def get_image_features(self, **kwargs: Any) -> BaseModelOutputWithPooling:
+                return BaseModelOutputWithPooling(
+                    last_hidden_state=_float(torch.zeros(1, 50, PRE_PROJECTION_WIDTH)),
+                    pooler_output=_float(torch.rand(1, DIMENSION)),
+                )
+
+        stubs = StubLoads()
+        stubs.model = OneRowModel()
+        _install(monkeypatch, stubs)
+
+        with pytest.raises(ValueError, match=r"expected 3 \(3, N\) embeddings"):
+            _adapter().encode_images(self._photos(tmp_path, 3))
+
+
+class TestBatchMemoryCeiling:
+    """RFC-024 section 9: N in a batch must not mean N decoded photos in RAM."""
+
+    class _LivenessTrackingProcessor(StubProcessor):
+        """Watches how many full-size decoded images are alive at once.
+
+        Deliberately does not retain the images it is handed -- the parent
+        class keeps them in a list for other assertions, and holding a
+        reference is precisely what this test is trying to detect.
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.live = 0
+            self.peak_live = 0
+
+        def __call__(
+            self,
+            images: PILImage.Image | None = None,
+            text: list[str] | None = None,
+            **kwargs: Any,
+        ) -> dict[str, torch.Tensor]:
+            if images is None:
+                return super().__call__(images=images, text=text, **kwargs)
+
+            self.live += 1
+            self.peak_live = max(self.peak_live, self.live)
+            weakref.finalize(images, self._released)
+            return {"pixel_values": _fingerprint_tensor(images)}
+
+        def _released(self) -> None:
+            self.live -= 1
+
+    @pytest.fixture()
+    def tracking(self, monkeypatch: pytest.MonkeyPatch) -> _LivenessTrackingProcessor:
+        stubs = StubLoads()
+        processor = TestBatchMemoryCeiling._LivenessTrackingProcessor()
+        stubs.processor = processor
+        _install(monkeypatch, stubs)
+        return processor
+
+    @staticmethod
+    def _large_photos(tmp_path: Path, count: int) -> list[Image]:
+        """Images big enough that retaining them all would be the bug.
+
+        Small next to a 24-megapixel drone photo, but the property under
+        test is structural -- how many are held at once -- not how big any
+        one of them is, so there is no reason to make the suite slow to
+        assert it.
+        """
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        images = []
+        for index in range(count):
+            path = tmp_path / f"large_{index}.png"
+            PILImage.new("RGB", (900, 700), color=(index * 10, 60, 90)).save(path)
+            images.append(_image(path))
+        return images
+
+    @pytest.mark.parametrize("batch_size", [2, 4, 8])
+    def test_only_one_decoded_image_is_alive_at_a_time(
+        self,
+        batch_size: int,
+        tracking: _LivenessTrackingProcessor,
+        tmp_path: Path,
+    ) -> None:
+        """The demo corpus cannot expose this; a structural assertion can.
+
+        RFC-024 section 9 allows asserting the structural property instead
+        of peak RSS, and this is the stronger of the two: RSS is noisy and
+        platform-dependent, while "no full-size decode outlives its own
+        preprocessing step" is exactly the invariant that keeps a batch of
+        24-megapixel photos from costing gigabytes.
+        """
+        _adapter().encode_images(self._large_photos(tmp_path, batch_size))
+
+        gc.collect()
+        assert tracking.peak_live == 1
+
+    def test_the_batch_tensor_is_fixed_size_regardless_of_source_resolution(
+        self, tracking: _LivenessTrackingProcessor, tmp_path: Path
+    ) -> None:
+        """What accumulates across a batch is the small tensor, not the photo.
+
+        Preprocessing collapses each decoded image to the model's fixed
+        input size, so the assembled batch grows with the batch *count*
+        and not with the source resolution -- the property that makes a
+        batch of large photos affordable at all.
+        """
+        small = self._large_photos(tmp_path / "small", 3)
+        large = self._large_photos(tmp_path / "large", 3)
+
+        _adapter().encode_images(small)
+        _adapter().encode_images(large)
+
+        assert tracking.peak_live == 1

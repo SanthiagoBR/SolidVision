@@ -25,7 +25,9 @@ from pathlib import Path
 import pytest
 from PIL import Image as PILImage
 
-from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
+from app.application.use_cases.index_or_update_images import (
+    IndexOrUpdateImagesUseCase,
+)
 from app.domain.entities.image import Image
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -36,6 +38,7 @@ from app.infrastructure.config.settings import settings
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
+from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
 from app.infrastructure.persistence.in_memory_image_repository import (
     InMemoryImageRepository,
 )
@@ -186,11 +189,21 @@ class TestHardCasesWithRealPixelDecoding:
     """
 
     @staticmethod
-    @pytest.fixture(scope="class")
+    @pytest.fixture(scope="class", params=[1, 8], ids=["sequential", "batched"])
     def indexing_run(
+        request: pytest.FixtureRequest,
         tmp_path_factory: pytest.TempPathFactory,
     ) -> tuple[Path, set[str]]:
-        """Index the hard-case corpus once, through the real production path."""
+        """Index the hard-case corpus through the real production path.
+
+        Parametrized over batch size 1 and 8, which makes every assertion
+        in this class RFC-024 section 6's acceptance test: the batched
+        pipeline must produce exactly the same outcome as the sequential
+        one for every case in the corpus, including the two that fail. A
+        batch of 8 here contains both `zero_byte.jpg` and `truncated.jpg`,
+        so the per-image retry really is exercised rather than merely
+        available.
+        """
         root = tmp_path_factory.mktemp("hard_cases")
         generate(root)
 
@@ -199,9 +212,12 @@ class TestHardCasesWithRealPixelDecoding:
             filesystem_provider=FilesystemImageProvider(
                 root, SUPPORTED_IMAGE_EXTENSIONS
             ),
-            index_or_update_use_case=IndexOrUpdateImageUseCase(
+            index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
                 repository=repository,
                 embedding_model=ClipEmbeddingModel(),
+                content_hasher=Sha256ContentHasher(),
+                batch_size=request.param,
+                metadata_prefetch_size=512,
             ),
         ).run()
 
@@ -250,3 +266,108 @@ class TestHardCasesWithRealPixelDecoding:
         )
 
         assert len(indexed_paths) == expected
+
+
+class TestBatchedInferenceOnTheRealCheckpoint:
+    """RFC-024 sections 3.1 and 5, against the checkpoint that ships.
+
+    The stubbed unit tests prove the adapter slices and orders a batch
+    correctly. Only this can prove that CLIP itself computes the same
+    thing for an image whether it arrives alone or inside a batch -- the
+    claim the whole RFC rests on, and one no stub can make.
+    """
+
+    @staticmethod
+    def _photos(tmp_path: Path, count: int) -> list[Image]:
+        return [
+            _image(
+                _write_photo(
+                    tmp_path / f"photo_{index}.jpg",
+                    (20 + index * 25, 90, 200 - index * 20),
+                )
+            )
+            for index in range(count)
+        ]
+
+    @pytest.mark.parametrize("batch_size", [2, 4, 8])
+    def test_batched_embeddings_match_single_image_embeddings(
+        self, batch_size: int, clip: ClipEmbeddingModel, tmp_path: Path
+    ) -> None:
+        """Equivalence to within floating point, at every batch size shipped.
+
+        The tolerance is loose by embedding standards and tight by the
+        standard that matters: cosine similarity is what the HNSW index
+        ranks on, and a 1e-5 per-component difference cannot reorder
+        results.
+        """
+        images = self._photos(tmp_path, batch_size)
+
+        batched = clip.encode_images(images)
+        one_at_a_time = [clip.encode_image(image) for image in images]
+
+        for from_batch, alone in zip(batched, one_at_a_time, strict=True):
+            assert from_batch.values == pytest.approx(alone.values, abs=1e-5)
+            assert _cosine(from_batch, alone) == pytest.approx(1.0, abs=1e-6)
+
+    def test_batching_preserves_the_distinctions_between_images(
+        self, clip: ClipEmbeddingModel, tmp_path: Path
+    ) -> None:
+        """A batch must not blur its members into one another.
+
+        A plausible batching bug -- broadcasting one row, or pooling across
+        the batch dimension -- would still return the right *number* of
+        vectors, all of them near-identical. Equivalence above would catch
+        it, but this states the failure mode directly.
+        """
+        images = self._photos(tmp_path, 4)
+
+        batched = clip.encode_images(images)
+
+        for index, left in enumerate(batched):
+            for right in batched[index + 1 :]:
+                assert _cosine(left, right) < 0.999
+
+    def test_every_batched_embedding_is_unit_norm(
+        self, clip: ClipEmbeddingModel, tmp_path: Path
+    ) -> None:
+        for embedding in clip.encode_images(self._photos(tmp_path, 4)):
+            norm = math.sqrt(sum(value * value for value in embedding.values))
+            assert norm == pytest.approx(1.0, abs=1e-5)
+
+    def test_a_broken_file_fails_the_batch_and_leaves_the_adapter_usable(
+        self, clip: ClipEmbeddingModel, tmp_path: Path
+    ) -> None:
+        """The precondition for the pipeline's per-image retry to work."""
+        images = self._photos(tmp_path, 3)
+        broken = tmp_path / "zero_byte.jpg"
+        broken.write_bytes(b"")
+
+        with pytest.raises(Exception):
+            clip.encode_images([*images, _image(broken)])
+
+        assert len(clip.encode_images(images)) == 3
+
+    def test_the_mixed_colourspace_hard_cases_survive_a_batch(
+        self, clip: ClipEmbeddingModel, tmp_path: Path
+    ) -> None:
+        """One batch, four source colourspaces -- RFC-022 6.2 in one call.
+
+        Preprocessing converts each file to RGB independently, so a batch
+        can legitimately mix them. Assembling the batch tensor would fail
+        loudly if any one of them reached `torch.cat` at a different shape.
+        """
+        paths = []
+        for mode, suffix in (
+            ("L", "jpg"),
+            ("RGBA", "png"),
+            ("CMYK", "jpg"),
+            ("I;16", "tiff"),
+        ):
+            path = tmp_path / f"case_{mode.replace(';', '')}.{suffix}"
+            PILImage.new(mode, (128, 96)).save(path)
+            paths.append(path)
+
+        results = clip.encode_images([_image(path) for path in paths])
+
+        assert len(results) == 4
+        assert all(len(result.values) == 512 for result in results)

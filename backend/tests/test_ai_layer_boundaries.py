@@ -118,3 +118,68 @@ def test_importing_the_fake_does_not_drag_in_torch() -> None:
     ).read_text(encoding="utf-8")
 
     assert "ClipEmbeddingModel" not in ai_package_source.split('"""')[-1]
+
+
+def test_the_batch_capability_did_not_leak_implementation_vocabulary() -> None:
+    """RFC-024 section 16: batching must not teach Domain about tensors.
+
+    `test_the_embedding_port_stays_model_agnostic` already scans the whole
+    file, but these are the words a batch API specifically invites -- the
+    ones you reach for when explaining *why* several images at once is
+    faster -- so they get named explicitly rather than left to a list
+    written before the method existed.
+    """
+    port_source = (DOMAIN_DIR / "services" / "embedding_model_port.py").read_text(
+        encoding="utf-8"
+    )
+
+    for term in ("tensor", "cuda", "gpu", "device", "pixel", "dtype", "forward pass"):
+        assert term not in port_source.lower(), f"{term!r} leaked into the port"
+
+
+def test_the_embedding_port_exposes_a_batch_capability() -> None:
+    """Guards the guard above: the checks are vacuous if the method is gone."""
+    from app.domain.services.embedding_model_port import EmbeddingModelPort
+
+    assert hasattr(EmbeddingModelPort, "encode_images")
+    assert "encode_images" not in EmbeddingModelPort.__abstractmethods__
+
+
+def test_the_content_hasher_port_names_no_implementation() -> None:
+    """The same contract discipline, applied to RFC-024's second port."""
+    port_source = (DOMAIN_DIR / "services" / "content_hasher_port.py").read_text(
+        encoding="utf-8"
+    )
+
+    for term in ("hashlib", "sha256", "pathlib", "open(", "read("):
+        assert term not in port_source.lower(), f"{term!r} leaked into the port"
+
+
+def test_the_application_layer_depends_only_on_ports_for_hashing() -> None:
+    """Hashing is filesystem I/O, so the concrete hasher stays below.
+
+    An `import ... Sha256ContentHasher` in a use case would compile and
+    pass every behavioural test in the suite -- this is the only thing
+    that would notice.
+    """
+    for path in _python_files(APPLICATION_DIR):
+        for module in _imported_modules(path):
+            assert "sha256" not in module.lower(), (
+                f"{path.relative_to(BACKEND_DIR)} imports {module!r}; the hashing "
+                f"implementation belongs behind ContentHasherPort"
+            )
+
+
+def test_use_cases_never_reach_for_the_database_directly() -> None:
+    """`AI_Context.md`: everything through `ImageRepository`.
+
+    RFC-024 added a bulk metadata read, which is exactly the kind of
+    "just one query" that tempts a use case to open a session itself.
+    """
+    for path in _python_files(APPLICATION_DIR):
+        for module in _imported_modules(path):
+            root = module.split(".")[0]
+            assert root not in ("sqlalchemy", "psycopg", "pgvector", "alembic"), (
+                f"{path.relative_to(BACKEND_DIR)} imports {module!r}; persistence "
+                f"belongs behind ImageRepository"
+            )

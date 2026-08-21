@@ -26,3 +26,11 @@ class IndexingRecord:
     embedding: EmbeddingVector
     file_size: int | None
     file_modified_at: datetime.datetime | None
+    content_hash: str | None = None
+    """Fingerprint of the bytes that produced `embedding`.
+
+    Optional for the same reason as `IndexMetadata.content_hash`: a writer
+    that never computed one persists NULL, and NULL reads back as
+    "unknown", which costs a re-embed on the next size/mtime change rather
+    than risking a skipped one.
+    """

@@ -18,3 +18,14 @@ class IndexMetadata:
 
     file_size: int | None
     file_modified_at: datetime.datetime | None
+    content_hash: str | None = None
+    """Fingerprint of the file's bytes at the time it was last indexed.
+
+    Defaults to `None`, which means *unknown*, never *matches*. Rows
+    written before RFC-024 carry NULL here and the column was added
+    without a backfill, so a caller comparing hashes must treat `None` as
+    "cannot confirm unchanged" and fall through to re-embedding. Defaulted
+    rather than required so that every construction site that predates
+    content hashing keeps producing the safe answer instead of silently
+    claiming a match it never checked.
+    """

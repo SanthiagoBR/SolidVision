@@ -1,7 +1,7 @@
 """Pin the indexing pipeline's behavior on structural edge cases (RFC-022 6.2).
 
 Runs the real production path -- `FilesystemImageProvider` -> `IndexingWorker`
--> `IndexOrUpdateImageUseCase` -> repository -- against generated files, using
+-> `IndexOrUpdateImagesUseCase` -> repository -- against generated files, using
 the in-memory repository and the fake embedding model so no PostgreSQL and no
 AI library is required.
 """
@@ -13,6 +13,9 @@ from pathlib import Path
 import pytest
 
 from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
+from app.application.use_cases.index_or_update_images import (
+    IndexOrUpdateImagesUseCase,
+)
 from app.domain.entities.image import Image
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
@@ -22,6 +25,7 @@ from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
 from app.infrastructure.filesystem.image_identity import compute_image_id
+from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
 from app.infrastructure.persistence.in_memory_image_repository import (
     InMemoryImageRepository,
 )
@@ -43,13 +47,16 @@ def hard_cases_root(tmp_path: Path) -> Path:
     return root
 
 
-def _run_worker(root: Path) -> InMemoryImageRepository:
+def _run_worker(root: Path, batch_size: int = 8) -> InMemoryImageRepository:
     repository = InMemoryImageRepository()
     worker = IndexingWorker(
         filesystem_provider=FilesystemImageProvider(root, SUPPORTED_IMAGE_EXTENSIONS),
-        index_or_update_use_case=IndexOrUpdateImageUseCase(
+        index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
             repository=repository,
             embedding_model=FakeEmbeddingModel(),
+            content_hasher=Sha256ContentHasher(),
+            batch_size=batch_size,
+            metadata_prefetch_size=512,
         ),
     )
     worker.run()
@@ -147,6 +154,7 @@ def test_second_run_skips_every_unchanged_file(hard_cases_root: Path) -> None:
     use_case = IndexOrUpdateImageUseCase(
         repository=repository,
         embedding_model=FakeEmbeddingModel(),
+        content_hasher=Sha256ContentHasher(),
     )
     provider = FilesystemImageProvider(hard_cases_root, SUPPORTED_IMAGE_EXTENSIONS)
 

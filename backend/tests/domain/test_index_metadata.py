@@ -36,3 +36,41 @@ def test_index_metadata_does_not_carry_image_or_embedding() -> None:
 
     assert not hasattr(metadata, "image")
     assert not hasattr(metadata, "embedding")
+
+
+def test_content_hash_defaults_to_none_meaning_unknown() -> None:
+    """Defaulted so a writer that never hashed cannot claim it did.
+
+    `None` reads as "cannot confirm unchanged", which costs one re-embed.
+    A default of, say, the empty string would compare unequal to every
+    real digest too, but would lose the ability to tell "never computed"
+    apart from "computed and different".
+    """
+    metadata = IndexMetadata(file_size=1, file_modified_at=None)
+
+    assert metadata.content_hash is None
+
+
+def test_content_hash_is_stored_when_supplied() -> None:
+    metadata = IndexMetadata(file_size=1, file_modified_at=None, content_hash="a" * 64)
+
+    assert metadata.content_hash == "a" * 64
+
+
+def test_content_hash_is_immutable() -> None:
+    metadata = IndexMetadata(file_size=None, file_modified_at=None)
+
+    with pytest.raises(FrozenInstanceError):
+        metadata.content_hash = "b" * 64  # type: ignore[misc]
+
+
+def test_metadata_with_the_same_fields_compares_equal() -> None:
+    """The bulk prefetch is asserted against per-id reads by equality."""
+    modified_at = datetime.datetime.now(datetime.UTC)
+
+    assert IndexMetadata(1, modified_at, "a" * 64) == IndexMetadata(
+        1, modified_at, "a" * 64
+    )
+    assert IndexMetadata(1, modified_at, "a" * 64) != IndexMetadata(
+        1, modified_at, "b" * 64
+    )

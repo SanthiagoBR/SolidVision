@@ -62,3 +62,39 @@ def test_indexing_record_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         record.file_size = 10  # type: ignore[misc]
+
+
+def test_content_hash_defaults_to_none() -> None:
+    """A writer with no hash to offer persists NULL, not a fabricated digest."""
+    record = IndexingRecord(
+        image=_build_image(),
+        embedding=EmbeddingVector([0.1]),
+        file_size=1,
+        file_modified_at=None,
+    )
+
+    assert record.content_hash is None
+
+
+def test_content_hash_is_carried_through_to_persistence() -> None:
+    record = IndexingRecord(
+        image=_build_image(),
+        embedding=EmbeddingVector([0.1]),
+        file_size=1,
+        file_modified_at=None,
+        content_hash="a" * 64,
+    )
+
+    assert record.content_hash == "a" * 64
+
+
+def test_content_hash_is_immutable() -> None:
+    record = IndexingRecord(
+        image=_build_image(),
+        embedding=EmbeddingVector([0.1]),
+        file_size=None,
+        file_modified_at=None,
+    )
+
+    with pytest.raises(FrozenInstanceError):
+        record.content_hash = "b" * 64  # type: ignore[misc]

@@ -58,7 +58,31 @@ class Settings(BaseSettings):
         default="default",
         description="Default collection name",
     )
-    batch_size: int = Field(default=16, ge=1, description="Processing batch size")
+    # Two window sizes, deliberately separate (RFC-024 sections 5 and 7.1).
+    #
+    # `batch_size` is bounded by memory: every image in a batch is decoded
+    # and preprocessed before the forward pass, so raising it costs RAM in
+    # proportion to the source photos. 8 is the shipped default because the
+    # measured CPU speedup curve plateaus there -- batch 8 captures ~87% of
+    # all the speedup available out to batch 128, and batch 64 was measurably
+    # *slower* than 32, so bigger is not reliably better. It is a default,
+    # not a ceiling: raise it on a machine with memory to spare.
+    #
+    # `metadata_prefetch_size` is bounded by nothing comparable: it controls
+    # how many ids go into one SELECT of four scalar columns. Coupling the
+    # two would force a bad compromise in both directions -- 8 ids per query
+    # is barely better than the per-file round trips this exists to remove,
+    # and 512 decoded images at once would exhaust memory on real photos.
+    batch_size: int = Field(
+        default=8,
+        ge=1,
+        description="Images encoded per model forward pass by the indexing worker",
+    )
+    metadata_prefetch_size: int = Field(
+        default=512,
+        ge=1,
+        description="Discovered files whose index metadata is read back per query",
+    )
     worker_count: int = Field(default=1, ge=1, description="Worker count")
     supported_extensions: tuple[str, ...] = Field(
         default=SUPPORTED_IMAGE_EXTENSIONS,

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+import uuid
+from collections.abc import Sequence
+
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -57,8 +60,85 @@ class PostgresImageRepository(ImageRepository):
         `IntegrityError` into `ImageAlreadyExistsError` -- a constraint
         violation here (e.g. the `file_size` CHECK) is a real error, not a
         duplicate-create signal.
+
+        The rollback on failure is load-bearing, not defensive tidiness.
+        Every caller of this method indexes many files in sequence and
+        isolates failures per file, so the session has to survive a
+        rejected row: without the rollback, SQLAlchemy leaves the
+        transaction in a pending-rollback state and the *next* file fails
+        with `PendingRollbackError` instead of succeeding, turning one bad
+        row into a cascade. RFC-024's per-row fallback (section 7.2) walks
+        exactly that path on the same session.
         """
-        model = self._session.get(ImageModel, record.image.id.value)
+        try:
+            self._stage_indexed(record)
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
+        """Upsert many rows as one read, one flush, and one commit.
+
+        The commit is the cheap part, which is the opposite of what RFC-024
+        assumed going in: profiling a real run showed a single commit of 45
+        rows costing 2.5 ms, against ~48 ms per row for everything else.
+        The cost was the *read* half -- see the comment below -- so this
+        method collapses the reads rather than just sharing a commit.
+
+        On failure the session is rolled back before the error propagates,
+        so the caller's per-row retry starts from a clean session rather
+        than one poisoned by a half-applied batch.
+        """
+        if not records:
+            return
+
+        try:
+            # Two details make this a bulk write rather than a loop that
+            # merely shares a commit, and both were found by profiling
+            # (RFC-024 section 7.2):
+            #
+            # `session.get()` per record would issue one SELECT per row --
+            # and, worse, each of those SELECTs autoflushes the rows staged
+            # so far, so the ORM emits an INSERT round trip per record
+            # anyway. One `IN (...)` query up front removes both.
+            #
+            # `no_autoflush` then keeps the staging loop from flushing
+            # partway through for any other reason, so the batch reaches
+            # the database as one flush followed by one commit.
+            with self._session.no_autoflush:
+                staged = self._existing_models(
+                    [record.image.id.value for record in records]
+                )
+                for record in records:
+                    staged[record.image.id.value] = self._stage_indexed(
+                        record, staged.get(record.image.id.value)
+                    )
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def _existing_models(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, ImageModel]:
+        """Load whichever of `ids` already have rows, in one query."""
+        statement = select(ImageModel).where(ImageModel.id.in_(ids))
+        return {
+            model.id: model
+            for model in self._session.execute(statement).scalars().all()
+        }
+
+    def _stage_indexed(
+        self, record: IndexingRecord, model: ImageModel | None = None
+    ) -> ImageModel:
+        """Apply one record to the session without committing it.
+
+        `model` is the already-loaded row when the caller has one; passing
+        `None` means "look it up", which is what the single-record path
+        does.
+        """
+        if model is None:
+            model = self._session.get(ImageModel, record.image.id.value)
+
         if model is None:
             model = ImageModel.from_domain(record.image)
             self._session.add(model)
@@ -70,7 +150,8 @@ class PostgresImageRepository(ImageRepository):
         model.embedding = list(record.embedding.values)
         model.file_size = record.file_size
         model.file_modified_at = record.file_modified_at
-        self._session.commit()
+        model.content_hash = record.content_hash
+        return model
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         model = self._session.get(ImageModel, image_id.value)
@@ -79,4 +160,56 @@ class PostgresImageRepository(ImageRepository):
         return IndexMetadata(
             file_size=model.file_size,
             file_modified_at=model.file_modified_at,
+            content_hash=model.content_hash,
         )
+
+    def get_index_metadata_many(
+        self, image_ids: Sequence[ImageId]
+    ) -> dict[ImageId, IndexMetadata]:
+        """Read the metadata for many ids in one round trip.
+
+        Selects the four metadata columns by name rather than loading whole
+        `ImageModel` rows. That is not premature tidiness: `embedding` is a
+        512-float vector, so hydrating full rows would drag roughly two
+        kilobytes per image across the wire to answer a question decided by
+        two scalars -- on the very path that exists to make re-scanning a
+        large unchanged collection cheap.
+        """
+        if not image_ids:
+            return {}
+
+        statement = select(
+            ImageModel.id,
+            ImageModel.file_size,
+            ImageModel.file_modified_at,
+            ImageModel.content_hash,
+        ).where(ImageModel.id.in_([image_id.value for image_id in image_ids]))
+
+        return {
+            ImageId(row.id): IndexMetadata(
+                file_size=row.file_size,
+                file_modified_at=row.file_modified_at,
+                content_hash=row.content_hash,
+            )
+            for row in self._session.execute(statement)
+        }
+
+    def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
+        """Refresh one row's filesystem metadata, leaving its embedding alone.
+
+        A targeted UPDATE rather than a read-modify-write, because the whole
+        point of this path is that no embedding needs to be produced or
+        moved; loading the row would fetch the 512-float vector this method
+        exists to avoid touching.
+        """
+        statement = (
+            update(ImageModel)
+            .where(ImageModel.id == image_id.value)
+            .values(
+                file_size=metadata.file_size,
+                file_modified_at=metadata.file_modified_at,
+                content_hash=metadata.content_hash,
+            )
+        )
+        self._session.execute(statement)
+        self._session.commit()

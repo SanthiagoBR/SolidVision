@@ -18,6 +18,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
+from app.application.use_cases.index_or_update_images import (
+    IndexOrUpdateImagesUseCase,
+)
 from app.domain.entities.image import Image
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
@@ -27,6 +30,7 @@ from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
 from app.infrastructure.filesystem.image_identity import compute_image_id
+from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
@@ -56,9 +60,12 @@ def test_worker_indexes_every_manifest_entry(
         filesystem_provider=FilesystemImageProvider(
             demo_corpus, SUPPORTED_IMAGE_EXTENSIONS
         ),
-        index_or_update_use_case=IndexOrUpdateImageUseCase(
+        index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
             repository=repository,
             embedding_model=FakeEmbeddingModel(),
+            content_hasher=Sha256ContentHasher(),
+            batch_size=8,
+            metadata_prefetch_size=512,
         ),
     )
     worker.run()
@@ -78,9 +85,12 @@ def test_worker_persists_embeddings_of_the_configured_dimension(
         filesystem_provider=FilesystemImageProvider(
             demo_corpus, SUPPORTED_IMAGE_EXTENSIONS
         ),
-        index_or_update_use_case=IndexOrUpdateImageUseCase(
+        index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
             repository=repository,
             embedding_model=FakeEmbeddingModel(),
+            content_hasher=Sha256ContentHasher(),
+            batch_size=8,
+            metadata_prefetch_size=512,
         ),
     )
     worker.run()
@@ -108,6 +118,7 @@ def test_second_run_skips_every_unchanged_file(
     use_case = IndexOrUpdateImageUseCase(
         repository=repository,
         embedding_model=FakeEmbeddingModel(),
+        content_hasher=Sha256ContentHasher(),
     )
     provider = FilesystemImageProvider(demo_corpus, SUPPORTED_IMAGE_EXTENSIONS)
 
@@ -129,14 +140,22 @@ def test_second_run_skips_every_unchanged_file(
     assert not any(second_run), "an unchanged demo photo must not be re-indexed"
 
 
-def test_touching_one_file_reindexes_only_that_file(
+def test_touching_one_file_does_not_reindex_it_when_the_bytes_match(
     demo_corpus: Path, db_session: Session
 ) -> None:
-    """Changing one file's mtime re-indexes it without disturbing the rest."""
+    """RFC-024 section 4 changed this outcome deliberately.
+
+    Before content hashing, moving a file's mtime was enough to force a
+    full re-embed -- the behaviour a copy, a backup restore, or a
+    `git checkout` triggers across a whole collection. Step 3 now reads
+    the bytes, finds them identical, and keeps the existing embedding.
+    Nothing else in the corpus is disturbed either way.
+    """
     repository = PostgresImageRepository(db_session)
     use_case = IndexOrUpdateImageUseCase(
         repository=repository,
         embedding_model=FakeEmbeddingModel(),
+        content_hasher=Sha256ContentHasher(),
     )
     provider = FilesystemImageProvider(demo_corpus, SUPPORTED_IMAGE_EXTENSIONS)
 
@@ -161,10 +180,54 @@ def test_touching_one_file_reindexes_only_that_file(
 
     second_pass = run_pass()
 
-    assert second_pass[str(touched_path)] is True
+    assert not any(second_pass.values())
+
+    # The refreshed mtime must still have been written back, or the next
+    # run would re-hash the same file forever having learned nothing.
+    stored = repository.get_index_metadata(
+        compute_image_id(ImagePath(str(touched_path)))
+    )
+    assert stored is not None
+    assert stored.file_modified_at == touched_entry.file_modified_at + (
+        datetime.timedelta(days=1)
+    )
+    assert stored.content_hash is not None
+
+
+def test_changing_one_file_reindexes_only_that_file(
+    demo_corpus: Path, db_session: Session
+) -> None:
+    """A genuine content change is still a re-index, and still only one file."""
+    repository = PostgresImageRepository(db_session)
+    use_case = IndexOrUpdateImageUseCase(
+        repository=repository,
+        embedding_model=FakeEmbeddingModel(),
+        content_hasher=Sha256ContentHasher(),
+    )
+    provider = FilesystemImageProvider(demo_corpus, SUPPORTED_IMAGE_EXTENSIONS)
+
+    def run_pass() -> dict[str, bool]:
+        return {
+            str(discovered.path): use_case.execute(
+                image=_to_image(discovered),
+                file_size=discovered.file_size,
+                file_modified_at=discovered.file_modified_at,
+            )
+            for discovered in provider.discover()
+        }
+
+    run_pass()
+
+    changed_entry = DEMO_MANIFEST.images[0]
+    changed_path = demo_corpus / changed_entry.relative_path
+    changed_path.write_bytes(changed_path.read_bytes() + b"appended-bytes")
+
+    second_pass = run_pass()
+
+    assert second_pass[str(changed_path)] is True
     untouched_results = {
         path: result
         for path, result in second_pass.items()
-        if path != str(touched_path)
+        if path != str(changed_path)
     }
     assert not any(untouched_results.values())

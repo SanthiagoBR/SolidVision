@@ -15,6 +15,8 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.persistence.base import Base
 
+SHA256_HEX_LENGTH = 64
+
 
 class ImageModel(Base):
     """SQLAlchemy representation of an image domain entity."""
@@ -40,6 +42,14 @@ class ImageModel(Base):
     file_modified_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # A hex-encoded SHA-256 digest is exactly 64 characters, so the length
+    # is physical schema rather than a guess. Nullable because RFC-024
+    # added the column without backfilling: rows indexed before it read
+    # back as NULL, which the skip decision treats as "unknown", never as
+    # "matches" (see `plan_indexing`).
+    content_hash: Mapped[str | None] = mapped_column(
+        String(SHA256_HEX_LENGTH), nullable=True
+    )
 
     __table_args__ = (UniqueConstraint("path", name="uq_images_path"),)
 
@@ -59,6 +69,7 @@ class ImageModel(Base):
             embedding=None,
             file_size=None,
             file_modified_at=None,
+            content_hash=None,
         )
 
     def to_domain(self) -> Image:
