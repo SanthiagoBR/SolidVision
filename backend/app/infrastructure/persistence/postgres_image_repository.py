@@ -10,12 +10,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.domain.entities.image import Image
-from app.domain.exceptions import ImageAlreadyExistsError
+from app.domain.exceptions import (
+    EmbeddingDimensionMismatchError,
+    ImageAlreadyExistsError,
+)
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
-from app.infrastructure.database.models.image_model import ImageModel
+from app.domain.value_objects.search_hit import SearchHit, SearchHits
+from app.infrastructure.database.models.image_model import (
+    EMBEDDING_DIMENSION,
+    ImageModel,
+)
 
 
 class PostgresImageRepository(ImageRepository):
@@ -152,6 +161,99 @@ class PostgresImageRepository(ImageRepository):
         model.file_modified_at = record.file_modified_at
         model.content_hash = record.content_hash
         return model
+
+    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+        """Rank the indexed images against `embedding` inside PostgreSQL.
+
+        The ranking is the database's job and stays there. Reading the
+        vectors back to sort them in Python would move 100,000 x 512
+        floats across the wire to answer a question the server can answer
+        with the HNSW index the RFC-023 migration already built -- roughly
+        200 MB per search, to return ten rows.
+
+        Three details are load-bearing:
+
+        `<=>` (`cosine_distance`) is the operator the index was created
+        for (`vector_cosine_ops`). Ordering by anything else -- L2, inner
+        product, or a Python-side expression -- silently gives up the
+        index and changes the ranking.
+
+        The distance-to-similarity conversion happens here, at the edge.
+        pgvector returns cosine *distance* in [0, 2]; `1 - distance` is
+        cosine similarity in [-1, 1]. It is not clamped or rescaled: a
+        negative score means the vectors genuinely oppose each other, and
+        nothing above this layer should have to know that a distance was
+        ever involved.
+
+        The id is the tie-break. Without it, equally distant rows come
+        back in whatever order the plan produces, which is not stable
+        across plans or across the seq-scan/index-scan boundary, and
+        `limit` would then cut an arbitrary one of them.
+
+        Only the four columns the domain entity needs are selected. The
+        `embedding` column is deliberately not among them: the caller
+        cannot use it, and hydrating full rows would drag a 512-float
+        vector back per hit for nothing.
+
+        **The result is best-effort once the planner uses the index.**
+        HNSW is an approximate index: a scan explores at most
+        `hnsw.ef_search` (40 by default) candidates, and any of those that
+        are dead-but-not-yet-vacuumed tuples are spent from that budget
+        and then filtered out. So an index scan can return *fewer* hits
+        than `limit` while more matching rows exist, and its top-K is not
+        guaranteed to be the true top-K. Measured, not theorized: with a
+        deliberately bloated index the shipped query returned 1 of 3 live
+        rows (RFC-025 section 7.3). At the sizes the planner answers with
+        a sequential scan the ranking is exact. Tuning `ef_search` is out
+        of scope here and belongs with the scale benchmark.
+        """
+        self._require_indexed_dimension(embedding)
+
+        distance = ImageModel.embedding.cosine_distance(list(embedding.values)).label(
+            "distance"
+        )
+        statement = (
+            select(
+                ImageModel.id,
+                ImageModel.path,
+                ImageModel.filename,
+                ImageModel.extension,
+                distance,
+            )
+            .where(ImageModel.embedding.is_not(None))
+            .order_by(distance, ImageModel.id)
+            .limit(limit)
+        )
+
+        return [
+            SearchHit(
+                image=Image(
+                    id=ImageId(row.id),
+                    path=ImagePath(row.path),
+                    filename=row.filename,
+                    extension=row.extension,
+                ),
+                similarity=1.0 - row.distance,
+            )
+            for row in self._session.execute(statement)
+        ]
+
+    @staticmethod
+    def _require_indexed_dimension(embedding: EmbeddingVector) -> None:
+        """Fail a wrong-width query vector before it reaches the server.
+
+        PostgreSQL rejects it too, but not reliably and not legibly: the
+        `vector(512)` column only complains once a row is actually
+        compared, so the same bad call raises against a populated table
+        and returns `[]` against an empty one. Checking up front makes the
+        failure identical everywhere, and identical to the in-memory
+        implementations, which is the point of the shared contract test.
+        """
+        if len(embedding.values) != EMBEDDING_DIMENSION:
+            raise EmbeddingDimensionMismatchError(
+                f"Query embedding has {len(embedding.values)} dimensions, but "
+                f"the images.embedding column holds {EMBEDDING_DIMENSION}."
+            )
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         model = self._session.get(ImageModel, image_id.value)

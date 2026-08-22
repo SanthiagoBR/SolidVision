@@ -2,14 +2,94 @@
 
 from __future__ import annotations
 
+import math
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from app.domain.entities.image import Image
+from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_hit import SearchHit, SearchHits
+from app.infrastructure.config.settings import settings
+
+
+def cosine_search(
+    query: EmbeddingVector,
+    indexed: Iterable[tuple[Image, EmbeddingVector]],
+    limit: int,
+) -> SearchHits:
+    """Rank `indexed` against `query` the way PostgreSQL would, in Python.
+
+    Shared by the two in-process `ImageRepository` doubles -- this module's
+    and `tests/application/fakes.py`'s -- rather than written twice. The
+    whole reason they implement search at all is to be held to the same
+    contract test as `PostgresImageRepository`, and two hand-rolled cosine
+    loops would be two chances to drift from it and from each other.
+
+    Deliberately computes the full cosine, dividing by both norms, instead
+    of a bare dot product. Callers happen to store L2-normalized vectors
+    today because `ClipEmbeddingModel` normalizes, but pgvector's `<=>`
+    does not assume that, and a double that silently required it would
+    disagree with PostgreSQL the first time a test used a hand-built
+    vector of any other length.
+
+    Ties break on the image id, matching the ORDER BY in
+    `PostgresImageRepository.search_similar()`: PostgreSQL compares UUIDs
+    byte by byte and Python compares `UUID.int`, which is the same
+    ordering over the same 16 bytes.
+    """
+    _require_indexed_dimension(query)
+
+    hits = [
+        SearchHit(image=image, similarity=_cosine_similarity(query, embedding))
+        for image, embedding in indexed
+    ]
+    hits.sort(key=lambda hit: (-hit.similarity, hit.image.id.value))
+    return hits[:limit]
+
+
+def _require_indexed_dimension(query: EmbeddingVector) -> None:
+    """Reject a query vector that cannot be compared with the stored ones.
+
+    Checked against the configured dimension rather than against whatever
+    happens to be stored, so that the error does not depend on the
+    repository being non-empty: PostgreSQL rejects a mismatched vector at
+    the `vector(512)` column whether or not any row exists, and a double
+    that answered `[]` for an empty store would be the more permissive of
+    the two exactly where a test is least likely to notice.
+    """
+    if len(query.values) != settings.embedding_dimension:
+        raise EmbeddingDimensionMismatchError(
+            f"Query embedding has {len(query.values)} dimensions, but the "
+            f"index holds {settings.embedding_dimension}."
+        )
+
+
+def _cosine_similarity(left: EmbeddingVector, right: EmbeddingVector) -> float:
+    """Return cosine similarity in [-1, 1], never a truncated approximation.
+
+    The length check is why this is a function rather than an inline
+    expression. `zip` stops at the shorter operand, so comparing a
+    3-dimensional vector with a 512-dimensional one would otherwise return
+    a plausible number computed from three dimensions -- a wrong answer
+    that looks exactly like a right one. `save_indexed_many()` below
+    documents the same class of hazard for atomicity: a double must not be
+    quietly more forgiving than the database it stands in for.
+    """
+    if len(left.values) != len(right.values):
+        raise EmbeddingDimensionMismatchError(
+            f"Cannot compare a {len(left.values)}-dimensional vector with a "
+            f"{len(right.values)}-dimensional one."
+        )
+
+    dot = sum(x * y for x, y in zip(left.values, right.values))
+    left_norm = math.sqrt(sum(x * x for x in left.values))
+    right_norm = math.sqrt(sum(y * y for y in right.values))
+    return dot / (left_norm * right_norm)
 
 
 class InMemoryImageRepository(ImageRepository):
@@ -18,6 +98,10 @@ class InMemoryImageRepository(ImageRepository):
     def __init__(self) -> None:
         self._images: list[Image] = []
         self._metadata: dict[uuid.UUID, IndexMetadata] = {}
+        # Kept apart from `_images` because not every image has one:
+        # `save()` creates a row with no embedding, exactly as the
+        # PostgreSQL column is nullable, and search must skip those.
+        self._embeddings: dict[uuid.UUID, EmbeddingVector] = {}
 
     def save(self, image: Image) -> None:
         self._images.append(image)
@@ -34,11 +118,19 @@ class InMemoryImageRepository(ImageRepository):
     def delete(self, image_id: ImageId) -> None:
         self._images = [image for image in self._images if image.id != image_id]
         self._metadata.pop(image_id.value, None)
+        self._embeddings.pop(image_id.value, None)
 
     def list(self) -> list[Image]:
         return list(self._images)
 
     def save_indexed(self, record: IndexingRecord) -> None:
+        """Store the image, its metadata, and -- since RFC-025 -- its embedding.
+
+        The embedding used to be dropped on the floor here, which was
+        harmless while nothing read one back and became a lie the moment
+        `search_similar()` existed: a repository that accepts a vector and
+        then finds nothing is not a stand-in for one that can.
+        """
         self._images = [image for image in self._images if image.id != record.image.id]
         self._images.append(record.image)
         self._metadata[record.image.id.value] = IndexMetadata(
@@ -46,6 +138,7 @@ class InMemoryImageRepository(ImageRepository):
             file_modified_at=record.file_modified_at,
             content_hash=record.content_hash,
         )
+        self._embeddings[record.image.id.value] = record.embedding
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
         """Persist every record, or none of them.
@@ -59,6 +152,7 @@ class InMemoryImageRepository(ImageRepository):
         """
         images = list(self._images)
         metadata = dict(self._metadata)
+        embeddings = dict(self._embeddings)
 
         for record in records:
             images = [image for image in images if image.id != record.image.id]
@@ -68,9 +162,31 @@ class InMemoryImageRepository(ImageRepository):
                 file_modified_at=record.file_modified_at,
                 content_hash=record.content_hash,
             )
+            embeddings[record.image.id.value] = record.embedding
 
         self._images = images
         self._metadata = metadata
+        self._embeddings = embeddings
+
+    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+        """Rank every stored embedding against `embedding`, in Python.
+
+        Scoring the whole store on every call is fine here and would not
+        be fine in production: this implementation exists for tests and
+        for wiring an application together before a database is up, where
+        the store holds tens of images. `PostgresImageRepository` is the
+        real path, and it ranks in the database precisely so that 100,000
+        vectors never cross into this process.
+        """
+        return cosine_search(
+            embedding,
+            (
+                (image, self._embeddings[image.id.value])
+                for image in self._images
+                if image.id.value in self._embeddings
+            ),
+            limit,
+        )
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         if not self.exists(image_id):

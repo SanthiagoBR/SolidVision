@@ -6,10 +6,13 @@ from collections.abc import Sequence
 from app.domain.entities.image import Image
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
+from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_hit import SearchHits
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
+from app.infrastructure.persistence.in_memory_image_repository import cosine_search
 
 
 class FakeImageRepository(ImageRepository):
@@ -18,6 +21,7 @@ class FakeImageRepository(ImageRepository):
     def __init__(self, images: list[Image] | None = None) -> None:
         self._images = list(images or [])
         self._metadata: dict[uuid.UUID, IndexMetadata] = {}
+        self._embeddings: dict[uuid.UUID, EmbeddingVector] = {}
         self.save_calls: list[Image] = []
         self.exists_calls: list[ImageId] = []
         self.list_calls = 0
@@ -26,6 +30,23 @@ class FakeImageRepository(ImageRepository):
         self.get_index_metadata_calls: list[ImageId] = []
         self.get_index_metadata_many_calls: list[Sequence[ImageId]] = []
         self.update_index_metadata_calls: list[tuple[ImageId, IndexMetadata]] = []
+        self.search_similar_calls: list[tuple[EmbeddingVector, int]] = []
+
+    def seed_embedding(self, image: Image, embedding: EmbeddingVector) -> None:
+        """Make `image` findable by search, without going through indexing.
+
+        This fake is constructed as `FakeImageRepository(images=[...])`
+        from bare `Image` entities, which carry no embedding -- so before
+        RFC-025 there was no way to set up a ranking scenario at all. The
+        alternative is building a full `IndexingRecord` with file sizes
+        and timestamps that a search test does not care about and would
+        have to invent.
+
+        Records nothing: seeding is arrangement, not behavior under test.
+        """
+        if all(existing.id != image.id for existing in self._images):
+            self._images.append(image)
+        self._embeddings[image.id.value] = embedding
 
     def save(self, image: Image) -> None:
         self.save_calls.append(image)
@@ -44,6 +65,7 @@ class FakeImageRepository(ImageRepository):
     def delete(self, image_id: ImageId) -> None:
         self._images = [image for image in self._images if image.id != image_id]
         self._metadata.pop(image_id.value, None)
+        self._embeddings.pop(image_id.value, None)
 
     def list(self) -> list[Image]:
         self.list_calls += 1
@@ -57,6 +79,29 @@ class FakeImageRepository(ImageRepository):
             file_size=record.file_size,
             file_modified_at=record.file_modified_at,
             content_hash=record.content_hash,
+        )
+        self._embeddings[record.image.id.value] = record.embedding
+
+    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+        """Rank the seeded embeddings, using the same code as the real double.
+
+        Delegates to `cosine_search()` rather than repeating the loop, so
+        that this fake, `InMemoryImageRepository`, and
+        `PostgresImageRepository` are held to one contract by
+        `tests/infrastructure/persistence/test_search_similar_contract.py`.
+        A second hand-written cosine here would be a second thing to keep
+        in agreement with pgvector, and the first to quietly stop
+        agreeing.
+        """
+        self.search_similar_calls.append((embedding, limit))
+        return cosine_search(
+            embedding,
+            (
+                (image, self._embeddings[image.id.value])
+                for image in self._images
+                if image.id.value in self._embeddings
+            ),
+            limit,
         )
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:

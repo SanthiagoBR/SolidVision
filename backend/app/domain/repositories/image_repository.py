@@ -1,12 +1,16 @@
 """Abstract repository port for image persistence operations."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
 from app.domain.entities.image import Image
+from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_hit import SearchHits
 
 
 class ImageRepository(ABC):
@@ -59,6 +63,48 @@ class ImageRepository(ABC):
 
         Constraint violations propagate as they do from `save_indexed()`;
         they are real errors, not duplicate-create signals.
+        """
+
+    @abstractmethod
+    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+        """Return the images closest to `embedding`, best match first.
+
+        The counterpart of `save_indexed()`: that method is how an
+        embedding enters the repository, and this is the only way one is
+        used once it is there. The repository owns the ranking -- callers
+        receive an ordered list and must not re-sort it, since an
+        implementation is free to rank by whatever it stores rather than
+        by recomputing anything in the caller's process.
+
+        The contract every implementation owes:
+
+        - Results are ordered from most similar to least similar, and
+          `SearchHit.similarity` is cosine similarity in [-1, 1]. It is
+          never rescaled to [0, 1]; a negative score is a real answer
+          meaning the vectors oppose each other.
+        - An image with no stored embedding never appears. It was never
+          compared, and inventing a score for it would put unindexed
+          files in front of indexed ones.
+        - At most `limit` hits come back, fewer when fewer images have
+          embeddings, and `[]` when none do. A short result means the
+          repository ran out of candidates, never that it ran out of
+          quality: filtering by a minimum score is not part of this
+          contract.
+        - Equally similar images come back in a stable, deterministic
+          order, so that repeating a search repeats its result.
+        - The search covers every image known to the repository. There is
+          no scoping argument, by collection or otherwise; adding one is a
+          change to what a collection *means*, not a parameter.
+        - An `embedding` whose width does not match the indexed vectors
+          raises `EmbeddingDimensionMismatchError`. It is a caller error,
+          not a search that happens to match nothing, and it must fail
+          identically in every implementation -- the plausible bug is an
+          implementation that truncates to the shorter vector and returns
+          a confident, meaningless ranking.
+
+        `limit` is expected to be a positive number the caller has already
+        vetted; policy about how large a page may be belongs to the
+        Application layer, not here.
         """
 
     @abstractmethod

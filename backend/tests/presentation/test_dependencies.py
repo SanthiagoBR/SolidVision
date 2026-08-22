@@ -4,6 +4,7 @@ from app.application.use_cases.index_image import IndexImageUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+from app.infrastructure.config.settings import settings
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
@@ -75,3 +76,15 @@ def test_use_cases_are_composed_with_a_postgres_backed_repository() -> None:
 
     assert isinstance(index_use_case._repository, PostgresImageRepository)
     assert isinstance(search_use_case._repository, PostgresImageRepository)
+
+
+def test_the_search_use_case_default_limit_comes_from_settings() -> None:
+    """RFC-025: `top_k_results` finally has a consumer.
+
+    It had been configurable and unused since the settings module was
+    written. The composition root is the only place allowed to read it,
+    which is what this pins -- a use case that reached for `settings`
+    itself would pass this assertion and fail the Application-layer
+    architecture test.
+    """
+    assert get_search_images_use_case()._default_limit == settings.top_k_results

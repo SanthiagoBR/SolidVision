@@ -9,6 +9,7 @@ from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+from app.infrastructure.config.settings import settings
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
@@ -60,10 +61,18 @@ def get_index_image_use_case() -> IndexImageUseCase:
 
 
 def get_search_images_use_case() -> SearchImagesUseCase:
-    """Return a search use case composed with the shared dependencies."""
+    """Return a search use case composed with the shared dependencies.
+
+    `settings.top_k_results` is read here and injected, never imported by
+    the use case: the Application layer must not depend on Infrastructure
+    configuration (`test_application_architecture.py` enforces it), so
+    this is the layer that turns a setting into an argument -- the same
+    arrangement `IndexOrUpdateImagesUseCase` uses for `batch_size`.
+    """
     return SearchImagesUseCase(
         repository=get_image_repository(),
         embedding_model=get_embedding_model(),
+        default_limit=settings.top_k_results,
     )
 
 

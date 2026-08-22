@@ -8,6 +8,11 @@ from app.domain.exceptions.image_errors import (
     InvalidImagePathError,
     UnsupportedImageExtensionError,
 )
+from app.domain.exceptions.search_errors import (
+    EmbeddingDimensionMismatchError,
+    EmptySearchQueryError,
+    InvalidSearchLimitError,
+)
 
 
 class InvalidEmbeddingVectorError(DomainError):
@@ -19,10 +24,13 @@ class InvalidEmbeddingVectorError(DomainError):
 
 __all__ = [
     "DomainError",
+    "EmbeddingDimensionMismatchError",
+    "EmptySearchQueryError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
     "InvalidEmbeddingVectorError",
     "InvalidImageIdentifierError",
     "InvalidImagePathError",
+    "InvalidSearchLimitError",
     "UnsupportedImageExtensionError",
 ]

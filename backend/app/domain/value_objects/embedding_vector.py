@@ -26,5 +26,12 @@ class EmbeddingVector:
         return normalized_values
 
 
-# Future RFCs may introduce a dedicated SearchQuery value object
-# once its domain behavior (e.g. query validation, normalization) becomes necessary.
+# A dedicated SearchQuery value object was considered by RFC-025 and
+# deliberately deferred. Search now validates its query -- rejecting blank
+# text -- but that is the whole of the behavior, and a value object whose
+# only job is to carry an already-checked string buys nothing the use case
+# does not already have: every construction site would be one call away
+# from the one place that validates. It becomes worth its own type when
+# there is domain behavior to put on it (normalization the repository must
+# agree with, structured filters, a query the model rewrites), at which
+# point the validation moves here with it.

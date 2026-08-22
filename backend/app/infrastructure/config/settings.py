@@ -93,16 +93,21 @@ class Settings(BaseSettings):
         description="Root directory scanned by the indexing worker",
     )
 
+    # Injected into `SearchImagesUseCase` by the composition root as its
+    # default page size; the use case itself never reads settings.
+    #
+    # `minimum_similarity` used to sit here and was removed by RFC-025.
+    # It had no readers at all, and its declared `ge=0.0, le=1.0` range
+    # was wrong for the scores search actually produces: cosine
+    # similarity runs in [-1, 1], so the bound would have rejected
+    # legitimate configuration for a filter that did not exist. A
+    # similarity floor is future work, and it needs the measured
+    # distribution of real scores to choose a default -- not a range
+    # guessed before anything was ranked.
     top_k_results: int = Field(
         default=10,
         ge=1,
-        description="Maximum number of results to return",
-    )
-    minimum_similarity: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Minimum similarity threshold",
+        description="Default number of search results returned per query",
     )
 
     log_level: str = Field(default="INFO", description="Logging level")

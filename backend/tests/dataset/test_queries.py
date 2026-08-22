@@ -1,23 +1,27 @@
-"""Tests for `dataset/demo/queries.json` (RFC-022 5.3): retrieval ground truth.
+"""Structural tests for `dataset/demo/queries.json` (RFC-022 5.3).
 
-Structural validity (paths exist, no overlap, no duplicates) is checked
-unconditionally. Actual retrieval quality is not -- `queries.json` ships
-dormant.
+What lives here is everything about the ground truth that is true
+regardless of which embedding model is loaded: the referenced paths exist
+in the manifest, relevant and hard-negative sets never overlap, query
+texts are unique, and no aerial image is orphaned from the eval set.
+Those checks depend on nothing but the two JSON files, so they belong in
+the fast offline suite and run on every `pytest`.
 
-RFC-023 delivered the half of that blockage it owned: `ClipEmbeddingModel`
-is a real `EmbeddingModelPort` with genuine semantic understanding, so the
-"no semantic model" reason is gone. The other half remains. Retrieval
-quality is a property of *search*, and `SearchImagesUseCase` still encodes
-the query, discards the embedding, and returns `repository.list()`
-unranked -- there is no vector similarity search to measure. Implementing
-one was explicitly out of scope for RFC-023 (section 17); it belongs to
-the separate vector-search RFC.
+**Retrieval quality moved out, and is no longer dormant.** RFC-022 shipped
+this dataset with a hand-rolled cosine loop marked `xfail`, blocked first
+on the absence of a semantic model (removed by RFC-023) and then on the
+absence of a search: `SearchImagesUseCase` encoded the query, discarded
+the embedding, and returned `repository.list()` unranked. Its docstring
+said that when vector search landed, the test to write was one that
+exercised `SearchImagesUseCase` end to end rather than a cosine loop
+standing in for it.
 
-So the dormant test below stays dormant, and stays on `FakeEmbeddingModel`
-on purpose: activating it against the real checkpoint would drag a 600 MB
-download into the fast suite to measure a ranking nothing produces yet.
-When vector search lands, the test to write is one that exercises
-`SearchImagesUseCase` end to end -- not this hand-rolled cosine loop.
+RFC-025 landed that search, and that test is
+`tests/dataset/test_semantic_search_e2e.py`: real CLIP, real PostgreSQL,
+real pgvector, all 25 queries, scored as Recall@5 and hard-negative
+contamination against measured regression floors. It is marked `slow`
+because it loads real checkpoints -- which is exactly why the cosine loop
+could not simply be pointed at the real model and left in this file.
 """
 
 from __future__ import annotations
@@ -25,12 +29,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import pytest
-
-from app.domain.entities.image import Image
-from app.domain.value_objects.image_path import ImagePath
-from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
-from app.infrastructure.filesystem.image_identity import compute_image_id
 from dataset_tools.manifest import DEMO_MANIFEST_PATH, load_manifest
 
 QUERIES_PATH = DEMO_MANIFEST_PATH.parent / "queries.json"
@@ -40,22 +38,6 @@ def _load_queries() -> list[dict[str, Any]]:
     raw = json.loads(QUERIES_PATH.read_text(encoding="utf-8"))
     queries: list[dict[str, Any]] = raw["queries"]
     return queries
-
-
-def _to_image(relative_path: str) -> Image:
-    """Build the domain entity the pipeline would build for a manifest path.
-
-    No materialized file is required: `FakeEmbeddingModel` never opens
-    pixels (RFC-022 7.3), so the id/path pair alone is enough to reproduce
-    the same embedding a real indexing run would have stored.
-    """
-    path = ImagePath(relative_path)
-    return Image(
-        id=compute_image_id(path),
-        path=path,
-        filename=relative_path.rsplit("/", 1)[-1],
-        extension="jpg",
-    )
 
 
 class TestQueriesStructuralValidity:
@@ -111,31 +93,3 @@ class TestQueriesStructuralValidity:
         }
         orphaned = domain_paths - referenced
         assert not orphaned, orphaned
-
-
-@pytest.mark.xfail(
-    reason=(
-        "Blocked on the vector-search RFC, not on the embedding model. "
-        "RFC-023 shipped a real semantic EmbeddingModelPort, but "
-        "SearchImagesUseCase still discards the query embedding and returns "
-        "every image unranked, so there is no retrieval to measure. Runs "
-        "here against FakeEmbeddingModel so the fast suite stays offline."
-    ),
-    strict=False,
-)
-def test_relevant_images_rank_above_hard_negatives() -> None:
-    """The retrieval quality this dataset exists to eventually measure."""
-    model = FakeEmbeddingModel()
-
-    for entry in _load_queries():
-        query_vector = model.encode_text(entry["query"])
-
-        def similarity(relative_path: str) -> float:
-            image = _to_image(relative_path)
-            embedding = model.encode_image(image)
-            return sum(x * y for x, y in zip(query_vector.values, embedding.values))
-
-        relevant_scores = [similarity(path) for path in entry["relevant"]]
-        hard_negative_scores = [similarity(path) for path in entry["hard_negatives"]]
-
-        assert min(relevant_scores) > max(hard_negative_scores), entry["query"]

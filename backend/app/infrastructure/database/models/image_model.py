@@ -17,6 +17,12 @@ from app.infrastructure.persistence.base import Base
 
 SHA256_HEX_LENGTH = 64
 
+# The projection width of the RFC-023 CLIP checkpoint, and therefore the
+# width of the `vector` column the RFC-023 migration created. Named here
+# rather than repeated as a literal because search has to validate query
+# vectors against the same number, and the two must not be able to drift.
+EMBEDDING_DIMENSION = 512
+
 
 class ImageModel(Base):
     """SQLAlchemy representation of an image domain entity."""
@@ -31,13 +37,14 @@ class ImageModel(Base):
     path: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     extension: Mapped[str] = mapped_column(String, nullable=False)
-    # 512 is the projection width of the RFC-023 CLIP checkpoint. Written as
-    # a literal rather than read from `settings.embedding_dimension` because
+    # A module constant rather than `settings.embedding_dimension` because
     # this is physical schema, pinned by a migration: it must not silently
     # follow a runtime env var away from what the database actually holds.
     # `test_image_model_embedding_column_matches_configured_dimension` asserts
     # the two stay in agreement.
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(512), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(EMBEDDING_DIMENSION), nullable=True
+    )
     file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     file_modified_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
