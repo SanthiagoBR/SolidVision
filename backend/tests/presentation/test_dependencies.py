@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import inspect
+from typing import Any
+
+from fastapi.params import Depends
+from sqlalchemy.orm import Session
+
 from app.application.use_cases.index_image import IndexImageUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.services.embedding_model_port import EmbeddingModelPort
@@ -8,6 +14,7 @@ from app.infrastructure.config.settings import settings
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
+from app.infrastructure.persistence.session import SessionLocal, get_db
 from app.presentation.dependencies import (
     get_embedding_model,
     get_image_repository,
@@ -16,19 +23,64 @@ from app.presentation.dependencies import (
 )
 
 
+def declared_dependency(provider: Any, parameter: str) -> Any:
+    """Return the callable a provider's parameter is injected from."""
+    default = inspect.signature(provider).parameters[parameter].default
+    assert isinstance(default, Depends), f"{parameter} is not injected"
+    return default.dependency
+
+
 def test_get_image_repository_returns_postgres_backed_repository() -> None:
-    assert isinstance(get_image_repository(), PostgresImageRepository)
+    assert isinstance(get_image_repository(SessionLocal()), PostgresImageRepository)
 
 
 def test_get_image_repository_returns_a_new_instance_per_call() -> None:
     # A SQLAlchemy Session is not safe to share across requests, so each
     # call must open its own session-bound repository instead of reusing
     # a singleton (unlike the previous InMemoryImageRepository wiring).
-    assert get_image_repository() is not get_image_repository()
+    session = SessionLocal()
+    assert get_image_repository(session) is not get_image_repository(session)
+
+
+def test_the_repository_session_is_injected_from_get_db() -> None:
+    """RFC-026 section 7: the leak, closed at the only place that can close it.
+
+    This provider used to call `SessionLocal()` itself, and nothing ever
+    closed the result. That was invisible while the only callers were
+    tests; under HTTP every request would have parked a pooled connection
+    inside an open transaction until the garbage collector got to it --
+    non-deterministic pool exhaustion, and an `idle in transaction`
+    backend blocking the autovacuum whose absence RFC-025 section 7.3
+    measured as an HNSW scan returning 1 of 3 live rows.
+
+    `get_db` is the generator that already did this correctly and sat
+    unused, with a docstring promising it to "future FastAPI
+    dependencies". Asserting on the declared dependency rather than on
+    behaviour is the point: nothing observable changes when this
+    regresses.
+    """
+    assert declared_dependency(get_image_repository, "session") is get_db
+
+    parameters = inspect.signature(get_image_repository).parameters
+    assert parameters["session"].annotation in (Session, "Session")
 
 
 def test_get_embedding_model_returns_shared_instance() -> None:
     assert get_embedding_model() is get_embedding_model()
+
+
+def test_the_embedding_model_provider_takes_no_arguments() -> None:
+    """A non-HTTP caller depends on calling this one directly.
+
+    `IndexingWorker.main()` imports this provider and calls it as a plain
+    zero-argument function. Giving it a `Depends(...)` default -- the
+    natural instinct while converting the rest of the module -- would hand
+    the CLI an `lru_cache`d `Depends` object in place of a model, and it
+    would fail at runtime far from the edit that caused it. Nothing is
+    given up by the rule: a zero-argument provider is already a valid
+    FastAPI dependency, which is how the use-case providers consume it.
+    """
+    assert inspect.signature(get_embedding_model).parameters == {}
 
 
 def test_production_wiring_uses_the_real_clip_adapter() -> None:
@@ -66,16 +118,38 @@ def test_resolving_the_embedding_model_downloads_nothing() -> None:
 
 
 def test_dependency_providers_compose_use_cases() -> None:
-    assert isinstance(get_index_image_use_case(), IndexImageUseCase)
-    assert isinstance(get_search_images_use_case(), SearchImagesUseCase)
+    repository = get_image_repository(SessionLocal())
+    model = get_embedding_model()
+
+    assert isinstance(get_index_image_use_case(repository, model), IndexImageUseCase)
+    assert isinstance(
+        get_search_images_use_case(repository, model), SearchImagesUseCase
+    )
 
 
 def test_use_cases_are_composed_with_a_postgres_backed_repository() -> None:
-    index_use_case = get_index_image_use_case()
-    search_use_case = get_search_images_use_case()
+    repository = get_image_repository(SessionLocal())
+    model = get_embedding_model()
+
+    index_use_case = get_index_image_use_case(repository, model)
+    search_use_case = get_search_images_use_case(repository, model)
 
     assert isinstance(index_use_case._repository, PostgresImageRepository)
     assert isinstance(search_use_case._repository, PostgresImageRepository)
+
+
+def test_the_use_case_providers_inject_every_collaborator() -> None:
+    """The whole graph is overridable, not just its root.
+
+    `app.dependency_overrides` keys on the callable named in a `Depends`,
+    so a provider that reached for `get_image_repository()` directly would
+    still work and would quietly become unswappable -- which is what the
+    integration tests use to substitute a transaction-scoped session and
+    a fake model without touching production code.
+    """
+    for provider in (get_index_image_use_case, get_search_images_use_case):
+        assert declared_dependency(provider, "repository") is get_image_repository
+        assert declared_dependency(provider, "embedding_model") is get_embedding_model
 
 
 def test_the_search_use_case_default_limit_comes_from_settings() -> None:
@@ -87,4 +161,8 @@ def test_the_search_use_case_default_limit_comes_from_settings() -> None:
     itself would pass this assertion and fail the Application-layer
     architecture test.
     """
-    assert get_search_images_use_case()._default_limit == settings.top_k_results
+    use_case = get_search_images_use_case(
+        get_image_repository(SessionLocal()), get_embedding_model()
+    )
+
+    assert use_case._default_limit == settings.top_k_results
