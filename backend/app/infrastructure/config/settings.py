@@ -110,6 +110,27 @@ class Settings(BaseSettings):
         description="Default number of search results returned per query",
     )
 
+    # Loading the CLIP checkpoint at API startup closes two problems at
+    # once (RFC-026 sections 9.1 and 10): the ~5 s cold start the first
+    # query would otherwise pay, and the check-then-act race inside the
+    # adapter's lazy load, which only exists because a `def` endpoint runs
+    # in a threadpool and two concurrent first requests can both find the
+    # model unloaded.
+    #
+    # It defaults to `False` for the same reason RFC-024 gave `--root` no
+    # default: the safe default is the one that cannot download 600 MB
+    # into a process that never asked for it. `TestClient(app)` used as a
+    # context manager runs startup events, so a default of `True` would
+    # make a plain `pytest` reach Hugging Face through
+    # `tests/presentation/test_health.py` -- a test file that has nothing
+    # to do with search. Set `WARM_UP_MODELS=true` when running the API
+    # for real.
+    warm_up_models: bool = Field(
+        default=False,
+        description="Load the embedding model at API startup "
+        "instead of on the first request",
+    )
+
     log_level: str = Field(default="INFO", description="Logging level")
     log_directory: str = Field(default="logs", description="Directory for log files")
     log_filename: str = Field(default="application.log", description="Log filename")
