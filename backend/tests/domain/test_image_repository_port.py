@@ -46,7 +46,13 @@ def test_image_repository_is_abstract() -> None:
 
 def test_image_repository_cannot_be_instantiated() -> None:
     try:
-        ImageRepository()
+        # The instantiation mypy refuses is the behaviour under test: the
+        # port must stay abstract, so that a subclass missing a method
+        # fails loudly at construction rather than at the first call. The
+        # ignore is narrow on purpose, and `warn_unused_ignores` will flag
+        # it the day `ImageRepository` stops being abstract -- which is
+        # exactly when this test should start failing.
+        ImageRepository()  # type: ignore[abstract]
     except TypeError:
         pass
     else:
