@@ -85,8 +85,14 @@ def test_get_returns_domain_image_not_orm_model(db_session: Session) -> None:
 
     result = repository.get(image.id)
 
-    assert isinstance(result, Image)
-    assert not isinstance(result, ImageModel)
+    # `type(...) is Image` rather than `not isinstance(result, ImageModel)`.
+    # The negative form was unreachable by construction -- `Image` and
+    # `ImageModel` share no hierarchy, so no value could ever satisfy it and
+    # mypy said so. The exact-type check states the intent the test always
+    # had: `get()` must hand back a Domain entity, not the ORM row it read
+    # nor a subclass of either. It is also the stronger assertion, since it
+    # fails if `to_domain()` ever starts returning something Image-like.
+    assert type(result) is Image
 
 
 def test_get_preserves_all_domain_fields(db_session: Session) -> None:
@@ -320,6 +326,11 @@ def test_save_indexed_updates_existing_row_without_duplicating(
     assert row is not None
     assert row.file_size == 200
     assert row.file_modified_at == second_modified_at
+    # The column is nullable, so the narrowing is real rather than a
+    # formality: it asserts the update actually wrote an embedding, which
+    # is half of what this test is checking. Without it `list(None)` would
+    # be a TypeError reported far from the cause.
+    assert row.embedding is not None
     assert list(row.embedding) == pytest.approx([0.9] * 512)
 
 

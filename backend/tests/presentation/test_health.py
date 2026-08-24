@@ -20,7 +20,12 @@ class FakeSession:
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
+    # A yield fixture is a generator function, so the annotation has to say
+    # so -- `-> TestClient` described the value pytest hands the test, not
+    # what the function returns. The `with` form matters and is why this
+    # yields at all: it runs the app's lifespan, which is what the RFC-026
+    # warm-up hangs off.
     with TestClient(app) as test_client:
         yield test_client
 

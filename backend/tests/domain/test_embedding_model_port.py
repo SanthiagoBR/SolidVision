@@ -20,7 +20,11 @@ def test_embedding_model_port_is_abstract() -> None:
 
 def test_embedding_model_port_cannot_be_instantiated() -> None:
     with pytest.raises(TypeError):
-        EmbeddingModelPort()
+        # The instantiation mypy refuses is the behaviour under test: the
+        # port must stay abstract so an adapter that forgets `encode_text`
+        # fails at construction. Narrow ignore, and `warn_unused_ignores`
+        # flags it if the port ever stops being abstract.
+        EmbeddingModelPort()  # type: ignore[abstract]
 
 
 def test_embedding_model_port_methods_are_abstract() -> None:
