@@ -2,7 +2,7 @@
 
 Registro de decisões de implementação do projeto, um documento por unidade de trabalho entregue. Cada RFC responde às mesmas perguntas: **qual era o problema, o que foi decidido, por que essa alternativa e não as outras, e como sabemos que funciona.**
 
-Os RFCs 001–021 foram escritos retroativamente a partir do código e do histórico do git, e são compactos. Os RFCs 022–026 foram escritos junto com a implementação e carregam as medições completas que sustentam cada decisão.
+Os RFCs 001–021 foram escritos retroativamente a partir do código e do histórico do git, e são compactos. Os RFCs 022–026 foram escritos junto com a implementação e carregam as medições completas que sustentam cada decisão. Os RFCs 027–030 são **propostas**: foram escritos antes da implementação, e todo número neles está marcado `TBM` até ser medido (a convenção de rascunho do [RFC-026](rfc-026-api-de-busca.md)). Nada marcado `TBM` deve ser citado como resultado.
 
 Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura de referência), [ADRs](../adr/) (decisões arquiteturais), [AI_Context.md](../../AI_Context.md) (convenções operacionais).
 
@@ -57,6 +57,19 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 | 025 | [Busca Semântica](rfc-025-busca-semantica.md) | `search_similar()` sobre pgvector; Recall@5 84,0% medido | ✅ |
 | 026 | [API de Busca](rfc-026-api-de-busca.md) | `GET /api/v1/images/search`; correção do vazamento de sessão | ✅ |
 
+## Sprint 5 — Acervo Real *(proposto)*
+
+| # | RFC | Entrega | Status |
+|---|---|---|---|
+| 027 | [Dispositivos e Identidade de Volume](rfc-027-dispositivos-e-identidade-de-volume.md) | `Device`, GUID de volume, `(device_id, relative_path)`, filtro por dispositivo | 📋 |
+| 028 | [Data de Captura e Filtro Temporal](rfc-028-data-de-captura-e-filtro-temporal.md) | `captured_at` via EXIF, `capture_source`, filtro por intervalo | 📋 |
+| 029 | [Jobs de Indexação e Indexação Seletiva](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md) | `indexing_jobs`, `POST /jobs`, worker sondando, cancelamento | 📋 |
+| 030 | [Acesso ao Arquivo](rfc-030-acesso-ao-arquivo.md) | Caminho na resposta, thumbnails, `POST /images/{id}/reveal` | 📋 |
+
+> **De onde veio esta sprint.** Um mockup de interface no Figma desenhou uma barra lateral de HDs, um filtro de datas e uma tela de pastas indexadas — e a pergunta era se aquilo fazia sentido para o projeto. Fazia: três das quatro peças já estavam desenhadas no [ARCHITECTURE.md](../../ARCHITECTURE.md) §15 e nunca construídas. A quarta encontrou um defeito no código entregue: [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md) mostra que a identidade de uma imagem é derivada do caminho absoluto, e que **a letra de unidade de um HD externo muda sozinha** — reindexando um disco inteiro em silêncio, a ~5 h de inferência por vez.
+>
+> **A ordem não é arbitrária.** O RFC-027 reescreve a chave primária de `images`, o que é um `UPDATE` em uma tabela enquanto nada referenciar `images.id` — e nada referencia, hoje. O RFC-029 preserva essa propriedade de propósito ([§11](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md)); o RFC-030 a encerra, ao endereçar thumbnails por id ([§7.3](rfc-030-acesso-ao-arquivo.md)). A janela para a correção barata está aberta agora e fecha no fim desta sprint.
+
 ---
 
 ## Como ler estes documentos
@@ -67,11 +80,14 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 
 **Se você quer ver medição de verdade**, [RFC-023 §3](rfc-023-adaptador-de-embedding-clip.md) escolheu o modelo por *bake-off* empírico, e [RFC-024 §17](rfc-024-pipeline-de-embeddings.md) tem uma seção inteira sobre hipóteses que os números mataram.
 
-**Se você quer aprender com os erros**, [RFC-012](rfc-012-interfaces-de-repositorio.md) (duplicata silenciosa), [RFC-014 §3.2](rfc-014-fake-embedding-model.md) (um bug que passava em todos os testes) e [RFC-026 §7](rfc-026-api-de-busca.md) (um vazamento de sessão que só virou bug sob HTTP).
+**Se você quer aprender com os erros**, [RFC-012](rfc-012-interfaces-de-repositorio.md) (duplicata silenciosa), [RFC-014 §3.2](rfc-014-fake-embedding-model.md) (um bug que passava em todos os testes), [RFC-026 §7](rfc-026-api-de-busca.md) (um vazamento de sessão que só virou bug sob HTTP) e [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md) (uma identidade estável que não era).
+
+**Se você quer saber o que vem a seguir**, a Sprint 5 é a única escrita antes da implementação. Comece pelo [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md), que é o defeito que ordenou o resto.
 
 ## Convenções
 
-- **Status:** ✅ Implementado · ⚠️ Superseded · ❌ Rejeitado
+- **Status:** ✅ Implementado · 📋 Proposto · ⚠️ Superseded · ❌ Rejeitado
+- Um RFC **proposto** não descreve o que foi feito, e sim o que se pretende fazer. Todo número nele é `TBM` — *a medir* — até a implementação escrevê-lo de volta. Um RFC proposto que passe a implementado sem que nenhum `TBM` tenha virado número não foi implementado: foi presumido.
 - Um RFC descreve **o que foi decidido e por quê**, não como usar o código. Instruções de uso ficam nos READMEs.
 - Números medidos declaram a máquina e as condições em que foram obtidos. Números não medidos são marcados como estimativa.
 - Decisões revertidas permanecem documentadas. Reescrever um RFC para esconder um caminho errado apaga a única informação que ele carregava de graça.
