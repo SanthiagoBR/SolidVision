@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tests.conftest import TEST_DEVICE_ID, make_test_device
 
 from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
 from app.application.use_cases.index_or_update_images import (
@@ -58,13 +59,15 @@ def _run_worker(root: Path, batch_size: int = 8) -> InMemoryImageRepository:
             batch_size=batch_size,
             metadata_prefetch_size=512,
         ),
+        device=make_test_device(),
+        mount_point=root,
     )
     worker.run()
     return repository
 
 
 def _indexed_paths(repository: InMemoryImageRepository) -> set[str]:
-    return {str(image.path) for image in repository.list()}
+    return {str(image.relative_path) for image in repository.list()}
 
 
 def test_generator_writes_exactly_the_declared_cases(hard_cases_root: Path) -> None:
@@ -86,7 +89,7 @@ def test_generator_writes_exactly_the_declared_cases(hard_cases_root: Path) -> N
 def test_expected_files_are_indexed(case: HardCase, hard_cases_root: Path) -> None:
     """Every case declared `indexed` produces a row on a first run."""
     repository = _run_worker(hard_cases_root)
-    expected = (hard_cases_root / case.relative_path).as_posix()
+    expected = case.relative_path
     assert expected in _indexed_paths(repository), case.description
 
 
@@ -100,7 +103,7 @@ def test_unsupported_extensions_never_reach_the_repository(
 ) -> None:
     """Cases declared `ignored` are filtered at discovery, not at indexing."""
     repository = _run_worker(hard_cases_root)
-    rejected = (hard_cases_root / case.relative_path).as_posix()
+    rejected = case.relative_path
     assert rejected not in _indexed_paths(repository), case.description
 
 
@@ -161,7 +164,7 @@ def test_second_run_skips_every_unchanged_file(hard_cases_root: Path) -> None:
     def run_pass() -> list[bool]:
         return [
             use_case.execute(
-                image=_to_image(discovered),
+                image=_to_image(discovered, hard_cases_root),
                 file_size=discovered.file_size,
                 file_modified_at=discovered.file_modified_at,
             )
@@ -175,12 +178,20 @@ def test_second_run_skips_every_unchanged_file(hard_cases_root: Path) -> None:
     assert not any(second_run), "an unchanged file must not be re-indexed"
 
 
-def _to_image(discovered: DiscoveredImageFile) -> Image:
-    """Build the domain entity the worker would build for a discovered file."""
-    path = ImagePath(str(discovered.path))
+def _to_image(discovered: DiscoveredImageFile, mount_point: Path) -> Image:
+    """Build the domain entity the worker would build for a discovered file.
+
+    `mount_point` is the corpus root, standing in for a whole volume:
+    since RFC-027 an image is identified by its device and its path
+    *within* that device, so the identity must not contain the temporary
+    directory pytest happened to hand this run.
+    """
+    relative_path = ImagePath(discovered.path.relative_to(mount_point))
     return Image(
-        id=compute_image_id(path),
-        path=path,
+        id=compute_image_id(TEST_DEVICE_ID, relative_path),
+        device_id=TEST_DEVICE_ID,
+        relative_path=relative_path,
+        absolute_path=ImagePath(str(discovered.path)),
         filename=discovered.filename,
         extension=discovered.extension,
     )

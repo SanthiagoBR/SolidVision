@@ -32,10 +32,18 @@ class Sha256ContentHasher(ContentHasherPort):
     """
 
     def hash_image(self, image: Image) -> str:
-        """Return the hex-encoded SHA-256 digest of the bytes at `image.path`."""
+        """Return the hex-encoded SHA-256 digest of the image's bytes.
+
+        Reads `Image.require_absolute_path()` rather than joining
+        `relative_path` onto anything: since RFC-027 an image records
+        where it lives on its *device*, and only whoever resolved that
+        device's mount point knows where that is right now. An image whose
+        device is unplugged raises `DeviceNotConnectedError` here, which
+        is the truthful answer -- there are no bytes to hash.
+        """
         digest = hashlib.sha256()
 
-        with image.path.value.open("rb") as stream:
+        with image.require_absolute_path().value.open("rb") as stream:
             while chunk := stream.read(READ_CHUNK_BYTES):
                 digest.update(chunk)
 

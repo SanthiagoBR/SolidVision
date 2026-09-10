@@ -6,8 +6,10 @@ import uuid
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.database.models.image_model import ImageModel
@@ -16,7 +18,8 @@ from app.infrastructure.database.models.image_model import ImageModel
 def test_from_domain_copies_fields() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -24,7 +27,8 @@ def test_from_domain_copies_fields() -> None:
     model = ImageModel.from_domain(image)
 
     assert model.id == image.id.value
-    assert model.path == str(image.path)
+    assert model.device_id == image.device_id.value
+    assert model.relative_path == str(image.relative_path)
     assert model.filename == image.filename
     assert model.extension == image.extension
 
@@ -32,7 +36,8 @@ def test_from_domain_copies_fields() -> None:
 def test_from_domain_leaves_embedding_unset() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -45,7 +50,8 @@ def test_from_domain_leaves_embedding_unset() -> None:
 def test_from_domain_leaves_incremental_metadata_unset() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -59,7 +65,8 @@ def test_from_domain_leaves_incremental_metadata_unset() -> None:
 def test_to_domain_reconstructs_value_objects() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -68,17 +75,20 @@ def test_to_domain_reconstructs_value_objects() -> None:
     reconstructed = model.to_domain()
 
     assert reconstructed.id == image.id
-    assert reconstructed.path == image.path
+    assert reconstructed.device_id == image.device_id
+    assert reconstructed.relative_path == image.relative_path
     assert reconstructed.filename == image.filename
     assert reconstructed.extension == image.extension
     assert isinstance(reconstructed.id, ImageId)
-    assert isinstance(reconstructed.path, ImagePath)
+    assert isinstance(reconstructed.relative_path, ImagePath)
+    assert isinstance(reconstructed.device_id, DeviceId)
 
 
 def test_to_domain_ignores_unset_embedding() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -94,7 +104,8 @@ def test_to_domain_ignores_unset_embedding() -> None:
 def test_to_domain_ignores_populated_embedding() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -110,7 +121,8 @@ def test_to_domain_ignores_populated_embedding() -> None:
 def test_to_domain_ignores_populated_incremental_metadata() -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -128,7 +140,8 @@ def test_to_domain_ignores_populated_incremental_metadata() -> None:
 def test_round_trip_preserves_fields_individually() -> None:
     original = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/roundtrip.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/roundtrip.png"),
         filename="roundtrip",
         extension="png",
     )
@@ -136,7 +149,8 @@ def test_round_trip_preserves_fields_individually() -> None:
     reconstructed = ImageModel.from_domain(original).to_domain()
 
     assert reconstructed.id == original.id
-    assert reconstructed.path == original.path
+    assert reconstructed.device_id == original.device_id
+    assert reconstructed.relative_path == original.relative_path
     assert reconstructed.filename == original.filename
     assert reconstructed.extension == original.extension
 
@@ -146,7 +160,8 @@ def test_row_persists_with_incremental_metadata_left_none(
 ) -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(f"images/{uuid.uuid4().hex}.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(f"images/{uuid.uuid4().hex}.png"),
         filename="example",
         extension="png",
     )
@@ -166,7 +181,8 @@ def test_negative_file_size_raises_check_constraint_violation(
 ) -> None:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(f"images/{uuid.uuid4().hex}.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(f"images/{uuid.uuid4().hex}.png"),
         filename="example",
         extension="png",
     )

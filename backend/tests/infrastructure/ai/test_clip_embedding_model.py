@@ -26,6 +26,7 @@ import pytest
 import torch
 from PIL import Image as PILImage
 from PIL import UnidentifiedImageError
+from tests.conftest import TEST_DEVICE_ID
 from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 from app.domain.entities.image import Image
@@ -213,7 +214,9 @@ def _image(path: Path) -> Image:
     image_path = ImagePath(str(path))
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=image_path,
+        device_id=TEST_DEVICE_ID,
+        relative_path=image_path,
+        absolute_path=image_path,
         filename=path.stem,
         extension=path.suffix.lstrip(".").lower(),
     )

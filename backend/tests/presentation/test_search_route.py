@@ -24,14 +24,17 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 from tests.application.fakes import FakeImageRepository
+from tests.conftest import TEST_DEVICE_ID
 
 from app.application.use_cases.search_images import (
     MAX_SEARCH_LIMIT,
     SearchImagesUseCase,
 )
 from app.domain.entities.image import Image
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.config.settings import settings
@@ -52,16 +55,24 @@ class RecordingSearchUseCase:
     def __init__(self, hits: list[SearchHit]) -> None:
         self.hits = hits
         self.calls: list[tuple[str, int | None]] = []
+        self.filters: list[SearchFilters | None] = []
 
-    def execute(self, query: str, limit: int | None = None) -> list[SearchHit]:
+    def execute(
+        self,
+        query: str,
+        limit: int | None = None,
+        filters: SearchFilters | None = None,
+    ) -> list[SearchHit]:
         self.calls.append((query, limit))
+        self.filters.append(filters)
         return self.hits
 
 
 def make_hit(filename: str, similarity: float) -> SearchHit:
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(f"C:/private/photos/{filename}.jpg"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(f"private/photos/{filename}.jpg"),
         filename=filename,
         extension="jpg",
     )
@@ -285,3 +296,126 @@ def test_a_non_integer_limit_is_a_422(
 
     assert response.status_code == 422
     assert stub.calls == []
+
+
+class TestDeviceFilterParameter:
+    """RFC-027 section 9, at the HTTP edge.
+
+    The route does one thing with `device_id`: turns it into a
+    `SearchFilters` and hands it down. Everything about what a filter
+    *means* is below this layer, so what these cases pin is the
+    translation -- and specifically the one translation that can be wrong
+    in a way nothing else notices.
+    """
+
+    def test_an_omitted_device_id_means_every_device(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """Absent must mean *all*, never *none*.
+
+        A route that turned a missing parameter into a one-element or
+        empty `IN ()` would make every ordinary search return zero
+        results, and the request that caused it would look completely
+        normal.
+        """
+        client.get(SEARCH_URL, params={"q": "lake"})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.is_empty()
+        assert filters.device_ids == frozenset()
+
+    def test_one_device_id_reaches_the_use_case(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        device_id = uuid.uuid4()
+
+        client.get(SEARCH_URL, params={"q": "lake", "device_id": str(device_id)})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.device_ids == frozenset({DeviceId(device_id)})
+
+    def test_the_parameter_repeats_for_several_devices(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        first, second = uuid.uuid4(), uuid.uuid4()
+
+        client.get(
+            SEARCH_URL,
+            params=[
+                ("q", "lake"),
+                ("device_id", str(first)),
+                ("device_id", str(second)),
+            ],
+        )
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.device_ids == frozenset({DeviceId(first), DeviceId(second)})
+
+    def test_a_repeated_device_id_is_carried_once(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """It is a set: a disk named twice is one disk."""
+        device_id = uuid.uuid4()
+
+        client.get(
+            SEARCH_URL,
+            params=[
+                ("q", "lake"),
+                ("device_id", str(device_id)),
+                ("device_id", str(device_id)),
+            ],
+        )
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert len(filters.device_ids) == 1
+
+    def test_a_malformed_device_id_is_rejected_by_validation(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """422, and the use case is never reached.
+
+        The id is declared as a `UUID`, so a client sending "HD2" gets a
+        well-formed complaint from FastAPI rather than a search that
+        quietly matches nothing.
+        """
+        response = client.get(SEARCH_URL, params={"q": "lake", "device_id": "HD2"})
+
+        assert response.status_code == 422
+        assert stub.calls == []
+
+    def test_an_unknown_device_id_is_a_valid_request(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """A filter restricts a set; it does not assert that it exists.
+
+        A search naming a disk the system has never seen correctly matches
+        nothing, and answering 200 with no results says exactly that.
+        """
+        response = client.get(
+            SEARCH_URL, params={"q": "lake", "device_id": str(uuid.uuid4())}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["results"] == []
+
+    def test_the_response_shape_is_unchanged_by_filtering(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """RFC-027 narrows the question; RFC-030 changes the answer.
+
+        Publishing the path, the disk a hit is on and whether that disk is
+        plugged in belongs to RFC-030, which owns the response shape. This
+        RFC adds an input and nothing else.
+        """
+        stub.hits = [make_hit("fish_ponds_02", 0.3255)]
+
+        body = client.get(
+            SEARCH_URL, params={"q": "lake", "device_id": str(uuid.uuid4())}
+        ).json()
+
+        assert set(body) == {"query", "limit", "results"}
+        assert set(body["results"][0]) == {"id", "filename", "similarity"}

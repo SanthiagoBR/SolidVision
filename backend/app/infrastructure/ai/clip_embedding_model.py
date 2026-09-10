@@ -66,7 +66,7 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         self._processor: ProcessorMixin | None = None
 
     def encode_image(self, image: Image) -> EmbeddingVector:
-        """Decode the pixels at `image.path` and return their CLIP embedding."""
+        """Decode the image's pixels and return their CLIP embedding."""
         model, processor = self._ensure_loaded()
         pixel_values = self._preprocess(processor, image)
 
@@ -132,7 +132,7 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         the model's input resolution, regardless of the source photo -- is
         allowed to outlive one file.
         """
-        with PILImage.open(image.path.value) as opened:
+        with PILImage.open(image.require_absolute_path().value) as opened:
             pixels = opened.convert("RGB")
             inputs: Mapping[str, torch.Tensor] = processor(
                 images=pixels, return_tensors="pt"

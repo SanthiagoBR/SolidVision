@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import Select, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -15,11 +16,13 @@ from app.domain.exceptions import (
     ImageAlreadyExistsError,
 )
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.database.models.image_model import (
     EMBEDDING_DIMENSION,
@@ -34,7 +37,14 @@ class PostgresImageRepository(ImageRepository):
         self._session = session
 
     def save(self, image: Image) -> None:
-        """Persist an image, translating path collisions into a domain error."""
+        """Persist an image, translating location collisions into a domain error.
+
+        The collision it names is now `(device_id, relative_path)` rather
+        than the old absolute `path`, which is the constraint that finally
+        means what this method always claimed: two rows for the same file
+        on the same disk are rejected, including when the disk mounted
+        under a different letter the second time (RFC-027 section 2.1).
+        """
         model = ImageModel.from_domain(image)
         self._session.add(model)
         try:
@@ -152,7 +162,8 @@ class PostgresImageRepository(ImageRepository):
             model = ImageModel.from_domain(record.image)
             self._session.add(model)
         else:
-            model.path = str(record.image.path)
+            model.device_id = record.image.device_id.value
+            model.relative_path = str(record.image.relative_path)
             model.filename = record.image.filename
             model.extension = record.image.extension
 
@@ -162,7 +173,12 @@ class PostgresImageRepository(ImageRepository):
         model.content_hash = record.content_hash
         return model
 
-    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+    def search_similar(
+        self,
+        embedding: EmbeddingVector,
+        limit: int,
+        filters: SearchFilters | None = None,
+    ) -> SearchHits:
         """Rank the indexed images against `embedding` inside PostgreSQL.
 
         The ranking is the database's job and stays there. Reading the
@@ -190,10 +206,26 @@ class PostgresImageRepository(ImageRepository):
         across plans or across the seq-scan/index-scan boundary, and
         `limit` would then cut an arbitrary one of them.
 
-        Only the four columns the domain entity needs are selected. The
+        Only the columns the domain entity needs are selected. The
         `embedding` column is deliberately not among them: the caller
         cannot use it, and hydrating full rows would drag a 512-float
-        vector back per hit for nothing.
+        vector back per hit for nothing. `absolute_path` is left unset on
+        every hit, because the database does not know where a device is
+        mounted and must not pretend to (RFC-027 section 7).
+
+        **The device filter is a `WHERE`, and what PostgreSQL does with it
+        is a measurement rather than a deduction.** The planner is free to
+        abandon the HNSW index and scan the subset sequentially, which is
+        both fast and exact for a selective filter; or to keep the index
+        and apply the predicate to what the traversal returned, which is
+        nearly free for an unselective one. The middle is the risk: an
+        index scan explores at most `hnsw.ef_search` candidates, so
+        post-filtering can discard enough of them to return **fewer than
+        `limit`** rows while more matching rows exist. Known mitigations,
+        none chosen here: `hnsw.iterative_scan`, raising `ef_search` when
+        a filter is present, or partial HNSW indexes per device.
+        `experiments/rfc-027-devices/planner_check.py` measures the three
+        regimes with `EXPLAIN ANALYZE`.
 
         **The result is best-effort once the planner uses the index.**
         HNSW is an approximate index: a scan explores at most
@@ -215,7 +247,8 @@ class PostgresImageRepository(ImageRepository):
         statement = (
             select(
                 ImageModel.id,
-                ImageModel.path,
+                ImageModel.device_id,
+                ImageModel.relative_path,
                 ImageModel.filename,
                 ImageModel.extension,
                 distance,
@@ -224,12 +257,14 @@ class PostgresImageRepository(ImageRepository):
             .order_by(distance, ImageModel.id)
             .limit(limit)
         )
+        statement = self._apply_filters(statement, filters)
 
         return [
             SearchHit(
                 image=Image(
                     id=ImageId(row.id),
-                    path=ImagePath(row.path),
+                    device_id=DeviceId(row.device_id),
+                    relative_path=ImagePath(row.relative_path),
                     filename=row.filename,
                     extension=row.extension,
                 ),
@@ -237,6 +272,31 @@ class PostgresImageRepository(ImageRepository):
             )
             for row in self._session.execute(statement)
         ]
+
+    @staticmethod
+    def _apply_filters(
+        statement: Select[Any], filters: SearchFilters | None
+    ) -> Select[Any]:
+        """Add the narrowing clauses, or none at all.
+
+        An absent or empty `SearchFilters` adds nothing, so the emitted
+        SQL is character-for-character the query RFC-025 shipped and its
+        contract tests keep describing the unfiltered behaviour. The
+        alternative -- always emitting `device_id IN (...)` and letting an
+        empty list mean "everything" -- is the bug this branch exists to
+        avoid: an empty `IN ()` matches no rows, so a defaulted argument
+        would silently return nothing.
+
+        RFC-028 adds its date range here, beside this clause and not
+        instead of it.
+        """
+        if filters is None or filters.is_empty():
+            return statement
+        return statement.where(
+            ImageModel.device_id.in_(
+                [device_id.value for device_id in filters.device_ids]
+            )
+        )
 
     @staticmethod
     def _require_indexed_dimension(embedding: EmbeddingVector) -> None:

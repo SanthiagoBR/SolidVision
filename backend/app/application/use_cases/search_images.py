@@ -21,6 +21,7 @@ from app.domain.exceptions import (
 )
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
 # The largest page any caller may ask for. Application policy rather than
@@ -52,7 +53,12 @@ class SearchImagesUseCase:
         self._embedding_model = embedding_model
         self._default_limit = default_limit
 
-    def execute(self, query: str, limit: int | None = None) -> list[SearchHit]:
+    def execute(
+        self,
+        query: str,
+        limit: int | None = None,
+        filters: SearchFilters | None = None,
+    ) -> list[SearchHit]:
         """Return the images best matching `query`, most similar first.
 
         The returned order is the repository's, passed through untouched.
@@ -66,6 +72,16 @@ class SearchImagesUseCase:
         `None` means "unspecified", never "unlimited": there is no way to
         ask for every image, because `MAX_SEARCH_LIMIT` would have to
         stop it anyway.
+
+        `filters` is passed straight through, unvalidated, and that is
+        deliberate rather than an omission. This layer owns policy about
+        what counts as a usable *request* -- an empty query, an absurd
+        page size -- and a device that does not exist is not one: the
+        filter is a restriction on the candidate set, so naming an unknown
+        device is a search that legitimately matches nothing (RFC-027
+        section 9). Checking would also mean this use case acquiring a
+        `DeviceRepository` it otherwise has no reason to hold, to reject
+        the one case that already answers correctly.
         """
         if not query.strip():
             raise EmptySearchQueryError(
@@ -76,7 +92,7 @@ class SearchImagesUseCase:
         self._validate_limit(effective_limit)
 
         embedding = self._embedding_model.encode_text(query)
-        return self._repository.search_similar(embedding, effective_limit)
+        return self._repository.search_similar(embedding, effective_limit, filters)
 
     @staticmethod
     def _validate_limit(limit: int) -> None:

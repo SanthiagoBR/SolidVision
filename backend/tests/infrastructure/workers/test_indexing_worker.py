@@ -7,9 +7,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from tests.application.fakes import FakeImageRepository, RecordingContentHasher
+from tests.application.fakes import (
+    FakeDeviceRepository,
+    FakeImageRepository,
+    RecordingContentHasher,
+    StubVolumeIdentityProvider,
+    make_device,
+)
 
 from app.application.use_cases.index_or_update_images import IndexOrUpdateImagesUseCase
+from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.value_objects.embedding_vector import EmbeddingVector
@@ -23,7 +30,16 @@ from app.infrastructure.workers.indexing_worker import (
     IndexingWorker,
     _build_arg_parser,
     main,
+    register_device,
 )
+
+TEST_DEVICE: Device = make_device()
+"""The disk every worker test pretends its `tmp_path` is.
+
+Built by `make_device()` so its id comes from `compute_device_id()`, the
+same derivation production uses -- a hand-picked UUID here would make
+every id assertion below check arithmetic rather than the derivation.
+"""
 
 SUPPORTED_EXTENSIONS = (".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".webp")
 
@@ -76,7 +92,17 @@ def _make_worker(
     repository: FakeImageRepository,
     embedding_model: EmbeddingModelPort,
     batch_size: int = 8,
+    mount_point: Path | None = None,
 ) -> IndexingWorker:
+    """Build a worker that treats `root` itself as the device mount point.
+
+    `mount_point` defaults to `root`, so `relative_path` comes out
+    relative to the test's own directory rather than to the drive the
+    suite happens to run from. That keeps every assertion below
+    independent of where `tmp_path` lives, which is the same property
+    RFC-027 gives the product: the identity must not contain the mount
+    point.
+    """
     provider = FilesystemImageProvider(root, SUPPORTED_EXTENSIONS)
     use_case = IndexOrUpdateImagesUseCase(
         repository=repository,
@@ -86,7 +112,10 @@ def _make_worker(
         metadata_prefetch_size=512,
     )
     return IndexingWorker(
-        filesystem_provider=provider, index_or_update_images_use_case=use_case
+        filesystem_provider=provider,
+        index_or_update_images_use_case=use_case,
+        device=TEST_DEVICE,
+        mount_point=mount_point or root,
     )
 
 
@@ -137,11 +166,73 @@ def test_image_construction_derives_expected_fields(tmp_path: Path) -> None:
     worker.run()
 
     record = repository.save_indexed_calls[0]
-    expected_path = ImagePath(str(tmp_path / "photo.png"))
-    assert record.image.path == expected_path
+    expected_relative = ImagePath("photo.png")
+    assert record.image.device_id == TEST_DEVICE.id
+    assert record.image.relative_path == expected_relative
+    assert record.image.absolute_path == ImagePath(str(tmp_path / "photo.png"))
     assert record.image.filename == "photo"
     assert record.image.extension == "png"
-    assert record.image.id == compute_image_id(expected_path)
+    assert record.image.id == compute_image_id(TEST_DEVICE.id, expected_relative)
+
+
+def test_a_drive_letter_change_does_not_reindex_anything(tmp_path: Path) -> None:
+    """RFC-027 section 2.1, end to end, as the RFC section 15 check.
+
+    The same disk is scanned twice under two different absolute locations
+    -- which is what a remounted volume looks like from here -- and must
+    produce the same id both times, so the second run skips every file
+    instead of paying for inference again.
+    """
+    disk = tmp_path / "disk"
+    (disk / "fotos" / "2018").mkdir(parents=True)
+    (disk / "fotos" / "2018" / "DJI_0042.JPG").write_bytes(b"aerial")
+
+    repository = FakeImageRepository()
+    monday_model = _RecordingEmbeddingModel()
+    _make_worker(disk, repository, monday_model).run()
+
+    # The volume comes back mounted somewhere else. Nothing on it moved.
+    remounted = tmp_path / "remounted"
+    disk.rename(remounted)
+    tuesday_model = _RecordingEmbeddingModel()
+    summary = _make_worker(remounted, repository, tuesday_model).run()
+
+    assert len(monday_model.encode_image_calls) == 1
+    assert tuesday_model.encode_image_calls == []
+    assert summary.skipped_unchanged == 1
+    assert len(repository.list()) == 1
+
+
+def test_relative_paths_are_measured_from_the_mount_point_not_the_root(
+    tmp_path: Path,
+) -> None:
+    """RFC-027 section 2.2: the scan root must not enter the identity.
+
+    Indexing `D:/fotos` and later `D:/fotos/2018` are two roots on one
+    disk, and the file they share is one file. Measuring from the mount
+    point is what makes the two agree.
+    """
+    (tmp_path / "fotos" / "2018").mkdir(parents=True)
+    (tmp_path / "fotos" / "2018" / "photo.png").write_bytes(b"data")
+
+    whole_disk = FakeImageRepository()
+    _make_worker(tmp_path, whole_disk, _RecordingEmbeddingModel()).run()
+
+    one_folder = FakeImageRepository()
+    _make_worker(
+        tmp_path / "fotos" / "2018",
+        one_folder,
+        _RecordingEmbeddingModel(),
+        mount_point=tmp_path,
+    ).run()
+
+    assert whole_disk.save_indexed_calls[0].image.relative_path == ImagePath(
+        "fotos/2018/photo.png"
+    )
+    assert (
+        one_folder.save_indexed_calls[0].image.id
+        == whole_disk.save_indexed_calls[0].image.id
+    )
 
 
 def test_same_path_produces_same_id_across_multiple_runs(tmp_path: Path) -> None:
@@ -294,6 +385,101 @@ def test_the_run_summary_is_returned_and_logged(
     assert any("Indexing finished" in message for message in caplog.messages)
 
 
+def test_the_worker_never_persists_a_mount_point(tmp_path: Path) -> None:
+    """The device it writes carries no letter, however it was resolved.
+
+    `Device` has no such field, so the check is really that nothing
+    smuggled one onto the entity -- which would be the easiest way to
+    reintroduce RFC-027 section 2.1 while every other test stayed green.
+    """
+    (tmp_path / "photo.png").write_bytes(b"data")
+
+    device_repository = FakeDeviceRepository()
+    device, volume = register_device(
+        volume_provider=StubVolumeIdentityProvider(mount_point=tmp_path),
+        device_repository=device_repository,
+        root=tmp_path,
+        label="HD9",
+    )
+
+    assert not hasattr(device, "mount_point")
+    assert not hasattr(device, "drive_letter")
+    assert not hasattr(device, "is_connected")
+    assert volume.mount_point == tmp_path
+
+
+class TestDeviceRegistration:
+    """RFC-027 section 14: the device is resolved before the scan starts."""
+
+    def test_an_unknown_volume_is_registered_with_the_supplied_label(
+        self, tmp_path: Path
+    ) -> None:
+        device_repository = FakeDeviceRepository()
+
+        device, _ = register_device(
+            volume_provider=StubVolumeIdentityProvider(mount_point=tmp_path),
+            device_repository=device_repository,
+            root=tmp_path,
+            label="HD2",
+        )
+
+        assert device.label == "HD2"
+        assert device_repository.get(device.id) == device
+
+    def test_a_known_volume_keeps_its_label_when_none_is_supplied(
+        self, tmp_path: Path
+    ) -> None:
+        """Renaming a disk is the user's decision, not a side effect."""
+        provider = StubVolumeIdentityProvider(mount_point=tmp_path)
+        device_repository = FakeDeviceRepository()
+        register_device(provider, device_repository, tmp_path, label="HD2")
+
+        device, _ = register_device(provider, device_repository, tmp_path, label="")
+
+        assert device.label == "HD2"
+        assert len(device_repository.list()) == 1
+
+    def test_a_known_volume_keeps_its_first_seen_at(self, tmp_path: Path) -> None:
+        """`first_seen_at` answers a question about the past, permanently."""
+        provider = StubVolumeIdentityProvider(mount_point=tmp_path)
+        device_repository = FakeDeviceRepository()
+        first, _ = register_device(provider, device_repository, tmp_path, "HD2")
+
+        second, _ = register_device(provider, device_repository, tmp_path, "HD2")
+
+        assert second.first_seen_at == first.first_seen_at
+        assert first.last_seen_at is not None
+        assert second.last_seen_at is not None
+        assert second.last_seen_at >= first.last_seen_at
+
+    def test_the_same_volume_never_becomes_two_devices(self, tmp_path: Path) -> None:
+        provider = StubVolumeIdentityProvider(mount_point=tmp_path)
+        device_repository = FakeDeviceRepository()
+
+        first, _ = register_device(provider, device_repository, tmp_path, "HD2")
+        second, _ = register_device(provider, device_repository, tmp_path, "HD3")
+
+        assert first.id == second.id
+        assert len(device_repository.list()) == 1
+
+    def test_persist_false_computes_the_device_without_writing_it(
+        self, tmp_path: Path
+    ) -> None:
+        """What `device_reconcile --dry-run` needs: a dry run writes nothing."""
+        device_repository = FakeDeviceRepository()
+
+        device, _ = register_device(
+            volume_provider=StubVolumeIdentityProvider(mount_point=tmp_path),
+            device_repository=device_repository,
+            root=tmp_path,
+            label="HD2",
+            persist=False,
+        )
+
+        assert device.label == "HD2"
+        assert device_repository.list() == []
+
+
 def test_worker_does_not_construct_infrastructure_dependencies_internally() -> None:
     source = inspect.getsource(IndexingWorker)
 
@@ -440,6 +626,16 @@ class TestCommandLineEntryPoint:
 
         assert args.root == tmp_path
 
+    def test_the_label_is_optional_and_defaults_to_empty(self, tmp_path: Path) -> None:
+        """Empty means "leave the label alone", not "call the disk nothing".
+
+        `register_device()` falls back to an existing label, then to the
+        volume's own, and only then to the identity string.
+        """
+        args = _build_arg_parser().parse_args(["--root", str(tmp_path)])
+
+        assert args.label == ""
+
     def test_no_default_points_at_the_configured_indexing_root(self) -> None:
         """`seed_demo.py` documents why this default would be dangerous."""
         (root_action,) = [
@@ -478,12 +674,30 @@ class TestCommandLineEntryPoint:
             self: IndexingWorker,
             filesystem_provider: FilesystemImageProvider,
             index_or_update_images_use_case: IndexOrUpdateImagesUseCase,
+            device: Device,
+            mount_point: Path,
         ) -> None:
-            real_worker_init(self, filesystem_provider, index_or_update_images_use_case)
+            real_worker_init(
+                self,
+                filesystem_provider,
+                index_or_update_images_use_case,
+                device,
+                mount_point,
+            )
             constructed.append(self)
 
         monkeypatch.setattr(
             "app.infrastructure.persistence.session.SessionLocal", lambda: _Session()
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.filesystem.volume_identity_provider."
+            "WindowsVolumeIdentityProvider",
+            lambda: StubVolumeIdentityProvider(mount_point=tmp_path),
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.postgres_device_repository."
+            "PostgresDeviceRepository",
+            lambda session: FakeDeviceRepository(),
         )
         monkeypatch.setattr(
             "app.presentation.dependencies.get_embedding_model",
@@ -495,7 +709,10 @@ class TestCommandLineEntryPoint:
             lambda session: repository,
         )
         monkeypatch.setattr(IndexingWorker, "__init__", capturing_init)
-        monkeypatch.setattr("sys.argv", ["indexing_worker", "--root", str(tmp_path)])
+        monkeypatch.setattr(
+            "sys.argv",
+            ["indexing_worker", "--root", str(tmp_path), "--label", "HD2"],
+        )
 
         main()
 
@@ -505,4 +722,6 @@ class TestCommandLineEntryPoint:
         assert use_case._embedding_model is embedding_model
         assert isinstance(use_case._content_hasher, Sha256ContentHasher)
         assert len(repository.save_indexed_calls) == 1
+        assert worker._device.label == "HD2"
+        assert worker._mount_point == tmp_path
         assert closed == [True]

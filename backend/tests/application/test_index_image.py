@@ -9,6 +9,7 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from tests.application.fakes import FakeImageRepository
+from tests.conftest import TEST_DEVICE_ID
 
 
 def test_index_image_saves_new_image_and_generates_embedding() -> None:
@@ -18,7 +19,8 @@ def test_index_image_saves_new_image_and_generates_embedding() -> None:
 
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/new.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/new.png"),
         filename="new",
         extension="png",
     )
@@ -34,7 +36,8 @@ def test_index_image_raises_for_existing_image_before_embedding_generation() -> 
         images=[
             Image(
                 id=ImageId(uuid.uuid4()),
-                path=ImagePath("images/existing.png"),
+                device_id=TEST_DEVICE_ID,
+                relative_path=ImagePath("images/existing.png"),
                 filename="existing",
                 extension="png",
             )
@@ -45,7 +48,8 @@ def test_index_image_raises_for_existing_image_before_embedding_generation() -> 
 
     duplicate = Image(
         id=repository._images[0].id,
-        path=ImagePath("images/existing.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/existing.png"),
         filename="existing",
         extension="png",
     )
@@ -68,7 +72,8 @@ def test_index_image_checks_duplicate_before_embedding_generation() -> None:
 
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/new.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/new.png"),
         filename="new",
         extension="png",
     )

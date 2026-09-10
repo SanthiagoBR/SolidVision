@@ -257,7 +257,7 @@ class IndexOrUpdateImagesUseCase:
             )
         except Exception as exc:
             summary.failures.append(
-                IndexingFailure(path=str(candidate.image.path), error=exc)
+                IndexingFailure(path=str(candidate.image.display_path), error=exc)
             )
             return None
 
@@ -303,7 +303,9 @@ class IndexOrUpdateImagesUseCase:
         except Exception as exc:
             summary.inference_fallbacks.append(
                 BatchFallback(
-                    paths=tuple(str(plan.candidate.image.path) for plan in plans),
+                    paths=tuple(
+                        str(plan.candidate.image.display_path) for plan in plans
+                    ),
                     error=exc,
                 )
             )
@@ -330,7 +332,9 @@ class IndexOrUpdateImagesUseCase:
                 embedding = self._embedding_model.encode_image(plan.candidate.image)
             except Exception as exc:
                 summary.failures.append(
-                    IndexingFailure(path=str(plan.candidate.image.path), error=exc)
+                    IndexingFailure(
+                        path=str(plan.candidate.image.display_path), error=exc
+                    )
                 )
                 continue
             encoded.append((plan, embedding))
@@ -372,7 +376,7 @@ class IndexOrUpdateImagesUseCase:
             summary.persistence_seconds += time.perf_counter() - started
             summary.persistence_fallbacks.append(
                 BatchFallback(
-                    paths=tuple(str(record.image.path) for record in records),
+                    paths=tuple(str(record.image.display_path) for record in records),
                     error=exc,
                 )
             )
@@ -393,7 +397,7 @@ class IndexOrUpdateImagesUseCase:
                 self._repository.save_indexed(record)
             except Exception as exc:
                 summary.failures.append(
-                    IndexingFailure(path=str(record.image.path), error=exc)
+                    IndexingFailure(path=str(record.image.display_path), error=exc)
                 )
                 continue
             finally:
@@ -417,7 +421,7 @@ class IndexOrUpdateImagesUseCase:
             )
         except Exception as exc:
             summary.failures.append(
-                IndexingFailure(path=str(plan.candidate.image.path), error=exc)
+                IndexingFailure(path=str(plan.candidate.image.display_path), error=exc)
             )
             return
         finally:

@@ -26,6 +26,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import QueuePool
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.value_objects.embedding_vector import EmbeddingVector
@@ -61,7 +62,8 @@ def checked_out_connections() -> int:
 def make_image(filename: str) -> Image:
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(f"images/search/{filename}-{uuid.uuid4().hex}.jpg"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(f"images/search/{filename}-{uuid.uuid4().hex}.jpg"),
         filename=filename,
         extension="jpg",
     )

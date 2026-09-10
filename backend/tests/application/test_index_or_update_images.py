@@ -25,6 +25,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from tests.application.fakes import FakeImageRepository, StubContentHasher
+from tests.conftest import TEST_DEVICE_ID
 
 MODIFIED_AT = datetime.datetime(2026, 8, 21, 12, 0, tzinfo=datetime.UTC)
 
@@ -109,7 +110,8 @@ def _image(name: str) -> Image:
     path = ImagePath(f"images/{name}.png")
     return Image(
         id=ImageId(uuid.uuid5(uuid.NAMESPACE_URL, str(path))),
-        path=path,
+        device_id=TEST_DEVICE_ID,
+        relative_path=path,
         filename=name,
         extension="png",
     )
@@ -183,7 +185,10 @@ class TestBatching:
 
         assert summary.indexed == 7
         assert len(repository.save_indexed_calls) == 7
-        assert len({str(r.image.path) for r in repository.save_indexed_calls}) == 7
+        persisted = {
+            str(record.image.relative_path) for record in repository.save_indexed_calls
+        }
+        assert len(persisted) == 7
 
     def test_batching_does_not_change_the_embeddings_that_get_persisted(self) -> None:
         """RFC-024's equivalence requirement, at the pipeline level.
@@ -202,7 +207,7 @@ class TestBatching:
 
         def by_path(repository: FakeImageRepository) -> dict[str, tuple[float, ...]]:
             return {
-                str(record.image.path): record.embedding.values
+                str(record.image.relative_path): record.embedding.values
                 for record in repository.save_indexed_calls
             }
 

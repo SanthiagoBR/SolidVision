@@ -41,12 +41,21 @@ from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
+from app.infrastructure.filesystem.volume_identity_provider import (
+    WindowsVolumeIdentityProvider,
+)
 from app.infrastructure.logging.logger import get_logger
+from app.infrastructure.persistence.postgres_device_repository import (
+    PostgresDeviceRepository,
+)
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
 from app.infrastructure.persistence.session import SessionLocal
-from app.infrastructure.workers.indexing_worker import IndexingWorker
+from app.infrastructure.workers.indexing_worker import (
+    IndexingWorker,
+    register_device,
+)
 from dataset_tools.manifest import DEMO_CORPUS_ROOT, DEMO_MANIFEST_PATH, load_manifest
 from dataset_tools.materialize import materialize
 
@@ -67,6 +76,18 @@ def seed_demo(target_root: Path) -> None:
 
     session = SessionLocal()
     try:
+        # RFC-027: an image belongs to a device, so the volume holding the
+        # target has to be registered before anything is indexed onto it.
+        # The demo corpus lives wherever the operator pointed it, which is
+        # usually the system drive -- the label says what it is so that a
+        # seeded database does not present the developer's own disk under
+        # a name suggesting it holds a real photo collection.
+        device, volume = register_device(
+            volume_provider=WindowsVolumeIdentityProvider(),
+            device_repository=PostgresDeviceRepository(session),
+            root=target_root,
+            label="DEMO-CORPUS",
+        )
         repository = PostgresImageRepository(session)
         worker = IndexingWorker(
             filesystem_provider=FilesystemImageProvider(
@@ -79,6 +100,8 @@ def seed_demo(target_root: Path) -> None:
                 batch_size=settings.batch_size,
                 metadata_prefetch_size=settings.metadata_prefetch_size,
             ),
+            device=device,
+            mount_point=volume.mount_point,
         )
         worker.run()
     finally:

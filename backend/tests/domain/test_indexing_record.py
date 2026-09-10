@@ -5,6 +5,7 @@ import uuid
 from dataclasses import FrozenInstanceError
 
 import pytest
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.value_objects.embedding_vector import EmbeddingVector
@@ -16,7 +17,8 @@ from app.domain.value_objects.indexing_record import IndexingRecord
 def _build_image() -> Image:
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )

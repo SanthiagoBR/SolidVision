@@ -5,6 +5,7 @@ import math
 import uuid
 
 import pytest
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
@@ -39,7 +40,8 @@ def test_encode_image_is_deterministic() -> None:
     model = FakeEmbeddingModel()
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -60,13 +62,15 @@ def test_different_images_produce_different_embeddings() -> None:
     model = FakeEmbeddingModel()
     first_image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/one.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/one.png"),
         filename="one",
         extension="png",
     )
     second_image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/two.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/two.png"),
         filename="two",
         extension="png",
     )
@@ -90,7 +94,8 @@ def test_methods_return_embedding_vector() -> None:
         model.encode_image(
             Image(
                 id=ImageId(uuid.uuid4()),
-                path=ImagePath("images/example.png"),
+                device_id=TEST_DEVICE_ID,
+                relative_path=ImagePath("images/example.png"),
                 filename="example",
                 extension="png",
             )

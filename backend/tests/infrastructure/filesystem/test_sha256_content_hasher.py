@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.services.content_hasher_port import ContentHasherPort
@@ -23,7 +24,9 @@ def _image(path: Path) -> Image:
     image_path = ImagePath(str(path))
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=image_path,
+        device_id=TEST_DEVICE_ID,
+        relative_path=image_path,
+        absolute_path=image_path,
         filename=path.stem,
         extension=path.suffix.lstrip(".").lower(),
     )

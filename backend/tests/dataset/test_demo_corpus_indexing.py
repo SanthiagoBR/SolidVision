@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 from sqlalchemy.orm import Session
+from tests.conftest import TEST_DEVICE_ID, make_test_device
 
 from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
 from app.application.use_cases.index_or_update_images import (
@@ -40,12 +41,20 @@ from dataset_tools.manifest import DEMO_MANIFEST_PATH, load_manifest
 DEMO_MANIFEST = load_manifest(DEMO_MANIFEST_PATH)
 
 
-def _to_image(discovered: DiscoveredImageFile) -> Image:
-    """Build the domain entity the worker would build for a discovered file."""
-    path = ImagePath(str(discovered.path))
+def _to_image(discovered: DiscoveredImageFile, mount_point: Path) -> Image:
+    """Build the domain entity the worker would build for a discovered file.
+
+    `mount_point` is the corpus root, standing in for a whole volume:
+    since RFC-027 an image is identified by its device and its path
+    *within* that device, so the identity must not contain the temporary
+    directory pytest happened to hand this run.
+    """
+    relative_path = ImagePath(discovered.path.relative_to(mount_point))
     return Image(
-        id=compute_image_id(path),
-        path=path,
+        id=compute_image_id(TEST_DEVICE_ID, relative_path),
+        device_id=TEST_DEVICE_ID,
+        relative_path=relative_path,
+        absolute_path=ImagePath(str(discovered.path)),
         filename=discovered.filename,
         extension=discovered.extension,
     )
@@ -67,12 +76,13 @@ def test_worker_indexes_every_manifest_entry(
             batch_size=8,
             metadata_prefetch_size=512,
         ),
+        device=make_test_device(),
+        mount_point=demo_corpus,
     )
     worker.run()
 
     for entry in DEMO_MANIFEST.images:
-        expected_path = ImagePath(str(demo_corpus / entry.relative_path))
-        expected_id = compute_image_id(expected_path)
+        expected_id = compute_image_id(TEST_DEVICE_ID, ImagePath(entry.relative_path))
         assert repository.exists(expected_id), entry.relative_path
 
 
@@ -92,13 +102,13 @@ def test_worker_persists_embeddings_of_the_configured_dimension(
             batch_size=8,
             metadata_prefetch_size=512,
         ),
+        device=make_test_device(),
+        mount_point=demo_corpus,
     )
     worker.run()
 
     sample_entry = DEMO_MANIFEST.images[0]
-    sample_id = compute_image_id(
-        ImagePath(str(demo_corpus / sample_entry.relative_path))
-    )
+    sample_id = compute_image_id(TEST_DEVICE_ID, ImagePath(sample_entry.relative_path))
     metadata = repository.get_index_metadata(sample_id)
     assert metadata is not None
     assert metadata.file_size is not None
@@ -125,7 +135,7 @@ def test_second_run_skips_every_unchanged_file(
     def run_pass() -> list[bool]:
         return [
             use_case.execute(
-                image=_to_image(discovered),
+                image=_to_image(discovered, demo_corpus),
                 file_size=discovered.file_size,
                 file_modified_at=discovered.file_modified_at,
             )
@@ -162,7 +172,7 @@ def test_touching_one_file_does_not_reindex_it_when_the_bytes_match(
     def run_pass() -> dict[str, bool]:
         return {
             str(discovered.path): use_case.execute(
-                image=_to_image(discovered),
+                image=_to_image(discovered, demo_corpus),
                 file_size=discovered.file_size,
                 file_modified_at=discovered.file_modified_at,
             )
@@ -185,7 +195,7 @@ def test_touching_one_file_does_not_reindex_it_when_the_bytes_match(
     # The refreshed mtime must still have been written back, or the next
     # run would re-hash the same file forever having learned nothing.
     stored = repository.get_index_metadata(
-        compute_image_id(ImagePath(str(touched_path)))
+        compute_image_id(TEST_DEVICE_ID, ImagePath(touched_entry.relative_path))
     )
     assert stored is not None
     assert stored.file_modified_at == touched_entry.file_modified_at + (
@@ -209,7 +219,7 @@ def test_changing_one_file_reindexes_only_that_file(
     def run_pass() -> dict[str, bool]:
         return {
             str(discovered.path): use_case.execute(
-                image=_to_image(discovered),
+                image=_to_image(discovered, demo_corpus),
                 file_size=discovered.file_size,
                 file_modified_at=discovered.file_modified_at,
             )
