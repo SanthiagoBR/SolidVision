@@ -15,6 +15,9 @@ RFC_017B_REVISION = "9d29f1a527fe"
 RFC_018_REVISION = "999b801e80f4"
 RFC_020_REVISION = "cbd5647f61b7"
 RFC_023_REVISION = "db526438ced5"
+RFC_024_REVISION = "26058b9e1d9a"
+RFC_027_DEVICES_REVISION = "a7f3c1d20b64"
+RFC_027_OWNERSHIP_REVISION = "b8e4d2a13c75"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -64,9 +67,10 @@ def test_history_is_linear_from_base_to_head() -> None:
             else None
         )
 
-    rfc_024 = _revision_after_rfc_023()
     assert chain == [
-        rfc_024.revision,
+        RFC_027_OWNERSHIP_REVISION,
+        RFC_027_DEVICES_REVISION,
+        RFC_024_REVISION,
         RFC_023_REVISION,
         RFC_020_REVISION,
         RFC_018_REVISION,

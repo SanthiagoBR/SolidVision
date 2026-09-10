@@ -13,6 +13,7 @@ import uuid
 
 import pytest
 from sqlalchemy.orm import Session
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.exceptions import ImageAlreadyExistsError
@@ -31,7 +32,8 @@ def _build_image(path: str | None = None) -> Image:
     unique = uuid.uuid4().hex
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(path or f"images/{unique}.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(path or f"images/{unique}.png"),
         filename=unique,
         extension="png",
     )
@@ -50,7 +52,7 @@ def test_save_persists_all_fields(db_session: Session) -> None:
     row = db_session.get(ImageModel, image.id.value)
     assert row is not None
     assert row.id == image.id.value
-    assert row.path == str(image.path)
+    assert row.relative_path == str(image.relative_path)
     assert row.filename == image.filename
     assert row.extension == image.extension
 
@@ -104,7 +106,7 @@ def test_get_preserves_all_domain_fields(db_session: Session) -> None:
 
     assert result is not None
     assert result.id == image.id
-    assert result.path == image.path
+    assert result.relative_path == image.relative_path
     assert result.filename == image.filename
     assert result.extension == image.extension
 
@@ -207,7 +209,7 @@ def test_list_includes_saved_images(db_session: Session) -> None:
 
     assert after_ids - before == {image.id}
     saved = next(result for result in after if result.id == image.id)
-    assert saved.path == image.path
+    assert saved.relative_path == image.relative_path
     assert saved.filename == image.filename
     assert saved.extension == image.extension
 
@@ -221,7 +223,8 @@ def test_round_trip_preserves_each_field_individually(db_session: Session) -> No
 
     assert reconstructed is not None
     assert reconstructed.id == original.id
-    assert reconstructed.path == original.path
+    assert reconstructed.relative_path == original.relative_path
+    assert reconstructed.device_id == original.device_id
     assert reconstructed.filename == original.filename
     assert reconstructed.extension == original.extension
 
@@ -287,7 +290,7 @@ def test_save_indexed_result_is_readable_via_get(db_session: Session) -> None:
 
     assert result is not None
     assert result.id == image.id
-    assert result.path == image.path
+    assert result.relative_path == image.relative_path
     assert result.filename == image.filename
     assert result.extension == image.extension
     assert not hasattr(result, "embedding")
@@ -548,7 +551,7 @@ class TestUpdateIndexMetadata:
 
         stored = repository.get(image.id)
         assert stored is not None
-        assert stored.path == image.path
+        assert stored.relative_path == image.relative_path
         assert stored.filename == image.filename
         assert stored.extension == image.extension
 

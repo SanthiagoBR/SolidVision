@@ -1,11 +1,11 @@
 # RFC-027 — Dispositivos e Identidade de Volume
 
-**Status:** Proposto
+**Status:** Implementado
 **Depende de:** RFC-019 (repositório PostgreSQL), RFC-020 (metadados incrementais), RFC-021 (worker), RFC-024 (pipeline), RFC-025 (busca)
 **Migration:** sim — `devices`, `images.device_id`, `images.relative_path`, e uma **reescrita de chave primária** (§6)
-**Medição:** `experiments/rfc-027-devices/` — `TBM`
+**Medição:** `experiments/rfc-027-devices/planner_check.py` — medido (§9.1)
 
-> **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir* durante a implementação e deve ser escrito de volta aqui depois. Este documento é uma proposta: nada nele foi medido ainda, e nenhuma afirmação de desempenho abaixo deve ser citada como resultado até que o `TBM` correspondente tenha sido substituído.
+> **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` era *a medir* durante a implementação e devia ser escrito de volta aqui depois. **Isso foi feito:** não resta nenhum `TBM`, e cada número abaixo é acompanhado da escala em que foi medido. Onde a medição não respondeu à pergunta inteira — §9.1 é o caso — o que ficou por medir está dito, em vez de ser preenchido por dedução.
 
 ---
 
@@ -93,7 +93,18 @@ class Device:
     total_bytes: int | None
     first_seen_at: datetime
     last_seen_at: datetime
+    last_scan_at: datetime | None      # §8
+    last_scan_file_count: int | None   # §8 — o denominador declarado
 ```
+
+> **Correção de rascunho.** As duas últimas linhas não estavam nesta lista
+> quando o RFC foi escrito, e a §8 as exige — ela decide que o denominador de
+> `% indexado` é *a última varredura* e diz, com todas as letras, que essa
+> escolha "exige persistir o resultado da varredura separadamente do resultado
+> da indexação — `devices.last_scan_file_count` e `devices.last_scan_at`". A
+> §4 e a §5.1 simplesmente não tinham sido atualizadas para concordar com a
+> §8. Foram implementadas, e a lista acima e a tabela da §5.1 passam a
+> refleti-lo.
 
 Congelada e comparando por `id`, seguindo `Image` (RFC-009). `label` é do usuário porque `filesystem_label` frequentemente é `Untitled` ou vazio, e um mockup que promete `HD2` precisa de um lugar para guardar `HD2`.
 
@@ -130,6 +141,8 @@ Reformatar o disco muda o GUID. Isso é aceitável e não precisa de tratamento:
 | `filesystem_label` | `TEXT` NULL | informativo |
 | `total_bytes` | `BIGINT` NULL | `CHECK >= 0` |
 | `first_seen_at` / `last_seen_at` | `TIMESTAMPTZ` NOT NULL | |
+| `last_scan_at` | `TIMESTAMPTZ` NULL | §8 |
+| `last_scan_file_count` | `INTEGER` NULL | §8 — `CHECK >= 0`; NULL significa *nunca varrido*, nunca *zero* |
 
 `last_seen_at` é histórico ("quando este disco esteve plugado pela última vez"), **não** estado de conexão. A distinção é §7.
 
@@ -181,7 +194,7 @@ Portanto a migration é **assistida**, e o `downgrade()` que o RFC-007 exige é 
 
 Linhas não reconciliadas **não são apagadas silenciosamente**. Elas são o registro de um disco que o usuário talvez precise plugar; apagá-las jogaria fora embeddings que custaram horas.
 
-O banco de desenvolvimento tem `TBM` linhas hoje, então na prática este caminho será exercitado contra um corpus pequeno. Ele é escrito para o acervo real de quem já rodou o worker, não para o corpus de demonstração.
+O banco de desenvolvimento tinha 45 linhas (todas com embedding) quando este caminho foi exercitado, então na prática ele rodou contra um corpus pequeno: 45 casadas, 45 reconciliadas, 0 perdidas, e o `md5` do conjunto de embeddings inalterado antes e depois. Ele é escrito para o acervo real de quem já rodou o worker, não para o corpus de demonstração.
 
 ## 7. Estado de conexão nunca é persistido
 
@@ -196,7 +209,18 @@ Device.volume_identity ∈ esse conjunto  →  conectado, e aqui está a letra
 
 A enumeração custa uma chamada de sistema e é cacheada por requisição, nunca entre requisições. Um resultado de busca sabe dizer *"HD3, desconectado"* porque a resolução aconteceu ao montar aquela resposta, e não porque alguém escreveu isso em uma tabela algum tempo atrás.
 
-Custo medido da enumeração: `TBM`.
+Custo medido da enumeração (`WindowsVolumeIdentityProvider.mounted_volumes()`,
+200 chamadas, uma máquina com um volume montado): **mediana 0,12 ms, p95 0,24
+ms**. Três ordens de grandeza abaixo do encode de uma consulta, que o RFC-025
+§12 mediu em ~90 ms para inglês. O cache por requisição continua justificado
+por correção — duas leituras dentro de uma mesma resposta têm de concordar —
+e não por custo.
+
+A ressalva é que a medição foi feita com **um** volume montado. O custo cresce
+com o número de volumes, porque cada um custa uma chamada
+`GetVolumeNameForVolumeMountPoint`; para os vinte discos do cenário do
+`ARCHITECTURE.md` §2 — dos quais tipicamente zero ou um está plugado — isso
+continua sendo ruído.
 
 ## 8. `% indexado` e o denominador que a UI não pode esconder
 
@@ -240,7 +264,48 @@ Há três regimes plausíveis, e qual deles vale em qual escala é uma **mediç�
 
 A faixa intermediária é o risco real. Mitigações conhecidas, em ordem de custo: `hnsw.iterative_scan` (pgvector ≥ 0,8), aumentar `ef_search` quando há filtro, ou índices HNSW parciais por dispositivo — viável precisamente porque a contagem de dispositivos é pequena e estável, ao contrário de um filtro por data.
 
-Nada disso é escolhido neste documento. `experiments/rfc-027-devices/planner_check.py` mede os três regimes com `EXPLAIN ANALYZE`, seguindo o RFC-025 §7, e o resultado é escrito de volta aqui: `TBM`.
+Nada disso é escolhido neste documento. `experiments/rfc-027-devices/planner_check.py`
+mede os três regimes com `EXPLAIN ANALYZE`, seguindo o RFC-025 §7. Medido com
+**20.000 imagens distribuídas igualmente entre 20 dispositivos**,
+`hnsw.ef_search = 40`, `limit = 10`:
+
+| filtro | plano escolhido | linhas | tempo |
+| --- | --- | --- | --- |
+| nenhum | índice HNSW (aproximado) | 10/10 | 4,6 ms |
+| 1 de 20 | bitmap sobre `uq_images_device_relative_path` (**exato**) | 10/10 | 7,9 ms |
+| 2 de 20 | varredura sequencial (**exata**) | 10/10 | 11,8 ms |
+| 5 de 20 | varredura sequencial (**exata**) | 10/10 | 23,8 ms |
+| 10 de 20 | índice HNSW (aproximado) | 10/10 | 2,8 ms |
+| 15 de 20 | índice HNSW (aproximado) | 10/10 | 3,0 ms |
+| 19 de 20 | índice HNSW (aproximado) | 10/10 | 4,6 ms |
+| 20 de 20 | índice HNSW (aproximado) | 10/10 | 3,9 ms |
+
+Os dois regimes das pontas se confirmaram. Um filtro seletivo faz o planejador
+abandonar o HNSW e varrer o subconjunto, que é **exato** e custa alguns
+milissegundos; um filtro pouco seletivo mantém o HNSW e o pós-filtro descarta
+quase nada — e é de fato mais rápido que a busca sem filtro, porque o mesmo
+`ef_search` é gasto sobre menos candidatos.
+
+**A faixa intermediária não apareceu nesta escala, e isso não é o mesmo que
+mostrar que ela não existe.** Nenhuma das oito execuções devolveu menos que
+`limit`. A razão é que o planejador trocou para varredura sequencial
+exatamente onde o pós-filtro começaria a descartar demais: com 20.000 linhas
+uma varredura completa é barata, então ele a preferiu em 2/20 e 5/20 em vez de
+usar o índice. Esse cálculo é função do tamanho da tabela — quanto maior ela
+fica, mais cedo o HNSW volta a parecer barato — de modo que a faixa pode se
+abrir num acervo grande. `CORPUS_SIZE` é parametrizável no script
+(`RFC027_CORPUS_SIZE`) exatamente para que essa pergunta seja medida e não
+deduzida quando houver um acervo maior à mão.
+
+Uma tentativa de medir com 100.000 imagens foi abortada: semear a tabela custa
+tempo superlinear porque cada `INSERT` também atualiza o grafo HNSW, e a
+semeadura ainda não havia terminado depois de vinte minutos. Fica registrado
+como não medido, em vez de estimado.
+
+Nenhuma mitigação foi adotada. Não há evidência de que alguma seja necessária
+nesta escala, e adotar `hnsw.iterative_scan` ou índices parciais por
+dispositivo sem uma medição que os justifique seria exatamente a dedução que
+esta seção recusa.
 
 **Explicitamente: o filtro não é justificado por desempenho.** Ele é justificado por utilidade — "procure só no HD que está na minha mão". Se a medição mostrar que ele também é mais rápido, ótimo; se mostrar que custa, ele continua valendo a pena e o custo fica registrado.
 
@@ -332,12 +397,53 @@ Trabalho futuro: adaptadores Linux/macOS; detecção de disco clonado; deduplica
 
 | verificação | resultado |
 | --- | --- |
-| `pytest` | `TBM` — a partir de 471 passados |
-| `pytest -m slow` | `TBM` — a partir de 56 |
-| `black --check .` / `ruff check .` | `TBM` |
-| `mypy` | `TBM` — a linha de base preexistente é 5 erros em 4 arquivos; **0 em código novo** é o critério |
-| `alembic heads` | `TBM` — head único, a partir de `26058b9e1d9a` |
-| `alembic downgrade` até `26058b9e1d9a` e `upgrade` de volta | `TBM` — obrigatório pelo RFC-007 |
-| Reconciliação sobre o banco de desenvolvimento | `TBM` — nenhuma linha perdida, nenhum embedding recomputado |
-| Troca de letra simulada não produz id novo | `TBM` — o teste que fixa §2.1 |
-| Contrato de `search_similar` com filtro vazio | `TBM` — idêntico ao RFC-025 |
+| `pytest` | **625 passados**, 58 desmarcados — a partir de 502 (o RFC dizia 471, desatualizado quando foi escrito) |
+| `pytest -m slow` | **58 passados** — a partir de 56 |
+| `black --check .` / `ruff check .` | **limpos** |
+| `mypy` | **0 erros em 141 arquivos.** A linha de base de 5 erros já havia sido zerada em `ed1bdf4`; o critério "0 em código novo" está cumprido, e o projeto inteiro segue limpo |
+| `alembic heads` | **head único**, `b8e4d2a13c75` |
+| `alembic downgrade` até `26058b9e1d9a` e `upgrade` de volta | **exercitado** — ver a ressalva abaixo |
+| Reconciliação sobre o banco de desenvolvimento | **45 linhas casadas, 45 reconciliadas, 0 perdidas**, `md5` do conjunto de embeddings idêntico antes e depois |
+| Troca de letra simulada não produz id novo | **passa** — `test_a_drive_letter_change_does_not_produce_a_new_id` e, ponta a ponta, `test_a_drive_letter_change_does_not_reindex_anything` |
+| Contrato de `search_similar` com filtro vazio | **passa** — os casos do RFC-025 continuam intactos nas três implementações, e `test_an_empty_filter_is_the_same_as_no_filter` fixa a equivalência |
+
+### 15.1 O que o round trip do RFC-007 restaura, e o que não
+
+`downgrade` até `26058b9e1d9a` funciona e restaura o **esquema**: `path`
+volta NOT NULL e único, as colunas de dispositivo e suas restrições somem,
+nenhuma linha é perdida e nenhum embedding é tocado (verificado pelo mesmo
+`md5`).
+
+Ele **não** restaura as *identidades* antigas, e não pode: recalcular um
+`ImageId` pré-RFC-027 exige o caminho absoluto que este esquema deixou de
+guardar, e o ponto de montagem de onde ele saiu nunca foi guardado (§6.3). Pela
+mesma razão o `path` restaurado é relativo ao dispositivo, não absoluto.
+
+A consequência prática é que `alembic upgrade head` sobre um banco com linhas
+não reconciliadas **falha de propósito** e deixa o banco onde estava. O caminho
+de volta é o de §6.3, em três passos, e foi o exercitado aqui:
+
+```
+alembic upgrade a7f3c1d20b64
+python -m app.infrastructure.workers.device_reconcile --root PATH --label HD2
+alembic upgrade head
+```
+
+Nenhuma inferência é refeita em nenhum dos três passos, que é a propriedade
+que de fato importa.
+
+### 15.2 Um defeito encontrado ao exercitar esse caminho
+
+A primeira versão do comando de reconciliação **apagou as 45 linhas do banco de
+desenvolvimento** durante justamente esse round trip, e o registro fica aqui
+porque o modo de falha é instrutivo.
+
+Depois de um `downgrade`, as linhas mantêm os ids *novos*. Ao subir de novo, o
+id recalculado de uma linha é igual ao id que ela já tem — e o comando lia isso
+como "outra linha já ocupa esta identidade", isto é, como a duplicata que §2.1
+descreve, cuja correção é apagar a redundante. Não era uma colisão: a linha era
+ela mesma. A verificação tem de ser `new_id != old_id` **antes** de qualquer
+coisa ser chamada de duplicata.
+
+Corrigido, e fixado por `test_a_row_whose_id_is_already_correct_is_not_deleted`.
+O banco de desenvolvimento não foi repovoado, por decisão do autor.

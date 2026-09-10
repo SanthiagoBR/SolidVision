@@ -25,9 +25,11 @@ from app.domain.exceptions import EmptySearchQueryError, InvalidSearchLimitError
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from tests.application.fakes import FakeImageRepository
+from tests.conftest import TEST_DEVICE_ID
 
 DEFAULT_LIMIT = 4
 
@@ -35,7 +37,8 @@ DEFAULT_LIMIT = 4
 def _image(name: str) -> Image:
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(f"images/{name}.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(f"images/{name}.png"),
         filename=name,
         extension="png",
     )
@@ -183,8 +186,13 @@ def test_the_use_case_does_not_reorder_the_repository_result() -> None:
             super().__init__()
             self._hits = hits
 
-        def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
-            self.search_similar_calls.append((embedding, limit))
+        def search_similar(
+            self,
+            embedding: EmbeddingVector,
+            limit: int,
+            filters: SearchFilters | None = None,
+        ) -> SearchHits:
+            self.search_similar_calls.append((embedding, limit, filters))
             return list(self._hits)
 
     hits = [

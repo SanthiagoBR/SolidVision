@@ -12,6 +12,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from tests.application.fakes import FakeImageRepository, StubContentHasher
+from tests.conftest import TEST_DEVICE_ID
 
 
 class _RecordingEmbeddingModel(EmbeddingModelPort):
@@ -32,7 +33,8 @@ class _RecordingEmbeddingModel(EmbeddingModelPort):
 def _build_image() -> Image:
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(f"images/{uuid.uuid4().hex}.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(f"images/{uuid.uuid4().hex}.png"),
         filename="example",
         extension="png",
     )

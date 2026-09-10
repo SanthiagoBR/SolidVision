@@ -10,6 +10,7 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 
 
@@ -66,7 +67,12 @@ class ImageRepository(ABC):
         """
 
     @abstractmethod
-    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+    def search_similar(
+        self,
+        embedding: EmbeddingVector,
+        limit: int,
+        filters: SearchFilters | None = None,
+    ) -> SearchHits:
         """Return the images closest to `embedding`, best match first.
 
         The counterpart of `save_indexed()`: that method is how an
@@ -92,9 +98,25 @@ class ImageRepository(ABC):
           contract.
         - Equally similar images come back in a stable, deterministic
           order, so that repeating a search repeats its result.
-        - The search covers every image known to the repository. There is
-          no scoping argument, by collection or otherwise; adding one is a
-          change to what a collection *means*, not a parameter.
+        - Without `filters`, the search covers every image known to the
+          repository. RFC-025 wrote that there was "no scoping argument,
+          by collection or otherwise" and named the condition for adding
+          one: a real table, a real foreign key, and ownership rules.
+          RFC-027 delivers those for *devices*, which are a physical fact
+          about where bytes are rather than a modelling choice, so
+          `filters` narrows by device and by nothing else yet.
+        - `filters=None` and `filters=SearchFilters()` mean the same
+          thing: no narrowing, and byte-for-byte the query RFC-025
+          shipped. Neither may be read as "an empty set of devices",
+          which would match nothing and turn a defaulted argument into a
+          search that silently returns zero results.
+        - A filtered search obeys every rule above, including ordering,
+          the cosine range, and skipping images with no embedding. It
+          restricts the candidate set; it does not change the ranking
+          within it.
+        - Filtering on a device that has no images returns `[]`, and
+          filtering on an unknown device id is not an error. The set is a
+          restriction, not an assertion that its members exist.
         - An `embedding` whose width does not match the indexed vectors
           raises `EmbeddingDimensionMismatchError`. It is a caller error,
           not a search that happens to match nothing, and it must fail
@@ -105,6 +127,16 @@ class ImageRepository(ABC):
         `limit` is expected to be a positive number the caller has already
         vetted; policy about how large a page may be belongs to the
         Application layer, not here.
+
+        **A filter may cost recall, and that is measured rather than
+        assumed.** PostgreSQL does not push an arbitrary predicate into
+        an HNSW graph traversal; it applies the filter to what the index
+        already returned, so a scan that explored `ef_search` candidates
+        can hand back *fewer* than `limit` rows while more matching rows
+        exist. That is the same mechanism RFC-025 section 7.3 measured by
+        accident with dead tuples. The filter is justified by usefulness
+        -- "search only the disk in my hand" -- not by speed (RFC-027
+        section 9.1).
         """
 
     @abstractmethod

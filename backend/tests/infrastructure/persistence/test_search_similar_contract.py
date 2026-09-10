@@ -17,22 +17,31 @@ that have nothing to do with what it was written to check.
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from collections.abc import Iterator
 
 import pytest
 from tests.application.fakes import FakeImageRepository
+from tests.conftest import TEST_DEVICE_ID
 
+from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.infrastructure.database.models.image_model import EMBEDDING_DIMENSION
+from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.persistence.in_memory_image_repository import (
     InMemoryImageRepository,
+)
+from app.infrastructure.persistence.postgres_device_repository import (
+    PostgresDeviceRepository,
 )
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
@@ -57,6 +66,37 @@ def repository(request: pytest.FixtureRequest) -> Iterator[ImageRepository]:
         yield FakeImageRepository()
 
 
+SECOND_VOLUME_IDENTITY = VolumeIdentity(
+    value="\\\\?\\Volume{00000000-0000-0000-0000-0000000000fe}\\",
+    kind=VolumeKind.WINDOWS_VOLUME_GUID,
+)
+SECOND_DEVICE_ID: DeviceId = compute_device_id(SECOND_VOLUME_IDENTITY)
+
+
+@pytest.fixture()
+def second_device(request: pytest.FixtureRequest) -> DeviceId:
+    """A second disk for the filter cases to exclude.
+
+    Real only where it has to be. PostgreSQL enforces
+    `images.device_id -> devices.id`, so the row must exist there before
+    an image can point at it; the in-memory implementations have no such
+    constraint and nothing to create. Writing it unconditionally would
+    make every in-memory round of this file need a database.
+    """
+    if "postgres" in request.node.callspec.id:
+        now = datetime.datetime.now(tz=datetime.UTC)
+        PostgresDeviceRepository(request.getfixturevalue("empty_db_session")).save(
+            Device(
+                id=SECOND_DEVICE_ID,
+                volume_identity=SECOND_VOLUME_IDENTITY,
+                label="SECOND-DEVICE",
+                first_seen_at=now,
+                last_seen_at=now,
+            )
+        )
+    return SECOND_DEVICE_ID
+
+
 def one_hot(index: int, sign: float = 1.0) -> EmbeddingVector:
     """Build a 512-dimensional axis vector, so similarities are exact.
 
@@ -71,11 +111,14 @@ def one_hot(index: int, sign: float = 1.0) -> EmbeddingVector:
     return EmbeddingVector(values)
 
 
-def _image(image_id: uuid.UUID | None = None) -> Image:
+def _image(
+    image_id: uuid.UUID | None = None, device_id: DeviceId | None = None
+) -> Image:
     unique = uuid.uuid4().hex
     return Image(
         id=ImageId(image_id or uuid.uuid4()),
-        path=ImagePath(f"images/search/{unique}.png"),
+        device_id=device_id or TEST_DEVICE_ID,
+        relative_path=ImagePath(f"images/search/{unique}.png"),
         filename=unique,
         extension="png",
     )
@@ -85,9 +128,10 @@ def index_image(
     repository: ImageRepository,
     embedding: EmbeddingVector,
     image_id: uuid.UUID | None = None,
+    device_id: DeviceId | None = None,
 ) -> Image:
     """Persist one searchable image, through the same door production uses."""
-    image = _image(image_id)
+    image = _image(image_id, device_id)
     repository.save_indexed(
         IndexingRecord(
             image=image,
@@ -226,3 +270,173 @@ def test_a_wrong_sized_query_vector_raises_on_an_empty_repository(
 ) -> None:
     with pytest.raises(EmbeddingDimensionMismatchError):
         repository.search_similar(EmbeddingVector([1.0, 0.0, 0.0]), limit=10)
+
+
+class TestDeviceFilter:
+    """RFC-027 section 9: the first thing a search may be narrowed by.
+
+    RFC-025 scoped search globally and named the condition for changing
+    that -- a real table, a real foreign key, ownership rules. Devices
+    satisfy it, so these cases join the ones above rather than replacing
+    them: the unfiltered contract is still the contract, and a filtered
+    search has to obey every clause of it within its subset.
+
+    The second device is `SECOND_DEVICE_ID`, which
+    `second_device_in_the_database` makes real for the PostgreSQL round
+    only -- the in-memory implementations have no foreign key to satisfy.
+    """
+
+    def test_an_absent_filter_searches_every_device(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        here = index_image(repository, one_hot(0))
+        elsewhere = index_image(repository, one_hot(1), device_id=second_device)
+
+        hits = repository.search_similar(one_hot(0), limit=10)
+
+        assert {hit.image for hit in hits} == {here, elsewhere}
+
+    def test_an_empty_filter_is_the_same_as_no_filter(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        """The bug this case exists to prevent, stated as a test.
+
+        An implementation that always emitted `device_id IN (...)` would
+        turn `SearchFilters()` into an empty `IN ()`, which matches
+        nothing -- so every unfiltered search would silently return zero
+        results, and a defaulted argument would be the cause.
+        """
+        index_image(repository, one_hot(0))
+        index_image(repository, one_hot(1), device_id=second_device)
+
+        unfiltered = repository.search_similar(one_hot(0), limit=10)
+        empty_filter = repository.search_similar(
+            one_hot(0), limit=10, filters=SearchFilters()
+        )
+
+        assert len(empty_filter) == len(unfiltered) == 2
+        assert [hit.image for hit in empty_filter] == [hit.image for hit in unfiltered]
+
+    def test_a_filter_excludes_images_on_other_devices(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        wanted = index_image(repository, one_hot(0))
+        index_image(repository, one_hot(0), device_id=second_device)
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})),
+        )
+
+        assert [hit.image for hit in hits] == [wanted]
+
+    def test_several_devices_can_be_named_at_once(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        here = index_image(repository, one_hot(0))
+        elsewhere = index_image(repository, one_hot(1), device_id=second_device)
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(
+                device_ids=frozenset({TEST_DEVICE_ID, second_device})
+            ),
+        )
+
+        assert {hit.image for hit in hits} == {here, elsewhere}
+
+    def test_filtering_on_a_device_with_no_images_returns_nothing(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        index_image(repository, one_hot(0))
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(device_ids=frozenset({second_device})),
+        )
+
+        assert hits == []
+
+    def test_filtering_on_an_unknown_device_is_not_an_error(
+        self, repository: ImageRepository
+    ) -> None:
+        """A filter restricts a set; it does not assert that it exists.
+
+        Rejecting an unknown id would mean the repository -- or something
+        above it -- keeping a list of devices just to refuse a search that
+        already answers correctly.
+        """
+        index_image(repository, one_hot(0))
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(device_ids=frozenset({DeviceId(uuid.uuid4())})),
+        )
+
+        assert hits == []
+
+    def test_ordering_and_scores_are_unchanged_within_the_subset(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        """A filter narrows candidates; it must not touch the ranking."""
+        identical = index_image(repository, one_hot(0))
+        orthogonal = index_image(repository, one_hot(1))
+        opposite = index_image(repository, one_hot(0, sign=-1.0))
+        index_image(repository, one_hot(0), device_id=second_device)
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})),
+        )
+
+        assert [hit.image for hit in hits] == [identical, orthogonal, opposite]
+        assert [hit.similarity for hit in hits] == [
+            pytest.approx(1.0),
+            pytest.approx(0.0),
+            pytest.approx(-1.0),
+        ]
+
+    def test_a_filter_does_not_resurrect_images_without_an_embedding(
+        self, repository: ImageRepository
+    ) -> None:
+        indexed = index_image(repository, one_hot(0))
+        store_without_embedding(repository)
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})),
+        )
+
+        assert [hit.image for hit in hits] == [indexed]
+
+    def test_limit_still_applies_inside_the_filtered_subset(
+        self, repository: ImageRepository
+    ) -> None:
+        for axis in range(5):
+            index_image(repository, one_hot(axis))
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=2,
+            filters=SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})),
+        )
+
+        assert len(hits) == 2
+
+    def test_a_wrong_sized_query_vector_still_raises_with_a_filter(
+        self, repository: ImageRepository
+    ) -> None:
+        index_image(repository, one_hot(0))
+
+        with pytest.raises(EmbeddingDimensionMismatchError):
+            repository.search_similar(
+                EmbeddingVector([1.0, 0.0, 0.0]),
+                limit=10,
+                filters=SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})),
+            )

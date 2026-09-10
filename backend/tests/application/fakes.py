@@ -1,18 +1,34 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from collections.abc import Sequence
+from pathlib import Path
 
+from app.domain.entities.device import Device
 from app.domain.entities.image import Image
+from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
+from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
-from app.infrastructure.persistence.in_memory_image_repository import cosine_search
+from app.infrastructure.filesystem.volume_identity_provider import (
+    ResolvedVolume,
+    VolumeIdentityProvider,
+)
+from app.infrastructure.persistence.in_memory_device_repository import (
+    InMemoryDeviceRepository,
+)
+from app.infrastructure.persistence.in_memory_image_repository import (
+    cosine_search,
+    matches_filters,
+)
 
 
 class FakeImageRepository(ImageRepository):
@@ -30,7 +46,9 @@ class FakeImageRepository(ImageRepository):
         self.get_index_metadata_calls: list[ImageId] = []
         self.get_index_metadata_many_calls: list[Sequence[ImageId]] = []
         self.update_index_metadata_calls: list[tuple[ImageId, IndexMetadata]] = []
-        self.search_similar_calls: list[tuple[EmbeddingVector, int]] = []
+        self.search_similar_calls: list[
+            tuple[EmbeddingVector, int, SearchFilters | None]
+        ] = []
 
     def seed_embedding(self, image: Image, embedding: EmbeddingVector) -> None:
         """Make `image` findable by search, without going through indexing.
@@ -82,24 +100,30 @@ class FakeImageRepository(ImageRepository):
         )
         self._embeddings[record.image.id.value] = record.embedding
 
-    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+    def search_similar(
+        self,
+        embedding: EmbeddingVector,
+        limit: int,
+        filters: SearchFilters | None = None,
+    ) -> SearchHits:
         """Rank the seeded embeddings, using the same code as the real double.
 
-        Delegates to `cosine_search()` rather than repeating the loop, so
-        that this fake, `InMemoryImageRepository`, and
-        `PostgresImageRepository` are held to one contract by
+        Delegates to `cosine_search()` and `matches_filters()` rather than
+        repeating either, so that this fake, `InMemoryImageRepository`,
+        and `PostgresImageRepository` are held to one contract by
         `tests/infrastructure/persistence/test_search_similar_contract.py`.
-        A second hand-written cosine here would be a second thing to keep
-        in agreement with pgvector, and the first to quietly stop
-        agreeing.
+        A second hand-written cosine here, or a second hand-written filter
+        predicate, would be a second thing to keep in agreement with
+        pgvector, and the first to quietly stop agreeing.
         """
-        self.search_similar_calls.append((embedding, limit))
+        self.search_similar_calls.append((embedding, limit, filters))
         return cosine_search(
             embedding,
             (
                 (image, self._embeddings[image.id.value])
                 for image in self._images
                 if image.id.value in self._embeddings
+                and matches_filters(image, filters)
             ),
             limit,
         )
@@ -162,7 +186,8 @@ class StubContentHasher(ContentHasherPort):
     files. Handing them the real hasher would make every one of those tests
     depend on a real filesystem to answer a question about control flow.
 
-    `digests` maps a path (as `str(image.path)`) to the digest to return;
+    `digests` maps a path (as `str(image.relative_path)`) to the digest to
+    return;
     anything absent gets `default`.
     """
 
@@ -177,4 +202,110 @@ class StubContentHasher(ContentHasherPort):
 
     def hash_image(self, image: Image) -> str:
         self.hashed.append(image)
-        return self.digests.get(str(image.path), self.default)
+        return self.digests.get(str(image.relative_path), self.default)
+
+
+class FakeDeviceRepository(DeviceRepository):
+    """In-memory device repository double with call recording.
+
+    Delegates every operation to `InMemoryDeviceRepository` rather than
+    keeping a second dict, for the reason `FakeImageRepository.search_similar`
+    delegates to `cosine_search`: a double that stores devices its own way
+    is a second implementation of the port, and the first one to stop
+    agreeing with the contract test.
+    """
+
+    def __init__(self, devices: list[Device] | None = None) -> None:
+        self._delegate = InMemoryDeviceRepository()
+        for device in devices or []:
+            self._delegate.save(device)
+        self.save_calls: list[Device] = []
+        self.get_by_volume_identity_calls: list[VolumeIdentity] = []
+
+    def save(self, device: Device) -> None:
+        self.save_calls.append(device)
+        self._delegate.save(device)
+
+    def get(self, device_id: DeviceId) -> Device | None:
+        return self._delegate.get(device_id)
+
+    def get_by_volume_identity(self, identity: VolumeIdentity) -> Device | None:
+        self.get_by_volume_identity_calls.append(identity)
+        return self._delegate.get_by_volume_identity(identity)
+
+    def list(self) -> list[Device]:
+        return self._delegate.list()
+
+    def delete(self, device_id: DeviceId) -> None:
+        self._delegate.delete(device_id)
+
+
+class StubVolumeIdentityProvider(VolumeIdentityProvider):
+    r"""Answers with a volume the test invented, touching no real disk.
+
+    Every test that exercises the device pipeline needs a volume identity,
+    and no test may depend on which disks the machine running it happens
+    to have. `WindowsVolumeIdentityProvider` is covered on its own by
+    `tests/infrastructure/filesystem/test_volume_identity.py`, which is
+    where real `kernel32` calls belong.
+
+    `mount_point` defaults to whatever `resolve()` is asked about, which
+    makes the common case -- "pretend this tmp_path is a whole disk" --
+    a one-liner, and makes `relative_path` come out relative to the
+    test's own directory rather than to `C:\`.
+    """
+
+    def __init__(
+        self,
+        identity: VolumeIdentity | None = None,
+        mount_point: Path | None = None,
+        filesystem_label: str | None = None,
+        total_bytes: int | None = None,
+    ) -> None:
+        self.identity = identity or VolumeIdentity(
+            value="\\\\?\\Volume{00000000-0000-0000-0000-000000000001}\\",
+            kind=VolumeKind.WINDOWS_VOLUME_GUID,
+        )
+        self.mount_point = mount_point
+        self.filesystem_label = filesystem_label
+        self.total_bytes = total_bytes
+        self.resolve_calls: list[Path] = []
+
+    def resolve(self, path: Path) -> ResolvedVolume:
+        self.resolve_calls.append(path)
+        return ResolvedVolume(
+            identity=self.identity,
+            mount_point=self.mount_point or path,
+            filesystem_label=self.filesystem_label,
+            total_bytes=self.total_bytes,
+        )
+
+    def mounted_volumes(self) -> dict[VolumeIdentity, Path]:
+        if self.mount_point is None:
+            return {}
+        return {self.identity: self.mount_point}
+
+
+def make_device(
+    volume_value: str = "\\\\?\\Volume{00000000-0000-0000-0000-000000000001}\\",
+    label: str = "HD-TEST",
+) -> Device:
+    """Build a `Device` whose id is derived exactly as production derives it.
+
+    Uses `compute_device_id()` rather than a literal UUID so that a test
+    fixture cannot drift from the derivation every real device goes
+    through -- the id is half of every `ImageId`, so a hand-picked one
+    would make the fixture describe a device the system could never
+    produce.
+    """
+    from app.infrastructure.filesystem.device_identity import compute_device_id
+
+    identity = VolumeIdentity(value=volume_value, kind=VolumeKind.WINDOWS_VOLUME_GUID)
+    now = datetime.datetime.now(tz=datetime.UTC)
+    return Device(
+        id=compute_device_id(identity),
+        volume_identity=identity,
+        label=label,
+        first_seen_at=now,
+        last_seen_at=now,
+    )

@@ -3,6 +3,8 @@ from __future__ import annotations
 import datetime
 import uuid
 
+from tests.conftest import TEST_DEVICE_ID
+
 from app.domain.entities.image import Image
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.value_objects.embedding_vector import EmbeddingVector
@@ -18,7 +20,8 @@ from app.infrastructure.persistence.in_memory_image_repository import (
 def _build_image(path: str = "images/example.png") -> Image:
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath(path),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath(path),
         filename="example",
         extension="png",
     )
@@ -33,7 +36,8 @@ def test_in_memory_image_repository_persists_and_reads_images() -> None:
     repository = InMemoryImageRepository()
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )
@@ -49,7 +53,8 @@ def test_in_memory_image_repository_deletes_and_lists_images() -> None:
     repository = InMemoryImageRepository()
     image = Image(
         id=ImageId(uuid.uuid4()),
-        path=ImagePath("images/example.png"),
+        device_id=TEST_DEVICE_ID,
+        relative_path=ImagePath("images/example.png"),
         filename="example",
         extension="png",
     )

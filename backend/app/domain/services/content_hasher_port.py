@@ -28,4 +28,11 @@ class ContentHasherPort(ABC):
 
     @abstractmethod
     def hash_image(self, image: Image) -> str:
-        """Return the fingerprint of the bytes stored at `image.path`."""
+        """Return the fingerprint of the bytes at the image\'s resolved location.
+
+        Implementations read `Image.require_absolute_path()`. Since
+        RFC-027 an image records where it lives on its *device*, and an
+        image whose device is unplugged has no bytes to fingerprint --
+        that raises `DeviceNotConnectedError` rather than returning a
+        sentinel, for the same reason I/O errors propagate.
+        """

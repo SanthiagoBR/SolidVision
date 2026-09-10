@@ -30,7 +30,7 @@ class FakeEmbeddingModel(EmbeddingModelPort):
     """
 
     def encode_image(self, image: Image) -> EmbeddingVector:
-        seed = f"image::{image.id}::{image.path}".encode()
+        seed = f"image::{image.id}::{image.relative_path}".encode()
         return self._build_embedding(seed)
 
     def encode_text(self, text: str) -> EmbeddingVector:

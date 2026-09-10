@@ -13,6 +13,7 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.config.settings import settings
 
@@ -50,6 +51,23 @@ def cosine_search(
     ]
     hits.sort(key=lambda hit: (-hit.similarity, hit.image.id.value))
     return hits[:limit]
+
+
+def matches_filters(image: Image, filters: SearchFilters | None) -> bool:
+    """Return whether `image` survives `filters`, for an in-process ranking.
+
+    Shared by both in-process `ImageRepository` doubles for the same
+    reason `cosine_search()` is: one predicate written once cannot drift
+    from the other, and both are held to the PostgreSQL contract by
+    `test_search_similar_contract.py`.
+
+    `None` and an empty `SearchFilters()` both mean "no narrowing", never
+    "an empty set of devices". Getting that backwards would make a
+    defaulted argument silently return nothing at all.
+    """
+    if filters is None or filters.is_empty():
+        return True
+    return image.device_id in filters.device_ids
 
 
 def _require_indexed_dimension(query: EmbeddingVector) -> None:
@@ -168,7 +186,12 @@ class InMemoryImageRepository(ImageRepository):
         self._metadata = metadata
         self._embeddings = embeddings
 
-    def search_similar(self, embedding: EmbeddingVector, limit: int) -> SearchHits:
+    def search_similar(
+        self,
+        embedding: EmbeddingVector,
+        limit: int,
+        filters: SearchFilters | None = None,
+    ) -> SearchHits:
         """Rank every stored embedding against `embedding`, in Python.
 
         Scoring the whole store on every call is fine here and would not
@@ -177,6 +200,14 @@ class InMemoryImageRepository(ImageRepository):
         the store holds tens of images. `PostgresImageRepository` is the
         real path, and it ranks in the database precisely so that 100,000
         vectors never cross into this process.
+
+        The device filter is applied *before* ranking, matching a `WHERE`
+        clause rather than a post-hoc trim of the top-K. Filtering
+        afterwards would return fewer than `limit` rows whenever the
+        excluded devices happened to rank high -- which is exactly the
+        HNSW recall hazard RFC-027 section 9.1 describes, and a test
+        double must not reproduce a physical-index artefact as if it were
+        contract.
         """
         return cosine_search(
             embedding,
@@ -184,6 +215,7 @@ class InMemoryImageRepository(ImageRepository):
                 (image, self._embeddings[image.id.value])
                 for image in self._images
                 if image.id.value in self._embeddings
+                and matches_filters(image, filters)
             ),
             limit,
         )

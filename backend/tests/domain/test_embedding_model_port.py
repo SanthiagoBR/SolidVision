@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import get_type_hints
 
 import pytest
+from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
@@ -63,7 +64,8 @@ class TestBatchEncoding:
         path = ImagePath(f"images/{name}.png")
         return Image(
             id=ImageId(uuid.uuid5(uuid.NAMESPACE_URL, str(path))),
-            path=path,
+            device_id=TEST_DEVICE_ID,
+            relative_path=path,
             filename=name,
             extension="png",
         )

@@ -35,6 +35,7 @@ from typing import Any
 import pytest
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
+from tests.conftest import make_test_device
 
 from app.application.use_cases.index_or_update_images import (
     IndexOrUpdateImagesUseCase,
@@ -45,6 +46,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.search_hit import SearchHit
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 from app.infrastructure.config.constants import SUPPORTED_IMAGE_EXTENSIONS
+from app.infrastructure.database.models.device_model import DeviceModel
 from app.infrastructure.database.models.image_model import ImageModel
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
@@ -52,6 +54,9 @@ from app.infrastructure.filesystem.filesystem_image_provider import (
 from app.infrastructure.filesystem.image_identity import compute_image_id
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
 from app.infrastructure.persistence.engine import EngineInstance
+from app.infrastructure.persistence.postgres_device_repository import (
+    PostgresDeviceRepository,
+)
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
@@ -259,7 +264,15 @@ def indexed_corpus(
 
     try:
         session.execute(delete(ImageModel))
+        session.execute(delete(DeviceModel))
         session.commit()
+        # RFC-027: `images.device_id` is a NOT NULL foreign key, so the
+        # corpus needs a device before a single row can be written. The
+        # corpus root stands in for a whole volume, which also keeps the
+        # ids below independent of where pytest put the temporary
+        # directory.
+        device = make_test_device()
+        PostgresDeviceRepository(session).save(device)
 
         repository = PostgresImageRepository(session)
         worker = IndexingWorker(
@@ -273,13 +286,15 @@ def indexed_corpus(
                 batch_size=8,
                 metadata_prefetch_size=512,
             ),
+            device=device,
+            mount_point=root,
         )
         summary = worker.run()
         assert summary.indexed == len(manifest.images), summary
         assert not summary.failures, summary.failures
 
         paths_by_id = {
-            str(compute_image_id(ImagePath(str(root / entry.relative_path)))): (
+            str(compute_image_id(device.id, ImagePath(entry.relative_path))): (
                 entry.relative_path
             )
             for entry in manifest.images

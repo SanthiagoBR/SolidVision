@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image as PILImage
+from tests.conftest import TEST_DEVICE_ID, make_test_device
 
 from app.application.use_cases.index_or_update_images import (
     IndexOrUpdateImagesUseCase,
@@ -65,7 +66,9 @@ def _image(path: Path) -> Image:
     image_path = ImagePath(str(path))
     return Image(
         id=ImageId(uuid.uuid4()),
-        path=image_path,
+        device_id=TEST_DEVICE_ID,
+        relative_path=image_path,
+        absolute_path=image_path,
         filename=path.stem,
         extension=path.suffix.lstrip(".").lower(),
     )
@@ -219,9 +222,11 @@ class TestHardCasesWithRealPixelDecoding:
                 batch_size=request.param,
                 metadata_prefetch_size=512,
             ),
+            device=make_test_device(),
+            mount_point=root,
         ).run()
 
-        return root, {str(image.path) for image in repository.list()}
+        return root, {str(image.relative_path) for image in repository.list()}
 
     @pytest.mark.parametrize(
         "case",
@@ -231,8 +236,10 @@ class TestHardCasesWithRealPixelDecoding:
     def test_cases_unaffected_by_decoding_keep_their_outcome(
         self, case: HardCase, indexing_run: tuple[Path, set[str]]
     ) -> None:
-        root, indexed_paths = indexing_run
-        path = (root / case.relative_path).as_posix()
+        _root, indexed_paths = indexing_run
+        # Device-relative since RFC-027: the corpus root stands in for a
+        # whole volume, so what a row records is the path within it.
+        path = case.relative_path
 
         if case.expect == INDEXED:
             assert path in indexed_paths, case.description
@@ -249,10 +256,10 @@ class TestHardCasesWithRealPixelDecoding:
         self, case: HardCase, indexing_run: tuple[Path, set[str]]
     ) -> None:
         """`zero_byte.jpg` and `truncated.jpg` cannot survive a real decode."""
-        root, indexed_paths = indexing_run
+        _root, indexed_paths = indexing_run
 
         assert case.expect_with_pixel_decoding == FAILED
-        assert (root / case.relative_path).as_posix() not in indexed_paths
+        assert case.relative_path not in indexed_paths
 
     def test_one_broken_file_still_does_not_abort_the_run(
         self, indexing_run: tuple[Path, set[str]]

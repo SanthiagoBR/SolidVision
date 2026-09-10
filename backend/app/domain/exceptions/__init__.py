@@ -1,5 +1,11 @@
 """Public exports for domain exceptions."""
 
+from app.domain.exceptions.device_errors import (
+    DeviceNotConnectedError,
+    DeviceNotFoundError,
+    InvalidDeviceIdentifierError,
+    InvalidVolumeIdentityError,
+)
 from app.domain.exceptions.domain_error import DomainError
 from app.domain.exceptions.image_errors import (
     ImageAlreadyExistsError,
@@ -23,14 +29,18 @@ class InvalidEmbeddingVectorError(DomainError):
 
 
 __all__ = [
+    "DeviceNotConnectedError",
+    "DeviceNotFoundError",
     "DomainError",
     "EmbeddingDimensionMismatchError",
     "EmptySearchQueryError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
+    "InvalidDeviceIdentifierError",
     "InvalidEmbeddingVectorError",
     "InvalidImageIdentifierError",
     "InvalidImagePathError",
     "InvalidSearchLimitError",
+    "InvalidVolumeIdentityError",
     "UnsupportedImageExtensionError",
 ]

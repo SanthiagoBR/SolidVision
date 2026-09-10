@@ -575,6 +575,48 @@ The database is responsible for:
 
 ## Main Tables
 
+### Devices
+
+Represents a physical storage volume - an external disk, a memory card, the
+internal drive (RFC-027).
+
+| Field | Description |
+|--------|-------------|
+| id | Primary Key, `uuid5` over the volume identity |
+| volume_identity | Opaque, platform-stable identifier for the volume |
+| volume_kind | Which platform's scheme produced it (`windows-volume-guid`) |
+| label | The user's name for the disk - "HD2" |
+| filesystem_label | The volume's own label; informative only |
+| total_bytes | Capacity |
+| first_seen_at | When the disk was first registered |
+| last_seen_at | When it was last observed plugged in |
+| last_scan_at | When it was last scanned |
+| last_scan_file_count | How many supported files that scan found |
+
+**There is no `drive_letter`, no `mount_point`, and no `is_connected`
+column, and none may be added.** On Windows a removable volume's drive
+letter is assigned by mount order, so persisting one means a stationary
+file's recorded location changes on its own - which changes the `uuid5`
+identity derived from it and re-runs hours of inference over an untouched
+disk. Where a volume is mounted is resolved when it is needed, by
+enumerating what is mounted at that moment, and never stored. Connection
+state has the same problem in a sharper form: nothing tells this process
+that a disk was unplugged, so the column would be wrong from that moment
+onward with nothing to correct it.
+
+`last_scan_file_count` is the declared denominator of "% indexed". The
+figure means *"this fraction of the files the scan of 12/03 found have
+embeddings"*, and anything displaying it must show the scan date too - a
+user who copied 10,000 photos onto the disk yesterday deserves
+`50% (scan of 12/03)` rather than a confident wrong number.
+
+A device is **not** a collection. One disk holds several indexed folders,
+scanned at different times against different model versions; fusing the two
+would force a whole disk to share one embedding model version, which
+section 21 identifies as the decision that forces a full re-index.
+
+---
+
 ### Collections
 
 Represents an indexed folder.
@@ -598,16 +640,24 @@ Represents a single indexed image.
 
 | Field | Description |
 |--------|-------------|
-| id | Primary Key |
+| id | Primary Key, `uuid5` over `{device_id}/{relative_path}` |
+| device_id | Foreign Key to `Devices` |
+| relative_path | Path within the device, e.g. `fotos/2018/DJI_0042.JPG` |
 | collection_id | Foreign Key |
 | filename | Original filename |
-| filepath | Absolute path |
 | width | Image width |
 | height | Image height |
 | file_size | Bytes |
 | last_modified | Filesystem timestamp |
 | content_hash | SHA256 hash |
 | thumbnail_path | Thumbnail location |
+
+An image's location is the pair `(device_id, relative_path)`; there is no
+absolute-path column. The absolute path still exists but is *computed*,
+by joining a mount point resolved at the moment of use onto
+`relative_path`. Keeping both forms would invite one of them to go stale,
+and the absolute one is precisely the one that cannot be kept correct
+(RFC-027).
 
 ### Thumbnail Serving
 
@@ -1128,7 +1178,12 @@ Planned improvements include:
 - Batch embedding generation
 - GPU acceleration
 - Fine-tuned aerial model
-- Desktop application (Electron or Tauri)
+- Desktop application (Electron or Tauri) - a packaging choice, **not** a
+  prerequisite for anything above it. Multi-device support in particular
+  does not wait on it: RFC-027 identifies volumes through the operating
+  system from the backend process, so knowing which disks exist, which are
+  connected, and which photo is on which one is available to the web
+  client today.
 - Mobile companion application
 - Multi-user support
 - Cloud synchronization
