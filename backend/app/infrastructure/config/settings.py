@@ -83,6 +83,19 @@ class Settings(BaseSettings):
         ge=1,
         description="Discovered files whose index metadata is read back per query",
     )
+    # RFC-028 section 6 reads the EXIF capture date during the scan, for
+    # every discovered file, including the ones the incremental check then
+    # skips -- that is how an already-indexed photo gains a date without
+    # paying for inference. Section 11 names the risk: a small per-file cost
+    # times 100,000 files can still be a large total. The switch exists so
+    # that a measured cost can be answered by configuration rather than a
+    # code change. Off means "not examined", never "no date": rows scanned
+    # with it off keep `capture_source = NULL` and are picked up by the next
+    # scan that has it on, or by `capture_date_backfill`.
+    extract_capture_date: bool = Field(
+        default=True,
+        description="Read each discovered file's EXIF capture date during the scan",
+    )
     worker_count: int = Field(default=1, ge=1, description="Worker count")
     supported_extensions: tuple[str, ...] = Field(
         default=SUPPORTED_IMAGE_EXTENSIONS,

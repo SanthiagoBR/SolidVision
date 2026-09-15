@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
@@ -64,10 +66,54 @@ def matches_filters(image: Image, filters: SearchFilters | None) -> bool:
     `None` and an empty `SearchFilters()` both mean "no narrowing", never
     "an empty set of devices". Getting that backwards would make a
     defaulted argument silently return nothing at all.
+
+    Each field narrows on its own and only when set, as each adds its own
+    `WHERE` clause in PostgreSQL.
+
+    The `captured_at is not None` check is explicit on purpose, and it is
+    the line most likely to be "simplified" away. PostgreSQL gets the
+    RFC-020 rule for free -- a comparison with NULL is never true -- but
+    Python does not: `start <= None` raises `TypeError` instead of
+    returning `False`, so without the check an unknown date would crash
+    the in-memory search where the database quietly excludes the row.
     """
     if filters is None or filters.is_empty():
         return True
-    return image.device_id in filters.device_ids
+    if filters.device_ids and image.device_id not in filters.device_ids:
+        return False
+    if filters.captured_between is not None:
+        if image.captured_at is None:
+            return False
+        return filters.captured_between.contains(image.captured_at)
+    return True
+
+
+def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters) -> int:
+    """Count what a date range hid for having no date, over searchable images.
+
+    `indexed` must already be restricted to images with an embedding,
+    exactly as `cosine_search()` expects. The device set is applied through
+    `matches_filters()` with the date range removed, so the definition of
+    "every other clause" cannot drift from the search predicate.
+
+    Shared by both in-process doubles for the reason `matches_filters()`
+    is.
+    """
+    if filters.captured_between is None:
+        return 0
+    without_date = SearchFilters(device_ids=filters.device_ids)
+    return sum(
+        1
+        for image in indexed
+        if image.captured_at is None and matches_filters(image, without_date)
+    )
+
+
+def with_capture_date(image: Image, capture: CaptureDate) -> Image:
+    """Return `image` carrying `capture`, for the frozen entity's two fields."""
+    return dataclasses.replace(
+        image, captured_at=capture.captured_at, capture_source=capture.source
+    )
 
 
 def _require_indexed_dimension(query: EmbeddingVector) -> None:
@@ -201,10 +247,10 @@ class InMemoryImageRepository(ImageRepository):
         real path, and it ranks in the database precisely so that 100,000
         vectors never cross into this process.
 
-        The device filter is applied *before* ranking, matching a `WHERE`
+        The filters are applied *before* ranking, matching a `WHERE`
         clause rather than a post-hoc trim of the top-K. Filtering
         afterwards would return fewer than `limit` rows whenever the
-        excluded devices happened to rank high -- which is exactly the
+        excluded images happened to rank high -- which is exactly the
         HNSW recall hazard RFC-027 section 9.1 describes, and a test
         double must not reproduce a physical-index artefact as if it were
         contract.
@@ -220,12 +266,28 @@ class InMemoryImageRepository(ImageRepository):
             limit,
         )
 
+    def count_unknown_capture_date(self, filters: SearchFilters) -> int:
+        return count_unknown_capture_date(
+            (image for image in self._images if image.id.value in self._embeddings),
+            filters,
+        )
+
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
-        if not self.exists(image_id):
+        """Return the stored change signals plus the image's capture source.
+
+        The capture source is read off the stored `Image`, not kept in
+        `_metadata` as well. The entity is where the capture date lives in
+        this implementation; a second copy here would be free to disagree
+        with it -- for instance after `update_index_metadata()` stored a
+        caller's `IndexMetadata` that never had a source in it.
+        """
+        image = self.get(image_id)
+        if image is None:
             return None
-        return self._metadata.get(
+        stored = self._metadata.get(
             image_id.value, IndexMetadata(file_size=None, file_modified_at=None)
         )
+        return dataclasses.replace(stored, capture_source=image.capture_source)
 
     def get_index_metadata_many(
         self, image_ids: Sequence[ImageId]
@@ -248,3 +310,22 @@ class InMemoryImageRepository(ImageRepository):
         if not self.exists(image_id):
             return
         self._metadata[image_id.value] = metadata
+
+    def update_capture_date(self, image_id: ImageId, capture: CaptureDate) -> None:
+        self.update_capture_date_many({image_id: capture})
+
+    def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
+        """Replace each named image with a copy carrying its capture date.
+
+        `Image` is frozen, so "updating a column" is swapping the entity
+        for `dataclasses.replace()` of it. Ids with no image are skipped,
+        as they are by the PostgreSQL `UPDATE`.
+        """
+        self._images = [
+            (
+                with_capture_date(image, captures[image.id])
+                if image.id in captures
+                else image
+            )
+            for image in self._images
+        ]

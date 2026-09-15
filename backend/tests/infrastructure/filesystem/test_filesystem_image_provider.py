@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 
+from PIL import Image
+
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.infrastructure.filesystem.discovered_image_file import DiscoveredImageFile
+from app.infrastructure.filesystem.exif_capture_date import (
+    DATE_TIME_ORIGINAL,
+    EXIF_IFD_POINTER,
+)
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
@@ -88,3 +97,89 @@ def test_metadata_fields_are_collected(tmp_path: Path) -> None:
     assert discovered.file_size == 10
     assert isinstance(discovered.file_modified_at, datetime.datetime)
     assert discovered.file_modified_at.tzinfo is not None
+
+
+class TestCaptureDate:
+    """RFC-028 section 6: the capture date is read in the scan, beside `stat()`."""
+
+    SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
+
+    @staticmethod
+    def write_jpeg(path: Path, date_time_original: str | None) -> Path:
+        exif = Image.Exif()
+        if date_time_original is not None:
+            exif.get_ifd(EXIF_IFD_POINTER)[DATE_TIME_ORIGINAL] = date_time_original
+        Image.new("RGB", (8, 8)).save(path, "JPEG", exif=exif.tobytes())
+        return path
+
+    def test_the_exif_capture_date_is_discovered(self, tmp_path: Path) -> None:
+        self.write_jpeg(tmp_path / "DJI_0042.jpg", "2018:07:14 15:32:05")
+
+        (discovered,) = FilesystemImageProvider(
+            tmp_path, SUPPORTED_EXTENSIONS
+        ).discover()
+
+        assert discovered.capture_date == CaptureDate(
+            self.SHOT, CaptureSource.EXIF_ORIGINAL
+        )
+
+    def test_a_file_without_exif_is_examined_and_unknown(self, tmp_path: Path) -> None:
+        self.write_jpeg(tmp_path / "exported.jpg", None)
+
+        (discovered,) = FilesystemImageProvider(
+            tmp_path, SUPPORTED_EXTENSIONS
+        ).discover()
+
+        assert discovered.capture_date == CaptureDate.unknown()
+
+    def test_the_modification_time_never_becomes_the_capture_date(
+        self, tmp_path: Path
+    ) -> None:
+        """The scan has `mtime` in hand; RFC-028 section 4 forbids using it."""
+        path = self.write_jpeg(tmp_path / "copied.jpg", None)
+        old = datetime.datetime(2018, 7, 14).timestamp()
+        os.utime(path, (old, old))
+
+        (discovered,) = FilesystemImageProvider(
+            tmp_path, SUPPORTED_EXTENSIONS
+        ).discover()
+
+        assert discovered.capture_date is not None
+        assert discovered.capture_date.captured_at is None
+
+    def test_extraction_switched_off_leaves_files_unexamined(
+        self, tmp_path: Path
+    ) -> None:
+        """Off is "not examined" (`None`), never "no date" (`unknown`).
+
+        Collapsing the two would mark every file scanned with the switch
+        off as permanently dateless, and no later scan would look again.
+        """
+        self.write_jpeg(tmp_path / "DJI_0042.jpg", "2018:07:14 15:32:05")
+
+        (discovered,) = FilesystemImageProvider(
+            tmp_path, SUPPORTED_EXTENSIONS, extract_capture_date=False
+        ).discover()
+
+        assert discovered.capture_date is None
+
+    def test_a_corrupt_file_does_not_stop_the_scan(self, tmp_path: Path) -> None:
+        """RFC-028 section 13: the scan never sees the exception."""
+        (tmp_path / "a-corrupt.jpg").write_bytes(b"\xff\xd8\xff\xe1\x00\x10Exif\x00")
+        self.write_jpeg(tmp_path / "b-fine.jpg", "2018:07:14 15:32:05")
+        (tmp_path / "c-not-an-image.png").write_bytes(b"plain text")
+
+        discovered = list(
+            FilesystemImageProvider(tmp_path, SUPPORTED_EXTENSIONS).discover()
+        )
+
+        assert [item.filename for item in discovered] == [
+            "a-corrupt",
+            "b-fine",
+            "c-not-an-image",
+        ]
+        assert discovered[0].capture_date == CaptureDate.unknown()
+        assert discovered[1].capture_date == CaptureDate(
+            self.SHOT, CaptureSource.EXIF_ORIGINAL
+        )
+        assert discovered[2].capture_date == CaptureDate.unknown()

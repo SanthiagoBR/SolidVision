@@ -9,9 +9,10 @@ and answering them should not require a database, a filesystem, or a model.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 
 import pytest
 
@@ -19,6 +20,8 @@ from app.application.use_cases.index_or_update_images import IndexOrUpdateImages
 from app.application.use_cases.indexing_plan import IndexCandidate
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -121,9 +124,15 @@ def _candidate(
     name: str,
     file_size: int = 1024,
     file_modified_at: datetime.datetime = MODIFIED_AT,
+    capture: CaptureDate | None = None,
 ) -> IndexCandidate:
+    image = _image(name)
+    if capture is not None:
+        image = dataclasses.replace(
+            image, captured_at=capture.captured_at, capture_source=capture.source
+        )
     return IndexCandidate(
-        image=_image(name),
+        image=image,
         file_size=file_size,
         file_modified_at=file_modified_at,
     )
@@ -686,3 +695,197 @@ class TestBulkPersistence:
 
         assert "(batch failed, retried per image)" in report
         assert "(bulk failed, degraded to per-row)" in report
+
+
+SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
+ORIGINAL = CaptureDate(SHOT, CaptureSource.EXIF_ORIGINAL)
+
+
+class TestCaptureDateOnSkippedRows:
+    """RFC-028 section 6: a skipped image gains its date without inference."""
+
+    def _index_undated(
+        self, repository: FakeImageRepository, names: Sequence[str]
+    ) -> None:
+        """Index rows the way a pre-RFC-028 run left them: never examined."""
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate(name) for name in names]
+        )
+        repository.update_capture_date_many_calls.clear()
+
+    def test_an_unchanged_row_never_examined_gains_its_date(self) -> None:
+        repository = FakeImageRepository()
+        self._index_undated(repository, ["photo"])
+
+        model = _RecordingModel()
+        summary = _use_case(repository, model).execute(
+            [_candidate("photo", capture=ORIGINAL)]
+        )
+
+        assert summary.skipped_unchanged == 1
+        assert model.single_calls == []
+        assert summary.capture_dates_written == 1
+        stored = repository.get(_image("photo").id)
+        assert stored is not None
+        assert stored.capture_date == ORIGINAL
+
+    def test_a_touched_identical_row_never_examined_gains_its_date(self) -> None:
+        """The branch that is easy to forget, and the one this case exists for.
+
+        mtime moved, the hash matched: `REFRESH_METADATA`. If only
+        `SKIP_UNCHANGED` wrote dates, this row would refresh its mtime now,
+        be `SKIP_UNCHANGED` on every later scan against a row that still
+        has no date, and never receive one.
+        """
+        repository = FakeImageRepository()
+        self._index_undated(repository, ["photo"])
+
+        model = _RecordingModel()
+        summary = _use_case(repository, model).execute(
+            [
+                _candidate(
+                    "photo",
+                    file_modified_at=MODIFIED_AT + datetime.timedelta(days=1),
+                    capture=ORIGINAL,
+                )
+            ]
+        )
+
+        assert summary.skipped_content_identical == 1
+        assert model.single_calls == []
+        assert summary.capture_dates_written == 1
+        stored = repository.get(_image("photo").id)
+        assert stored is not None
+        assert stored.capture_date == ORIGINAL
+
+    def test_the_refresh_does_not_reset_the_date_it_just_wrote(self) -> None:
+        """`update_index_metadata()` must leave the capture columns alone."""
+        repository = FakeImageRepository()
+        self._index_undated(repository, ["photo"])
+        touched = MODIFIED_AT + datetime.timedelta(days=1)
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", file_modified_at=touched, capture=ORIGINAL)]
+        )
+
+        metadata = repository.get_index_metadata(_image("photo").id)
+
+        assert metadata is not None
+        assert metadata.file_modified_at == touched
+        assert metadata.capture_source is CaptureSource.EXIF_ORIGINAL
+
+    def test_a_rescan_of_a_dated_collection_writes_nothing(self) -> None:
+        """Steady state: zero writes. The property the condition protects."""
+        repository = FakeImageRepository()
+        self._index_undated(repository, [f"photo_{index}" for index in range(5)])
+        dated = [_candidate(f"photo_{index}", capture=ORIGINAL) for index in range(5)]
+        first = _use_case(repository, _RecordingModel()).execute(dated)
+        repository.update_capture_date_many_calls.clear()
+
+        second = _use_case(repository, _RecordingModel()).execute(dated)
+
+        assert first.capture_dates_written == 5
+        assert second.capture_dates_written == 0
+        assert repository.update_capture_date_many_calls == []
+        assert repository.update_capture_date_calls == []
+
+    def test_a_row_examined_as_unknown_is_not_reexamined_by_a_scan(self) -> None:
+        """Only the backfill's `--force` revisits `unknown`."""
+        repository = FakeImageRepository()
+        self._index_undated(repository, ["photo"])
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", capture=CaptureDate.unknown())]
+        )
+        repository.update_capture_date_many_calls.clear()
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", capture=ORIGINAL)]
+        )
+
+        assert summary.capture_dates_written == 0
+        stored = repository.get(_image("photo").id)
+        assert stored is not None
+        assert stored.capture_source is CaptureSource.UNKNOWN
+
+    def test_extraction_switched_off_writes_nothing(self) -> None:
+        """A candidate with no capture date was not examined; nothing to record."""
+        repository = FakeImageRepository()
+        self._index_undated(repository, ["photo"])
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", capture=None)]
+        )
+
+        assert summary.capture_dates_written == 0
+        assert repository.update_capture_date_many_calls == []
+
+    def test_dates_are_written_once_per_prefetch_window(self) -> None:
+        """The first scan dates a whole collection; one write per file would not do."""
+        repository = FakeImageRepository()
+        names = [f"photo_{index}" for index in range(10)]
+        self._index_undated(repository, names)
+
+        _use_case(repository, _RecordingModel(), metadata_prefetch_size=4).execute(
+            [_candidate(name, capture=ORIGINAL) for name in names]
+        )
+
+        assert [len(call) for call in repository.update_capture_date_many_calls] == [
+            4,
+            4,
+            2,
+        ]
+        assert repository.update_capture_date_calls == []
+
+    def test_a_new_image_carries_its_date_through_the_embedding_write(self) -> None:
+        """`EMBED` writes the whole row, so it needs no separate date write."""
+        repository = FakeImageRepository()
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("brand_new", capture=ORIGINAL)]
+        )
+
+        assert summary.indexed == 1
+        assert summary.capture_dates_written == 0
+        assert repository.update_capture_date_many_calls == []
+        (record,) = repository.save_indexed_calls
+        assert record.image.capture_date == ORIGINAL
+
+    def test_a_failed_bulk_date_write_degrades_to_per_row(self) -> None:
+        class _RejectsOneDate(FakeImageRepository):
+            def update_capture_date_many(
+                self, captures: Mapping[ImageId, CaptureDate]
+            ) -> None:
+                raise RuntimeError("deadlock detected")
+
+            def update_capture_date(
+                self, image_id: ImageId, capture: CaptureDate
+            ) -> None:
+                if image_id == _image("photo_1").id:
+                    raise RuntimeError("row rejected")
+                super().update_capture_date(image_id, capture)
+
+        repository = _RejectsOneDate()
+        names = ["photo_0", "photo_1", "photo_2"]
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate(name) for name in names]
+        )
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate(name, capture=ORIGINAL) for name in names]
+        )
+
+        assert summary.capture_dates_written == 2
+        (failure,) = summary.failures
+        assert failure.path.endswith("photo_1.png")
+        assert summary.skipped_unchanged == 3
+
+    def test_the_report_counts_dated_rows(self) -> None:
+        repository = FakeImageRepository()
+        self._index_undated(repository, ["photo"])
+
+        report = (
+            _use_case(repository, _RecordingModel())
+            .execute([_candidate("photo", capture=ORIGINAL)])
+            .format_report()
+        )
+
+        assert "Dated:               1" in report

@@ -62,7 +62,7 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 | # | RFC | Entrega | Status |
 |---|---|---|---|
 | 027 | [Dispositivos e Identidade de Volume](rfc-027-dispositivos-e-identidade-de-volume.md) | `Device`, GUID de volume, `(device_id, relative_path)`, filtro por dispositivo | 📋 |
-| 028 | [Data de Captura e Filtro Temporal](rfc-028-data-de-captura-e-filtro-temporal.md) | `captured_at` via EXIF, `capture_source`, filtro por intervalo | 📋 |
+| 028 | [Data de Captura e Filtro Temporal](rfc-028-data-de-captura-e-filtro-temporal.md) | `captured_at` via EXIF, `capture_source`, filtro por intervalo | ✅ |
 | 029 | [Jobs de Indexação e Indexação Seletiva](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md) | `indexing_jobs`, `POST /jobs`, worker sondando, cancelamento | 📋 |
 | 030 | [Acesso ao Arquivo](rfc-030-acesso-ao-arquivo.md) | Caminho na resposta, thumbnails, `POST /images/{id}/reveal` | 📋 |
 

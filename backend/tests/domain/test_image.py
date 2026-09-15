@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import datetime
 import uuid
 from dataclasses import FrozenInstanceError
 
 import pytest
 
 from app.domain.entities.image import Image
-from app.domain.exceptions import DeviceNotConnectedError
+from app.domain.exceptions import DeviceNotConnectedError, InvalidCaptureDateError
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -132,3 +135,58 @@ def test_absolute_path_does_not_participate_in_equality() -> None:
 
     assert unmounted == mounted
     assert hash(unmounted) == hash(mounted)
+
+
+class TestCaptureDate:
+    """RFC-028: the capture date is an attribute of the photograph."""
+
+    SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
+
+    def test_an_image_is_unexamined_by_default(self) -> None:
+        """Every construction site that predates RFC-028 keeps working.
+
+        And keeps meaning "never examined" rather than "examined, no date":
+        a default of `UNKNOWN` would tell the scan never to look.
+        """
+        image = _image()
+
+        assert image.captured_at is None
+        assert image.capture_source is None
+        assert image.capture_date is None
+
+    def test_an_examined_image_exposes_its_capture_date(self) -> None:
+        image = _image(
+            captured_at=self.SHOT, capture_source=CaptureSource.EXIF_ORIGINAL
+        )
+
+        assert image.capture_date == CaptureDate(self.SHOT, CaptureSource.EXIF_ORIGINAL)
+
+    def test_examined_without_a_date_is_distinct_from_never_examined(self) -> None:
+        examined = _image(capture_source=CaptureSource.UNKNOWN)
+
+        assert examined.capture_date == CaptureDate.unknown()
+        assert _image().capture_date is None
+
+    def test_a_zone_aware_capture_date_is_rejected(self) -> None:
+        with pytest.raises(InvalidCaptureDateError):
+            _image(
+                captured_at=self.SHOT.replace(tzinfo=datetime.UTC),
+                capture_source=CaptureSource.EXIF_ORIGINAL,
+            )
+
+    def test_a_date_without_a_source_is_rejected(self) -> None:
+        with pytest.raises(InvalidCaptureDateError):
+            _image(captured_at=self.SHOT)
+
+    def test_the_capture_date_does_not_participate_in_equality(self) -> None:
+        """Equality is by id, and a backfilled date does not make a new image."""
+        image_id = ImageId(uuid.uuid4())
+        before = _image(id=image_id)
+        after = _image(
+            id=image_id,
+            captured_at=self.SHOT,
+            capture_source=CaptureSource.EXIF_ORIGINAL,
+        )
+
+        assert before == after
+        assert hash(before) == hash(after)

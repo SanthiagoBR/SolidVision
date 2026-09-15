@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 
+from app.domain.value_objects.capture_source import CaptureSource
+
 
 @dataclass(frozen=True)
 class IndexMetadata:
@@ -28,4 +30,27 @@ class IndexMetadata:
     rather than required so that every construction site that predates
     content hashing keeps producing the safe answer instead of silently
     claiming a match it never checked.
+    """
+
+    capture_source: CaptureSource | None = None
+    """Whether this row's capture date was ever examined, and from where.
+
+    **NOT A CHANGE SIGNAL. `plan_indexing()` must never read it.** It
+    rides along in the prefetch for a different consumer: the scan writes a
+    capture date only for rows whose source is still `None` -- never
+    examined -- so that re-scanning an unchanged collection costs zero
+    writes after the first pass (RFC-028 section 6). The prefetch is
+    already one query per window, so one more scalar in it is free, where a
+    separate lookup would be the per-file round trip RFC-024 section 7.1
+    removed.
+
+    A different capture date says nothing about whether the pixels
+    changed. Comparing it in the skip decision would re-embed a photo --
+    the most expensive operation in the system -- because its EXIF was
+    edited or the extraction improved (RFC-028 section 6.1).
+    `test_indexing_plan.py` fails if that comparison is ever added.
+
+    Only `ImageRepository.update_capture_date*()` writes this column;
+    `update_index_metadata()` leaves it untouched even though it receives
+    an `IndexMetadata`.
     """

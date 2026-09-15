@@ -18,6 +18,7 @@ RFC_023_REVISION = "db526438ced5"
 RFC_024_REVISION = "26058b9e1d9a"
 RFC_027_DEVICES_REVISION = "a7f3c1d20b64"
 RFC_027_OWNERSHIP_REVISION = "b8e4d2a13c75"
+RFC_028_REVISION = "c5d1e8f24a90"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -68,6 +69,7 @@ def test_history_is_linear_from_base_to_head() -> None:
         )
 
     assert chain == [
+        RFC_028_REVISION,
         RFC_027_OWNERSHIP_REVISION,
         RFC_027_DEVICES_REVISION,
         RFC_024_REVISION,
@@ -218,6 +220,50 @@ def test_rfc_024_migration_downgrade_drops_only_the_new_column() -> None:
     assert "drop_table" not in downgrade_source
     assert "embedding" not in downgrade_source
     assert "ix_images_embedding_hnsw" not in downgrade_source
+
+
+def test_rfc_028_migration_follows_rfc_027() -> None:
+    assert _revision_after(RFC_027_OWNERSHIP_REVISION).revision == RFC_028_REVISION
+
+
+def test_rfc_028_migration_adds_a_zoneless_timestamp_and_a_plain_string() -> None:
+    """RFC-028 sections 4.2 and 5, checked in the migration as well as the model.
+
+    The model and the migration are two places that can disagree, and
+    only the migration decides what the database actually holds.
+    """
+    upgrade_source = inspect.getsource(
+        _revision_after(RFC_027_OWNERSHIP_REVISION).module.upgrade
+    )
+
+    assert 'sa.Column("captured_at", sa.DateTime(timezone=False)' in upgrade_source
+    assert 'sa.Column("capture_source", sa.String()' in upgrade_source
+    assert "nullable=True" in upgrade_source
+    assert "Enum" not in upgrade_source
+    assert "timezone=True" not in upgrade_source
+
+
+def test_rfc_028_migration_does_not_touch_unrelated_schema() -> None:
+    upgrade_source = inspect.getsource(
+        _revision_after(RFC_027_OWNERSHIP_REVISION).module.upgrade
+    )
+
+    assert "create_table" not in upgrade_source
+    assert "drop_table" not in upgrade_source
+    assert "embedding" not in upgrade_source
+    assert "file_modified_at" not in upgrade_source
+    assert "content_hash" not in upgrade_source
+
+
+def test_rfc_028_migration_downgrade_drops_only_the_new_columns() -> None:
+    downgrade_source = inspect.getsource(
+        _revision_after(RFC_027_OWNERSHIP_REVISION).module.downgrade
+    )
+
+    assert 'op.drop_column("images", "capture_source")' in downgrade_source
+    assert 'op.drop_column("images", "captured_at")' in downgrade_source
+    assert "embedding" not in downgrade_source
+    assert "drop_table" not in downgrade_source
 
 
 def test_earlier_migrations_were_not_rewritten() -> None:

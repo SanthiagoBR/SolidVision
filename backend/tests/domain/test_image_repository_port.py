@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from app.domain.entities.image import Image
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
 ALL_METHODS = (
@@ -24,6 +26,9 @@ ALL_METHODS = (
     "get_index_metadata",
     "get_index_metadata_many",
     "update_index_metadata",
+    "update_capture_date",
+    "update_capture_date_many",
+    "count_unknown_capture_date",
 )
 
 
@@ -41,6 +46,9 @@ def test_image_repository_is_abstract() -> None:
         "get_index_metadata",
         "get_index_metadata_many",
         "update_index_metadata",
+        "update_capture_date",
+        "update_capture_date_many",
+        "count_unknown_capture_date",
     }
 
 
@@ -101,6 +109,22 @@ def test_image_repository_methods_use_domain_types_only() -> None:
     )
     assert signatures["search_similar"].parameters["limit"].annotation is int
     assert signatures["search_similar"].return_annotation == list[SearchHit]
+    assert (
+        signatures["update_capture_date"].parameters["image_id"].annotation is ImageId
+    )
+    assert (
+        signatures["update_capture_date"].parameters["capture"].annotation
+        is CaptureDate
+    )
+    assert (
+        signatures["update_capture_date_many"].parameters["captures"].annotation
+        == Mapping[ImageId, CaptureDate]
+    )
+    assert (
+        signatures["count_unknown_capture_date"].parameters["filters"].annotation
+        is SearchFilters
+    )
+    assert signatures["count_unknown_capture_date"].return_annotation is int
 
 
 def test_image_repository_methods_are_abstract() -> None:

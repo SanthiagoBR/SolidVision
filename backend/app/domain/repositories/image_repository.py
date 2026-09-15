@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from app.domain.entities.image import Image
+from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
@@ -44,7 +45,16 @@ class ImageRepository(ABC):
 
     @abstractmethod
     def save_indexed(self, record: IndexingRecord) -> None:
-        """Create or update an image together with its embedding and metadata."""
+        """Create or update an image together with its embedding and metadata.
+
+        The whole row is written from the record, capture date included:
+        `record.image.captured_at` and `capture_source` replace whatever
+        was stored, even when they are `None`. That is correct for the only
+        caller, which reaches this for new or genuinely changed bytes --
+        a date read from the old bytes no longer describes the file, and
+        "never examined" is the honest state until a scan reads the new
+        ones.
+        """
 
     @abstractmethod
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
@@ -104,12 +114,23 @@ class ImageRepository(ABC):
           one: a real table, a real foreign key, and ownership rules.
           RFC-027 delivers those for *devices*, which are a physical fact
           about where bytes are rather than a modelling choice, so
-          `filters` narrows by device and by nothing else yet.
+          `filters` narrows by device -- and, since RFC-028, by capture
+          date, which is a fact recorded inside the file.
+        - A capture-date range is half-open, `[start, end)`, over the
+          camera-local `captured_at`. An image whose capture date is
+          unknown never matches a range, however wide: unknown never
+          means "matches" (RFC-020). The device set and the range combine
+          with AND.
         - `filters=None` and `filters=SearchFilters()` mean the same
           thing: no narrowing, and byte-for-byte the query RFC-025
           shipped. Neither may be read as "an empty set of devices",
           which would match nothing and turn a defaulted argument into a
-          search that silently returns zero results.
+          search that silently returns zero results -- nor as an
+          unbounded date range, which would silently drop every image
+          without a date.
+        - Every hit's `Image` carries its `captured_at` and
+          `capture_source`, so a caller can show why a photo matched a
+          date filter and how much that date is worth.
         - A filtered search obeys every rule above, including ordering,
           the cosine range, and skipping images with no embedding. It
           restricts the candidate set; it does not change the ranking
@@ -146,6 +167,9 @@ class ImageRepository(ABC):
         Returns `None` when no row exists for `image_id` (new file).
         Returns `IndexMetadata(None, None)` when a row exists but has no
         metadata yet -- callers must treat that as changed, not unchanged.
+
+        Includes the row's `capture_source` (RFC-028), which is not a
+        change signal; see `IndexMetadata.capture_source`.
         """
 
     @abstractmethod
@@ -181,4 +205,81 @@ class ImageRepository(ABC):
         Does nothing when no row exists for `image_id`; a caller that wants
         a row created must go through `save_indexed()`, which is the only
         contract carrying an embedding.
+
+        Writes the three change signals and nothing else. In particular it
+        does not touch the capture date, whatever `metadata.capture_source`
+        says: that belongs to `update_capture_date()`, and a refresh that
+        also wrote it would reset an examined row to "never examined"
+        whenever a caller built its `IndexMetadata` without one.
+        """
+
+    @abstractmethod
+    def update_capture_date(self, image_id: ImageId, capture: CaptureDate) -> None:
+        """Record the examined capture date of an existing row (RFC-028).
+
+        Writes `captured_at` and `capture_source` and nothing else -- no
+        embedding, no change signal -- because a capture date is a
+        searchable attribute of the photograph, not a reason to reindex it
+        (RFC-028 section 6.1). This is how an already-indexed image gains a
+        date without paying for inference.
+
+        Takes a `CaptureDate`, never `None`: there is no call that marks a
+        row as "never examined" again, since nothing legitimate un-reads a
+        file.
+
+        Does nothing when no row exists for `image_id`, the same contract
+        as `update_index_metadata()`. A date is only worth storing beside
+        an image the system knows, and creating a row here would create
+        one with no embedding.
+
+        Unconditional. Deciding *whether* to write -- only rows never
+        examined during a scan; never replacing a stronger source with a
+        weaker one under the backfill's `--force` -- is the caller's
+        policy, in `capture_date_to_write()`.
+        """
+
+    @abstractmethod
+    def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
+        """Record many capture dates as one write.
+
+        The bulk counterpart of `update_capture_date()`, for the reason
+        RFC-024 added `get_index_metadata_many()`: the first scan after
+        RFC-028 dates an entire already-indexed collection, and one
+        statement per file would turn that pass into 100,000 round trips.
+
+        Ids with no row are skipped silently, exactly as the single-row
+        version does. An empty mapping writes nothing.
+        """
+
+    @abstractmethod
+    def count_unknown_capture_date(self, filters: SearchFilters) -> int:
+        """Count the searchable images a date filter hid for having no date.
+
+        The number behind "N photos were left out because their date is
+        unknown". RFC-028 section 4.1 requires the UI to be able to say it:
+        without it, "I can't find the 2018 photo" and "the 2018 photo is
+        indexed but has no EXIF" look identical -- an empty result that
+        reads as the photo not existing, which is the failure RFC-028
+        section 2.1 exists to remove.
+
+        Counts images that (a) have an embedding, so a search could have
+        returned them, (b) satisfy every *other* clause of `filters` --
+        today, the device set -- and (c) have `captured_at` NULL, whether
+        never examined or examined without a date. When
+        `filters.captured_between` is `None` there was no date clause to
+        hide anything, the answer is 0, and an implementation must return
+        it without querying.
+
+        Three properties to know before "fixing" what looks inconsistent:
+
+        - It is a **second query**, not a by-product of the search. A
+          vector search returns at most `limit` rows and has no way to
+          know what its `WHERE` discarded.
+        - It counts over **the whole table under the filters**, not over
+          the neighbourhood an approximate index happened to explore. That
+          is the question the user is asking -- how many photos did the
+          filter hide? -- and it is deliberately not the ranking's
+          universe. The two numbers are not supposed to add up to anything.
+        - It ignores the query text. Relevance is not the reason these
+          images were left out; their missing date is.
         """

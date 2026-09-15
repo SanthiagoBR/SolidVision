@@ -29,6 +29,9 @@ from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
+from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -112,7 +115,9 @@ def one_hot(index: int, sign: float = 1.0) -> EmbeddingVector:
 
 
 def _image(
-    image_id: uuid.UUID | None = None, device_id: DeviceId | None = None
+    image_id: uuid.UUID | None = None,
+    device_id: DeviceId | None = None,
+    capture: CaptureDate | None = None,
 ) -> Image:
     unique = uuid.uuid4().hex
     return Image(
@@ -121,6 +126,8 @@ def _image(
         relative_path=ImagePath(f"images/search/{unique}.png"),
         filename=unique,
         extension="png",
+        captured_at=capture.captured_at if capture else None,
+        capture_source=capture.source if capture else None,
     )
 
 
@@ -129,9 +136,18 @@ def index_image(
     embedding: EmbeddingVector,
     image_id: uuid.UUID | None = None,
     device_id: DeviceId | None = None,
+    captured_at: datetime.datetime | None = None,
+    capture: CaptureDate | None = None,
 ) -> Image:
-    """Persist one searchable image, through the same door production uses."""
-    image = _image(image_id, device_id)
+    """Persist one searchable image, through the same door production uses.
+
+    `captured_at` is the short form for the common case -- a date read from
+    `DateTimeOriginal`; `capture` states any other examined outcome,
+    including `CaptureDate.unknown()`.
+    """
+    if captured_at is not None:
+        capture = CaptureDate(captured_at, CaptureSource.EXIF_ORIGINAL)
+    image = _image(image_id, device_id, capture)
     repository.save_indexed(
         IndexingRecord(
             image=image,
@@ -143,9 +159,14 @@ def index_image(
     return image
 
 
-def store_without_embedding(repository: ImageRepository) -> Image:
+def store_without_embedding(
+    repository: ImageRepository, captured_at: datetime.datetime | None = None
+) -> Image:
     """Persist an image the way `IndexImageUseCase` does: no embedding at all."""
-    image = _image()
+    capture = (
+        CaptureDate(captured_at, CaptureSource.EXIF_ORIGINAL) if captured_at else None
+    )
+    image = _image(capture=capture)
     repository.save(image)
     return image
 
@@ -440,3 +461,261 @@ class TestDeviceFilter:
                 limit=10,
                 filters=SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})),
             )
+
+
+NEW_YEAR_2018 = datetime.datetime(2018, 1, 1)
+NEW_YEAR_2019 = datetime.datetime(2019, 1, 1)
+YEAR_2018 = DateRange(start=NEW_YEAR_2018, end=NEW_YEAR_2019)
+
+
+def in_2018() -> SearchFilters:
+    return SearchFilters(captured_between=YEAR_2018)
+
+
+class TestCaptureDateFilter:
+    """RFC-028 section 8: a half-open range over the camera-local capture date.
+
+    These cases join the device ones rather than replacing them, for the
+    same reason those joined RFC-025's: the unfiltered contract is still
+    the contract. Every assertion here holds for all three repositories
+    **at the scale this file runs at**, where PostgreSQL answers from a
+    sequential scan and is therefore exact. At a scale where the planner
+    keeps the approximate HNSW index, a date filter can return fewer than
+    `limit` rows while more exist; that is measured by
+    `experiments/rfc-028-capture-date/planner_check.py`, and asserting it
+    here would make this test flaky by construction.
+    """
+
+    def test_a_range_excludes_images_outside_it(
+        self, repository: ImageRepository
+    ) -> None:
+        inside = index_image(
+            repository, one_hot(0), captured_at=datetime.datetime(2018, 7, 14)
+        )
+        index_image(repository, one_hot(0), captured_at=datetime.datetime(2017, 7, 14))
+        index_image(repository, one_hot(0), captured_at=datetime.datetime(2020, 7, 14))
+
+        hits = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert [hit.image for hit in hits] == [inside]
+
+    def test_an_unknown_capture_date_never_matches(
+        self, repository: ImageRepository
+    ) -> None:
+        """RFC-020's rule, and RFC-028 section 4.1: unknown is never "matches".
+
+        Both kinds of unknown -- a row never examined, and a row examined
+        with no date -- are excluded from the widest range there is.
+        """
+        dated = index_image(
+            repository, one_hot(0), captured_at=datetime.datetime(2018, 7, 14)
+        )
+        index_image(repository, one_hot(0))
+        index_image(repository, one_hot(0), capture=CaptureDate.unknown())
+
+        everything = SearchFilters(
+            captured_between=DateRange(datetime.datetime.min, datetime.datetime.max)
+        )
+        hits = repository.search_similar(one_hot(0), limit=10, filters=everything)
+
+        assert [hit.image for hit in hits] == [dated]
+
+    def test_the_start_bound_is_included(self, repository: ImageRepository) -> None:
+        at_start = index_image(repository, one_hot(0), captured_at=NEW_YEAR_2018)
+
+        hits = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert [hit.image for hit in hits] == [at_start]
+
+    def test_the_end_bound_is_excluded(self, repository: ImageRepository) -> None:
+        """A shot at the stroke of midnight belongs to 2019, not to both years."""
+        index_image(repository, one_hot(0), captured_at=NEW_YEAR_2019)
+
+        assert repository.search_similar(one_hot(0), limit=10, filters=in_2018()) == []
+
+    def test_the_last_instant_before_the_end_is_included(
+        self, repository: ImageRepository
+    ) -> None:
+        """The New Year's Eve shot a closed `<= 2018-12-31` range would drop."""
+        last = index_image(
+            repository,
+            one_hot(0),
+            captured_at=datetime.datetime(2018, 12, 31, 23, 59, 59, 999_999),
+        )
+
+        hits = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert [hit.image for hit in hits] == [last]
+
+    def test_an_empty_range_matches_nothing(self, repository: ImageRepository) -> None:
+        index_image(repository, one_hot(0), captured_at=NEW_YEAR_2018)
+
+        empty = SearchFilters(captured_between=DateRange(NEW_YEAR_2018, NEW_YEAR_2018))
+
+        assert repository.search_similar(one_hot(0), limit=10, filters=empty) == []
+
+    def test_date_and_device_filters_combine_with_and(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        wanted = index_image(
+            repository, one_hot(0), captured_at=datetime.datetime(2018, 7, 14)
+        )
+        index_image(
+            repository,
+            one_hot(0),
+            device_id=second_device,
+            captured_at=datetime.datetime(2018, 7, 14),
+        )
+        index_image(repository, one_hot(0), captured_at=datetime.datetime(2016, 1, 1))
+
+        hits = repository.search_similar(
+            one_hot(0),
+            limit=10,
+            filters=SearchFilters(
+                device_ids=frozenset({TEST_DEVICE_ID}), captured_between=YEAR_2018
+            ),
+        )
+
+        assert [hit.image for hit in hits] == [wanted]
+
+    def test_a_date_only_filter_does_not_restrict_devices(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        """The empty device set still means *all* when a date is given."""
+        here = index_image(
+            repository, one_hot(0), captured_at=datetime.datetime(2018, 7, 14)
+        )
+        elsewhere = index_image(
+            repository,
+            one_hot(1),
+            device_id=second_device,
+            captured_at=datetime.datetime(2018, 8, 1),
+        )
+
+        hits = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert {hit.image for hit in hits} == {here, elsewhere}
+
+    def test_a_date_filter_does_not_resurrect_images_without_an_embedding(
+        self, repository: ImageRepository
+    ) -> None:
+        indexed = index_image(
+            repository, one_hot(0), captured_at=datetime.datetime(2018, 7, 14)
+        )
+        store_without_embedding(repository, captured_at=datetime.datetime(2018, 7, 15))
+
+        hits = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert [hit.image for hit in hits] == [indexed]
+
+    def test_ordering_and_scores_are_unchanged_within_the_range(
+        self, repository: ImageRepository
+    ) -> None:
+        shot = datetime.datetime(2018, 7, 14)
+        identical = index_image(repository, one_hot(0), captured_at=shot)
+        orthogonal = index_image(repository, one_hot(1), captured_at=shot)
+        opposite = index_image(repository, one_hot(0, sign=-1.0), captured_at=shot)
+        index_image(repository, one_hot(0), captured_at=datetime.datetime(2011, 1, 1))
+
+        hits = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert [hit.image for hit in hits] == [identical, orthogonal, opposite]
+        assert [hit.similarity for hit in hits] == [
+            pytest.approx(1.0),
+            pytest.approx(0.0),
+            pytest.approx(-1.0),
+        ]
+
+    def test_limit_still_applies_inside_the_range(
+        self, repository: ImageRepository
+    ) -> None:
+        for axis in range(5):
+            index_image(
+                repository, one_hot(axis), captured_at=datetime.datetime(2018, 7, 14)
+            )
+
+        hits = repository.search_similar(one_hot(0), limit=2, filters=in_2018())
+
+        assert len(hits) == 2
+
+    def test_hits_carry_their_capture_date_naive(
+        self, repository: ImageRepository
+    ) -> None:
+        """The response needs the date and its source; the date stays naive."""
+        shot = datetime.datetime(2018, 12, 31, 23, 30)
+        index_image(repository, one_hot(0), captured_at=shot)
+
+        (hit,) = repository.search_similar(one_hot(0), limit=10, filters=in_2018())
+
+        assert hit.image.captured_at == shot
+        assert hit.image.captured_at is not None
+        assert hit.image.captured_at.tzinfo is None
+        assert hit.image.capture_source is CaptureSource.EXIF_ORIGINAL
+
+    def test_an_unfiltered_hit_reports_a_never_examined_row_as_none(
+        self, repository: ImageRepository
+    ) -> None:
+        index_image(repository, one_hot(0))
+
+        (hit,) = repository.search_similar(one_hot(0), limit=10)
+
+        assert hit.image.captured_at is None
+        assert hit.image.capture_source is None
+
+
+class TestUnknownCaptureDateCount:
+    """RFC-028 section 4.1: how many photos a date filter hid for having no date."""
+
+    def test_no_date_range_means_zero(self, repository: ImageRepository) -> None:
+        index_image(repository, one_hot(0))
+
+        assert repository.count_unknown_capture_date(SearchFilters()) == 0
+
+    def test_a_device_only_filter_means_zero(self, repository: ImageRepository) -> None:
+        """Nothing was hidden by a date clause that was not there."""
+        index_image(repository, one_hot(0))
+
+        filters = SearchFilters(device_ids=frozenset({TEST_DEVICE_ID}))
+
+        assert repository.count_unknown_capture_date(filters) == 0
+
+    def test_both_kinds_of_unknown_are_counted(
+        self, repository: ImageRepository
+    ) -> None:
+        index_image(repository, one_hot(0))
+        index_image(repository, one_hot(1), capture=CaptureDate.unknown())
+        index_image(repository, one_hot(2), captured_at=datetime.datetime(2018, 7, 1))
+        index_image(repository, one_hot(3), captured_at=datetime.datetime(2011, 7, 1))
+
+        assert repository.count_unknown_capture_date(in_2018()) == 2
+
+    def test_images_without_an_embedding_are_not_counted(
+        self, repository: ImageRepository
+    ) -> None:
+        """Only an image a search could have returned was hidden by the filter."""
+        store_without_embedding(repository)
+        index_image(repository, one_hot(0))
+
+        assert repository.count_unknown_capture_date(in_2018()) == 1
+
+    def test_the_device_clause_still_applies(
+        self, repository: ImageRepository, second_device: DeviceId
+    ) -> None:
+        index_image(repository, one_hot(0))
+        index_image(repository, one_hot(1), device_id=second_device)
+
+        filters = SearchFilters(
+            device_ids=frozenset({second_device}), captured_between=YEAR_2018
+        )
+
+        assert repository.count_unknown_capture_date(filters) == 1
+
+    def test_the_count_is_not_bounded_by_the_search_limit(
+        self, repository: ImageRepository
+    ) -> None:
+        """It counts the table under the filters, not the ranked page."""
+        for axis in range(7):
+            index_image(repository, one_hot(axis))
+
+        assert repository.search_similar(one_hot(0), limit=2, filters=in_2018()) == []
+        assert repository.count_unknown_capture_date(in_2018()) == 7

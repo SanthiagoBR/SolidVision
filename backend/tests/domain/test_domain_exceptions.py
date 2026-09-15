@@ -9,6 +9,8 @@ from app.domain.exceptions import (
     EmptySearchQueryError,
     ImageAlreadyExistsError,
     ImageNotFoundError,
+    InvalidCaptureDateError,
+    InvalidDateRangeError,
     InvalidDeviceIdentifierError,
     InvalidImageIdentifierError,
     InvalidImagePathError,
@@ -31,6 +33,8 @@ def test_all_domain_exceptions_inherit_from_domain_error() -> None:
     assert issubclass(DeviceNotConnectedError, DomainError)
     assert issubclass(InvalidDeviceIdentifierError, DomainError)
     assert issubclass(InvalidVolumeIdentityError, DomainError)
+    assert issubclass(InvalidCaptureDateError, DomainError)
+    assert issubclass(InvalidDateRangeError, DomainError)
 
 
 def test_domain_error_inherits_from_exception() -> None:
@@ -55,6 +59,8 @@ def test_default_messages_are_assigned() -> None:
         str(InvalidDeviceIdentifierError()) == "Device identifier must be a valid UUID"
     )
     assert str(InvalidVolumeIdentityError()) == "Invalid volume identity."
+    assert str(InvalidCaptureDateError()) == "Invalid capture date."
+    assert str(InvalidDateRangeError()) == "Invalid date range."
 
 
 def test_custom_messages_override_defaults() -> None:
@@ -71,6 +77,8 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "EmptySearchQueryError",
         "ImageAlreadyExistsError",
         "ImageNotFoundError",
+        "InvalidCaptureDateError",
+        "InvalidDateRangeError",
         "InvalidDeviceIdentifierError",
         "InvalidEmbeddingVectorError",
         "InvalidImageIdentifierError",
