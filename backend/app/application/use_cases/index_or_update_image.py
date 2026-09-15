@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 
+from app.application.use_cases.capture_date_plan import capture_date_to_write
 from app.application.use_cases.indexing_plan import (
     IndexAction,
     IndexCandidate,
@@ -34,6 +35,9 @@ class IndexOrUpdateImageUseCase:
     - metadata differs but the content hash proves the bytes are identical
       -> refresh the stored metadata and keep the existing embedding;
     - metadata differs and the content genuinely changed -> re-index.
+
+    Since RFC-028 a skipped image whose row was never examined for a
+    capture date also gets the date `image` carries, without re-embedding.
 
     RFC-024 kept this class deliberately, rather than retiring it in favour
     of `IndexOrUpdateImagesUseCase`. It is the single-file entry point: the
@@ -73,24 +77,26 @@ class IndexOrUpdateImageUseCase:
             file_size=file_size,
             file_modified_at=file_modified_at,
         )
-        plan = plan_indexing(
-            candidate,
-            self._repository.get_index_metadata(image.id),
-            self._content_hasher,
-        )
+        existing = self._repository.get_index_metadata(image.id)
+        plan = plan_indexing(candidate, existing, self._content_hasher)
 
-        if plan.action is IndexAction.SKIP_UNCHANGED:
-            return False
-
-        if plan.action is IndexAction.REFRESH_METADATA:
-            self._repository.update_index_metadata(
-                image.id,
-                IndexMetadata(
-                    file_size=file_size,
-                    file_modified_at=file_modified_at,
-                    content_hash=plan.content_hash,
-                ),
+        if plan.action is not IndexAction.EMBED:
+            # Both skipping branches, not just one: see
+            # `IndexOrUpdateImagesUseCase._write_capture_dates()`.
+            if plan.action is IndexAction.REFRESH_METADATA:
+                self._repository.update_index_metadata(
+                    image.id,
+                    IndexMetadata(
+                        file_size=file_size,
+                        file_modified_at=file_modified_at,
+                        content_hash=plan.content_hash,
+                    ),
+                )
+            capture = capture_date_to_write(
+                existing.capture_source if existing else None, image.capture_date
             )
+            if capture is not None:
+                self._repository.update_capture_date(image.id, capture)
             return False
 
         embedding = self._embedding_model.encode_image(image)

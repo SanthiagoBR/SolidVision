@@ -12,6 +12,7 @@ whether it is *useful* is a model property, measured end to end in
 
 from __future__ import annotations
 
+import datetime
 import uuid
 
 import pytest
@@ -22,6 +23,7 @@ from app.application.use_cases.search_images import (
 )
 from app.domain.entities.image import Image
 from app.domain.exceptions import EmptySearchQueryError, InvalidSearchLimitError
+from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -214,3 +216,43 @@ def test_no_results_is_an_empty_list_not_an_error() -> None:
     use_case, _ = _build_use_case()
 
     assert use_case.execute("a lake") == []
+
+
+class TestCountHiddenByUnknownDate:
+    """RFC-028 section 4.1, and the rule that an unfiltered search pays nothing."""
+
+    YEAR_2018 = DateRange(datetime.datetime(2018, 1, 1), datetime.datetime(2019, 1, 1))
+
+    def test_no_filters_asks_the_repository_nothing(self) -> None:
+        use_case, repository = _build_use_case()
+
+        assert use_case.count_hidden_by_unknown_date(None) is None
+        assert repository.count_unknown_capture_date_calls == []
+
+    def test_a_device_only_filter_asks_the_repository_nothing(self) -> None:
+        use_case, repository = _build_use_case()
+
+        filters = SearchFilters(device_ids=frozenset({TEST_DEVICE_ID}))
+
+        assert use_case.count_hidden_by_unknown_date(filters) is None
+        assert repository.count_unknown_capture_date_calls == []
+
+    def test_a_search_without_a_date_range_never_triggers_the_count(self) -> None:
+        """The second query must not exist for an ordinary search, not merely be 0."""
+        use_case, repository = _build_use_case()
+        _seed(repository, 3)
+
+        use_case.execute("lake", filters=SearchFilters())
+        use_case.count_hidden_by_unknown_date(SearchFilters())
+
+        assert repository.count_unknown_capture_date_calls == []
+
+    def test_a_date_range_is_counted_with_the_same_filters(self) -> None:
+        use_case, repository = _build_use_case()
+        _seed(repository, 3)
+        filters = SearchFilters(
+            device_ids=frozenset({TEST_DEVICE_ID}), captured_between=self.YEAR_2018
+        )
+
+        assert use_case.count_hidden_by_unknown_date(filters) == 3
+        assert repository.count_unknown_capture_date_calls == [filters]

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import uuid
 
 from app.application.use_cases.index_or_update_image import IndexOrUpdateImageUseCase
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -281,3 +284,71 @@ def test_a_new_file_is_hashed_so_the_next_run_can_use_the_check() -> None:
 
     assert content_hasher.hashed == [image]
     assert repository.save_indexed_calls[0].content_hash == "0" * 64
+
+
+class TestCaptureDateOnTheSingleImagePath:
+    """The single-file entry point follows the same RFC-028 write policy."""
+
+    SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
+
+    def _use_case(
+        self, repository: FakeImageRepository
+    ) -> tuple[IndexOrUpdateImageUseCase, _RecordingEmbeddingModel]:
+        model = _RecordingEmbeddingModel()
+        return (
+            IndexOrUpdateImageUseCase(
+                repository=repository,
+                embedding_model=model,
+                content_hasher=StubContentHasher(),
+            ),
+            model,
+        )
+
+    def _dated(self, image: Image) -> Image:
+        return dataclasses.replace(
+            image, captured_at=self.SHOT, capture_source=CaptureSource.EXIF_ORIGINAL
+        )
+
+    def test_an_unchanged_undated_row_gains_its_date(self) -> None:
+        repository = FakeImageRepository()
+        use_case, model = self._use_case(repository)
+        image = _build_image()
+        modified_at = datetime.datetime.now(datetime.UTC)
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        was_indexed = use_case.execute(
+            self._dated(image), file_size=1024, file_modified_at=modified_at
+        )
+
+        assert was_indexed is False
+        assert len(model.encode_image_calls) == 1
+        (call,) = repository.update_capture_date_calls
+        assert call == (image.id, CaptureDate(self.SHOT, CaptureSource.EXIF_ORIGINAL))
+
+    def test_a_touched_identical_undated_row_gains_its_date(self) -> None:
+        repository = FakeImageRepository()
+        use_case, model = self._use_case(repository)
+        image = _build_image()
+        modified_at = datetime.datetime.now(datetime.UTC)
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        use_case.execute(
+            self._dated(image),
+            file_size=1024,
+            file_modified_at=modified_at + datetime.timedelta(hours=1),
+        )
+
+        assert len(model.encode_image_calls) == 1
+        assert len(repository.update_index_metadata_calls) == 1
+        assert len(repository.update_capture_date_calls) == 1
+
+    def test_a_dated_row_is_not_rewritten(self) -> None:
+        repository = FakeImageRepository()
+        use_case, _ = self._use_case(repository)
+        image = self._dated(_build_image())
+        modified_at = datetime.datetime.now(datetime.UTC)
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        assert repository.update_capture_date_calls == []

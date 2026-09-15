@@ -148,33 +148,54 @@ class IndexingWorker:
         to be while this disk is plugged in, so that the hasher and the
         model can open it, and it is never written to the database
         (RFC-027 section 5.2).
-        """
-        for discovered in self._filesystem_provider.discover():
-            logger.info("Discovered file: %s", discovered.path)
-            try:
-                absolute_path = ImagePath(str(discovered.path))
-                relative_path = ImagePath(
-                    discovered.path.relative_to(self._mount_point)
-                )
-                image = Image(
-                    id=compute_image_id(self._device.id, relative_path),
-                    device_id=self._device.id,
-                    relative_path=relative_path,
-                    filename=discovered.filename,
-                    extension=discovered.extension,
-                    absolute_path=absolute_path,
-                )
-            except Exception as exc:
-                undiscoverable.append(
-                    IndexingFailure(path=str(discovered.path), error=exc)
-                )
-                continue
 
-            yield IndexCandidate(
-                image=image,
-                file_size=discovered.file_size,
-                file_modified_at=discovered.file_modified_at,
+        The capture date the scan read goes onto the entity too (RFC-028
+        section 6), so the use case can write it for a row it skips.
+        """
+        yield from discovered_candidates(
+            self._filesystem_provider, self._device, self._mount_point, undiscoverable
+        )
+
+
+def discovered_candidates(
+    filesystem_provider: FilesystemImageProvider,
+    device: Device,
+    mount_point: Path,
+    undiscoverable: list[IndexingFailure],
+) -> Iterator[IndexCandidate]:
+    """Turn discovered files into candidates for one device; see `_candidates()`.
+
+    A module function rather than a private method so that
+    `capture_date_backfill` mints the same ids from the same discovered
+    files. The backfill writes to rows the indexing worker created, so a
+    second copy of this translation would be a second chance to compute a
+    different `ImageId` for the same file -- and to date nothing.
+    """
+    for discovered in filesystem_provider.discover():
+        logger.info("Discovered file: %s", discovered.path)
+        try:
+            absolute_path = ImagePath(str(discovered.path))
+            relative_path = ImagePath(discovered.path.relative_to(mount_point))
+            capture = discovered.capture_date
+            image = Image(
+                id=compute_image_id(device.id, relative_path),
+                device_id=device.id,
+                relative_path=relative_path,
+                filename=discovered.filename,
+                extension=discovered.extension,
+                absolute_path=absolute_path,
+                captured_at=capture.captured_at if capture else None,
+                capture_source=capture.source if capture else None,
             )
+        except Exception as exc:
+            undiscoverable.append(IndexingFailure(path=str(discovered.path), error=exc))
+            continue
+
+        yield IndexCandidate(
+            image=image,
+            file_size=discovered.file_size,
+            file_modified_at=discovered.file_modified_at,
+        )
 
 
 def register_device(
@@ -317,7 +338,9 @@ def main() -> None:
         )
         worker = IndexingWorker(
             filesystem_provider=FilesystemImageProvider(
-                root, settings.supported_extensions
+                root,
+                settings.supported_extensions,
+                extract_capture_date=settings.extract_capture_date,
             ),
             index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
                 repository=PostgresImageRepository(session),

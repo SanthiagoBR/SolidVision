@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from app.domain.entities.device import Device
@@ -10,6 +11,7 @@ from app.domain.entities.image import Image
 from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
+from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -27,7 +29,9 @@ from app.infrastructure.persistence.in_memory_device_repository import (
 )
 from app.infrastructure.persistence.in_memory_image_repository import (
     cosine_search,
+    count_unknown_capture_date,
     matches_filters,
+    with_capture_date,
 )
 
 
@@ -46,6 +50,9 @@ class FakeImageRepository(ImageRepository):
         self.get_index_metadata_calls: list[ImageId] = []
         self.get_index_metadata_many_calls: list[Sequence[ImageId]] = []
         self.update_index_metadata_calls: list[tuple[ImageId, IndexMetadata]] = []
+        self.update_capture_date_calls: list[tuple[ImageId, CaptureDate]] = []
+        self.update_capture_date_many_calls: list[dict[ImageId, CaptureDate]] = []
+        self.count_unknown_capture_date_calls: list[SearchFilters] = []
         self.search_similar_calls: list[
             tuple[EmbeddingVector, int, SearchFilters | None]
         ] = []
@@ -135,11 +142,7 @@ class FakeImageRepository(ImageRepository):
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         self.get_index_metadata_calls.append(image_id)
-        if not any(image.id == image_id for image in self._images):
-            return None
-        return self._metadata.get(
-            image_id.value, IndexMetadata(file_size=None, file_modified_at=None)
-        )
+        return self._stored_metadata(image_id)
 
     def get_index_metadata_many(
         self, image_ids: Sequence[ImageId]
@@ -147,17 +150,61 @@ class FakeImageRepository(ImageRepository):
         self.get_index_metadata_many_calls.append(list(image_ids))
         found = {}
         for image_id in image_ids:
-            if any(image.id == image_id for image in self._images):
-                found[image_id] = self._metadata.get(
-                    image_id.value,
-                    IndexMetadata(file_size=None, file_modified_at=None),
-                )
+            metadata = self._stored_metadata(image_id)
+            if metadata is not None:
+                found[image_id] = metadata
         return found
+
+    def _stored_metadata(self, image_id: ImageId) -> IndexMetadata | None:
+        """The metadata for one id, with the capture source read off the image.
+
+        Same rule as `InMemoryImageRepository.get_index_metadata()`: the
+        entity holds the capture date, and `_metadata` does not keep a
+        second copy of it that could disagree.
+        """
+        image = self.get(image_id)
+        if image is None:
+            return None
+        stored = self._metadata.get(
+            image_id.value, IndexMetadata(file_size=None, file_modified_at=None)
+        )
+        return dataclasses.replace(stored, capture_source=image.capture_source)
 
     def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
         self.update_index_metadata_calls.append((image_id, metadata))
         if any(image.id == image_id for image in self._images):
             self._metadata[image_id.value] = metadata
+
+    def update_capture_date(self, image_id: ImageId, capture: CaptureDate) -> None:
+        self.update_capture_date_calls.append((image_id, capture))
+        self._apply_capture_dates({image_id: capture})
+
+    def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
+        self.update_capture_date_many_calls.append(dict(captures))
+        self._apply_capture_dates(captures)
+
+    def _apply_capture_dates(self, captures: Mapping[ImageId, CaptureDate]) -> None:
+        self._images = [
+            (
+                with_capture_date(image, captures[image.id])
+                if image.id in captures
+                else image
+            )
+            for image in self._images
+        ]
+
+    def count_unknown_capture_date(self, filters: SearchFilters) -> int:
+        """Delegates to the shared counter, and records that it was asked.
+
+        The record is what lets a use-case test prove the count is *not*
+        requested for a search without a date range (RFC-028 section 8):
+        the extra query must not exist at all, not merely return 0.
+        """
+        self.count_unknown_capture_date_calls.append(filters)
+        return count_unknown_capture_date(
+            (image for image in self._images if image.id.value in self._embeddings),
+            filters,
+        )
 
 
 class RecordingContentHasher(ContentHasherPort):

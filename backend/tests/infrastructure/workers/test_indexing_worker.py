@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from PIL import Image as PILImage
 from tests.application.fakes import (
     FakeDeviceRepository,
     FakeImageRepository,
@@ -19,9 +20,15 @@ from app.application.use_cases.index_or_update_images import IndexOrUpdateImages
 from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
+from app.infrastructure.filesystem.exif_capture_date import (
+    DATE_TIME_ORIGINAL,
+    EXIF_IFD_POINTER,
+)
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
@@ -725,3 +732,89 @@ class TestCommandLineEntryPoint:
         assert worker._device.label == "HD2"
         assert worker._mount_point == tmp_path
         assert closed == [True]
+
+
+class TestCaptureDateThroughTheWorker:
+    """RFC-028 section 6, end to end: EXIF in a real file, a date in the row."""
+
+    SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
+
+    @staticmethod
+    def write_jpeg(path: Path, date_time_original: str | None) -> None:
+        exif = PILImage.Exif()
+        if date_time_original is not None:
+            exif.get_ifd(EXIF_IFD_POINTER)[DATE_TIME_ORIGINAL] = date_time_original
+        PILImage.new("RGB", (8, 8)).save(path, "JPEG", exif=exif.tobytes())
+
+    def test_a_new_file_is_indexed_with_its_capture_date(self, tmp_path: Path) -> None:
+        self.write_jpeg(tmp_path / "DJI_0042.jpg", "2018:07:14 15:32:05")
+        repository = FakeImageRepository()
+
+        _make_worker(tmp_path, repository, _RecordingEmbeddingModel()).run()
+
+        (record,) = repository.save_indexed_calls
+        assert record.image.capture_date == CaptureDate(
+            self.SHOT, CaptureSource.EXIF_ORIGINAL
+        )
+
+    def test_an_already_indexed_file_gains_its_date_without_inference(
+        self, tmp_path: Path
+    ) -> None:
+        """The first scan after RFC-028, over a collection indexed before it."""
+        self.write_jpeg(tmp_path / "DJI_0042.jpg", "2018:07:14 15:32:05")
+        repository = FakeImageRepository()
+        before_rfc_028 = IndexingWorker(
+            filesystem_provider=FilesystemImageProvider(
+                tmp_path, SUPPORTED_EXTENSIONS, extract_capture_date=False
+            ),
+            index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
+                repository=repository,
+                embedding_model=_RecordingEmbeddingModel(),
+                content_hasher=RecordingContentHasher(),
+                batch_size=8,
+                metadata_prefetch_size=512,
+            ),
+            device=TEST_DEVICE,
+            mount_point=tmp_path,
+        )
+        before_rfc_028.run()
+        (row,) = repository.list()
+        assert row.capture_source is None
+
+        model = _RecordingEmbeddingModel()
+        summary = _make_worker(tmp_path, repository, model).run()
+
+        assert model.encode_image_calls == []
+        assert summary.skipped_unchanged == 1
+        assert summary.capture_dates_written == 1
+        (row,) = repository.list()
+        assert row.capture_date == CaptureDate(self.SHOT, CaptureSource.EXIF_ORIGINAL)
+
+    def test_a_third_scan_writes_no_dates(self, tmp_path: Path) -> None:
+        self.write_jpeg(tmp_path / "dated.jpg", "2018:07:14 15:32:05")
+        self.write_jpeg(tmp_path / "undated.jpg", None)
+        repository = FakeImageRepository()
+        worker = _make_worker(tmp_path, repository, _RecordingEmbeddingModel())
+        worker.run()
+
+        summary = worker.run()
+
+        assert summary.skipped_unchanged == 2
+        assert summary.capture_dates_written == 0
+        assert repository.update_capture_date_many_calls == []
+
+    def test_a_corrupt_file_is_still_indexed_as_undated(self, tmp_path: Path) -> None:
+        """RFC-028 section 13: extraction never takes the scan down with it."""
+        (tmp_path / "corrupt.jpg").write_bytes(b"\xff\xd8\xff\xe1\x00\x10Exif\x00\x00")
+        self.write_jpeg(tmp_path / "fine.jpg", "2018:07:14 15:32:05")
+        repository = FakeImageRepository()
+
+        summary = _make_worker(tmp_path, repository, _FailsForFilename("corrupt")).run()
+
+        assert summary.discovered == 2
+        assert {record.image.filename for record in repository.save_indexed_calls} == {
+            "fine"
+        }
+        (failure,) = summary.failures
+        assert failure.path.endswith("corrupt.jpg")
+        assert isinstance(failure.error, RuntimeError)

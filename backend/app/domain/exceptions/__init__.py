@@ -1,5 +1,9 @@
 """Public exports for domain exceptions."""
 
+from app.domain.exceptions.capture_date_errors import (
+    InvalidCaptureDateError,
+    InvalidDateRangeError,
+)
 from app.domain.exceptions.device_errors import (
     DeviceNotConnectedError,
     DeviceNotFoundError,
@@ -36,6 +40,8 @@ __all__ = [
     "EmptySearchQueryError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
+    "InvalidCaptureDateError",
+    "InvalidDateRangeError",
     "InvalidDeviceIdentifierError",
     "InvalidEmbeddingVectorError",
     "InvalidImageIdentifierError",

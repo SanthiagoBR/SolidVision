@@ -26,6 +26,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from itertools import islice
 
+from app.application.use_cases.capture_date_plan import capture_date_to_write
 from app.application.use_cases.indexing_plan import (
     IndexAction,
     IndexCandidate,
@@ -35,6 +36,7 @@ from app.application.use_cases.indexing_plan import (
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
@@ -92,6 +94,14 @@ class IndexingSummary:
     persistence_batches: int = 0
     persistence_writes: int = 0
     persistence_seconds: float = 0.0
+    capture_dates_written: int = 0
+    """Already-indexed rows that gained a capture date without re-embedding.
+
+    Large on the first scan after RFC-028 and zero on every later scan of
+    an unchanged collection. A non-zero value on a re-scan of a collection
+    nobody touched would mean the conditional write has stopped being
+    conditional, which is why it is reported rather than left implicit.
+    """
     elapsed_seconds: float = 0.0
     failures: list[IndexingFailure] = field(default_factory=list)
     inference_fallbacks: list[BatchFallback] = field(default_factory=list)
@@ -127,6 +137,8 @@ class IndexingSummary:
                 "(mtime changed, content identical)",
                 f"Indexed:        {self.indexed:6d}",
                 f"Failed:         {self.failed:6d}",
+                f"Dated:          {self.capture_dates_written:6d}   "
+                "(capture date written, no re-embed)",
                 "",
                 "Inference:",
                 f"  images:       {self.indexed:6d}",
@@ -209,26 +221,38 @@ class IndexOrUpdateImagesUseCase:
         started = time.perf_counter()
         pending: list[IndexPlan] = []
 
-        for window in _windowed(candidates, self._metadata_prefetch_size):
+        for window in windowed(candidates, self._metadata_prefetch_size):
             summary.discovered += len(window)
             existing = self._repository.get_index_metadata_many(
                 [candidate.image.id for candidate in window]
             )
+            capture_dates: list[tuple[IndexCandidate, CaptureDate]] = []
 
             for candidate in window:
                 plan = self._plan(candidate, existing, summary)
                 if plan is None:
                     continue
 
-                if plan.action is IndexAction.SKIP_UNCHANGED:
-                    summary.skipped_unchanged += 1
-                elif plan.action is IndexAction.REFRESH_METADATA:
-                    self._refresh_metadata(plan, summary)
-                else:
+                if plan.action is IndexAction.EMBED:
                     pending.append(plan)
                     if len(pending) == self._batch_size:
                         self._flush(pending, summary)
                         pending = []
+                    continue
+
+                if plan.action is IndexAction.SKIP_UNCHANGED:
+                    summary.skipped_unchanged += 1
+                else:
+                    self._refresh_metadata(plan, summary)
+
+                capture = capture_date_to_write(
+                    existing[candidate.image.id].capture_source,
+                    candidate.image.capture_date,
+                )
+                if capture is not None:
+                    capture_dates.append((candidate, capture))
+
+            self._write_capture_dates(capture_dates, summary)
 
         if pending:
             self._flush(pending, summary)
@@ -431,8 +455,59 @@ class IndexOrUpdateImagesUseCase:
         summary.persistence_writes += 1
         summary.skipped_content_identical += 1
 
+    def _write_capture_dates(
+        self,
+        capture_dates: list[tuple[IndexCandidate, CaptureDate]],
+        summary: IndexingSummary,
+    ) -> None:
+        """Date the rows this window skipped, in one write, degrading per row.
 
-def _windowed(
+        **Both skipping branches feed this, not only `SKIP_UNCHANGED`.**
+        `REFRESH_METADATA` -- mtime moved, bytes did not -- is the branch
+        that is easy to forget, and forgetting it would leave every file
+        that was ever copied or restored without a capture date for good:
+        its next scans are `SKIP_UNCHANGED` against a row that still has
+        none, and the condition below would have been the only chance.
+        `EMBED` does not come through here, because `save_indexed_many()`
+        writes the whole row from the entity, capture date included.
+
+        Which rows get written is `capture_date_to_write()`'s decision:
+        only rows never examined, so the first scan after RFC-028 dates the
+        collection and every later scan of an unchanged collection writes
+        nothing (RFC-028 section 6).
+
+        One bulk call per prefetch window rather than per file, and a
+        failed bulk write is retried row by row so one bad row costs one
+        date, not the window's -- the same trade `_persist_batch()` makes.
+        Counted in `capture_dates_written` and kept out of the persistence
+        counters, whose averages RFC-024 section 7.2 reads as the cost of
+        writing embeddings.
+        """
+        if not capture_dates:
+            return
+
+        try:
+            self._repository.update_capture_date_many(
+                {candidate.image.id: capture for candidate, capture in capture_dates}
+            )
+        except Exception:
+            for candidate, capture in capture_dates:
+                try:
+                    self._repository.update_capture_date(candidate.image.id, capture)
+                except Exception as exc:
+                    summary.failures.append(
+                        IndexingFailure(
+                            path=str(candidate.image.display_path), error=exc
+                        )
+                    )
+                    continue
+                summary.capture_dates_written += 1
+            return
+
+        summary.capture_dates_written += len(capture_dates)
+
+
+def windowed(
     candidates: Iterable[IndexCandidate], size: int
 ) -> Iterator[Sequence[IndexCandidate]]:
     """Yield consecutive fixed-size windows without materializing the source.
@@ -440,6 +515,9 @@ def _windowed(
     `FilesystemImageProvider.discover()` sorts its output, and RFC-024
     section 10 relies on that: identical input produces identical windows,
     identical batches, and therefore a reproducible run.
+
+    Public since RFC-028, because the capture-date backfill walks candidates
+    in the same prefetch windows and should not carry a second copy.
     """
     iterator = iter(candidates)
     while window := list(islice(iterator, size)):

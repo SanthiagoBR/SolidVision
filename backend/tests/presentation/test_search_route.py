@@ -18,6 +18,7 @@ collaborator is touched.
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from collections.abc import Iterator
 
@@ -31,6 +32,8 @@ from app.application.use_cases.search_images import (
     SearchImagesUseCase,
 )
 from app.domain.entities.image import Image
+from app.domain.value_objects.capture_source import CaptureSource
+from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -56,6 +59,8 @@ class RecordingSearchUseCase:
         self.hits = hits
         self.calls: list[tuple[str, int | None]] = []
         self.filters: list[SearchFilters | None] = []
+        self.excluded_unknown_date: int | None = None
+        self.count_calls: list[SearchFilters | None] = []
 
     def execute(
         self,
@@ -67,14 +72,25 @@ class RecordingSearchUseCase:
         self.filters.append(filters)
         return self.hits
 
+    def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
+        self.count_calls.append(filters)
+        return self.excluded_unknown_date
 
-def make_hit(filename: str, similarity: float) -> SearchHit:
+
+def make_hit(
+    filename: str,
+    similarity: float,
+    captured_at: datetime.datetime | None = None,
+    capture_source: CaptureSource | None = None,
+) -> SearchHit:
     image = Image(
         id=ImageId(uuid.uuid4()),
         device_id=TEST_DEVICE_ID,
         relative_path=ImagePath(f"private/photos/{filename}.jpg"),
         filename=filename,
         extension="jpg",
+        captured_at=captured_at,
+        capture_source=capture_source,
     )
     return SearchHit(image=image, similarity=similarity)
 
@@ -123,8 +139,11 @@ def test_a_normal_query_returns_the_documented_body(
                 "id": str(hit.image.id.value),
                 "filename": "fish_ponds_02",
                 "similarity": 0.3255,
+                "captured_at": None,
+                "capture_source": None,
             }
         ],
+        "excluded_unknown_date": None,
     }
 
 
@@ -227,8 +246,14 @@ def test_no_result_exposes_a_server_path(
     response = client.get(SEARCH_URL, params={"q": "fish ponds"})
 
     for result in response.json()["results"]:
-        assert set(result) == {"id", "filename", "similarity"}
-    assert "C:/private/photos" not in response.text
+        assert set(result) == {
+            "id",
+            "filename",
+            "similarity",
+            "captured_at",
+            "capture_source",
+        }
+    assert "private/photos" not in response.text
 
 
 def test_an_empty_result_set_is_a_200_not_a_404(
@@ -408,14 +433,229 @@ class TestDeviceFilterParameter:
         """RFC-027 narrows the question; RFC-030 changes the answer.
 
         Publishing the path, the disk a hit is on and whether that disk is
-        plugged in belongs to RFC-030, which owns the response shape. This
-        RFC adds an input and nothing else.
+        plugged in belongs to RFC-030, which owns the response shape. A
+        device filter adds an input and nothing else -- the fields present
+        are the same with or without it, and none of them names a device.
         """
         stub.hits = [make_hit("fish_ponds_02", 0.3255)]
 
-        body = client.get(
+        unfiltered = client.get(SEARCH_URL, params={"q": "lake"}).json()
+        filtered = client.get(
             SEARCH_URL, params={"q": "lake", "device_id": str(uuid.uuid4())}
         ).json()
 
-        assert set(body) == {"query", "limit", "results"}
-        assert set(body["results"][0]) == {"id", "filename", "similarity"}
+        assert set(filtered) == set(unfiltered)
+        assert set(filtered["results"][0]) == set(unfiltered["results"][0])
+        assert not any("device" in key for key in filtered["results"][0])
+        assert filtered["excluded_unknown_date"] is None
+
+
+SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
+
+
+class TestCaptureDateParameters:
+    """RFC-028 at the HTTP edge: two optional bounds, camera-local, zoneless."""
+
+    def test_omitted_bounds_mean_no_date_filter(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """Not `[min, max)`, which would silently drop every undated photo."""
+        client.get(SEARCH_URL, params={"q": "lake"})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.captured_between is None
+        assert filters.is_empty()
+
+    def test_both_bounds_become_a_half_open_range(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        client.get(
+            SEARCH_URL,
+            params={
+                "q": "lake",
+                "captured_from": "2018-01-01",
+                "captured_to": "2019-01-01T00:00:00",
+            },
+        )
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.captured_between == DateRange(
+            datetime.datetime(2018, 1, 1), datetime.datetime(2019, 1, 1)
+        )
+
+    def test_only_a_start_leaves_the_end_open(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        client.get(SEARCH_URL, params={"q": "lake", "captured_from": "2018-01-01"})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.captured_between == DateRange(
+            datetime.datetime(2018, 1, 1), datetime.datetime.max
+        )
+
+    def test_only_an_end_leaves_the_start_open(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        client.get(SEARCH_URL, params={"q": "lake", "captured_to": "2019-01-01"})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.captured_between == DateRange(
+            datetime.datetime.min, datetime.datetime(2019, 1, 1)
+        )
+
+    def test_the_bounds_reach_the_use_case_naive(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        client.get(
+            SEARCH_URL,
+            params={"q": "lake", "captured_from": "2018-01-01T10:00:00"},
+        )
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.captured_between is not None
+        assert filters.captured_between.start.tzinfo is None
+
+    @pytest.mark.parametrize(
+        "bound",
+        [
+            "2018-01-01T00:00:00Z",
+            "2018-01-01T00:00:00-03:00",
+            "2018-01-01T00:00:00+00:00",
+        ],
+        ids=["utc-z", "negative-offset", "zero-offset"],
+    )
+    @pytest.mark.parametrize("parameter", ["captured_from", "captured_to"])
+    def test_a_bound_with_a_zone_is_refused_not_converted(
+        self,
+        client: TestClient,
+        real_use_case: SearchImagesUseCase,
+        parameter: str,
+        bound: str,
+    ) -> None:
+        """400 with a message about the zone -- never a silent conversion.
+
+        Converting would need a zone to convert into, and a camera-local
+        capture date has none (RFC-028 section 5). Refused with 400 rather
+        than 422 because the value parses; it is the application that
+        refuses what it means.
+        """
+        response = client.get(SEARCH_URL, params={"q": "lake", parameter: bound})
+
+        assert response.status_code == 400
+        assert "time zone" in response.json()["detail"]
+
+    def test_a_unix_timestamp_is_refused_as_zoned(
+        self, client: TestClient, real_use_case: SearchImagesUseCase
+    ) -> None:
+        """Pydantic reads `1514764800` as an aware UTC instant; that is a zone too."""
+        response = client.get(
+            SEARCH_URL, params={"q": "lake", "captured_from": "1514764800"}
+        )
+
+        assert response.status_code == 400
+
+    def test_an_inverted_range_is_refused_with_400(
+        self, client: TestClient, real_use_case: SearchImagesUseCase
+    ) -> None:
+        response = client.get(
+            SEARCH_URL,
+            params={
+                "q": "lake",
+                "captured_from": "2019-01-01",
+                "captured_to": "2018-01-01",
+            },
+        )
+
+        assert response.status_code == 400
+        assert "after its end" in response.json()["detail"]
+
+    def test_a_value_that_is_not_a_date_is_a_422(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        response = client.get(
+            SEARCH_URL, params={"q": "lake", "captured_from": "last summer"}
+        )
+
+        assert response.status_code == 422
+        assert stub.calls == []
+
+    def test_an_equal_from_and_to_is_a_valid_empty_range(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        response = client.get(
+            SEARCH_URL,
+            params={
+                "q": "lake",
+                "captured_from": "2018-01-01",
+                "captured_to": "2018-01-01",
+            },
+        )
+
+        assert response.status_code == 200
+
+
+class TestCaptureDateInTheResponse:
+    def test_captured_at_is_serialized_without_z_or_offset(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """RFC-028 section 5, at the last place it could be undone.
+
+        A trailing `Z` would tell every client that the camera clock read
+        UTC, and a client converting it to local time would move the shot
+        -- New Year's Eve into the next year -- which is the exact error
+        the zoneless column exists to prevent.
+        """
+        stub.hits = [make_hit("dji", 0.5, SHOT, CaptureSource.EXIF_ORIGINAL)]
+
+        response = client.get(SEARCH_URL, params={"q": "lake"})
+
+        (result,) = response.json()["results"]
+        assert result["captured_at"] == "2018-07-14T15:32:05"
+        assert '"captured_at":"2018-07-14T15:32:05"' in response.text
+        assert "2018-07-14T15:32:05Z" not in response.text
+        assert "2018-07-14T15:32:05+" not in response.text
+        assert "2018-07-14T15:32:05-" not in response.text
+        assert result["capture_source"] == "exif_original"
+
+    def test_an_unknown_date_is_null_with_its_source(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        stub.hits = [
+            make_hit("scan", 0.5, None, CaptureSource.UNKNOWN),
+            make_hit("legacy", 0.4),
+        ]
+
+        results = client.get(SEARCH_URL, params={"q": "lake"}).json()["results"]
+
+        assert results[0]["captured_at"] is None
+        assert results[0]["capture_source"] == "unknown"
+        assert results[1]["captured_at"] is None
+        assert results[1]["capture_source"] is None
+
+    def test_the_excluded_count_is_published_for_a_date_filter(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """RFC-028 section 4.1: an empty 2018 must not read as "no such photo"."""
+        stub.excluded_unknown_date = 312
+
+        body = client.get(
+            SEARCH_URL, params={"q": "lake", "captured_from": "2018-01-01"}
+        ).json()
+
+        assert body["excluded_unknown_date"] == 312
+        (filters,) = stub.count_calls
+        assert filters is not None
+        assert filters.captured_between is not None
+
+    def test_the_excluded_count_is_null_without_a_date_filter(
+        self, client: TestClient, real_use_case: SearchImagesUseCase
+    ) -> None:
+        """Null, not 0: there was no date filter to hide anything."""
+        body = client.get(SEARCH_URL, params={"q": "lake"}).json()
+
+        assert body["excluded_unknown_date"] is None

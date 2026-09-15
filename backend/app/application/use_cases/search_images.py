@@ -94,6 +94,31 @@ class SearchImagesUseCase:
         embedding = self._embedding_model.encode_text(query)
         return self._repository.search_similar(embedding, effective_limit, filters)
 
+    def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
+        """How many searchable images a date range left out for having no date.
+
+        RFC-028 section 4.1 requires the UI to be able to say it: an empty
+        result for "2018" must be distinguishable from "the 2018 photo is
+        indexed but has no EXIF", or the product repeats the silent wrong
+        answer RFC-028 section 2.1 exists to remove.
+
+        `None` -- not 0 -- when there is no date range, and in that case the
+        repository is not asked at all. The two answers mean different
+        things to a client: 0 says "the date filter hid nothing", `None`
+        says "there was no date filter to hide anything", and an unfiltered
+        search must not pay for a second query to learn a number nobody
+        requested (RFC-028 section 8).
+
+        A separate call rather than a second return value of `execute()`:
+        the count is a second query with its own cost, over a different
+        universe than the ranking -- the whole table under the filters, not
+        the neighbourhood an approximate index explored -- and the page
+        `execute()` returns stays exactly what it was.
+        """
+        if filters is None or filters.captured_between is None:
+            return None
+        return self._repository.count_unknown_capture_date(filters)
+
     @staticmethod
     def _validate_limit(limit: int) -> None:
         """Reject an unusable page size, at construction and at call time.

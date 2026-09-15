@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 
 from app.domain.exceptions import DeviceNotConnectedError
+from app.domain.value_objects.capture_date import CaptureDate, validate_capture_fields
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -59,6 +62,54 @@ class Image:
     and must fail loudly when it is `None` rather than reconstruct a path
     of its own from the relative one.
     """
+
+    captured_at: datetime.datetime | None = None
+    """When the photograph was taken, as the camera's clock read it.
+
+    Naive, always: EXIF records local wall-clock time with no zone, and
+    this field keeps it that way from extraction to the HTTP response
+    (RFC-028 section 5). `None` means unknown -- the file was never
+    examined, or was examined and had no date -- and an image with an
+    unknown date never matches a date-range filter (RFC-028 section 4.1).
+
+    Here on the entity, unlike `file_size`, `file_modified_at` and
+    `content_hash`, and the difference is what each one is *for*. Those
+    three are change signals: only the incremental skip decision reads
+    them, so they travel in `IndexMetadata` and `IndexingRecord`. A capture
+    date is a searchable attribute of the photograph. It has to reach the
+    search response through `SearchHit`, and it has to be visible to the
+    filter predicate the in-memory repositories evaluate against an
+    `Image`. Keeping it out of the entity would force those doubles to
+    carry a side dictionary just to filter -- a second representation of
+    the same fact, which is the divergence the shared contract test
+    exists to prevent.
+
+    The same argument `SearchHit` makes for keeping `similarity` *off*
+    this entity cuts the other way here: a similarity means nothing
+    without its query, while a capture date is the same for every caller.
+
+    Not part of equality, which stays by `id`, like every other field.
+    """
+
+    capture_source: CaptureSource | None = None
+    """Where `captured_at` came from; `None` if the file was never examined.
+
+    `None` and `CaptureSource.UNKNOWN` are different answers, and the scan
+    depends on the difference: `None` rows get their date written on the
+    next scan that sees them, `UNKNOWN` rows are left alone because
+    re-reading a file that had no date yields no date (RFC-028 section
+    4.2).
+    """
+
+    def __post_init__(self) -> None:
+        validate_capture_fields(self.captured_at, self.capture_source)
+
+    @property
+    def capture_date(self) -> CaptureDate | None:
+        """The examined capture date as one value, or `None` if never examined."""
+        if self.capture_source is None:
+            return None
+        return CaptureDate(captured_at=self.captured_at, source=self.capture_source)
 
     @property
     def display_path(self) -> ImagePath:

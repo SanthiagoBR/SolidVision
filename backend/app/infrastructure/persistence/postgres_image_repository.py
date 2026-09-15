@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
-from typing import Any
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
-from sqlalchemy import Select, select, update
+from sqlalchemy import (
+    ColumnElement,
+    Select,
+    Table,
+    bindparam,
+    func,
+    select,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,6 +24,8 @@ from app.domain.exceptions import (
     ImageAlreadyExistsError,
 )
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -166,6 +176,8 @@ class PostgresImageRepository(ImageRepository):
             model.relative_path = str(record.image.relative_path)
             model.filename = record.image.filename
             model.extension = record.image.extension
+            model.captured_at = record.image.captured_at
+            model.capture_source = _source_value(record.image.capture_source)
 
         model.embedding = list(record.embedding.values)
         model.file_size = record.file_size
@@ -227,6 +239,13 @@ class PostgresImageRepository(ImageRepository):
         `experiments/rfc-027-devices/planner_check.py` measures the three
         regimes with `EXPLAIN ANALYZE`.
 
+        **A capture-date range is the harder filter of the two** (RFC-028
+        section 8.1). Its selectivity is set by whatever interval the user
+        asks for rather than known in advance, and there is no finite set
+        of ranges to build one partial index per, so the mitigation that
+        suits devices does not exist for dates.
+        `experiments/rfc-028-capture-date/planner_check.py` measures it.
+
         **The result is best-effort once the planner uses the index.**
         HNSW is an approximate index: a scan explores at most
         `hnsw.ef_search` (40 by default) candidates, and any of those that
@@ -251,6 +270,8 @@ class PostgresImageRepository(ImageRepository):
                 ImageModel.relative_path,
                 ImageModel.filename,
                 ImageModel.extension,
+                ImageModel.captured_at,
+                ImageModel.capture_source,
                 distance,
             )
             .where(ImageModel.embedding.is_not(None))
@@ -267,6 +288,8 @@ class PostgresImageRepository(ImageRepository):
                     relative_path=ImagePath(row.relative_path),
                     filename=row.filename,
                     extension=row.extension,
+                    captured_at=row.captured_at,
+                    capture_source=_source_member(row.capture_source),
                 ),
                 similarity=1.0 - row.distance,
             )
@@ -287,16 +310,54 @@ class PostgresImageRepository(ImageRepository):
         avoid: an empty `IN ()` matches no rows, so a defaulted argument
         would silently return nothing.
 
-        RFC-028 adds its date range here, beside this clause and not
-        instead of it.
+        Each field adds its own clause, or none, independently of the
+        other. The same reasoning applies to the date range: an absent one
+        is not `[datetime.min, datetime.max)`, which would exclude every
+        image with a NULL `captured_at` and change the unfiltered query.
+
+        The range is `captured_at >= start AND captured_at < end`, and the
+        NULL rule of RFC-020 needs no clause of its own here: a comparison
+        with NULL is NULL, which `WHERE` treats as false, so an image with
+        an unknown date never matches. The in-memory implementations have
+        no such free lunch and must say `is not None` explicitly.
         """
         if filters is None or filters.is_empty():
             return statement
-        return statement.where(
-            ImageModel.device_id.in_(
-                [device_id.value for device_id in filters.device_ids]
+        if filters.device_ids:
+            statement = statement.where(_device_clause(filters))
+        if filters.captured_between is not None:
+            statement = statement.where(
+                ImageModel.captured_at >= filters.captured_between.start,
+                ImageModel.captured_at < filters.captured_between.end,
+            )
+        return statement
+
+    def count_unknown_capture_date(self, filters: SearchFilters) -> int:
+        """Count, in one `COUNT(*)`, what a date range hid for having no date.
+
+        Mirrors `search_similar()`'s `WHERE` minus the ranking and minus
+        the date clause itself -- `embedding IS NOT NULL`, the device set
+        if any, and `captured_at IS NULL` -- so "the photos the filter
+        hid" and "the photos the search could have shown" are drawn from
+        the same definition of searchable.
+
+        No query at all without a date range, so an unfiltered search
+        never pays for a second round trip (RFC-028 section 8).
+        """
+        if filters.captured_between is None:
+            return 0
+
+        statement = (
+            select(func.count())
+            .select_from(ImageModel)
+            .where(
+                ImageModel.embedding.is_not(None),
+                ImageModel.captured_at.is_(None),
             )
         )
+        if filters.device_ids:
+            statement = statement.where(_device_clause(filters))
+        return int(self._session.execute(statement).scalar_one())
 
     @staticmethod
     def _require_indexed_dimension(embedding: EmbeddingVector) -> None:
@@ -323,6 +384,7 @@ class PostgresImageRepository(ImageRepository):
             file_size=model.file_size,
             file_modified_at=model.file_modified_at,
             content_hash=model.content_hash,
+            capture_source=_source_member(model.capture_source),
         )
 
     def get_index_metadata_many(
@@ -330,12 +392,16 @@ class PostgresImageRepository(ImageRepository):
     ) -> dict[ImageId, IndexMetadata]:
         """Read the metadata for many ids in one round trip.
 
-        Selects the four metadata columns by name rather than loading whole
+        Selects the metadata columns by name rather than loading whole
         `ImageModel` rows. That is not premature tidiness: `embedding` is a
         512-float vector, so hydrating full rows would drag roughly two
         kilobytes per image across the wire to answer a question decided by
         two scalars -- on the very path that exists to make re-scanning a
         large unchanged collection cheap.
+
+        `capture_source` is one of them since RFC-028, for the conditional
+        capture-date write, and costs one short string per row in a query
+        that was running anyway.
         """
         if not image_ids:
             return {}
@@ -345,6 +411,7 @@ class PostgresImageRepository(ImageRepository):
             ImageModel.file_size,
             ImageModel.file_modified_at,
             ImageModel.content_hash,
+            ImageModel.capture_source,
         ).where(ImageModel.id.in_([image_id.value for image_id in image_ids]))
 
         return {
@@ -352,6 +419,7 @@ class PostgresImageRepository(ImageRepository):
                 file_size=row.file_size,
                 file_modified_at=row.file_modified_at,
                 content_hash=row.content_hash,
+                capture_source=_source_member(row.capture_source),
             )
             for row in self._session.execute(statement)
         }
@@ -375,3 +443,71 @@ class PostgresImageRepository(ImageRepository):
         )
         self._session.execute(statement)
         self._session.commit()
+
+    def update_capture_date(self, image_id: ImageId, capture: CaptureDate) -> None:
+        """Write one row's capture date with a targeted UPDATE.
+
+        Like `update_index_metadata()`, and for the same reason: loading
+        the row first would fetch the embedding this path exists to leave
+        alone. An id with no row matches nothing and changes nothing.
+        """
+        self.update_capture_date_many({image_id: capture})
+
+    def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
+        """Write many capture dates as one executemany UPDATE and one commit.
+
+        A Core `UPDATE ... WHERE id = :target_id` executed with a list of
+        parameter sets, rather than the ORM's bulk update by primary key.
+        The ORM form checks that every key matched a row, and the port's
+        contract is the opposite: an id with no row is skipped silently,
+        the same as the single-row method.
+
+        Rolled back on failure before the error propagates, so the caller
+        can fall back to per-row writes on a clean session.
+        """
+        if not captures:
+            return
+
+        table = cast(Table, ImageModel.__table__)
+        statement = (
+            update(table)
+            .where(table.c.id == bindparam("target_id"))
+            .values(
+                captured_at=bindparam("new_captured_at"),
+                capture_source=bindparam("new_capture_source"),
+            )
+        )
+        parameters = [
+            {
+                "target_id": image_id.value,
+                "new_captured_at": capture.captured_at,
+                "new_capture_source": capture.source.value,
+            }
+            for image_id, capture in captures.items()
+        ]
+        try:
+            self._session.execute(statement, parameters)
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+
+def _device_clause(filters: SearchFilters) -> ColumnElement[bool]:
+    """The device-set predicate, shared by search and by the unknown-date count."""
+    return ImageModel.device_id.in_(
+        [device_id.value for device_id in filters.device_ids]
+    )
+
+
+def _source_value(source: CaptureSource | None) -> str | None:
+    return source.value if source is not None else None
+
+
+def _source_member(value: str | None) -> CaptureSource | None:
+    """Read a stored `capture_source` back, keeping NULL as `None`.
+
+    Never maps NULL to `CaptureSource.UNKNOWN`: NULL is "never examined",
+    and the scan writes only rows in that state (RFC-028 section 4.2).
+    """
+    return CaptureSource(value) if value is not None else None

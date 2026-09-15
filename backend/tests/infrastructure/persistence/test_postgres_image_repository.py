@@ -12,20 +12,28 @@ import datetime
 import uuid
 
 import pytest
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
 from app.domain.exceptions import ImageAlreadyExistsError
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.search_filters import SearchFilters
 from app.infrastructure.database.models.image_model import ImageModel
+from app.infrastructure.persistence.engine import EngineInstance
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
 )
+
+POSTGRES_DIALECT = EngineInstance.dialect
+"""The dialect the application actually runs, for compiling SQL without a query."""
 
 
 def _build_image(path: str | None = None) -> Image:
@@ -698,3 +706,81 @@ def test_a_rejected_row_does_not_poison_the_next_save(db_session: Session) -> No
     repository.save_indexed(_build_record(survivor))
 
     assert repository.exists(survivor.id)
+
+
+class TestTheEmittedFilterSql:
+    """RFC-028 section 8: without a date range, the query does not change.
+
+    Asserted on the compiled SQL rather than on results, because the
+    failure being guarded against returns correct-looking results. An
+    absent range rendered as `captured_at >= '0001-01-01' AND captured_at <
+    '9999-12-31'` excludes every row with an unknown date -- a silent
+    change to what an ordinary search returns -- and adds a clause the
+    planner has to cost on every query.
+    """
+
+    @staticmethod
+    def compiled(filters: SearchFilters | None) -> str:
+        base = select(ImageModel.id).where(ImageModel.embedding.is_not(None))
+        statement = PostgresImageRepository._apply_filters(base, filters)
+        return str(statement.compile(dialect=POSTGRES_DIALECT))
+
+    def test_no_filter_and_an_empty_filter_emit_the_unfiltered_query(self) -> None:
+        unfiltered = str(
+            select(ImageModel.id)
+            .where(ImageModel.embedding.is_not(None))
+            .compile(dialect=POSTGRES_DIALECT)
+        )
+
+        assert self.compiled(None) == unfiltered
+        assert self.compiled(SearchFilters()) == unfiltered
+
+    def test_a_device_filter_emits_no_date_clause(self) -> None:
+        sql = self.compiled(SearchFilters(device_ids=frozenset({TEST_DEVICE_ID})))
+
+        assert "device_id IN" in sql
+        assert "captured_at" not in sql
+
+    def test_a_date_filter_emits_a_half_open_range_and_no_device_clause(
+        self,
+    ) -> None:
+        sql = self.compiled(
+            SearchFilters(
+                captured_between=DateRange(
+                    datetime.datetime(2018, 1, 1), datetime.datetime(2019, 1, 1)
+                )
+            )
+        )
+
+        assert "images.captured_at >= " in sql
+        assert "images.captured_at < " in sql
+        assert "captured_at <=" not in sql
+        assert "device_id" not in sql
+        assert "IS NULL" not in sql
+
+
+def test_update_capture_date_many_writes_in_one_statement(
+    db_session: Session,
+) -> None:
+    """One executemany round of UPDATEs, not a SELECT-then-write per row."""
+    repository = PostgresImageRepository(db_session)
+    images = [_build_image() for _ in range(3)]
+    for image in images:
+        repository.save(image)
+    statements: list[str] = []
+
+    def record(conn: object, cursor: object, statement: str, *args: object) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        repository.update_capture_date_many(
+            {image.id: CaptureDate.unknown() for image in images}
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    updates = [sql for sql in statements if sql.lstrip().upper().startswith("UPDATE")]
+    assert len(updates) == 1
+    assert not any(sql.lstrip().upper().startswith("SELECT") for sql in statements)

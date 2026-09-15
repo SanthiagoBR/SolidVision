@@ -19,6 +19,8 @@ unrelated seed lands somewhere between.
 
 from __future__ import annotations
 
+import dataclasses
+import datetime
 import uuid
 from collections.abc import Iterator
 
@@ -29,6 +31,8 @@ from sqlalchemy.pool import QueuePool
 from tests.conftest import TEST_DEVICE_ID
 
 from app.domain.entities.image import Image
+from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -232,3 +236,51 @@ def test_every_request_returns_its_connection_to_the_pool(
             assert checked_out_connections() == baseline
     finally:
         app.dependency_overrides.clear()
+
+
+def test_a_date_range_filters_real_rows_and_reports_the_undated(
+    client: TestClient, empty_db_session: Session, model: FakeEmbeddingModel
+) -> None:
+    """RFC-028 end to end: query string -> DateRange -> SQL -> naive JSON.
+
+    Three rows share the query's vector, so only the date decides: one
+    inside 2018, one outside, one with no date. The undated one must be
+    left out of the results *and* counted in `excluded_unknown_date`.
+    """
+    repository = PostgresImageRepository(empty_db_session)
+    vector = model.encode_text(QUERY)
+    for filename, capture in (
+        (
+            "in_2018",
+            CaptureDate(
+                datetime.datetime(2018, 12, 31, 23, 30), CaptureSource.EXIF_ORIGINAL
+            ),
+        ),
+        (
+            "in_2020",
+            CaptureDate(datetime.datetime(2020, 1, 1), CaptureSource.EXIF_ORIGINAL),
+        ),
+        ("undated", CaptureDate.unknown()),
+    ):
+        image = dataclasses.replace(
+            make_image(filename),
+            captured_at=capture.captured_at,
+            capture_source=capture.source,
+        )
+        repository.save_indexed(
+            IndexingRecord(
+                image=image, embedding=vector, file_size=1, file_modified_at=None
+            )
+        )
+
+    response = client.get(
+        SEARCH_URL,
+        params={"q": QUERY, "captured_from": "2018-01-01", "captured_to": "2019-01-01"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [result["filename"] for result in body["results"]] == ["in_2018"]
+    assert body["results"][0]["captured_at"] == "2018-12-31T23:30:00"
+    assert body["results"][0]["capture_source"] == "exif_original"
+    assert body["excluded_unknown_date"] == 1

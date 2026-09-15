@@ -31,6 +31,12 @@ class IndexCandidate:
     Carries the filesystem facts the skip decision compares against, and
     nothing about how the file was found -- the Infrastructure type that
     produced it (`DiscoveredImageFile`) stays in Infrastructure.
+
+    The capture date the scan read (RFC-028) travels on `image`, where it
+    is a field of the entity, rather than as two more fields here beside
+    `file_size` and `file_modified_at`. That placement is also a guard:
+    the fields of this class are the change signals `plan_indexing()`
+    compares, and a capture date is not one (RFC-028 section 6.1).
     """
 
     image: Image
@@ -88,6 +94,14 @@ def plan_indexing(
     the *next* run -- a row persisted without a hash reads back as `None`,
     which means unknown, so skipping the hash here would leave the whole
     mechanism permanently dormant for every file the system ever indexes.
+
+    **The capture date is not consulted, and must never be** (RFC-028
+    section 6.1). `existing.capture_source` is in the prefetched metadata
+    for the conditional date write, not for this decision: a new EXIF date
+    on identical pixels is a metadata change, and answering it with a
+    re-embed would spend the most expensive operation in the system on
+    it. `tests/application/test_indexing_plan.py` fails if a comparison is
+    added.
 
     A stored hash of `None` never matches a computed one, which is a plain
     consequence of `None != str` rather than a special case. Rows written

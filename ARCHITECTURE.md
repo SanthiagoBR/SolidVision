@@ -648,8 +648,10 @@ Represents a single indexed image.
 | width | Image width |
 | height | Image height |
 | file_size | Bytes |
-| last_modified | Filesystem timestamp |
+| last_modified | Filesystem timestamp (`TIMESTAMPTZ`, from `st_mtime`) |
 | content_hash | SHA256 hash |
+| captured_at | When the photo was taken, from EXIF (`TIMESTAMP` **without** time zone) |
+| capture_source | Where `captured_at` came from: `exif_original`, `exif_digitized`, `unknown`, or NULL |
 | thumbnail_path | Thumbnail location |
 
 An image's location is the pair `(device_id, relative_path)`; there is no
@@ -658,6 +660,25 @@ by joining a mount point resolved at the moment of use onto
 `relative_path`. Keeping both forms would invite one of them to go stale,
 and the absolute one is precisely the one that cannot be kept correct
 (RFC-027).
+
+`captured_at` and `last_modified` are both timestamps and deliberately have
+different types (RFC-028). `last_modified` is an absolute instant, so it is
+stored with a zone. `captured_at` is EXIF `DateTimeOriginal` (falling back to
+`DateTimeDigitized`): the camera's local wall-clock time, which records no
+zone, so it is stored without one — inventing a zone would move New Year's
+Eve photos into the next year. The filesystem timestamp is **never** used as
+a capture date: copying between disks, the normal life of a photo archive,
+rewrites it.
+
+`capture_source` distinguishes a row that was never examined (NULL) from one
+examined and found to have no date (`unknown`). A scan writes the capture
+date only for NULL rows, so re-scanning an unchanged collection costs no
+writes; `python -m app.infrastructure.workers.capture_date_backfill --root
+PATH` dates an indexed disk without loading the embedding model, and
+`--force` re-reads `unknown` rows after the extraction improves, never
+replacing a source with a weaker one. An image with an unknown capture date
+never matches a date-range filter; the search response reports how many were
+excluded that way.
 
 ### Thumbnail Serving
 
@@ -808,6 +829,8 @@ Otherwise:
 Generate new embedding.
 
 This ordering keeps incremental indexing inexpensive for the common case (most files unchanged) and reserves hashing for files that are actually candidates for reprocessing. This dramatically reduces indexing time for large collections.
+
+The EXIF capture date (RFC-028) is read during the same scan, but it is **not** a step in this ladder and never triggers re-embedding: a different capture date on identical pixels is a metadata change. For files the ladder skips (unchanged, or mtime changed with identical content), the capture date is written only if the row has never been examined (`capture_source` NULL), in one bulk write per metadata-prefetch window. Files that are re-embedded have their capture date written with the rest of the row. The scan-time extraction can be switched off with `EXTRACT_CAPTURE_DATE=false`; rows then stay unexamined rather than being marked as having no date.
 
 ---
 

@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.entities.image import Image
+from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
@@ -82,6 +83,50 @@ class ImageModel(Base):
         String(SHA256_HEX_LENGTH), nullable=True
     )
 
+    captured_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
+    """When the photograph was taken, as the camera clock read it (RFC-028).
+
+    **`timezone=False`, two columns below a `file_modified_at` that is
+    `timezone=True` -- and the difference is the design, not an
+    inconsistency to tidy up.** `file_modified_at` comes from `st_mtime`,
+    an absolute instant, so it belongs in `TIMESTAMPTZ`. This column comes
+    from EXIF `DateTimeOriginal`, which is a local wall-clock reading with
+    no zone. Putting it in `TIMESTAMPTZ` would force a zone to be invented
+    -- UTC, or the zone of whichever machine ran the scan -- and either
+    one moves a photo taken at 22:00 on 31 December into the following
+    year for anyone reading it elsewhere (RFC-028 section 5). "Photos from
+    2018" is asked in camera-local time and is answered here with no
+    conversion at all.
+
+    The accepted cost: shots from two different zones do not order
+    strictly against each other.
+    """
+
+    capture_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    """Where `captured_at` came from -- a `CaptureSource` value, or NULL.
+
+    Three states, and the first two must never be merged:
+
+    - NULL: the row was **never examined** -- it is older than RFC-028,
+      or its disk was scanned with extraction off;
+    - `'unknown'`: examined, and the file carries no usable date, so
+      `captured_at` is NULL;
+    - `'exif_original'` / `'exif_digitized'`: the EXIF tag the date was
+      read from.
+
+    The NULL / `'unknown'` split is what keeps re-scanning cheap. A scan
+    writes a capture date only for rows that are still NULL, so after the
+    first pass an unchanged collection costs no writes at all. If
+    "examined, no date" were stored as NULL too, every scan would reread
+    and rewrite every dateless file forever -- and dateless files are the
+    most numerous kind in exactly the collections RFC-028 worries about.
+
+    A plain `String`, not a PostgreSQL `ENUM`, so that adding a source
+    does not need a migration.
+    """
+
     __table_args__ = (
         UniqueConstraint(
             "device_id", "relative_path", name="uq_images_device_relative_path"
@@ -103,6 +148,10 @@ class ImageModel(Base):
         The Domain `Image` entity has no embedding or filesystem metadata
         fields, so those persistence-only columns are left unset here; they
         are populated separately by the indexing pipeline once it exists.
+
+        The capture date *is* copied, because since RFC-028 it is a field of
+        the entity: an attribute of the photograph rather than a change
+        signal for the pipeline.
         """
         return cls(
             id=image.id.value,
@@ -114,6 +163,10 @@ class ImageModel(Base):
             file_size=None,
             file_modified_at=None,
             content_hash=None,
+            captured_at=image.captured_at,
+            capture_source=(
+                image.capture_source.value if image.capture_source else None
+            ),
         )
 
     def to_domain(self) -> Image:
@@ -132,4 +185,8 @@ class ImageModel(Base):
             relative_path=ImagePath(self.relative_path),
             filename=self.filename,
             extension=self.extension,
+            captured_at=self.captured_at,
+            capture_source=(
+                CaptureSource(self.capture_source) if self.capture_source else None
+            ),
         )
