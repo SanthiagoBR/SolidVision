@@ -16,9 +16,10 @@ takes no further resource routes (RFC-026 section 6.1).
 
 from fastapi import APIRouter
 
-from .routers import images_router
+from .routers import images_router, jobs_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(images_router)
+api_v1_router.include_router(jobs_router)
 
 __all__ = ["api_v1_router"]

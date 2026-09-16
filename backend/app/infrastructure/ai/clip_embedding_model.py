@@ -164,6 +164,17 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         """
         return TEXT_PROMPT_TEMPLATE.format(query=self._translator.to_english(text))
 
+    def warm_up(self) -> None:
+        """Load the CLIP checkpoint now, without touching the translator.
+
+        `encode_text()` would also load it, and would drag the translation
+        model in behind it (`build_prompt` detects the language first) --
+        600 MB the job executor is never going to use, because a worker
+        encodes images and never queries. So this loads the one tower it
+        needs.
+        """
+        self._ensure_loaded()
+
     def _ensure_loaded(self) -> tuple[CLIPModel, ProcessorMixin]:
         """Load the checkpoint on first use and reuse it on every later call."""
         if self._model is None or self._processor is None:

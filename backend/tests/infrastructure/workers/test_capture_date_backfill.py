@@ -124,14 +124,20 @@ class TestTheModelIsNeverLoaded:
             assert forbidden not in loaded, f"{MODULE}'s imports loaded {forbidden}"
 
     def test_the_guard_can_fail(self) -> None:
-        """Guards the guard: the indexing worker's own imports *do* load the model.
+        """Guards the guard: the job executor's imports *do* load the model.
 
         If this ever stops being true, the two checks above prove nothing,
         because the subprocess would not be seeing model imports at all.
-        """
-        worker = Path(capture_date_backfill.__file__).with_name("indexing_worker.py")
 
-        loaded = _loaded_after_importing(_every_import_in(worker))
+        It points at `job_runner.py` rather than at `indexing_worker.py`,
+        which is where the model import moved when RFC-029 turned the CLI
+        into a client of the job machinery: the executor is now the thing
+        that composes the pipeline, and therefore the thing that reaches
+        for `get_embedding_model`.
+        """
+        runner = Path(capture_date_backfill.__file__).with_name("job_runner.py")
+
+        loaded = _loaded_after_importing(_every_import_in(runner))
 
         assert "app.presentation.dependencies" in loaded
         assert "torch" in loaded

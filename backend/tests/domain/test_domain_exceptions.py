@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import app.domain.exceptions as domain_exceptions
 from app.domain.exceptions import (
+    ConflictError,
+    DeviceBusyError,
     DeviceNotConnectedError,
     DeviceNotFoundError,
     DomainError,
     EmbeddingDimensionMismatchError,
     EmptySearchQueryError,
+    IllegalJobTransitionError,
     ImageAlreadyExistsError,
     ImageNotFoundError,
     InvalidCaptureDateError,
@@ -14,8 +17,12 @@ from app.domain.exceptions import (
     InvalidDeviceIdentifierError,
     InvalidImageIdentifierError,
     InvalidImagePathError,
+    InvalidJobIdentifierError,
+    InvalidJobScopeError,
     InvalidSearchLimitError,
     InvalidVolumeIdentityError,
+    JobNotFoundError,
+    NotFoundError,
     UnsupportedImageExtensionError,
 )
 
@@ -35,6 +42,11 @@ def test_all_domain_exceptions_inherit_from_domain_error() -> None:
     assert issubclass(InvalidVolumeIdentityError, DomainError)
     assert issubclass(InvalidCaptureDateError, DomainError)
     assert issubclass(InvalidDateRangeError, DomainError)
+    assert issubclass(JobNotFoundError, DomainError)
+    assert issubclass(DeviceBusyError, DomainError)
+    assert issubclass(IllegalJobTransitionError, DomainError)
+    assert issubclass(InvalidJobScopeError, DomainError)
+    assert issubclass(InvalidJobIdentifierError, DomainError)
 
 
 def test_domain_error_inherits_from_exception() -> None:
@@ -61,6 +73,10 @@ def test_default_messages_are_assigned() -> None:
     assert str(InvalidVolumeIdentityError()) == "Invalid volume identity."
     assert str(InvalidCaptureDateError()) == "Invalid capture date."
     assert str(InvalidDateRangeError()) == "Invalid date range."
+    assert str(JobNotFoundError()) == "Indexing job not found."
+    assert str(DeviceBusyError()) == "Device already has an active job."
+    assert str(IllegalJobTransitionError()) == "Illegal indexing job transition."
+    assert str(InvalidJobScopeError()) == "Invalid indexing job scope."
 
 
 def test_custom_messages_override_defaults() -> None:
@@ -70,11 +86,14 @@ def test_custom_messages_override_defaults() -> None:
 
 def test_all_exceptions_are_exported_via_package_init() -> None:
     expected = {
+        "ConflictError",
+        "DeviceBusyError",
         "DeviceNotConnectedError",
         "DeviceNotFoundError",
         "DomainError",
         "EmbeddingDimensionMismatchError",
         "EmptySearchQueryError",
+        "IllegalJobTransitionError",
         "ImageAlreadyExistsError",
         "ImageNotFoundError",
         "InvalidCaptureDateError",
@@ -83,8 +102,45 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "InvalidEmbeddingVectorError",
         "InvalidImageIdentifierError",
         "InvalidImagePathError",
+        "InvalidJobIdentifierError",
+        "InvalidJobScopeError",
         "InvalidSearchLimitError",
         "InvalidVolumeIdentityError",
+        "JobNotFoundError",
+        "NotFoundError",
         "UnsupportedImageExtensionError",
     }
     assert set(domain_exceptions.__all__) == expected
+
+
+def test_the_two_status_bearing_bases_sit_between_domain_error_and_the_leaves() -> None:
+    """RFC-029 gave `DomainError` two intermediate bases (section 7.1).
+
+    They exist so that Presentation can answer 404 and 409 without a table
+    of exception classes, and the hierarchy is what carries that -- a new
+    "not found" error gets its status by inheriting, not by anyone
+    remembering to register it.
+    """
+    assert issubclass(NotFoundError, DomainError)
+    assert issubclass(ConflictError, DomainError)
+    assert not issubclass(NotFoundError, ConflictError)
+    assert not issubclass(ConflictError, NotFoundError)
+
+    assert issubclass(JobNotFoundError, NotFoundError)
+    assert issubclass(DeviceNotFoundError, NotFoundError)
+    assert issubclass(DeviceBusyError, ConflictError)
+    assert issubclass(IllegalJobTransitionError, ConflictError)
+    assert issubclass(DeviceNotConnectedError, ConflictError)
+
+
+def test_a_malformed_request_stays_a_plain_domain_error() -> None:
+    """The 400 cases, stated as what they are *not*.
+
+    An invalid scope would not start working if the disk were plugged in
+    or the queue emptied, which is exactly what separates it from the
+    conflict cases above.
+    """
+    for error in (InvalidJobScopeError, InvalidJobIdentifierError):
+        assert issubclass(error, DomainError)
+        assert not issubclass(error, NotFoundError)
+        assert not issubclass(error, ConflictError)

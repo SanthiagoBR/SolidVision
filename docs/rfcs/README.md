@@ -2,7 +2,7 @@
 
 Registro de decisões de implementação do projeto, um documento por unidade de trabalho entregue. Cada RFC responde às mesmas perguntas: **qual era o problema, o que foi decidido, por que essa alternativa e não as outras, e como sabemos que funciona.**
 
-Os RFCs 001–021 foram escritos retroativamente a partir do código e do histórico do git, e são compactos. Os RFCs 022–026 foram escritos junto com a implementação e carregam as medições completas que sustentam cada decisão. Os RFCs 027–030 são **propostas**: foram escritos antes da implementação, e todo número neles está marcado `TBM` até ser medido (a convenção de rascunho do [RFC-026](rfc-026-api-de-busca.md)). Nada marcado `TBM` deve ser citado como resultado.
+Os RFCs 001–021 foram escritos retroativamente a partir do código e do histórico do git, e são compactos. Os RFCs 022–026 foram escritos junto com a implementação e carregam as medições completas que sustentam cada decisão. Os RFCs 027–030 foram escritos **antes** da implementação, com todo número marcado `TBM` até ser medido (a convenção de rascunho do [RFC-026](rfc-026-api-de-busca.md)). Os RFCs 027, 028 e 029 já foram implementados e reescritos: neles não resta nenhum `TBM`, e cada número vem com a escala e as condições em que foi medido. O RFC-030 continua proposta, e nada marcado `TBM` nele deve ser citado como resultado.
 
 Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura de referência), [ADRs](../adr/) (decisões arquiteturais), [AI_Context.md](../../AI_Context.md) (convenções operacionais).
 
@@ -57,13 +57,13 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 | 025 | [Busca Semântica](rfc-025-busca-semantica.md) | `search_similar()` sobre pgvector; Recall@5 84,0% medido | ✅ |
 | 026 | [API de Busca](rfc-026-api-de-busca.md) | `GET /api/v1/images/search`; correção do vazamento de sessão | ✅ |
 
-## Sprint 5 — Acervo Real *(proposto)*
+## Sprint 5 — Acervo Real *(em andamento)*
 
 | # | RFC | Entrega | Status |
 |---|---|---|---|
-| 027 | [Dispositivos e Identidade de Volume](rfc-027-dispositivos-e-identidade-de-volume.md) | `Device`, GUID de volume, `(device_id, relative_path)`, filtro por dispositivo | 📋 |
+| 027 | [Dispositivos e Identidade de Volume](rfc-027-dispositivos-e-identidade-de-volume.md) | `Device`, GUID de volume, `(device_id, relative_path)`, filtro por dispositivo | ✅ |
 | 028 | [Data de Captura e Filtro Temporal](rfc-028-data-de-captura-e-filtro-temporal.md) | `captured_at` via EXIF, `capture_source`, filtro por intervalo | ✅ |
-| 029 | [Jobs de Indexação e Indexação Seletiva](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md) | `indexing_jobs`, `POST /jobs`, worker sondando, cancelamento | 📋 |
+| 029 | [Jobs de Indexação e Indexação Seletiva](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md) | `indexing_jobs`, `POST /jobs`, executor sondando, cancelamento cooperativo | ✅ |
 | 030 | [Acesso ao Arquivo](rfc-030-acesso-ao-arquivo.md) | Caminho na resposta, thumbnails, `POST /images/{id}/reveal` | 📋 |
 
 > **De onde veio esta sprint.** Um mockup de interface no Figma desenhou uma barra lateral de HDs, um filtro de datas e uma tela de pastas indexadas — e a pergunta era se aquilo fazia sentido para o projeto. Fazia: três das quatro peças já estavam desenhadas no [ARCHITECTURE.md](../../ARCHITECTURE.md) §15 e nunca construídas. A quarta encontrou um defeito no código entregue: [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md) mostra que a identidade de uma imagem é derivada do caminho absoluto, e que **a letra de unidade de um HD externo muda sozinha** — reindexando um disco inteiro em silêncio, a ~5 h de inferência por vez.

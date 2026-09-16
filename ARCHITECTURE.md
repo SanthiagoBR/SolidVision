@@ -724,22 +724,61 @@ It must never influence ranking.
 
 ### IndexingJobs
 
-Tracks indexing executions.
+Tracks indexing executions (RFC-029). One row is one request to index a
+device, or some folders on it: an *event*, not a description of the disk.
 
 | Field | Description |
 |--------|-------------|
-| id | Primary Key |
-| collection_id | FK |
-| started_at | Timestamp |
-| finished_at | Timestamp |
-| status | Running / Completed / Failed |
+| id | Primary Key, `uuid4` - a job is an event, not derivable content |
+| device_id | FK -> `devices.id` |
+| status | `pending` / `running` / `completed` / `failed` / `cancelled` |
+| created_at | When the job was queued |
+| started_at | When a worker first claimed it; preserved across a resume |
+| finished_at | When it reached a final state |
+| discovered_files | Files the scan has found - a running count, not a total |
+| discovery_complete | Whether the scan finished, making the count a total |
 | processed_images | Counter |
+| skipped_images | Counter - files the incremental check passed over |
 | failed_images | Counter |
-| last_processed_path | Absolute path of the last successfully processed image |
+| last_processed_relative_path | The checkpoint, relative to the device |
+| error_message | Why it failed; NULL otherwise |
+| last_heartbeat_at | The evidence that a worker is still alive |
+| cancel_requested | A stop has been asked for; the worker acts on it |
+| attempts | Times a worker was given this job and did not finish it |
 
-`last_processed_path` acts as a checkpoint. If the worker is interrupted, resuming a job means continuing the scan from this reference instead of restarting the entire collection, avoiding redundant reprocessing of already-indexed images.
+Folders live in a child table, `IndexingJobScopes` (`job_id`,
+`relative_path`), keyed on the pair. **Zero scope rows means the whole
+device.**
 
-This enables recovery after interruptions.
+Four fields differ from this document's original sketch, and each is a
+decision rather than a rename:
+
+- **`device_id`, not `collection_id`.** `Collection` is still a
+  placeholder (RFC-027); a device is what the system has.
+- **`last_processed_relative_path`, not `last_processed_path`.** RFC-027
+  removed absolute paths from this database because a drive letter is
+  assigned by mount order. An absolute checkpoint would be the same
+  instability again.
+- **`skipped_images` added.** Without it a job that skipped 39,000 of
+  40,000 files reports `processed=1000` against `discovered=40000` and
+  looks stuck. It is the only thing that makes a progress bar honest.
+- **`cancel_requested` and `attempts` added.** The first lets a route ask
+  for a stop without racing the worker for the `status` column; the second
+  bounds how many times an abandoned job may be requeued.
+
+**One active job per device, enforced by a partial unique index** on
+`device_id WHERE status IN ('pending', 'running')` - never by a `SELECT`
+before the `INSERT`, which two concurrent requests would both pass.
+
+**There is no foreign key to `images`, and none may be added.** A job
+refers to a device and to folders; its counters are aggregates and its
+checkpoint is a path. That keeps the image-identity rewrite of RFC-027
+cheap, and RFC-030 is what deliberately closes that window.
+
+`last_processed_relative_path` acts as a checkpoint: a job that is
+interrupted resumes the scan from this reference instead of restarting the
+whole scope. Two rules govern it, and both are correctness rather than
+tuning - see section 16.
 
 ---
 
@@ -831,6 +870,47 @@ Generate new embedding.
 This ordering keeps incremental indexing inexpensive for the common case (most files unchanged) and reserves hashing for files that are actually candidates for reprocessing. This dramatically reduces indexing time for large collections.
 
 The EXIF capture date (RFC-028) is read during the same scan, but it is **not** a step in this ladder and never triggers re-embedding: a different capture date on identical pixels is a metadata change. For files the ladder skips (unchanged, or mtime changed with identical content), the capture date is written only if the row has never been examined (`capture_source` NULL), in one bulk write per metadata-prefetch window. Files that are re-embedded have their capture date written with the rest of the row. The scan-time extraction can be switched off with `EXTRACT_CAPTURE_DATE=false`; rows then stay unexamined rather than being marked as having no date.
+
+## Resuming an Interrupted Job
+
+The checkpoint of section 15 only means something under the conditions
+below, and RFC-029 made all of them explicit because every one of them is
+silent when broken.
+
+**Discovery order has to be stable between runs.** "Continue after X" is a
+position in a sequence, so a second scan that visits the files in a
+different order skips arbitrary ones. `FilesystemImageProvider.discover()`
+sorts, and since RFC-029 that `sorted()` is a correctness requirement
+rather than a convenience for deterministic tests - removing it in the
+name of performance would pass every existing test and break resumption in
+a filesystem-dependent way.
+
+**And the order is path order, which is not string order.** On Windows,
+sorting paths compares part by part and case-insensitively:
+
+```
+sorted(Path)  ->  a/x.jpg, a/Z.jpg, a b/x.jpg, B/y.jpg
+sorted(str)   ->  B/y.jpg, a b/x.jpg, a/Z.jpg, a/x.jpg
+```
+
+PostgreSQL's collation gives a third answer. A resume written as
+`relative_path > :checkpoint`, in SQL or in Python, therefore skips and
+repeats files - and passes any test whose fixtures are lowercase and
+space-free. The comparison is made on reconstructed `Path` values, with
+the same key that ordered the scan.
+
+**The checkpoint may never run ahead of what is durable.** The batch
+buffer survives across prefetch windows, so a file decided `EMBED` in one
+window can still be unwritten while later files have already been skipped
+and accounted for. The checkpoint is therefore the greatest path `P` such
+that *every* file up to and including `P` has been written, skipped, or
+recorded as a failure - in practice, the file immediately before the
+oldest plan still buffered.
+
+Erring is asymmetric, and this errs the safe way: a checkpoint that lags
+costs a re-scan of a few files the incremental check then skips for
+nothing, while one that leads loses photographs.
+
 
 ---
 

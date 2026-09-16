@@ -14,14 +14,31 @@ from functools import lru_cache
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.cancel_indexing_job import CancelIndexingJobUseCase
+from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
+from app.application.use_cases.get_indexing_job import GetIndexingJobUseCase
 from app.application.use_cases.index_image import IndexImageUseCase
+from app.application.use_cases.list_indexing_jobs import ListIndexingJobsUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
+from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.repositories.indexing_job_repository import IndexingJobRepository
+from app.domain.services.device_locator import DeviceLocator
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 from app.infrastructure.config.settings import settings
+from app.infrastructure.filesystem.mounted_device_locator import MountedDeviceLocator
+from app.infrastructure.filesystem.volume_identity_provider import (
+    WindowsVolumeIdentityProvider,
+)
+from app.infrastructure.persistence.postgres_device_repository import (
+    PostgresDeviceRepository,
+)
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
+)
+from app.infrastructure.persistence.postgres_indexing_job_repository import (
+    PostgresIndexingJobRepository,
 )
 from app.infrastructure.persistence.session import get_db
 
@@ -128,9 +145,79 @@ def get_search_images_use_case(
     )
 
 
+def get_device_repository(
+    session: Session = Depends(get_db),
+) -> DeviceRepository:
+    """Return a device repository bound to the request's session."""
+    return PostgresDeviceRepository(session)
+
+
+def get_indexing_job_repository(
+    session: Session = Depends(get_db),
+) -> IndexingJobRepository:
+    """Return a job repository bound to the request's session (RFC-029)."""
+    return PostgresIndexingJobRepository(session)
+
+
+def get_device_locator() -> DeviceLocator:
+    """Return the locator that answers "is this disk plugged in, and where".
+
+    **Built per request, and it must not be cached.** The answer changes
+    when the user pulls a cable and nothing notifies this process
+    (RFC-027 section 7), so an `lru_cache` here -- of the kind
+    `get_embedding_model` legitimately uses -- would hand a job a drive
+    letter that now belongs to a different disk. The adapter is a thin
+    shell over an enumeration, so constructing one costs nothing.
+
+    This is also the reason the API runs as a host process rather than in
+    a container: `WindowsVolumeIdentityProvider` refuses to construct off
+    `win32`, and a container could not answer this question at all
+    (RFC-029 section 6).
+    """
+    return MountedDeviceLocator(WindowsVolumeIdentityProvider())
+
+
+def get_create_indexing_job_use_case(
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+    device_repository: DeviceRepository = Depends(get_device_repository),
+    device_locator: DeviceLocator = Depends(get_device_locator),
+) -> CreateIndexingJobUseCase:
+    """Return the use case that validates a request to index and queues it."""
+    return CreateIndexingJobUseCase(
+        job_repository=job_repository,
+        device_repository=device_repository,
+        device_locator=device_locator,
+    )
+
+
+def get_cancel_indexing_job_use_case(
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+) -> CancelIndexingJobUseCase:
+    return CancelIndexingJobUseCase(job_repository=job_repository)
+
+
+def get_indexing_job_use_case(
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+) -> GetIndexingJobUseCase:
+    return GetIndexingJobUseCase(job_repository=job_repository)
+
+
+def get_list_indexing_jobs_use_case(
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+) -> ListIndexingJobsUseCase:
+    return ListIndexingJobsUseCase(job_repository=job_repository)
+
+
 __all__ = [
+    "get_cancel_indexing_job_use_case",
+    "get_create_indexing_job_use_case",
+    "get_device_locator",
+    "get_device_repository",
     "get_embedding_model",
     "get_image_repository",
     "get_index_image_use_case",
+    "get_indexing_job_repository",
+    "get_indexing_job_use_case",
+    "get_list_indexing_jobs_use_case",
     "get_search_images_use_case",
 ]
