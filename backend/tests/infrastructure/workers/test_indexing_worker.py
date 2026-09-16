@@ -19,6 +19,7 @@ from tests.application.fakes import (
 from app.application.use_cases.index_or_update_images import IndexOrUpdateImagesUseCase
 from app.domain.entities.device import Device
 from app.domain.entities.image import Image
+from app.domain.entities.indexing_job import JobStatus
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.capture_source import CaptureSource
@@ -652,46 +653,39 @@ class TestCommandLineEntryPoint:
         assert root_action.default is None
         assert root_action.required is True
 
-    def test_main_composes_the_real_pipeline_against_the_given_root(
+    def test_main_creates_a_job_and_runs_it_here(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The entry point is a composition root, and this pins what it wires.
+        """The entry point after RFC-029, and what it now wires together.
 
-        The session and the embedding model are the two collaborators that
-        would otherwise open a real connection and load a real checkpoint,
-        so both are replaced; everything else is the production wiring.
+        The command no longer indexes directly: it registers the device,
+        creates a job scoped to `--root`, and runs that job in this very
+        process through the same `JobRunner.run_job()` the executor calls.
+        One indexing code path, and no second process required (RFC-029
+        section 12).
+
+        The session, the volume adapter, the repositories and the model
+        are replaced, because each would otherwise open a real connection,
+        touch a real disk, or load a real checkpoint. Everything between
+        them is production wiring.
         """
-        from app.infrastructure.filesystem.sha256_content_hasher import (
-            Sha256ContentHasher,
+        from app.infrastructure.persistence.in_memory_indexing_job_repository import (
+            InMemoryIndexingJobRepository,
         )
 
-        (tmp_path / "photo.png").write_bytes(b"data")
+        root = tmp_path / "fotos" / "2018"
+        root.mkdir(parents=True)
+        (root / "photo.png").write_bytes(b"data")
+
         repository = FakeImageRepository()
+        jobs = InMemoryIndexingJobRepository()
+        devices = FakeDeviceRepository()
         embedding_model = _RecordingEmbeddingModel()
         closed: list[bool] = []
 
         class _Session:
             def close(self) -> None:
                 closed.append(True)
-
-        constructed: list[IndexingWorker] = []
-        real_worker_init = IndexingWorker.__init__
-
-        def capturing_init(
-            self: IndexingWorker,
-            filesystem_provider: FilesystemImageProvider,
-            index_or_update_images_use_case: IndexOrUpdateImagesUseCase,
-            device: Device,
-            mount_point: Path,
-        ) -> None:
-            real_worker_init(
-                self,
-                filesystem_provider,
-                index_or_update_images_use_case,
-                device,
-                mount_point,
-            )
-            constructed.append(self)
 
         monkeypatch.setattr(
             "app.infrastructure.persistence.session.SessionLocal", lambda: _Session()
@@ -704,7 +698,12 @@ class TestCommandLineEntryPoint:
         monkeypatch.setattr(
             "app.infrastructure.persistence.postgres_device_repository."
             "PostgresDeviceRepository",
-            lambda session: FakeDeviceRepository(),
+            lambda session: devices,
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.postgres_indexing_job_repository."
+            "PostgresIndexingJobRepository",
+            lambda session: jobs,
         )
         monkeypatch.setattr(
             "app.presentation.dependencies.get_embedding_model",
@@ -715,23 +714,88 @@ class TestCommandLineEntryPoint:
             "PostgresImageRepository",
             lambda session: repository,
         )
-        monkeypatch.setattr(IndexingWorker, "__init__", capturing_init)
         monkeypatch.setattr(
             "sys.argv",
-            ["indexing_worker", "--root", str(tmp_path), "--label", "HD2"],
+            ["indexing_worker", "--root", str(root), "--label", "HD2"],
         )
 
         main()
 
-        (worker,) = constructed
-        use_case = worker._index_or_update_images_use_case
-        assert use_case._repository is repository
-        assert use_case._embedding_model is embedding_model
-        assert isinstance(use_case._content_hasher, Sha256ContentHasher)
+        (job,) = jobs.list()
+        assert job.status is JobStatus.COMPLETED
+        assert job.progress.processed_images == 1
         assert len(repository.save_indexed_calls) == 1
-        assert worker._device.label == "HD2"
-        assert worker._mount_point == tmp_path
-        assert closed == [True]
+        assert devices.save_calls[0].label == "HD2"
+        # Two sessions are opened and both are closed (RFC-029 section 4.11).
+        assert closed == [True, True]
+
+    def test_main_scopes_the_job_to_the_root_rather_than_the_whole_disk(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The correction RFC-029 section 12 needed.
+
+        The draft said the CLI becomes "a job with an empty scope, the
+        whole device". `--root D:/fotos/2018` has never indexed a whole
+        disk, and an empty scope would have turned a refactor into a
+        behaviour change measured in hours.
+        """
+        from app.infrastructure.persistence.in_memory_indexing_job_repository import (
+            InMemoryIndexingJobRepository,
+        )
+
+        root = tmp_path / "fotos" / "2018"
+        root.mkdir(parents=True)
+        (root / "photo.png").write_bytes(b"data")
+        (tmp_path / "outros").mkdir()
+        (tmp_path / "outros" / "other.png").write_bytes(b"data")
+
+        repository = FakeImageRepository()
+        jobs = InMemoryIndexingJobRepository()
+        # One instance, not one per call: the runner looks the device up
+        # again through this same repository, and a fresh double would
+        # have forgotten the device `register_device()` just saved.
+        devices = FakeDeviceRepository()
+
+        class _Session:
+            def close(self) -> None:
+                return None
+
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.session.SessionLocal", lambda: _Session()
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.filesystem.volume_identity_provider."
+            "WindowsVolumeIdentityProvider",
+            lambda: StubVolumeIdentityProvider(mount_point=tmp_path),
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.postgres_device_repository."
+            "PostgresDeviceRepository",
+            lambda session: devices,
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.postgres_indexing_job_repository."
+            "PostgresIndexingJobRepository",
+            lambda session: jobs,
+        )
+        monkeypatch.setattr(
+            "app.presentation.dependencies.get_embedding_model",
+            lambda: _RecordingEmbeddingModel(),
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.postgres_image_repository."
+            "PostgresImageRepository",
+            lambda session: repository,
+        )
+        monkeypatch.setattr("sys.argv", ["indexing_worker", "--root", str(root)])
+
+        main()
+
+        (job,) = jobs.list()
+        assert [str(scope) for scope in job.scopes] == ["fotos/2018"]
+        assert {
+            str(record.image.relative_path) for record in repository.save_indexed_calls
+        } == {"fotos/2018/photo.png"}
 
 
 class TestCaptureDateThroughTheWorker:

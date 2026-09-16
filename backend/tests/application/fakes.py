@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from app.domain.entities.device import Device
@@ -11,12 +11,14 @@ from app.domain.entities.image import Image
 from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
+from app.domain.services.device_locator import DeviceLocator
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.job_scope import JobScope
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
@@ -56,6 +58,15 @@ class FakeImageRepository(ImageRepository):
         self.search_similar_calls: list[
             tuple[EmbeddingVector, int, SearchFilters | None]
         ] = []
+        self.on_save_indexed_many: Callable[[], None] | None = None
+        """Run just before a bulk write lands, for tests that need the middle.
+
+        Some things can only be asserted about a run while it is running:
+        a disk unplugged halfway (RFC-029 section 15), an operator pressing
+        `Ctrl+C`. Both are events in the world rather than in the
+        repository, and this is the only place a test can reach into a
+        pipeline that is otherwise a single call.
+        """
 
     def seed_embedding(self, image: Image, embedding: EmbeddingVector) -> None:
         """Make `image` findable by search, without going through indexing.
@@ -136,6 +147,8 @@ class FakeImageRepository(ImageRepository):
         )
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
+        if self.on_save_indexed_many is not None:
+            self.on_save_indexed_many()
         self.save_indexed_many_calls.append(list(records))
         for record in records:
             self.save_indexed(record)
@@ -331,6 +344,48 @@ class StubVolumeIdentityProvider(VolumeIdentityProvider):
         if self.mount_point is None:
             return {}
         return {self.identity: self.mount_point}
+
+
+class FakeDeviceLocator(DeviceLocator):
+    """Answers "where is this disk" and "is this folder on it" from a real tmp dir.
+
+    Filesystem-backed rather than a dict of declared answers, so that a
+    test asking about a scope gets the same answer the Windows adapter
+    would: `tmp_path` stands in for a mount point, and a folder either
+    exists under it or does not.
+
+    `disconnect()` is what makes the RFC-029 section 15 case testable
+    without unplugging anything -- a disk that was present when the job
+    was created and gone by the time it finished. A locator that cached
+    would be unable to express it, which is exactly why the port forbids
+    caching.
+    """
+
+    def __init__(self, mounts: dict[DeviceId, Path] | None = None) -> None:
+        self._mounts = dict(mounts or {})
+        self.mount_point_calls: list[DeviceId] = []
+        self.resolve_scope_calls: list[tuple[DeviceId, str]] = []
+
+    def mount_point(self, device: Device) -> Path | None:
+        self.mount_point_calls.append(device.id)
+        return self._mounts.get(device.id)
+
+    def resolve_scope(self, device: Device, scope: JobScope) -> JobScope | None:
+        self.resolve_scope_calls.append((device.id, str(scope)))
+        mount = self._mounts.get(device.id)
+        if mount is None:
+            return None
+        target = mount / str(scope) if scope.parts else mount
+        if not target.is_dir():
+            return None
+        return scope
+
+    def connect(self, device_id: DeviceId, mount_point: Path) -> None:
+        self._mounts[device_id] = mount_point
+
+    def disconnect(self, device_id: DeviceId) -> None:
+        """Pull the cable, as far as anything asking this locator can tell."""
+        self._mounts.pop(device_id, None)
 
 
 def make_device(

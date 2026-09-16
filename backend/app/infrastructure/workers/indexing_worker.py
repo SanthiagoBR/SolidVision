@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import argparse
 import datetime
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from app.application.use_cases.index_or_update_images import (
@@ -26,8 +27,12 @@ from app.application.use_cases.index_or_update_images import (
 from app.application.use_cases.indexing_plan import IndexCandidate
 from app.domain.entities.device import Device
 from app.domain.entities.image import Image
+from app.domain.entities.indexing_job import IndexingJob
 from app.domain.repositories.device_repository import DeviceRepository
+from app.domain.repositories.indexing_job_repository import IndexingJobRepository
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.job_id import JobId
+from app.domain.value_objects.job_scope import JobScope
 from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
@@ -291,12 +296,60 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    """Compose the real pipeline and run it against an explicitly named root.
+def scope_for(root: Path, mount_point: Path) -> JobScope:
+    """Turn a scan root into the device-relative scope that means the same thing.
 
-    This function is the composition root -- the one place allowed to know
-    every concrete class at once. `IndexingWorker` itself stays injected
-    and knows none of them.
+    **The correction RFC-029 section 12 needed.** The draft said the CLI
+    becomes "a job with an empty scope, the whole device" -- but
+    `--root D:\fotos\2018` has never indexed a whole disk, it indexes one
+    folder. An empty scope would have turned a refactor into a behaviour
+    change measured in hours.
+
+    Empty comes out only when the root *is* the mount point, which is the
+    one case where "this folder" and "this disk" are the same request.
+    """
+    relative = root.relative_to(mount_point)
+    return JobScope(relative)
+
+
+def follow(
+    jobs: IndexingJobRepository,
+    job_id: JobId,
+    poll_interval: float,
+    sleep: Callable[[float], None] = time.sleep,
+) -> IndexingJob | None:
+    """Watch a job somebody else is running, until it stops moving.
+
+    Reached only when a separate executor claimed the job first. That is
+    not a failure and not a reason to exit: the user asked for a folder to
+    be indexed, it is being indexed, and the command reports the same
+    outcome either way (RFC-029 section 12).
+    """
+    while True:
+        job = jobs.get(job_id)
+        if job is None or job.status.is_terminal:
+            return job
+        sleep(poll_interval)
+
+
+def main() -> None:
+    """Create a job for the named root and run it in this very process.
+
+    The composition root -- the one place allowed to know every concrete
+    class at once. Two decisions here are RFC-029 corrections, and both
+    are about not making this command worse than it was:
+
+    * `--root` becomes a **scope**, not the whole device (`scope_for()`);
+    * the job is executed **here**, by claiming it with the same atomic
+      `UPDATE` the polling loop uses. RFC-029 section 12 accepted that
+      "the CLI comes to require the worker running"; that would make
+      `indexing_worker --root PATH` a command that waits for ever in
+      silence whenever nobody started an executor. It requires no second
+      process, and there is still exactly one indexing code path -- this
+      calls `JobRunner.run_job()`, which is what the executor calls.
+
+    If an executor *is* running and claims the job first, this follows it
+    by polling and reports the same outcome.
 
     The provider imports are function-local rather than module-level so
     that importing `IndexingWorker` never drags Presentation, and through
@@ -304,57 +357,77 @@ def main() -> None:
     test suite imports this module; paying a torch import for a CLI that
     is not being run would be a real cost, not a hypothetical one.
     """
+    from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
     from app.infrastructure.config.settings import settings
-    from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
+    from app.infrastructure.filesystem.mounted_device_locator import (
+        MountedDeviceLocator,
+    )
     from app.infrastructure.filesystem.volume_identity_provider import (
         WindowsVolumeIdentityProvider,
     )
     from app.infrastructure.persistence.postgres_device_repository import (
         PostgresDeviceRepository,
     )
-    from app.infrastructure.persistence.postgres_image_repository import (
-        PostgresImageRepository,
+    from app.infrastructure.persistence.postgres_indexing_job_repository import (
+        PostgresIndexingJobRepository,
     )
     from app.infrastructure.persistence.session import SessionLocal
-    from app.presentation.dependencies import get_embedding_model
+    from app.infrastructure.workers.job_runner import build_runner
 
     args = _build_arg_parser().parse_args()
     root = args.root.resolve()
 
-    session = SessionLocal()
+    job_session = SessionLocal()
+    image_session = SessionLocal()
     try:
+        volume_provider = WindowsVolumeIdentityProvider()
+        devices = PostgresDeviceRepository(job_session)
         device, volume = register_device(
-            volume_provider=WindowsVolumeIdentityProvider(),
-            device_repository=PostgresDeviceRepository(session),
+            volume_provider=volume_provider,
+            device_repository=devices,
             root=root,
             label=args.label,
         )
+        scope = scope_for(root, volume.mount_point)
         logger.info(
             "Indexing %s on device %s (%s), mounted at %s",
-            root,
+            scope or "the whole device",
             device.label,
             device.id,
             volume.mount_point,
         )
-        worker = IndexingWorker(
-            filesystem_provider=FilesystemImageProvider(
-                root,
-                settings.supported_extensions,
-                extract_capture_date=settings.extract_capture_date,
-            ),
-            index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
-                repository=PostgresImageRepository(session),
-                embedding_model=get_embedding_model(),
-                content_hasher=Sha256ContentHasher(),
-                batch_size=settings.batch_size,
-                metadata_prefetch_size=settings.metadata_prefetch_size,
-            ),
-            device=device,
-            mount_point=volume.mount_point,
+
+        jobs = PostgresIndexingJobRepository(job_session)
+        job = CreateIndexingJobUseCase(
+            job_repository=jobs,
+            device_repository=devices,
+            device_locator=MountedDeviceLocator(volume_provider),
+        ).execute(device.id, () if scope.is_whole_device else (str(scope),))
+        logger.info("Created indexing job %s", job.id)
+
+        runner = build_runner(job_session, image_session)
+        runner.warm_up_now()
+        finished = runner.run_job(job.id)
+        if finished is None:
+            logger.info("Another executor claimed job %s; following it", job.id)
+            finished = follow(jobs, job.id, settings.job_poll_interval)
+
+        if finished is None:
+            logger.error("Job %s disappeared before it finished", job.id)
+            return
+        logger.info(
+            "Job %s finished as %s: %d indexed, %d skipped, %d failed",
+            finished.id,
+            finished.status.value,
+            finished.progress.processed_images,
+            finished.progress.skipped_images,
+            finished.progress.failed_images,
         )
-        worker.run()
+        if finished.error_message:
+            logger.error("%s", finished.error_message)
     finally:
-        session.close()
+        image_session.close()
+        job_session.close()
 
 
 if __name__ == "__main__":

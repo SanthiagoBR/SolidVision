@@ -93,6 +93,11 @@ Changing the embedding model requires a complete reindex of the collection.
 
 Indexing is executed by the Worker, never by FastAPI.
 
+RFC-029 did not change that. `POST /api/v1/jobs` writes a row saying an
+indexing run is wanted; a separate host process claims it and does the
+work. No route opens a file, loads a model, or reaches
+`IndexOrUpdateImagesUseCase`.
+
 Processing order:
 
 ```
@@ -136,10 +141,14 @@ Never calculate hashes before timestamp and size checks.
 Collections must store:
 
 ```
-last_processed_path
+indexing_jobs.last_processed_relative_path
 ```
 
-to allow interrupted indexing jobs to resume safely.
+to allow interrupted indexing jobs to resume safely. Relative to the
+device since RFC-027, because an absolute path starts with a drive letter
+and a drive letter is assigned by mount order. Compared as a path and
+never as a string, and never allowed to run ahead of the batch buffer --
+see `ARCHITECTURE.md`, "Resuming an Interrupted Job".
 
 ---
 
@@ -354,6 +363,22 @@ The `app.` prefix is required: the package is `app.infrastructure`, and
 `pyproject.toml` puts `backend/` on `pythonpath`, not `backend/app/`. `--root`
 is required and has no default, deliberately, so the command can never begin
 indexing a real photo collection nobody pointed it at (RFC-024 section 12).
+
+Since RFC-029 this command creates a job scoped to `--root` and runs it in
+its own process. It does **not** require a second process to be running,
+and it does not index the whole disk: `--root D:/fotos/2018` is still
+`fotos/2018`.
+
+The long-running executor, which the API's jobs are run by:
+
+```
+python -m app.infrastructure.workers.job_runner
+```
+
+**A host process, not a container.** The volume identity RFC-027 depends
+on is a Windows construct, and a container would see a mounted path
+instead. The product ships as a native Windows process with an installer,
+with only PostgreSQL in a container.
 
 ---
 

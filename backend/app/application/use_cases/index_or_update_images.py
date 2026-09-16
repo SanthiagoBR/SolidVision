@@ -36,10 +36,16 @@ from app.application.use_cases.indexing_plan import (
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.services.indexing_observer import (
+    IndexingObserver,
+    NullIndexingObserver,
+)
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
+from app.domain.value_objects.indexing_progress import IndexingProgress
 from app.domain.value_objects.indexing_record import IndexingRecord
 
 
@@ -106,11 +112,47 @@ class IndexingSummary:
     failures: list[IndexingFailure] = field(default_factory=list)
     inference_fallbacks: list[BatchFallback] = field(default_factory=list)
     persistence_fallbacks: list[BatchFallback] = field(default_factory=list)
+    stopped: bool = False
+    """Whether an observer asked the run to wind up before the stream ended.
+
+    Not a failure, and deliberately not an exception (RFC-029 section 8).
+    A cancelled run leaves everything it indexed in place and searchable,
+    and the next run over the same scope skips it through the incremental
+    decision. The flag is how a caller tells "finished the scope" from
+    "stopped part way", which are two different things to write on a job.
+    """
 
     @property
     def failed(self) -> int:
         """How many individual files could not be indexed."""
         return len(self.failures)
+
+    def as_progress(self) -> IndexingProgress:
+        """Project the counters a watcher needs out of the ones a human reads.
+
+        The two shapes are separate on purpose. This class carries
+        timings, fallback records and every individual failure because a
+        finished run is reported to a person; `IndexingProgress` carries
+        four integers because a client is drawing a progress bar. Handing
+        this object to the Domain port would also mean the Domain
+        importing the Application, which nothing here does.
+
+        Both kinds of skip are one number to a watcher. "Unchanged" and
+        "mtime moved, bytes did not" are a meaningful distinction in the
+        report RFC-024 section 11 specifies and no distinction at all to
+        somebody waiting for a bar to move.
+
+        `discovery_complete` is left false here, always. This class
+        counts what the *pipeline* consumed, and it cannot know whether
+        the stream feeding it has ended -- only the scan knows that, and
+        it says so through `IndexingObserver.discovered()`.
+        """
+        return IndexingProgress(
+            discovered_files=self.discovered,
+            processed_images=self.indexed,
+            skipped_images=self.skipped_unchanged + self.skipped_content_identical,
+            failed_images=self.failed,
+        )
 
     def format_report(self) -> str:
         """Render the run as the block RFC-024 section 11 specifies.
@@ -178,6 +220,79 @@ class IndexingSummary:
         return 100.0 * part / whole if whole > 0.0 else 0.0
 
 
+class DurableFrontier:
+    """How far a run may claim to have got, given what is still unwritten.
+
+    **The checkpoint is not "the last file processed", and the difference
+    is data loss.** The batch buffer survives across prefetch windows: a
+    file decided `EMBED` in window 1 can still be sitting in `pending`
+    while files from window 3 have been skipped and are already accounted
+    for. A checkpoint taken from the last file *seen* would therefore
+    stand past files that were never written, and a crash would resume
+    beyond them -- silently, and for good, because the resumed scan never
+    looks at them again.
+
+    So the rule (RFC-029 section 10, made precise): the checkpoint is the
+    greatest path `P` such that every discovered file up to and including
+    `P` has been written, skipped, or recorded as a failure. In practice
+    that is the file immediately *before* the oldest plan still buffered,
+    or the last file seen when nothing is buffered.
+
+    Erring is asymmetric and this errs the safe way. A checkpoint that
+    lags costs a re-scan of a few files whose work the incremental
+    decision then skips for nothing; a checkpoint that leads loses
+    photographs.
+
+    One nuance, accepted and stated: a skipped file counts as durable
+    before its capture date is written, because that write happens once
+    per window (RFC-028 section 6). A resume past it leaves the row with
+    `capture_source` NULL -- which means *never examined*, so the next
+    full scan or `capture_date_backfill` writes it. A deferred metadata
+    write, not a lost one.
+    """
+
+    def __init__(self) -> None:
+        self._last_seen: ImagePath | None = None
+        self._buffered_after: ImagePath | None = None
+        self._buffering = False
+
+    def decided(self, path: ImagePath) -> None:
+        """Record a file that needs nothing further -- skipped, refreshed, failed."""
+        self._last_seen = path
+
+    def buffered(self, path: ImagePath) -> None:
+        """Record a file that went into the batch and is not written yet.
+
+        The frontier freezes at the file before this one, and stays there
+        until the batch is flushed -- however many windows that takes.
+        """
+        if not self._buffering:
+            self._buffered_after = self._last_seen
+            self._buffering = True
+        self._last_seen = path
+
+    def flushed(self) -> None:
+        """Record that the batch was written, releasing the frozen frontier.
+
+        Called after the flush whether or not every row in it survived:
+        a row that failed was recorded as a failure, which accounts for
+        its file just as a successful write does.
+        """
+        self._buffering = False
+        self._buffered_after = None
+
+    @property
+    def durable_through(self) -> ImagePath | None:
+        """The checkpoint right now, or `None` when nothing is durable yet.
+
+        `None` is a real answer rather than a missing one -- a run whose
+        very first file went straight into the batch has nothing durable
+        behind it -- and a caller must treat it as "leave the stored
+        checkpoint alone", never as "clear it".
+        """
+        return self._buffered_after if self._buffering else self._last_seen
+
+
 class IndexOrUpdateImagesUseCase:
     """Index a stream of candidates in batches without giving up error isolation.
 
@@ -210,18 +325,42 @@ class IndexOrUpdateImagesUseCase:
         self._batch_size = batch_size
         self._metadata_prefetch_size = metadata_prefetch_size
 
-    def execute(self, candidates: Iterable[IndexCandidate]) -> IndexingSummary:
+    def execute(
+        self,
+        candidates: Iterable[IndexCandidate],
+        observer: IndexingObserver | None = None,
+    ) -> IndexingSummary:
         """Run the full pipeline over `candidates` and return what happened.
 
         `candidates` is consumed lazily and never materialized in full, so
         memory stays bounded by the two window sizes no matter how many
         files were discovered.
+
+        `observer` is optional and defaults to one that does nothing, so
+        every caller written before RFC-029 -- and every test of this class
+        -- behaves exactly as it did. It is the seam RFC-029 needs for
+        progress (section 7.3) and for cooperative cancellation (section
+        8), and it is deliberately a Domain port that knows nothing about
+        jobs: this method must not learn that jobs exist, or "the CLI
+        re-indexes what the UI skips" becomes a thing that can happen.
+
+        `should_stop()` is consulted between windows and after each flush,
+        never inside a forward pass. A stop flushes whatever has already
+        been inferred -- throwing away inference that has been paid for
+        buys nothing -- sets `summary.stopped`, and returns normally. A
+        cancellation is not a failure and does not raise.
         """
+        watcher = observer if observer is not None else NullIndexingObserver()
         summary = IndexingSummary()
         started = time.perf_counter()
         pending: list[IndexPlan] = []
+        frontier = DurableFrontier()
 
         for window in windowed(candidates, self._metadata_prefetch_size):
+            if watcher.should_stop():
+                summary.stopped = True
+                break
+
             summary.discovered += len(window)
             existing = self._repository.get_index_metadata_many(
                 [candidate.image.id for candidate in window]
@@ -231,15 +370,28 @@ class IndexOrUpdateImagesUseCase:
             for candidate in window:
                 plan = self._plan(candidate, existing, summary)
                 if plan is None:
+                    # Reported as a failure, which accounts for the file:
+                    # a checkpoint may pass it, because resuming would
+                    # only fail on it again.
+                    frontier.decided(candidate.image.relative_path)
                     continue
 
                 if plan.action is IndexAction.EMBED:
+                    frontier.buffered(candidate.image.relative_path)
                     pending.append(plan)
                     if len(pending) == self._batch_size:
                         self._flush(pending, summary)
                         pending = []
+                        frontier.flushed()
+                        watcher.batch_persisted(
+                            summary.as_progress(), frontier.durable_through
+                        )
+                        if watcher.should_stop():
+                            summary.stopped = True
+                            break
                     continue
 
+                frontier.decided(candidate.image.relative_path)
                 if plan.action is IndexAction.SKIP_UNCHANGED:
                     summary.skipped_unchanged += 1
                 else:
@@ -253,9 +405,15 @@ class IndexOrUpdateImagesUseCase:
                     capture_dates.append((candidate, capture))
 
             self._write_capture_dates(capture_dates, summary)
+            watcher.window_decided(summary.as_progress(), frontier.durable_through)
+
+            if summary.stopped:
+                break
 
         if pending:
             self._flush(pending, summary)
+            frontier.flushed()
+            watcher.batch_persisted(summary.as_progress(), frontier.durable_through)
 
         summary.elapsed_seconds = time.perf_counter() - started
         return summary

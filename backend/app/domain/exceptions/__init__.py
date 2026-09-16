@@ -10,13 +10,24 @@ from app.domain.exceptions.device_errors import (
     InvalidDeviceIdentifierError,
     InvalidVolumeIdentityError,
 )
-from app.domain.exceptions.domain_error import DomainError
+from app.domain.exceptions.domain_error import (
+    ConflictError,
+    DomainError,
+    NotFoundError,
+)
 from app.domain.exceptions.image_errors import (
     ImageAlreadyExistsError,
     ImageNotFoundError,
     InvalidImageIdentifierError,
     InvalidImagePathError,
     UnsupportedImageExtensionError,
+)
+from app.domain.exceptions.job_errors import (
+    DeviceBusyError,
+    IllegalJobTransitionError,
+    InvalidJobIdentifierError,
+    InvalidJobScopeError,
+    JobNotFoundError,
 )
 from app.domain.exceptions.search_errors import (
     EmbeddingDimensionMismatchError,
@@ -33,11 +44,14 @@ class InvalidEmbeddingVectorError(DomainError):
 
 
 __all__ = [
+    "ConflictError",
+    "DeviceBusyError",
     "DeviceNotConnectedError",
     "DeviceNotFoundError",
     "DomainError",
     "EmbeddingDimensionMismatchError",
     "EmptySearchQueryError",
+    "IllegalJobTransitionError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
     "InvalidCaptureDateError",
@@ -46,7 +60,11 @@ __all__ = [
     "InvalidEmbeddingVectorError",
     "InvalidImageIdentifierError",
     "InvalidImagePathError",
+    "InvalidJobIdentifierError",
+    "InvalidJobScopeError",
     "InvalidSearchLimitError",
     "InvalidVolumeIdentityError",
+    "JobNotFoundError",
+    "NotFoundError",
     "UnsupportedImageExtensionError",
 ]

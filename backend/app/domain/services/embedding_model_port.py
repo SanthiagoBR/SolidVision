@@ -53,3 +53,25 @@ class EmbeddingModelPort(ABC):
         whether retrying one at a time is worth the time it costs.
         """
         return [self.encode_image(image) for image in images]
+
+    def warm_up(self) -> None:
+        """Do now whatever the first `encode_*` call would otherwise do.
+
+        Concrete and a no-op by default, for the reason `encode_images` is
+        concrete: an implementation with nothing to load -- the fake, and
+        any future adapter that is already resident -- should not have to
+        write a method saying so.
+
+        RFC-029 section 9.1 is why it exists at all. The job executor
+        does this **before** it starts polling, because an implementation
+        whose first call has seconds of set-up to pay (RFC-026 section 9.1
+        measured ~4.95 s for the shipped one, cold) has no batch to report
+        progress from while it pays them. A worker that claimed a job
+        first would hold it, silent, for the whole of that -- and on a
+        short enough stale timeout would be reaped before it had done
+        anything at all.
+
+        Must not raise for a transient reason a later call could survive;
+        a caller may treat a failure here as "try again lazily" rather
+        than as fatal.
+        """

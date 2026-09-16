@@ -19,6 +19,7 @@ RFC_024_REVISION = "26058b9e1d9a"
 RFC_027_DEVICES_REVISION = "a7f3c1d20b64"
 RFC_027_OWNERSHIP_REVISION = "b8e4d2a13c75"
 RFC_028_REVISION = "c5d1e8f24a90"
+RFC_029_REVISION = "e7a2c9b41f30"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -47,6 +48,18 @@ def _revision_after_rfc_023() -> Script:
     return _revision_after(RFC_023_REVISION)
 
 
+def _statements_only(source: str) -> str:
+    """Strip `#` comments so an assertion reads code rather than commentary.
+
+    These migrations carry long explanations of what they deliberately do
+    *not* do, so a plain substring search over the source answers a
+    different question from the one the test is asking.
+    """
+    return "\n".join(
+        line for line in source.splitlines() if not line.strip().startswith("#")
+    )
+
+
 def test_alembic_has_exactly_one_head() -> None:
     script = _script_directory()
 
@@ -69,6 +82,7 @@ def test_history_is_linear_from_base_to_head() -> None:
         )
 
     assert chain == [
+        RFC_029_REVISION,
         RFC_028_REVISION,
         RFC_027_OWNERSHIP_REVISION,
         RFC_027_DEVICES_REVISION,
@@ -284,3 +298,97 @@ def test_earlier_migrations_were_not_rewritten() -> None:
 
     assert "content_hash" not in rfc_023_source
     assert "Vector(CURRENT_DIMENSION)" in rfc_023_source
+
+
+def test_rfc_029_migration_follows_rfc_028() -> None:
+    assert _revision_after(RFC_028_REVISION).revision == RFC_029_REVISION
+
+
+def test_rfc_029_migration_creates_both_job_tables() -> None:
+    upgrade_source = inspect.getsource(_revision_after(RFC_028_REVISION).module.upgrade)
+
+    assert '"indexing_jobs",' in upgrade_source
+    assert '"indexing_job_scopes",' in upgrade_source
+    assert upgrade_source.count("op.create_table(") == 2
+
+
+def test_rfc_029_migration_writes_the_partial_unique_index_by_hand() -> None:
+    """RFC-029 section 9, and the reason it is not left to autogenerate.
+
+    A plain unique index on `device_id` would forbid a disk from ever
+    having two jobs, history included. The `WHERE` is what narrows it to
+    the jobs that actually hold the disk, and autogenerate does not
+    reliably reproduce a partial index -- so it is written out and read
+    back here.
+    """
+    module = _revision_after(RFC_028_REVISION).module
+    upgrade_source = inspect.getsource(module.upgrade)
+
+    assert module.ACTIVE_JOB_INDEX == "uq_one_active_job_per_device"
+    assert "postgresql_where=sa.text(ACTIVE_JOB_PREDICATE)" in upgrade_source
+    assert "unique=True" in upgrade_source
+    assert "pending" in module.ACTIVE_JOB_PREDICATE
+    assert "running" in module.ACTIVE_JOB_PREDICATE
+
+
+def test_rfc_029_migration_adds_the_columns_the_draft_schema_omitted() -> None:
+    """`cancel_requested` and `attempts` (RFC-029 sections 8 and 9.1).
+
+    Section 8 wrote `cancel_requested = true` against a section 5.1 table
+    that had no such column; `attempts` is what bounds the reaper's
+    requeue loop so a process-killing file cannot loop for ever.
+    """
+    upgrade_source = inspect.getsource(_revision_after(RFC_028_REVISION).module.upgrade)
+
+    assert '"cancel_requested",' in upgrade_source
+    assert '"attempts",' in upgrade_source
+    assert '"skipped_images",' in upgrade_source
+    assert '"discovery_complete",' in upgrade_source
+    assert '"last_processed_relative_path",' in upgrade_source
+
+
+def test_rfc_029_migration_creates_no_key_into_images() -> None:
+    """RFC-027 section 6.2's window stays open; RFC-030 is what closes it."""
+    upgrade_source = inspect.getsource(_revision_after(RFC_028_REVISION).module.upgrade)
+
+    assert '["images.id"]' not in upgrade_source
+    assert '"image_id"' not in upgrade_source
+
+
+def test_rfc_029_migration_does_not_touch_unrelated_schema() -> None:
+    """Read from the code, not the prose.
+
+    This revision explains at length why a scope cascades where an image
+    row must not, so the word "embedding" appears in its comments. The
+    question being asked is about the statements it executes.
+    """
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_028_REVISION).module.upgrade)
+    )
+
+    assert "drop_table" not in upgrade_source
+    assert "add_column" not in upgrade_source
+    assert "embedding" not in upgrade_source
+    assert "captured_at" not in upgrade_source
+    # The `images` *table*, not the counters whose names end in it.
+    assert '"images"' not in upgrade_source
+    assert "images.id" not in upgrade_source
+
+
+def test_rfc_029_migration_downgrade_drops_the_index_before_the_table() -> None:
+    """Explicit rather than incidental: PostgreSQL would drop it either way.
+
+    Writing it out is what makes the reversal reviewable, and a partial
+    index is the part of this revision most likely to be recreated by
+    hand.
+    """
+    downgrade_source = inspect.getsource(
+        _revision_after(RFC_028_REVISION).module.downgrade
+    )
+
+    index_position = downgrade_source.index("drop_index")
+    table_position = downgrade_source.index('drop_table("indexing_jobs")')
+
+    assert index_position < table_position
+    assert 'drop_table("indexing_job_scopes")' in downgrade_source
+    assert "images" not in downgrade_source

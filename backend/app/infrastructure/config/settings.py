@@ -96,7 +96,85 @@ class Settings(BaseSettings):
         default=True,
         description="Read each discovered file's EXIF capture date during the scan",
     )
-    worker_count: int = Field(default=1, ge=1, description="Worker count")
+    worker_count: int = Field(
+        default=1,
+        ge=1,
+        description="Indexing job executors this machine is expected to run",
+    )
+    """Still without a reader in the code, and RFC-029 says why.
+
+    RFC-029 section 9 expected this to gain a consumer: several devices can
+    be indexed at once, one executor each. Nothing here spawns them,
+    because nothing here needs to -- an executor is
+    `python -m app.infrastructure.workers.job_runner`, and running two of
+    them is running the command twice. The pieces that would break under
+    concurrency are built for it and tested for it (the partial unique
+    index of section 9, and the `SKIP LOCKED` claim of section 4.10), so
+    the setting documents the expectation while the operating system
+    supplies the process manager.
+
+    A supervisor that read this and forked would be a second way to start
+    the same program, and the first thing to get out of step with how it
+    is actually deployed -- a native Windows process, not a container
+    (RFC-029 section 6).
+    """
+
+    # RFC-029's four knobs. The defaults below are chosen against the
+    # measurements in `experiments/rfc-029-indexing-jobs/`, which is
+    # where the numbers behind each one live -- RFC-029 sections 6.1 and
+    # 9.1 both insisted the timeout in particular come from a measured
+    # distribution rather than from "a few minutes".
+    job_poll_interval: float = Field(
+        default=2.0,
+        gt=0.0,
+        description="Seconds the job executor sleeps between polls of an empty queue",
+    )
+    """Start-up latency for a job, against an operation lasting minutes.
+
+    The declared cost of polling instead of pushing (RFC-029 section 6.1):
+    a job created just after a poll waits up to this long. Lowering it
+    trades idle queries for a shorter wait, and the measurement says how
+    much of each.
+    """
+
+    job_heartbeat_interval: float = Field(
+        default=10.0,
+        gt=0.0,
+        description="Minimum seconds between heartbeat writes during a scan",
+    )
+    """Rate limit for the heartbeat emitted *while walking the disk*.
+
+    Progress written at the end of a window or a batch is not rate-limited
+    -- that is already at most one write per 512 files or per 8 images
+    (RFC-029 section 7.3). This bounds the one callback that fires per
+    file, so a scan cannot turn into a write per file.
+    """
+
+    job_stale_timeout: float = Field(
+        default=120.0,
+        gt=0.0,
+        description="Seconds without a heartbeat after which a job is abandoned",
+    )
+    """How long silence has to last before the reaper acts.
+
+    Must exceed the longest real gap between heartbeats, which is not the
+    length of a batch: a cold scan and a resume can both go a long time
+    without reaching one. Too short and the reaper kills healthy jobs; too
+    long and a device stays reserved after a genuine crash.
+    """
+
+    job_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        description="Times a job may be requeued by the reaper before it fails",
+    )
+    """The bound that stops a requeue loop from running for ever.
+
+    The reaper puts an abandoned job back in the queue with its checkpoint
+    (RFC-029 section 9.1, corrected), which is what makes the checkpoint
+    have a reader at all. Without a bound, a file whose decoder takes the
+    whole process down would kill every worker that resumed onto it.
+    """
     supported_extensions: tuple[str, ...] = Field(
         default=SUPPORTED_IMAGE_EXTENSIONS,
         description="Supported image extensions",
