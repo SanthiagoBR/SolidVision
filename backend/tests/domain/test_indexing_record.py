@@ -100,3 +100,20 @@ def test_content_hash_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         record.content_hash = "b" * 64  # type: ignore[misc]
+
+
+def test_thumbnail_path_defaults_to_none() -> None:
+    """RFC-030: a record written without rendering carries no thumbnail.
+
+    `None` is written as NULL, which is what a record for changed bytes
+    must do -- a location from the old bytes would describe a picture the
+    file no longer contains.
+    """
+    record = IndexingRecord(
+        image=_build_image(),
+        embedding=EmbeddingVector([0.1, 0.2, 0.3]),
+        file_size=1024,
+        file_modified_at=None,
+    )
+
+    assert record.thumbnail_path is None

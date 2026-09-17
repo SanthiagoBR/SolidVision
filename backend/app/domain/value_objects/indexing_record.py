@@ -34,3 +34,18 @@ class IndexingRecord:
     "unknown", which costs a re-embed on the next size/mtime change rather
     than risking a skipped one.
     """
+
+    thumbnail_path: str | None = None
+    """Where the thumbnail rendered from these bytes was stored (RFC-030).
+
+    Optional like `content_hash`, and `None` is written as `None`: a
+    record reaches the repository because its bytes are new or changed, so
+    a thumbnail stored for an *earlier* version of the file no longer
+    depicts it. Keeping that stale location would serve the old picture
+    under the new `ETag`.
+
+    `None` when rendering failed, which is never a failure of the record
+    -- the embedding was paid for and the image is searchable without a
+    thumbnail (RFC-030 section 7.2) -- or when the pipeline was composed
+    without a thumbnail writer at all.
+    """

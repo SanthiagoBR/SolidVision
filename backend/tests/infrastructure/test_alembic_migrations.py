@@ -20,6 +20,7 @@ RFC_027_DEVICES_REVISION = "a7f3c1d20b64"
 RFC_027_OWNERSHIP_REVISION = "b8e4d2a13c75"
 RFC_028_REVISION = "c5d1e8f24a90"
 RFC_029_REVISION = "e7a2c9b41f30"
+RFC_030_REVISION = "f4b9e2d7c615"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -82,6 +83,7 @@ def test_history_is_linear_from_base_to_head() -> None:
         )
 
     assert chain == [
+        RFC_030_REVISION,
         RFC_029_REVISION,
         RFC_028_REVISION,
         RFC_027_OWNERSHIP_REVISION,
@@ -392,3 +394,46 @@ def test_rfc_029_migration_downgrade_drops_the_index_before_the_table() -> None:
     assert index_position < table_position
     assert 'drop_table("indexing_job_scopes")' in downgrade_source
     assert "images" not in downgrade_source
+
+
+def test_rfc_030_migration_follows_rfc_029() -> None:
+    assert _revision_after(RFC_029_REVISION).revision == RFC_030_REVISION
+
+
+def test_rfc_030_migration_adds_one_nullable_string_column() -> None:
+    """NULL is "no thumbnail", which every row indexed before RFC-030 is."""
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_029_REVISION).module.upgrade)
+    )
+
+    assert upgrade_source.count("op.add_column(") == 1
+    assert 'sa.Column("thumbnail_path", sa.String(), nullable=True)' in upgrade_source
+
+
+def test_rfc_030_migration_does_not_touch_unrelated_schema() -> None:
+    """No index, no constraint, no key, and nothing but `images`.
+
+    `images.id` is referred to by the *files* this column names, not by a
+    foreign key -- which is how RFC-030 section 7.3 closes RFC-027's window
+    without adding one.
+    """
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_029_REVISION).module.upgrade)
+    )
+
+    assert "create_index" not in upgrade_source
+    assert "create_unique_constraint" not in upgrade_source
+    assert "create_foreign_key" not in upgrade_source
+    assert "drop_" not in upgrade_source
+    assert "embedding" not in upgrade_source
+    assert "indexing_jobs" not in upgrade_source
+
+
+def test_rfc_030_migration_downgrade_drops_only_the_new_column() -> None:
+    downgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_029_REVISION).module.downgrade)
+    )
+
+    assert downgrade_source.count("op.drop_column(") == 1
+    assert 'op.drop_column("images", "thumbnail_path")' in downgrade_source
+    assert "drop_table" not in downgrade_source

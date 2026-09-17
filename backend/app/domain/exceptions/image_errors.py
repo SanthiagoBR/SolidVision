@@ -1,10 +1,19 @@
 """Image-specific domain exceptions."""
 
-from app.domain.exceptions.domain_error import DomainError
+from app.domain.exceptions.domain_error import DomainError, NotFoundError
 
 
-class ImageNotFoundError(DomainError):
-    """Raised when an image cannot be found."""
+class ImageNotFoundError(NotFoundError):
+    """Raised when an image cannot be found.
+
+    Re-based from `DomainError` onto `NotFoundError` by RFC-030, which
+    gave the first route able to raise it: `GET /api/v1/images/{id}` with
+    an id that names no row is a 404 (RFC-030 section 4.2), and a plain
+    `DomainError` answers 400. The same move RFC-029 made for
+    `DeviceNotFoundError`, and safe for the same reason -- until RFC-030
+    nothing in production raised this at all, so no client has ever been
+    told a status for it.
+    """
 
     def __init__(self, message: str = "Image not found.") -> None:
         super().__init__(message)

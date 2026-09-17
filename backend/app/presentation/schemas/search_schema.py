@@ -1,4 +1,4 @@
-"""Response shapes for `GET /api/v1/images/search` (RFC-026 section 5.2).
+"""Response shapes for `GET /api/v1/images/search` (RFC-026 section 5.2, RFC-030).
 
 The only place in the codebase allowed to decide what a search result
 looks like on the wire, and the decisions it makes are mostly about what
@@ -7,60 +7,58 @@ to leave out.
 
 from __future__ import annotations
 
-import datetime
-from uuid import UUID
+from collections.abc import Sequence
 
 from pydantic import BaseModel, Field
 
-from app.domain.value_objects.capture_source import CaptureSource
+from app.application.use_cases.resolve_image_location import LocatedImage
 from app.domain.value_objects.search_hit import SearchHit
+from app.presentation.schemas.image_schema import ImageSchema, image_fields
 
 
-class SearchResultSchema(BaseModel):
-    """One ranked image, as a client sees it.
+class SearchResultSchema(ImageSchema):
+    """One ranked image, as a client sees it: the image, plus how well it matched.
 
-    `path` is deliberately absent even though `SearchHit.image` carries
-    one. Publishing it would leak the server's filesystem layout to every
-    caller, and would hand clients an identifier that changes whenever a
-    file moves -- RFC-024 derives the image id from the path, so a stored
-    path is both unstable and unusable against the `GET /images/{id}`
-    that RFC-027 will add. `id` is the identifier; `filename` is for
-    display.
+    **The path is published now, and RFC-030 section 2 is why.** RFC-026
+    kept it out with two arguments, recorded here rather than erased:
 
-    **The capture date is published; the location still is not.** RFC-030
-    owns the response shape for everything about *where* a file is -- its
-    path, its disk, whether that disk is plugged in -- and none of that is
-    here. `captured_at` and `capture_source` are a different kind of field:
-    attributes of the photograph, identical for every caller and every
-    query, and the two things that make a date-filtered result legible --
-    why this photo matched, and how much that date is worth. RFC-028
-    section 12 records the decision.
+    > *"Publishing it would leak the server's filesystem layout to every
+    > caller, and would hand clients an identifier that changes whenever a
+    > file moves."*
+
+    The first dissolved. In a local-first deployment the server's
+    filesystem *is* the user's, and a search that ends in a filename and a
+    UUID has found a photo without telling anyone where it is -- the last
+    step of the product was missing. The second still holds, and it shapes
+    what is published: `id` remains the only identifier, and the paths are
+    display. No route accepts a path back.
+
+    The shape is `ImageSchema` -- the body of `GET /images/{id}`, which
+    this docstring once promised "RFC-027" would add -- plus `similarity`,
+    which exists only inside a query (RFC-025 section 4.1).
+
+    **A hit on a disconnected disk is a full answer.** `device.connected`
+    is false, `absolute_path` is null, and `device.label` and
+    `relative_path` say "HD3, fotos/2018/junho" -- which, for someone with
+    twenty disks, is the expensive part of the question (RFC-030 section
+    4.1).
+
+    `captured_at` and `capture_source` are attributes of the photograph,
+    identical for every caller and every query, and the two things that
+    make a date-filtered result legible (RFC-028 section 12).
     """
 
-    id: UUID = Field(description="Stable identifier of the matched image")
-    filename: str = Field(description="Name of the file, without its extension")
     similarity: float = Field(
         description="Cosine similarity in [-1, 1]; 1 is identical direction"
     )
-    captured_at: datetime.datetime | None = Field(
-        description=(
-            "When the photo was taken, in the camera's local time, with no "
-            "time zone and no offset (e.g. 2018-07-14T15:32:05). Null when "
-            "unknown."
-        )
-    )
-    capture_source: CaptureSource | None = Field(
-        description=(
-            "Where captured_at came from: exif_original (the camera clock at "
-            "the shot), exif_digitized (when the image was digitised), or "
-            "unknown (the file carries no date). Null if the file has not "
-            "been examined yet."
-        )
-    )
 
     @classmethod
-    def from_hit(cls, hit: SearchHit) -> SearchResultSchema:
-        """Map one domain hit to its wire form, adding nothing.
+    def from_hit(cls, hit: SearchHit, located: LocatedImage) -> SearchResultSchema:
+        """Map one domain hit and its resolved location to the wire, adding nothing.
+
+        `located` must describe `hit.image`; the pairing is checked, because
+        a mismatch would publish one photo's score under another photo's
+        path, and nothing downstream could notice.
 
         `similarity` is copied through unrounded and unclamped. Rescaling
         it into [0, 1] for a progress bar would destroy the distinction
@@ -77,13 +75,11 @@ class SearchResultSchema(BaseModel):
         than trusted: a `Z` here would tell every client the camera clock
         was UTC, undoing the reason the column has no zone.
         """
-        return cls(
-            id=hit.image.id.value,
-            filename=hit.image.filename,
-            similarity=hit.similarity,
-            captured_at=hit.image.captured_at,
-            capture_source=hit.image.capture_source,
-        )
+        if located.image.id != hit.image.id:
+            raise ValueError(
+                f"Location for {located.image.id} paired with hit {hit.image.id}"
+            )
+        return cls(similarity=hit.similarity, **image_fields(located))
 
 
 class SearchResponseSchema(BaseModel):
@@ -122,7 +118,8 @@ class SearchResponseSchema(BaseModel):
         cls,
         query: str,
         limit: int,
-        hits: list[SearchHit],
+        hits: Sequence[SearchHit],
+        locations: Sequence[LocatedImage],
         excluded_unknown_date: int | None = None,
     ) -> SearchResponseSchema:
         """Wrap a ranking without reordering, filtering, or truncating it.
@@ -131,10 +128,18 @@ class SearchResponseSchema(BaseModel):
         one the vector index produced. Re-sorting here by `similarity`
         would at best reproduce it and at worst disagree with it about
         ties, which the repository breaks by id on purpose.
+
+        `locations` is `ResolveImageLocationUseCase`'s answer for the same
+        hits, in the same order -- it keeps order by contract, so the two
+        are paired positionally and `strict=True` refuses a length mismatch
+        rather than dropping the tail of the ranking.
         """
         return cls(
             query=query,
             limit=limit,
-            results=[SearchResultSchema.from_hit(hit) for hit in hits],
+            results=[
+                SearchResultSchema.from_hit(hit, located)
+                for hit, located in zip(hits, locations, strict=True)
+            ],
             excluded_unknown_date=excluded_unknown_date,
         )

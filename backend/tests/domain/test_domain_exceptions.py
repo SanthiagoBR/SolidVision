@@ -9,6 +9,8 @@ from app.domain.exceptions import (
     DomainError,
     EmbeddingDimensionMismatchError,
     EmptySearchQueryError,
+    FileGoneError,
+    GoneError,
     IllegalJobTransitionError,
     ImageAlreadyExistsError,
     ImageNotFoundError,
@@ -23,6 +25,7 @@ from app.domain.exceptions import (
     InvalidVolumeIdentityError,
     JobNotFoundError,
     NotFoundError,
+    ThumbnailNotFoundError,
     UnsupportedImageExtensionError,
 )
 
@@ -47,6 +50,8 @@ def test_all_domain_exceptions_inherit_from_domain_error() -> None:
     assert issubclass(IllegalJobTransitionError, DomainError)
     assert issubclass(InvalidJobScopeError, DomainError)
     assert issubclass(InvalidJobIdentifierError, DomainError)
+    assert issubclass(FileGoneError, DomainError)
+    assert issubclass(ThumbnailNotFoundError, DomainError)
 
 
 def test_domain_error_inherits_from_exception() -> None:
@@ -77,6 +82,8 @@ def test_default_messages_are_assigned() -> None:
     assert str(DeviceBusyError()) == "Device already has an active job."
     assert str(IllegalJobTransitionError()) == "Illegal indexing job transition."
     assert str(InvalidJobScopeError()) == "Invalid indexing job scope."
+    assert str(FileGoneError()) == "File is no longer on its device."
+    assert str(ThumbnailNotFoundError()) == "Thumbnail not found."
 
 
 def test_custom_messages_override_defaults() -> None:
@@ -93,6 +100,8 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "DomainError",
         "EmbeddingDimensionMismatchError",
         "EmptySearchQueryError",
+        "FileGoneError",
+        "GoneError",
         "IllegalJobTransitionError",
         "ImageAlreadyExistsError",
         "ImageNotFoundError",
@@ -108,6 +117,7 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "InvalidVolumeIdentityError",
         "JobNotFoundError",
         "NotFoundError",
+        "ThumbnailNotFoundError",
         "UnsupportedImageExtensionError",
     }
     assert set(domain_exceptions.__all__) == expected
@@ -144,3 +154,29 @@ def test_a_malformed_request_stays_a_plain_domain_error() -> None:
         assert issubclass(error, DomainError)
         assert not issubclass(error, NotFoundError)
         assert not issubclass(error, ConflictError)
+
+
+def test_rfc_030_rebased_image_not_found_and_added_a_gone_base() -> None:
+    """`ImageNotFoundError` moved onto `NotFoundError`; `GoneError` is new.
+
+    The re-basing is safe because nothing raised `ImageNotFoundError`
+    before `GET /api/v1/images/{id}` existed (RFC-030 section 4.2), and
+    it is the move RFC-029 already made for `DeviceNotFoundError`.
+
+    `GoneError` sits beside the other two bases, never under them: a file
+    deleted from a connected disk is neither "never existed" nor "try
+    again later", and a hierarchy that nested it under either would let
+    `status_for` answer with the wrong one.
+    """
+    assert issubclass(ImageNotFoundError, NotFoundError)
+    assert issubclass(ThumbnailNotFoundError, NotFoundError)
+
+    assert issubclass(GoneError, DomainError)
+    assert not issubclass(GoneError, NotFoundError)
+    assert not issubclass(GoneError, ConflictError)
+    assert issubclass(FileGoneError, GoneError)
+
+    # The disconnected-disk case of `/reveal` reuses the RFC-027 error
+    # rather than a second class for the same fact.
+    assert issubclass(DeviceNotConnectedError, ConflictError)
+    assert not issubclass(DeviceNotConnectedError, GoneError)

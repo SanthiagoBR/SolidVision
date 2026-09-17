@@ -284,3 +284,28 @@ def test_a_date_range_filters_real_rows_and_reports_the_undated(
     assert body["results"][0]["captured_at"] == "2018-12-31T23:30:00"
     assert body["results"][0]["capture_source"] == "exif_original"
     assert body["excluded_unknown_date"] == 1
+
+
+def test_a_hit_on_a_disk_that_is_not_plugged_in_is_a_full_answer(
+    client: TestClient, seeded: dict[str, Image]
+) -> None:
+    """RFC-030 section 4.1, through the production resolver and a real session.
+
+    No override for the device repository or the locator: the device row
+    comes from PostgreSQL, and "connected" is asked of the real volume
+    enumeration. The test device's volume GUID is one no machine has, so
+    the honest answer on any machine is "not plugged in" -- and the search
+    must still be a 200 that says which disk and which folder.
+    """
+    response = client.get(SEARCH_URL, params={"q": QUERY})
+
+    assert response.status_code == 200
+    first = response.json()["results"][0]
+    assert first["id"] == str(seeded["identical"].id.value)
+    assert first["device"] == {
+        "id": str(TEST_DEVICE_ID.value),
+        "label": "TEST-DEVICE",
+        "connected": False,
+    }
+    assert first["relative_path"] == str(seeded["identical"].relative_path)
+    assert first["absolute_path"] is None

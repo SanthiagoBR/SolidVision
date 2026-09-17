@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -222,6 +223,54 @@ class Settings(BaseSettings):
         "instead of on the first request",
     )
 
+    # RFC-030 section 6, guard 1. It defaults to `False` on the precedent
+    # `warm_up_models` set: the safe default is the one that cannot act on
+    # a machine that never asked. Here the action is opening windows on the
+    # user's desktop, so an API started without this setting answers 404
+    # for `/reveal` -- the route behaves as if it did not exist, rather
+    # than existing and refusing.
+    #
+    # It is *one* of two guards, and it does not replace the other: however
+    # this is set, `/reveal` refuses any caller that is not on loopback.
+    # This one is the operator's intention; that one is a fact about who is
+    # calling. The file path in search results is deliberately not behind
+    # this setting -- showing where a photo is is the product's main job.
+    allow_local_file_actions: bool = Field(
+        default=False,
+        description="Allow POST /api/v1/images/{id}/reveal to open the file "
+        "manager on this machine (loopback callers only)",
+    )
+
+    thumbnail_directory: Path = Field(
+        default_factory=lambda: _default_thumbnail_directory(),
+        description="Directory the application keeps thumbnails in",
+    )
+    """The thumbnail cache (RFC-030 section 7.1). Never inside a collection.
+
+    The default is the per-user application data directory --
+    `%LOCALAPPDATA%/SolidVision/thumbnails` on Windows -- rather than a
+    path relative to the working directory like `log_directory`. A relative
+    default sits beside `indexing_root_path`'s `data/images`, and would be
+    inside the collection the moment someone indexed `data/`. Wherever it
+    is, scans skip it (`FilesystemImageProvider(excluded_directories=...)`),
+    so indexing a whole system disk does not index the thumbnails.
+    """
+
+    thumbnail_max_edge: int = Field(
+        default=512,
+        ge=16,
+        description="Longest side, in pixels, of a generated thumbnail",
+    )
+    """512, the size RFC-030 section 7.2 used for its example.
+
+    Changing it does not re-render existing thumbnails -- run the
+    thumbnail backfill with `--force` for that. Their `ETag` does not
+    change either, because it is the content hash of the *photo*: a client
+    that already holds a thumbnail at the old size keeps it until the photo
+    itself changes, which is a smaller picture of the right photo rather
+    than a wrong one.
+    """
+
     log_level: str = Field(default="INFO", description="Logging level")
     log_directory: str = Field(default="logs", description="Directory for log files")
     log_filename: str = Field(default="application.log", description="Log filename")
@@ -245,6 +294,21 @@ class Settings(BaseSettings):
     def validate_supported_extensions(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         """Ensure supported extensions are normalized to lowercase."""
         return tuple(ext.lower() for ext in value)
+
+
+def _default_thumbnail_directory() -> Path:
+    """The per-user application data directory, which no scan should be pointed at.
+
+    `LOCALAPPDATA` rather than `APPDATA`: thumbnails are a cache that can be
+    rebuilt from the photos, and Windows roams `APPDATA` between machines
+    in a domain -- copying a hundred thousand JPEGs at every sign-in. The
+    fallback for other platforms is the XDG cache location, for a process
+    that will not get far there anyway (the volume adapter is Windows-only).
+    """
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "SolidVision" / "thumbnails"
+    return Path.home() / ".cache" / "solidvision" / "thumbnails"
 
 
 settings = Settings()

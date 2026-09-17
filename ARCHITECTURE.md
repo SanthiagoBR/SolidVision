@@ -652,7 +652,7 @@ Represents a single indexed image.
 | content_hash | SHA256 hash |
 | captured_at | When the photo was taken, from EXIF (`TIMESTAMP` **without** time zone) |
 | capture_source | Where `captured_at` came from: `exif_original`, `exif_digitized`, `unknown`, or NULL |
-| thumbnail_path | Thumbnail location |
+| thumbnail_path | Thumbnail location, relative to the application's thumbnail cache; NULL if none yet |
 
 An image's location is the pair `(device_id, relative_path)`; there is no
 absolute-path column. The absolute path still exists but is *computed*,
@@ -660,6 +660,12 @@ by joining a mount point resolved at the moment of use onto
 `relative_path`. Keeping both forms would invite one of them to go stale,
 and the absolute one is precisely the one that cannot be kept correct
 (RFC-027).
+
+Since RFC-030 the API publishes both, for display: `relative_path` always,
+`absolute_path` only when the device is mounted at the moment of the request,
+with the device's label and `connected` flag beside them. A hit on an
+unplugged disk is a full answer — "it is on HD3, in fotos/2018" — not an
+error. The id remains the only identifier: no route accepts a path.
 
 `captured_at` and `last_modified` are both timestamps and deliberately have
 different types (RFC-028). `last_modified` is an absolute instant, so it is
@@ -683,6 +689,17 @@ excluded that way.
 ### Thumbnail Serving
 
 Thumbnails are generated once during indexing and stored on disk (see `thumbnail_path` in the `Images` table). They are served to the frontend as static files through a dedicated FastAPI endpoint (`StaticFiles` or an equivalent controlled route), never embedded as base64 in API responses. This keeps JSON payloads small for large result sets and allows the browser to cache thumbnails independently.
+
+RFC-030 built it, and settled what that paragraph left open:
+
+- **Where they live — and where they never do.** In `settings.thumbnail_directory`, an application cache (`%LOCALAPPDATA%\SolidVision\thumbnails` by default), one JPEG per image id, sharded by the id's first two hex digits. **Never inside a photo collection**: the system does not write to the collection, and a thumbnail kept beside its photo would go into the drawer with the disk — which is exactly when it is the only way to see the photo. Every scan skips the cache directory even when it lies under a scanned folder, so indexing a system disk does not index the thumbnails. `thumbnail_path` is stored relative to the cache, for the reason `relative_path` is relative to its device.
+- **When they are generated.** For every image the pipeline embeds, after inference and before the row is written, from a fresh decode of the file — the picture CLIP decodes never leaves its adapter. A thumbnail that fails to render is reported and never fails the image, which stays indexed and searchable without one. Skipped files are not rendered, so a re-scan stays a `stat` per file. Images indexed before RFC-030 get theirs from `python -m app.infrastructure.workers.thumbnail_backfill --root PATH`, which never loads the model.
+- **How they are served.** `GET /api/v1/images/{id}/thumbnail`, a controlled route rather than a `StaticFiles` mount: 404 when the image has no thumbnail (the UI shows a placeholder), served whether or not the photo's disk is plugged in.
+- **How they are cached.** `ETag: "<content_hash>"` and `Cache-Control: private, no-cache`. The image id is derived from the *path*, so a photo overwritten in place keeps its id, gets a new content hash and a new thumbnail in the same reprocessing, and must not be served from a client cache that never asks. `no-cache` stores the thumbnail and revalidates every use; a current copy costs a `304` decided from one metadata read, with no file touched. A year of `max-age` beside the `ETag` would have let the browser skip revalidation entirely and reintroduced the stale-thumbnail bug; `immutable` was rejected for the same reason. Rows indexed before RFC-024 have no content hash, and are served `no-store`.
+
+### Opening a File
+
+`POST /api/v1/images/{id}/reveal` opens Explorer with the file selected (RFC-030 section 5). The only input is the id — the server builds the path from the row and the mount point resolved now, so no client-supplied path exists to traverse — and the process is started with an argument list, never a shell. Two independent guards stand in front of it: `settings.allow_local_file_actions` (off by default, in which case the route answers 404 as if it did not exist) and a loopback check on the caller's address, which holds however the setting is configured. A disconnected disk is 409; a file missing from a connected disk is 410. Windows is the only implementation; macOS and Linux are declared behind the same port.
 
 ---
 

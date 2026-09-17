@@ -224,6 +224,13 @@ class IndexedCorpus:
     repository: PostgresImageRepository
     root: Path
     paths_by_id: dict[str, str]
+    session: Session
+    """The one transaction the corpus lives in, device row included.
+
+    Exposed since RFC-030, whose search route also reads the *device* of
+    every hit: a request that opened its own session would not see a
+    device written inside this uncommitted transaction.
+    """
 
     def relative_path_of(self, image: Image) -> str:
         return self.paths_by_id[str(image.id)]
@@ -300,7 +307,12 @@ def indexed_corpus(
             for entry in manifest.images
         }
 
-        yield IndexedCorpus(repository=repository, root=root, paths_by_id=paths_by_id)
+        yield IndexedCorpus(
+            repository=repository,
+            root=root,
+            paths_by_id=paths_by_id,
+            session=session,
+        )
     finally:
         session.close()
         transaction.rollback()

@@ -12,10 +12,14 @@ from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
 from app.domain.services.device_locator import DeviceLocator
+from app.domain.services.file_revealer_port import FileRevealerPort
+from app.domain.services.thumbnail_generator_port import ThumbnailGeneratorPort
+from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
@@ -33,6 +37,7 @@ from app.infrastructure.persistence.in_memory_image_repository import (
     cosine_search,
     count_unknown_capture_date,
     matches_filters,
+    store_thumbnail,
     with_capture_date,
 )
 
@@ -44,6 +49,7 @@ class FakeImageRepository(ImageRepository):
         self._images = list(images or [])
         self._metadata: dict[uuid.UUID, IndexMetadata] = {}
         self._embeddings: dict[uuid.UUID, EmbeddingVector] = {}
+        self._thumbnails: dict[uuid.UUID, str] = {}
         self.save_calls: list[Image] = []
         self.exists_calls: list[ImageId] = []
         self.list_calls = 0
@@ -55,6 +61,8 @@ class FakeImageRepository(ImageRepository):
         self.update_capture_date_calls: list[tuple[ImageId, CaptureDate]] = []
         self.update_capture_date_many_calls: list[dict[ImageId, CaptureDate]] = []
         self.count_unknown_capture_date_calls: list[SearchFilters] = []
+        self.update_thumbnail_path_calls: list[tuple[ImageId, str]] = []
+        self.update_thumbnail_path_many_calls: list[dict[ImageId, str]] = []
         self.search_similar_calls: list[
             tuple[EmbeddingVector, int, SearchFilters | None]
         ] = []
@@ -102,6 +110,7 @@ class FakeImageRepository(ImageRepository):
         self._images = [image for image in self._images if image.id != image_id]
         self._metadata.pop(image_id.value, None)
         self._embeddings.pop(image_id.value, None)
+        self._thumbnails.pop(image_id.value, None)
 
     def list(self) -> list[Image]:
         self.list_calls += 1
@@ -117,6 +126,7 @@ class FakeImageRepository(ImageRepository):
             content_hash=record.content_hash,
         )
         self._embeddings[record.image.id.value] = record.embedding
+        store_thumbnail(self._thumbnails, record)
 
     def search_similar(
         self,
@@ -181,7 +191,11 @@ class FakeImageRepository(ImageRepository):
         stored = self._metadata.get(
             image_id.value, IndexMetadata(file_size=None, file_modified_at=None)
         )
-        return dataclasses.replace(stored, capture_source=image.capture_source)
+        return dataclasses.replace(
+            stored,
+            capture_source=image.capture_source,
+            thumbnail_path=self._thumbnails.get(image_id.value),
+        )
 
     def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
         self.update_index_metadata_calls.append((image_id, metadata))
@@ -205,6 +219,20 @@ class FakeImageRepository(ImageRepository):
             )
             for image in self._images
         ]
+
+    def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
+        self.update_thumbnail_path_calls.append((image_id, location))
+        self._apply_thumbnail_paths({image_id: location})
+
+    def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
+        self.update_thumbnail_path_many_calls.append(dict(locations))
+        self._apply_thumbnail_paths(locations)
+
+    def _apply_thumbnail_paths(self, locations: Mapping[ImageId, str]) -> None:
+        known = {image.id for image in self._images}
+        for image_id, location in locations.items():
+            if image_id in known:
+                self._thumbnails[image_id.value] = location
 
     def count_unknown_capture_date(self, filters: SearchFilters) -> int:
         """Delegates to the shared counter, and records that it was asked.
@@ -236,6 +264,70 @@ class RecordingContentHasher(ContentHasherPort):
     def hash_image(self, image: Image) -> str:
         self.hashed.append(image)
         return self._delegate.hash_image(image)
+
+
+class RecordingThumbnailGenerator(ThumbnailGeneratorPort):
+    """Draws nothing and reads nothing; records what it was asked to render.
+
+    The pipeline tests ask about control flow -- which images get a
+    thumbnail, and what a failure does -- and the images they build sit at
+    paths that do not exist. The real Pillow adapter is covered on its own
+    by `tests/infrastructure/filesystem/test_thumbnail_generator.py`.
+
+    `failing` names the filenames to refuse, the way `_BatchFailsForFilename`
+    does for the model.
+    """
+
+    def __init__(self, failing: frozenset[str] = frozenset()) -> None:
+        self.failing = failing
+        self.generated: list[tuple[Image, int]] = []
+
+    def generate(self, image: Image, max_edge: int) -> bytes:
+        self.generated.append((image, max_edge))
+        if image.filename in self.failing:
+            raise OSError(f"cannot decode {image.filename}")
+        return f"thumbnail:{image.id}:{max_edge}".encode()
+
+
+class InMemoryThumbnailStore(ThumbnailStorePort):
+    """Keeps thumbnails in a dict, and has no file to hand back.
+
+    `locate()` answers `None` always and records that it was asked, which
+    is what the conditional-request tests need: a `304` must be decided
+    without the store being consulted at all.
+    """
+
+    def __init__(self) -> None:
+        self.saved: dict[ImageId, bytes] = {}
+        self.locate_calls: list[str] = []
+
+    def save(self, image_id: ImageId, data: bytes) -> str:
+        self.saved[image_id] = data
+        return f"memory/{image_id.value}.jpg"
+
+    def locate(self, location: str) -> Path | None:
+        self.locate_calls.append(location)
+        return None
+
+
+class FakeFileRevealer(FileRevealerPort):
+    """Opens no window; answers "is the file there" from the real filesystem.
+
+    Filesystem-backed for the reason `FakeDeviceLocator` is: the `/reveal`
+    tests put a real file under `tmp_path` and delete it to get a 410, so
+    the missing-file rule is exercised against a disk rather than against a
+    flag the test set. **Nothing in the default suite may start
+    `explorer.exe`** -- `WindowsFileRevealer` is tested with its process
+    launcher replaced.
+    """
+
+    def __init__(self) -> None:
+        self.revealed: list[ImagePath] = []
+
+    def reveal(self, path: ImagePath) -> None:
+        if not path.value.is_file():
+            raise FileNotFoundError(f"No file at {path}")
+        self.revealed.append(path)
 
 
 class StubContentHasher(ContentHasherPort):

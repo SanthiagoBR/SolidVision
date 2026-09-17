@@ -25,6 +25,11 @@ The database stores only:
 
 The filesystem is always the source of truth.
 
+Thumbnails are files in an application cache directory
+(`settings.thumbnail_directory`), not database contents: the database stores
+where each one is. Nothing is ever written inside a photo collection
+(RFC-028 section 10, RFC-030 section 7.1).
+
 ---
 
 # Architecture Rules
@@ -379,6 +384,17 @@ python -m app.infrastructure.workers.job_runner
 on is a Windows construct, and a container would see a mounted path
 instead. The product ships as a native Windows process with an installer,
 with only PostgreSQL in a container.
+
+Thumbnails for images indexed before RFC-030, without loading the model:
+
+```
+python -m app.infrastructure.workers.thumbnail_backfill --root PATH
+```
+
+No route accepts a file path, in any form. `POST /api/v1/images/{id}/reveal`
+takes an id, builds the path on the server, and runs behind two guards
+(`ALLOW_LOCAL_FILE_ACTIONS` and a loopback check) that must stay independent
+of each other (RFC-030 section 6).
 
 ---
 

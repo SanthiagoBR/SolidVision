@@ -18,6 +18,7 @@ import pytest
 
 from app.application.use_cases.index_or_update_images import IndexOrUpdateImagesUseCase
 from app.application.use_cases.indexing_plan import IndexCandidate
+from app.application.use_cases.thumbnail_writer import ThumbnailWriter
 from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.value_objects.capture_date import CaptureDate
@@ -27,7 +28,12 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
-from tests.application.fakes import FakeImageRepository, StubContentHasher
+from tests.application.fakes import (
+    FakeImageRepository,
+    InMemoryThumbnailStore,
+    RecordingThumbnailGenerator,
+    StubContentHasher,
+)
 from tests.conftest import TEST_DEVICE_ID
 
 MODIFIED_AT = datetime.datetime(2026, 8, 21, 12, 0, tzinfo=datetime.UTC)
@@ -144,6 +150,7 @@ def _use_case(
     content_hasher: StubContentHasher | None = None,
     batch_size: int = 4,
     metadata_prefetch_size: int = 512,
+    thumbnail_writer: ThumbnailWriter | None = None,
 ) -> IndexOrUpdateImagesUseCase:
     return IndexOrUpdateImagesUseCase(
         repository=repository,
@@ -151,6 +158,7 @@ def _use_case(
         content_hasher=content_hasher or StubContentHasher(),
         batch_size=batch_size,
         metadata_prefetch_size=metadata_prefetch_size,
+        thumbnail_writer=thumbnail_writer,
     )
 
 
@@ -889,3 +897,148 @@ class TestCaptureDateOnSkippedRows:
         )
 
         assert "Dated:               1" in report
+
+
+class TestThumbnails:
+    """RFC-030 section 7.2: rendered for what was embedded, and never fatal."""
+
+    MAX_EDGE = 512
+
+    def _writer(
+        self, failing: frozenset[str] = frozenset()
+    ) -> tuple[ThumbnailWriter, RecordingThumbnailGenerator, InMemoryThumbnailStore]:
+        generator = RecordingThumbnailGenerator(failing=failing)
+        store = InMemoryThumbnailStore()
+        return ThumbnailWriter(generator, store, self.MAX_EDGE), generator, store
+
+    def test_every_embedded_image_is_persisted_with_its_thumbnail_location(
+        self,
+    ) -> None:
+        writer, generator, store = self._writer()
+        repository = FakeImageRepository()
+        names = [f"photo_{index}" for index in range(5)]
+
+        summary = _use_case(
+            repository, _RecordingModel(), batch_size=2, thumbnail_writer=writer
+        ).execute([_candidate(name) for name in names])
+
+        assert summary.thumbnails_written == 5
+        assert summary.thumbnail_failures == []
+        assert [edge for _, edge in generator.generated] == [self.MAX_EDGE] * 5
+        for name in names:
+            image_id = _image(name).id
+            metadata = repository.get_index_metadata(image_id)
+            assert metadata is not None
+            assert metadata.thumbnail_path == f"memory/{image_id.value}.jpg"
+            assert image_id in store.saved
+
+    def test_a_thumbnail_failure_is_not_an_indexing_failure(self) -> None:
+        """Invariant 6: the embedding was paid for, and the image is searchable.
+
+        The image is persisted, counted as indexed, and carries no
+        thumbnail -- so the backfill picks it up later -- while the failure
+        is reported where a human reading the run will see it.
+        """
+        writer, _, _ = self._writer(failing=frozenset({"photo_1"}))
+        repository = FakeImageRepository()
+
+        summary = _use_case(
+            repository, _RecordingModel(), batch_size=4, thumbnail_writer=writer
+        ).execute([_candidate(f"photo_{index}") for index in range(3)])
+
+        assert summary.failures == []
+        assert summary.failed == 0
+        assert summary.indexed == 3
+        assert summary.as_progress().failed_images == 0
+        (failure,) = summary.thumbnail_failures
+        assert failure.path.endswith("photo_1.png")
+        assert isinstance(failure.error, OSError)
+        assert summary.thumbnails_written == 2
+
+        failed = repository.get_index_metadata(_image("photo_1").id)
+        assert failed is not None
+        assert failed.thumbnail_path is None
+        assert not failed.thumbnail_generated
+        saved = {
+            record.image.filename: record.thumbnail_path
+            for record in repository.save_indexed_calls
+        }
+        assert saved["photo_1"] is None
+        assert saved["photo_0"] is not None
+
+    def test_an_image_whose_embedding_failed_is_never_rendered(self) -> None:
+        """Pitfall 8: the per-image retry drops it, and so must the thumbnails.
+
+        Rendering it would pay a full decode for a row that is never
+        written -- and a thumbnail with no embedding is a row the rest of
+        the system has no way to reach.
+        """
+        writer, generator, store = self._writer()
+        model = _BatchFailsForFilename("photo_2")
+
+        summary = _use_case(
+            FakeImageRepository(), model, batch_size=4, thumbnail_writer=writer
+        ).execute([_candidate(f"photo_{index}") for index in range(4)])
+
+        rendered = {image.filename for image, _ in generator.generated}
+        assert "photo_2" not in rendered
+        assert rendered == {"photo_0", "photo_1", "photo_3"}
+        assert _image("photo_2").id not in store.saved
+        (failure,) = summary.failures
+        assert failure.path.endswith("photo_2.png")
+
+    def test_skipped_and_refreshed_files_are_not_rendered(self) -> None:
+        """A re-scan costs a `stat` per file, and a decode per file would end that.
+
+        Unchanged files keep the thumbnail they have; files indexed before
+        RFC-030 are the backfill's.
+        """
+        repository = FakeImageRepository()
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate("unchanged"), _candidate("touched")]
+        )
+
+        writer, generator, _ = self._writer()
+        summary = _use_case(
+            repository, _RecordingModel(), thumbnail_writer=writer
+        ).execute(
+            [
+                _candidate("unchanged"),
+                _candidate(
+                    "touched", file_modified_at=MODIFIED_AT + datetime.timedelta(1)
+                ),
+            ]
+        )
+
+        assert summary.skipped_unchanged == 1
+        assert summary.skipped_content_identical == 1
+        assert generator.generated == []
+        assert summary.thumbnails_written == 0
+
+    def test_a_pipeline_without_a_writer_persists_no_thumbnail(self) -> None:
+        """Every composition written before RFC-030 keeps doing what it did."""
+        repository = FakeImageRepository()
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo")]
+        )
+
+        assert summary.thumbnails_written == 0
+        (record,) = repository.save_indexed_calls
+        assert record.thumbnail_path is None
+
+    def test_thumbnail_time_is_reported_apart_from_inference(self) -> None:
+        writer, _, _ = self._writer()
+
+        report = (
+            _use_case(FakeImageRepository(), _RecordingModel(), thumbnail_writer=writer)
+            .execute([_candidate("photo")])
+            .format_report()
+        )
+
+        assert "Thumbnails:" in report
+        assert "written:           1" in report
+
+    def test_a_nonsensical_max_edge_is_rejected_at_construction(self) -> None:
+        with pytest.raises(ValueError, match="max_edge"):
+            ThumbnailWriter(RecordingThumbnailGenerator(), InMemoryThumbnailStore(), 0)
