@@ -21,12 +21,20 @@ from __future__ import annotations
 import datetime
 import uuid
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.application.fakes import FakeImageRepository
-from tests.conftest import TEST_DEVICE_ID
+from tests.application.fakes import (
+    FakeDeviceLocator,
+    FakeDeviceRepository,
+    FakeImageRepository,
+)
+from tests.conftest import TEST_DEVICE_ID, make_test_device
 
+from app.application.use_cases.resolve_image_location import (
+    ResolveImageLocationUseCase,
+)
 from app.application.use_cases.search_images import (
     MAX_SEARCH_LIMIT,
     SearchImagesUseCase,
@@ -42,7 +50,10 @@ from app.domain.value_objects.search_hit import SearchHit
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.config.settings import settings
 from app.presentation.api import app
-from app.presentation.dependencies import get_search_images_use_case
+from app.presentation.dependencies import (
+    get_resolve_image_location_use_case,
+    get_search_images_use_case,
+)
 
 SEARCH_URL = "/api/v1/images/search"
 
@@ -96,7 +107,26 @@ def make_hit(
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def locator() -> FakeDeviceLocator:
+    """Where the test device is mounted: nowhere, unless a test connects it.
+
+    Installed for every test in this file, because since RFC-030 the route
+    resolves each hit's location after searching. Without the override
+    that would reach the real device repository -- a database session --
+    and the real volume enumeration, neither of which this level may touch.
+    """
+    fake = FakeDeviceLocator()
+    app.dependency_overrides[get_resolve_image_location_use_case] = lambda: (
+        ResolveImageLocationUseCase(
+            device_repository=FakeDeviceRepository([make_test_device("HD-TEST")]),
+            device_locator=fake,
+        )
+    )
+    return fake
+
+
+@pytest.fixture
+def client(locator: FakeDeviceLocator) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -141,6 +171,13 @@ def test_a_normal_query_returns_the_documented_body(
                 "similarity": 0.3255,
                 "captured_at": None,
                 "capture_source": None,
+                "device": {
+                    "id": str(TEST_DEVICE_ID.value),
+                    "label": "HD-TEST",
+                    "connected": False,
+                },
+                "relative_path": "private/photos/fish_ponds_02.jpg",
+                "absolute_path": None,
             }
         ],
         "excluded_unknown_date": None,
@@ -231,29 +268,83 @@ def test_similarity_survives_as_a_float_including_negative_values(
     assert all(isinstance(result["similarity"], float) for result in results)
 
 
-def test_no_result_exposes_a_server_path(
+def test_a_result_publishes_where_the_file_is_and_nothing_more(
     client: TestClient, stub: RecordingSearchUseCase
 ) -> None:
-    """The server filesystem is not a public interface (RFC-026 section 5.2).
+    """RFC-030 reversed RFC-026 here, and this test used to pin the opposite.
 
-    `SearchHit.image` carries a `path` and the repository returns it, so
-    this asserts a deliberate omission rather than an absence. The
-    literal check is the one that would catch a `path` smuggled into
-    another field name.
+    It was `test_no_result_exposes_a_server_path`, asserting that
+    `private/photos` never appeared in a response. RFC-030 section 2 kept
+    one of RFC-026's two arguments -- a path is not an identifier -- and
+    dropped the other, because a local-first server's filesystem is the
+    user's own. The field set is still pinned exactly: the paths arrive
+    under their own names and nowhere else.
     """
     stub.hits = [make_hit("fish_ponds_02", 0.3255)]
 
     response = client.get(SEARCH_URL, params={"q": "fish ponds"})
 
-    for result in response.json()["results"]:
-        assert set(result) == {
-            "id",
-            "filename",
-            "similarity",
-            "captured_at",
-            "capture_source",
-        }
-    assert "private/photos" not in response.text
+    (result,) = response.json()["results"]
+    assert set(result) == {
+        "id",
+        "filename",
+        "similarity",
+        "captured_at",
+        "capture_source",
+        "device",
+        "relative_path",
+        "absolute_path",
+    }
+    assert set(result["device"]) == {"id", "label", "connected"}
+    assert result["relative_path"] == "private/photos/fish_ponds_02.jpg"
+
+
+def test_a_hit_on_a_disconnected_disk_is_a_200_with_no_absolute_path(
+    client: TestClient, stub: RecordingSearchUseCase
+) -> None:
+    """RFC-030 section 4.1: "it is on HD-TEST, in private/photos" is the answer."""
+    stub.hits = [make_hit("fish_ponds_02", 0.3255)]
+
+    response = client.get(SEARCH_URL, params={"q": "fish ponds"})
+
+    assert response.status_code == 200
+    (result,) = response.json()["results"]
+    assert result["absolute_path"] is None
+    assert result["device"]["connected"] is False
+    assert result["device"]["label"] == "HD-TEST"
+
+
+def test_a_hit_on_a_connected_disk_carries_a_forward_slashed_absolute_path(
+    client: TestClient,
+    stub: RecordingSearchUseCase,
+    locator: FakeDeviceLocator,
+    tmp_path: Path,
+) -> None:
+    """Pitfall 9 of the build prompt: `ImagePath` publishes `/`, never `\\`.
+
+    A JSON client should not have to know which operating system answered
+    in order to split a path.
+    """
+    locator.connect(TEST_DEVICE_ID, tmp_path)
+    stub.hits = [make_hit("fish_ponds_02", 0.3255)]
+
+    (result,) = client.get(SEARCH_URL, params={"q": "fish ponds"}).json()["results"]
+
+    assert result["device"]["connected"] is True
+    expected = (tmp_path / "private/photos/fish_ponds_02.jpg").as_posix()
+    assert result["absolute_path"] == expected
+    assert "\\" not in result["absolute_path"]
+
+
+def test_the_disk_is_asked_about_once_per_page_not_once_per_hit(
+    client: TestClient, stub: RecordingSearchUseCase, locator: FakeDeviceLocator
+) -> None:
+    """RFC-030 section 4.2, at the edge: ten hits on one disk, one enumeration."""
+    stub.hits = [make_hit(f"photo_{index}", 0.5) for index in range(10)]
+
+    client.get(SEARCH_URL, params={"q": "anything"})
+
+    assert locator.mount_point_calls == [TEST_DEVICE_ID]
 
 
 def test_an_empty_result_set_is_a_200_not_a_404(
@@ -430,12 +521,12 @@ class TestDeviceFilterParameter:
     def test_the_response_shape_is_unchanged_by_filtering(
         self, client: TestClient, stub: RecordingSearchUseCase
     ) -> None:
-        """RFC-027 narrows the question; RFC-030 changes the answer.
+        """RFC-027 narrows the question; RFC-030 changed the answer, for both.
 
-        Publishing the path, the disk a hit is on and whether that disk is
-        plugged in belongs to RFC-030, which owns the response shape. A
-        device filter adds an input and nothing else -- the fields present
-        are the same with or without it, and none of them names a device.
+        A device filter adds an input and nothing else: the fields present
+        are the same with or without it. Until RFC-030 this also asserted
+        that no field named a device; RFC-030 added `device` to every
+        result, filtered or not, which is the property that remains.
         """
         stub.hits = [make_hit("fish_ponds_02", 0.3255)]
 
@@ -446,7 +537,7 @@ class TestDeviceFilterParameter:
 
         assert set(filtered) == set(unfiltered)
         assert set(filtered["results"][0]) == set(unfiltered["results"][0])
-        assert not any("device" in key for key in filtered["results"][0])
+        assert "device" in unfiltered["results"][0]
         assert filtered["excluded_unknown_date"] is None
 
 

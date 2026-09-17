@@ -13,7 +13,12 @@ from app.domain.exceptions.device_errors import (
 from app.domain.exceptions.domain_error import (
     ConflictError,
     DomainError,
+    GoneError,
     NotFoundError,
+)
+from app.domain.exceptions.file_access_errors import (
+    FileGoneError,
+    ThumbnailNotFoundError,
 )
 from app.domain.exceptions.image_errors import (
     ImageAlreadyExistsError,
@@ -51,6 +56,8 @@ __all__ = [
     "DomainError",
     "EmbeddingDimensionMismatchError",
     "EmptySearchQueryError",
+    "FileGoneError",
+    "GoneError",
     "IllegalJobTransitionError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
@@ -66,5 +73,6 @@ __all__ = [
     "InvalidVolumeIdentityError",
     "JobNotFoundError",
     "NotFoundError",
+    "ThumbnailNotFoundError",
     "UnsupportedImageExtensionError",
 ]

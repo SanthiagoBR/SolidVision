@@ -314,3 +314,25 @@ def test_negative_file_size_raises_check_constraint_violation(
     db_session.add(model)
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+class TestThumbnailPathColumn:
+    """RFC-030 section 7: a location in the app's cache, or NULL."""
+
+    def test_the_column_is_a_nullable_plain_string(self) -> None:
+        column = ImageModel.__table__.c.thumbnail_path
+
+        assert column.nullable is True
+        assert isinstance(column.type, String)
+
+    def test_from_domain_leaves_it_unset(self) -> None:
+        """`Image` carries no thumbnail; only an `IndexingRecord` writes one."""
+        image = Image(
+            id=ImageId(uuid.uuid4()),
+            device_id=TEST_DEVICE_ID,
+            relative_path=ImagePath("images/example.png"),
+            filename="example",
+            extension="png",
+        )
+
+        assert ImageModel.from_domain(image).thumbnail_path is None

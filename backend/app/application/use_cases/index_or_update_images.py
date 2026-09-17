@@ -11,7 +11,7 @@ The stages are explicit and composed as a stream, not as queues or threads
 (RFC-024 section 10):
 
     candidates -> prefetch window -> skip decision -> inference batch
-               -> persistence
+               -> thumbnails -> persistence
 
 Two window sizes appear below and they are deliberately different. Metadata
 prefetch reads a handful of scalars per row, so it wants a large window;
@@ -33,6 +33,7 @@ from app.application.use_cases.indexing_plan import (
     IndexPlan,
     plan_indexing,
 )
+from app.application.use_cases.thumbnail_writer import ThumbnailWriter
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
 from app.domain.services.embedding_model_port import EmbeddingModelPort
@@ -108,6 +109,24 @@ class IndexingSummary:
     nobody touched would mean the conditional write has stopped being
     conditional, which is why it is reported rather than left implicit.
     """
+    thumbnails_written: int = 0
+    thumbnail_seconds: float = 0.0
+    """Rendering and storing thumbnails, kept apart from inference time.
+
+    Apart because RFC-030 section 7.2 asked how much thumbnails move the
+    RFC-024 throughput, and folded into `inference_seconds` the answer
+    would be unreadable -- the report's img/s figure for the model would
+    silently start including a JPEG encoder.
+    """
+    thumbnail_failures: list[IndexingFailure] = field(default_factory=list)
+    """Images indexed successfully whose thumbnail could not be made.
+
+    **Not in `failures`, and not counted by `failed`.** Each of these
+    images was embedded and persisted and is searchable; it shows a
+    placeholder instead of a picture until the thumbnail backfill runs
+    (RFC-030 section 7.2). Reporting it as a failed file would tell a job
+    that a photo was lost when nothing was.
+    """
     elapsed_seconds: float = 0.0
     failures: list[IndexingFailure] = field(default_factory=list)
     inference_fallbacks: list[BatchFallback] = field(default_factory=list)
@@ -168,6 +187,9 @@ class IndexingSummary:
             self.persistence_seconds, self.persistence_batches
         )
         database_share = self._share(self.persistence_seconds, self.elapsed_seconds)
+        average_thumbnail = self._average(
+            self.thumbnail_seconds, self.thumbnails_written
+        )
 
         return "\n".join(
             [
@@ -190,6 +212,13 @@ class IndexingSummary:
                 f"{self._rate(self.indexed, self.inference_seconds):6.1f} img/s",
                 f"  fallbacks:    {len(self.inference_fallbacks):6d}   "
                 "(batch failed, retried per image)",
+                "",
+                "Thumbnails:",
+                f"  written:      {self.thumbnails_written:6d}",
+                f"  failed:       {len(self.thumbnail_failures):6d}   "
+                "(image indexed, no thumbnail)",
+                f"  avg:          {average_thumbnail:6.3f}s",
+                f"  total:        {self.thumbnail_seconds:6.2f}s",
                 "",
                 "Persistence:",
                 f"  rows:         {self.persistence_writes:6d}",
@@ -300,7 +329,8 @@ class IndexOrUpdateImagesUseCase:
     A batch is attempted as a unit; if it raises, the exact same images are
     retried one at a time, so N-1 of them still land and the one genuinely
     at fault is reported with its real path and its real exception.
-    Hashing and persistence are guarded per file for the same reason.
+    Hashing and persistence are guarded per file for the same reason, and
+    so, since RFC-030, is rendering a thumbnail.
     """
 
     def __init__(
@@ -310,7 +340,17 @@ class IndexOrUpdateImagesUseCase:
         content_hasher: ContentHasherPort,
         batch_size: int,
         metadata_prefetch_size: int,
+        thumbnail_writer: ThumbnailWriter | None = None,
     ) -> None:
+        """Compose the pipeline.
+
+        `thumbnail_writer` is optional so that every composition written
+        before RFC-030 -- the benchmarks, the measurement scripts, the
+        tests of control flow -- keeps doing exactly what it measured. The
+        executor that runs real jobs passes one (`build_runner()`), and a
+        pipeline without one persists `thumbnail_path = NULL`, which is
+        the state the backfill exists to repair.
+        """
         if batch_size < 1:
             raise ValueError(f"batch_size must be at least 1, got {batch_size}")
         if metadata_prefetch_size < 1:
@@ -324,6 +364,7 @@ class IndexOrUpdateImagesUseCase:
         self._content_hasher = content_hasher
         self._batch_size = batch_size
         self._metadata_prefetch_size = metadata_prefetch_size
+        self._thumbnail_writer = thumbnail_writer
 
     def execute(
         self,
@@ -456,8 +497,15 @@ class IndexOrUpdateImagesUseCase:
         next batch starts -- which is what makes crash-restart cheap under
         the incremental skip (section 13). Should a future measurement
         favour decoupling, `Settings` is where the second knob goes.
+
+        Thumbnails are rendered between the two, so that the row is
+        written once with its thumbnail location in it rather than written
+        and then updated -- a second round trip per batch for a value known
+        before the first.
         """
-        self._persist_batch(self._encode_batch(plans, summary), summary)
+        encoded = self._encode_batch(plans, summary)
+        thumbnails = self._render_thumbnails(encoded, summary)
+        self._persist_batch(encoded, thumbnails, summary)
 
     def _encode_batch(
         self, plans: list[IndexPlan], summary: IndexingSummary
@@ -522,9 +570,57 @@ class IndexOrUpdateImagesUseCase:
             encoded.append((plan, embedding))
         return encoded
 
+    def _render_thumbnails(
+        self,
+        encoded: list[tuple[IndexPlan, EmbeddingVector]],
+        summary: IndexingSummary,
+    ) -> dict[ImageId, str]:
+        """Render a thumbnail for every image that survived inference.
+
+        **Only survivors.** `encoded` is what `_encode_batch()` returned,
+        which excludes every image whose embedding failed -- including the
+        ones that failed only on the per-image retry. Rendering those would
+        pay a full decode for a row that is never written.
+
+        **Only `EMBED`.** Nothing reaches this method for a file the skip
+        decision passed over: an unchanged file already has the thumbnail
+        its bytes deserve, or has none and is the backfill's to render.
+        Rendering here for skipped files would turn a re-scan, which costs
+        a `stat` per file, into a full decode per file (RFC-030 section
+        7.2).
+
+        **A failure is reported and never propagated** (RFC-030 section
+        7.2): the embedding was paid for and the image is searchable. The
+        image is persisted with no thumbnail location, and the failure goes
+        to `thumbnail_failures`, never to `failures`.
+
+        One known imperfection, accepted: the file is stored before the
+        row is written. If the row then fails to persist, the stored file is
+        an orphan until the next run for that image overwrites it.
+        """
+        if self._thumbnail_writer is None or not encoded:
+            return {}
+
+        thumbnails: dict[ImageId, str] = {}
+        started = time.perf_counter()
+        try:
+            for plan, _ in encoded:
+                image = plan.candidate.image
+                try:
+                    thumbnails[image.id] = self._thumbnail_writer.write(image)
+                except Exception as exc:
+                    summary.thumbnail_failures.append(
+                        IndexingFailure(path=str(image.display_path), error=exc)
+                    )
+        finally:
+            summary.thumbnail_seconds += time.perf_counter() - started
+        summary.thumbnails_written += len(thumbnails)
+        return thumbnails
+
     def _persist_batch(
         self,
         encoded: list[tuple[IndexPlan, EmbeddingVector]],
+        thumbnails: dict[ImageId, str],
         summary: IndexingSummary,
     ) -> None:
         """Write a batch behind one transaction, degrading to per-row on failure.
@@ -547,6 +643,7 @@ class IndexOrUpdateImagesUseCase:
                 file_size=plan.candidate.file_size,
                 file_modified_at=plan.candidate.file_modified_at,
                 content_hash=plan.content_hash,
+                thumbnail_path=thumbnails.get(plan.candidate.image.id),
             )
             for plan, embedding in encoded
         ]

@@ -14,15 +14,19 @@ from where an error sits in the hierarchy, not from a table of exception
 classes kept in Presentation: `NotFoundError` answers 404, `ConflictError`
 answers 409, and everything else still answers 400. A new "not found"
 error inherits its status; it does not have to be registered anywhere, and
-nobody can forget to.
+nobody can forget to. RFC-030 added a third base the same way:
+`GoneError` answers 410.
 
     situation                          error                         status
     ---------------------------------- ----------------------------- ------
     job id names nothing               JobNotFoundError                 404
     device id names nothing            DeviceNotFoundError              404
+    image id names nothing             ImageNotFoundError               404
+    image has no thumbnail to serve    ThumbnailNotFoundError           404
     device already has an active job   DeviceBusyError                  409
     cancelling a finished job          IllegalJobTransitionError        409
     device is not plugged in           DeviceNotConnectedError          409
+    disk plugged in, file not on it    FileGoneError                    410
     scope is absolute / has .. / gone  InvalidJobScopeError             400
 
 The last two rows are worth reading together. RFC-029 section 7.1 sent
@@ -38,7 +42,12 @@ from __future__ import annotations
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from app.domain.exceptions import ConflictError, DomainError, NotFoundError
+from app.domain.exceptions import (
+    ConflictError,
+    DomainError,
+    GoneError,
+    NotFoundError,
+)
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -46,6 +55,7 @@ logger = get_logger(__name__)
 STATUS_BY_BASE: tuple[tuple[type[DomainError], int], ...] = (
     (NotFoundError, status.HTTP_404_NOT_FOUND),
     (ConflictError, status.HTTP_409_CONFLICT),
+    (GoneError, status.HTTP_410_GONE),
 )
 """The status-bearing bases, and nothing else.
 
@@ -72,8 +82,8 @@ def status_for(error: Exception) -> int:
 
     "Most specific" is resolved through the exception's own MRO rather
     than through the order of the table above, so the answer does not
-    depend on how the tuple happens to be written. With two disjoint bases
-    that is the same answer either way today; it stops being the same
+    depend on how the tuple happens to be written. With three disjoint
+    bases that is the same answer either way today; it stops being the same
     answer the moment a third base is added under one of these two, which
     is exactly when a subtle mapping bug would be hardest to see.
     """

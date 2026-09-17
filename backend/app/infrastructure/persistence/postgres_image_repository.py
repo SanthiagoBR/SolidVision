@@ -183,6 +183,7 @@ class PostgresImageRepository(ImageRepository):
         model.file_size = record.file_size
         model.file_modified_at = record.file_modified_at
         model.content_hash = record.content_hash
+        model.thumbnail_path = record.thumbnail_path
         return model
 
     def search_similar(
@@ -385,6 +386,7 @@ class PostgresImageRepository(ImageRepository):
             file_modified_at=model.file_modified_at,
             content_hash=model.content_hash,
             capture_source=_source_member(model.capture_source),
+            thumbnail_path=model.thumbnail_path,
         )
 
     def get_index_metadata_many(
@@ -401,7 +403,8 @@ class PostgresImageRepository(ImageRepository):
 
         `capture_source` is one of them since RFC-028, for the conditional
         capture-date write, and costs one short string per row in a query
-        that was running anyway.
+        that was running anyway. `thumbnail_path` joined it in RFC-030 for
+        the thumbnail backfill, on the same terms.
         """
         if not image_ids:
             return {}
@@ -412,6 +415,7 @@ class PostgresImageRepository(ImageRepository):
             ImageModel.file_modified_at,
             ImageModel.content_hash,
             ImageModel.capture_source,
+            ImageModel.thumbnail_path,
         ).where(ImageModel.id.in_([image_id.value for image_id in image_ids]))
 
         return {
@@ -420,6 +424,7 @@ class PostgresImageRepository(ImageRepository):
                 file_modified_at=row.file_modified_at,
                 content_hash=row.content_hash,
                 capture_source=_source_member(row.capture_source),
+                thumbnail_path=row.thumbnail_path,
             )
             for row in self._session.execute(statement)
         }
@@ -484,6 +489,39 @@ class PostgresImageRepository(ImageRepository):
                 "new_capture_source": capture.source.value,
             }
             for image_id, capture in captures.items()
+        ]
+        try:
+            self._session.execute(statement, parameters)
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
+        """Record one row's thumbnail location with a targeted UPDATE."""
+        self.update_thumbnail_path_many({image_id: location})
+
+    def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
+        """Record many thumbnail locations as one executemany UPDATE.
+
+        The shape of `update_capture_date_many()`, for its reasons: a Core
+        `UPDATE` so that an id with no row is skipped rather than refused,
+        no read of the row -- which would drag the embedding along -- and a
+        rollback before re-raising so the caller's per-row fallback starts
+        from a clean session.
+        """
+        if not locations:
+            return
+
+        table = cast(Table, ImageModel.__table__)
+        statement = (
+            update(table)
+            .where(table.c.id == bindparam("target_id"))
+            .values(thumbnail_path=bindparam("new_thumbnail_path"))
+        )
+        parameters = [
+            {"target_id": image_id.value, "new_thumbnail_path": location}
+            for image_id, location in locations.items()
         ]
         try:
             self._session.execute(statement, parameters)

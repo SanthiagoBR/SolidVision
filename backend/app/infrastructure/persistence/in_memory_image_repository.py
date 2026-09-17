@@ -109,6 +109,20 @@ def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters)
     )
 
 
+def store_thumbnail(thumbnails: dict[uuid.UUID, str], record: IndexingRecord) -> None:
+    """Apply a record's thumbnail location the way `save_indexed()` writes it.
+
+    `None` removes the stored location instead of leaving it, because the
+    record carries new bytes and a thumbnail of the old ones no longer
+    depicts the file -- the PostgreSQL implementation writes the NULL.
+    Shared by both in-process doubles so they cannot disagree about it.
+    """
+    if record.thumbnail_path is None:
+        thumbnails.pop(record.image.id.value, None)
+    else:
+        thumbnails[record.image.id.value] = record.thumbnail_path
+
+
 def with_capture_date(image: Image, capture: CaptureDate) -> Image:
     """Return `image` carrying `capture`, for the frozen entity's two fields."""
     return dataclasses.replace(
@@ -166,6 +180,12 @@ class InMemoryImageRepository(ImageRepository):
         # `save()` creates a row with no embedding, exactly as the
         # PostgreSQL column is nullable, and search must skip those.
         self._embeddings: dict[uuid.UUID, EmbeddingVector] = {}
+        # Apart from `_metadata` too, although it travels back inside an
+        # `IndexMetadata`: `update_index_metadata()` replaces that entry
+        # wholesale with whatever the caller built, and a caller refreshing
+        # change signals never knows the thumbnail. Kept in `_metadata`, a
+        # refresh would erase it; the PostgreSQL `UPDATE` does not.
+        self._thumbnails: dict[uuid.UUID, str] = {}
 
     def save(self, image: Image) -> None:
         self._images.append(image)
@@ -183,6 +203,7 @@ class InMemoryImageRepository(ImageRepository):
         self._images = [image for image in self._images if image.id != image_id]
         self._metadata.pop(image_id.value, None)
         self._embeddings.pop(image_id.value, None)
+        self._thumbnails.pop(image_id.value, None)
 
     def list(self) -> list[Image]:
         return list(self._images)
@@ -203,6 +224,7 @@ class InMemoryImageRepository(ImageRepository):
             content_hash=record.content_hash,
         )
         self._embeddings[record.image.id.value] = record.embedding
+        store_thumbnail(self._thumbnails, record)
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
         """Persist every record, or none of them.
@@ -217,6 +239,7 @@ class InMemoryImageRepository(ImageRepository):
         images = list(self._images)
         metadata = dict(self._metadata)
         embeddings = dict(self._embeddings)
+        thumbnails = dict(self._thumbnails)
 
         for record in records:
             images = [image for image in images if image.id != record.image.id]
@@ -227,10 +250,12 @@ class InMemoryImageRepository(ImageRepository):
                 content_hash=record.content_hash,
             )
             embeddings[record.image.id.value] = record.embedding
+            store_thumbnail(thumbnails, record)
 
         self._images = images
         self._metadata = metadata
         self._embeddings = embeddings
+        self._thumbnails = thumbnails
 
     def search_similar(
         self,
@@ -287,7 +312,11 @@ class InMemoryImageRepository(ImageRepository):
         stored = self._metadata.get(
             image_id.value, IndexMetadata(file_size=None, file_modified_at=None)
         )
-        return dataclasses.replace(stored, capture_source=image.capture_source)
+        return dataclasses.replace(
+            stored,
+            capture_source=image.capture_source,
+            thumbnail_path=self._thumbnails.get(image_id.value),
+        )
 
     def get_index_metadata_many(
         self, image_ids: Sequence[ImageId]
@@ -329,3 +358,13 @@ class InMemoryImageRepository(ImageRepository):
             )
             for image in self._images
         ]
+
+    def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
+        self.update_thumbnail_path_many({image_id: location})
+
+    def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
+        """Record each location whose image exists; skip the rest."""
+        known = {image.id for image in self._images}
+        for image_id, location in locations.items():
+            if image_id in known:
+                self._thumbnails[image_id.value] = location

@@ -54,6 +54,10 @@ class ImageRepository(ABC):
         a date read from the old bytes no longer describes the file, and
         "never examined" is the honest state until a scan reads the new
         ones.
+
+        The same holds for `record.thumbnail_path` (RFC-030): written as
+        given, `None` included, because a thumbnail rendered from the old
+        bytes no longer depicts the file.
         """
 
     @abstractmethod
@@ -168,8 +172,9 @@ class ImageRepository(ABC):
         Returns `IndexMetadata(None, None)` when a row exists but has no
         metadata yet -- callers must treat that as changed, not unchanged.
 
-        Includes the row's `capture_source` (RFC-028), which is not a
-        change signal; see `IndexMetadata.capture_source`.
+        Includes the row's `capture_source` (RFC-028) and `thumbnail_path`
+        (RFC-030), neither of which is a change signal; see
+        `IndexMetadata`.
         """
 
     @abstractmethod
@@ -210,7 +215,10 @@ class ImageRepository(ABC):
         does not touch the capture date, whatever `metadata.capture_source`
         says: that belongs to `update_capture_date()`, and a refresh that
         also wrote it would reset an examined row to "never examined"
-        whenever a caller built its `IndexMetadata` without one.
+        whenever a caller built its `IndexMetadata` without one. The
+        thumbnail location is left alone for the same reason -- a refresh
+        means the bytes did not change, so the thumbnail still depicts
+        them.
         """
 
     @abstractmethod
@@ -249,6 +257,29 @@ class ImageRepository(ABC):
 
         Ids with no row are skipped silently, exactly as the single-row
         version does. An empty mapping writes nothing.
+        """
+
+    @abstractmethod
+    def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
+        """Record where an existing row's thumbnail was stored (RFC-030).
+
+        The thumbnail backfill's write: it gives an already-indexed image
+        a thumbnail without touching its embedding or its change signals,
+        the way `update_capture_date()` gives it a date.
+
+        Does nothing when no row exists for `image_id`. A thumbnail is only
+        worth pointing at from an image the system knows, and creating a
+        row here would create one with no embedding.
+        """
+
+    @abstractmethod
+    def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
+        """Record many thumbnail locations as one write.
+
+        The bulk counterpart of `update_thumbnail_path()`, used once per
+        prefetch window by the backfill for the reason
+        `update_capture_date_many()` exists. Ids with no row are skipped
+        silently; an empty mapping writes nothing.
         """
 
     @abstractmethod

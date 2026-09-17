@@ -87,6 +87,7 @@ class JobRunner:
         max_attempts: int = 3,
         sleep: Callable[[float], None] = time.sleep,
         warm_up: Callable[[], None] | None = None,
+        excluded_directories: tuple[Path, ...] = (),
     ) -> None:
         self._jobs = jobs
         self._devices = devices
@@ -100,6 +101,13 @@ class JobRunner:
         self._stale_timeout = stale_timeout
         self._max_attempts = max_attempts
         self._sleep = sleep
+        self._excluded_directories = excluded_directories
+        """Directories no scan may yield files from -- the thumbnail cache.
+
+        See `FilesystemImageProvider`: without this, a job over a system
+        disk would index the application's own thumbnails as photographs
+        (RFC-030 section 7.1).
+        """
         self._warm_up = warm_up
         """Loads the model before the loop starts; see `run_forever()`.
 
@@ -253,6 +261,10 @@ class JobRunner:
 
         for failure in summary.failures:
             logger.error("Failed to index %s", failure.path, exc_info=failure.error)
+        for failure in summary.thumbnail_failures:
+            logger.warning(
+                "Indexed %s without a thumbnail", failure.path, exc_info=failure.error
+            )
         logger.info("%s", summary.format_report())
 
         if summary.stopped:
@@ -328,6 +340,7 @@ class JobRunner:
             scopes=job.scopes,
             resume_after=_checkpoint_of(job),
             observer=observer,
+            excluded_directories=self._excluded_directories,
         )
         return self._indexer.execute(
             self._candidates(provider, device, mount), observer
@@ -432,12 +445,25 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
 
     Separated as a function so the executor and the CLI compose the same
     runner rather than two that drift.
+
+    **This is the composition that renders thumbnails** (RFC-030 section
+    7.2), and the thumbnail cache is excluded from every scan it runs.
+    Both are here rather than defaulted inside `JobRunner` because the
+    directory is configuration, and this is where configuration becomes
+    arguments.
     """
+    from app.application.use_cases.thumbnail_writer import ThumbnailWriter
     from app.infrastructure.config.settings import settings
     from app.infrastructure.filesystem.mounted_device_locator import (
         MountedDeviceLocator,
     )
     from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
+    from app.infrastructure.filesystem.thumbnail_generator import (
+        PillowThumbnailGenerator,
+    )
+    from app.infrastructure.filesystem.thumbnail_store import (
+        FilesystemThumbnailStore,
+    )
     from app.infrastructure.filesystem.volume_identity_provider import (
         WindowsVolumeIdentityProvider,
     )
@@ -462,6 +488,11 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
             content_hasher=Sha256ContentHasher(),
             batch_size=settings.batch_size,
             metadata_prefetch_size=settings.metadata_prefetch_size,
+            thumbnail_writer=ThumbnailWriter(
+                generator=PillowThumbnailGenerator(),
+                store=FilesystemThumbnailStore(settings.thumbnail_directory),
+                max_edge=settings.thumbnail_max_edge,
+            ),
         ),
         supported_extensions=settings.supported_extensions,
         extract_capture_date=settings.extract_capture_date,
@@ -470,6 +501,7 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
         heartbeat_interval=settings.job_heartbeat_interval,
         stale_timeout=settings.job_stale_timeout,
         max_attempts=settings.job_max_attempts,
+        excluded_directories=(settings.thumbnail_directory,),
     )
 
 

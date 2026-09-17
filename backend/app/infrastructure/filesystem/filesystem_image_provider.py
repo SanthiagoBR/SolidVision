@@ -89,6 +89,7 @@ class FilesystemImageProvider:
         resume_after: PurePath | None = None,
         observer: IndexingObserver | None = None,
         report_every: int = 200,
+        excluded_directories: tuple[Path, ...] = (),
     ) -> None:
         """Configure a scan of `root`, or of some folders within it.
 
@@ -119,6 +120,15 @@ class FilesystemImageProvider:
         skips most of its scan here without yielding anything -- both look
         dead to a reaper watching for batches (RFC-029 section 9.1). The
         provider still knows nothing about jobs; it reports to a port.
+
+        `excluded_directories` are absolute directories whose contents are
+        never yielded, wherever they sit under `root` (RFC-030). The one
+        caller that needs it passes the thumbnail cache: indexing a whole
+        system disk would otherwise discover every thumbnail as a photo,
+        embed it, render a thumbnail *of* it, and discover that on the next
+        run -- a collection that grows every time it is scanned. Excluded
+        files are skipped before they count as examined, so they are not
+        part of the sequence a checkpoint names either.
         """
         self._root = root
         self._supported_extensions = {ext.lower() for ext in supported_extensions}
@@ -127,6 +137,9 @@ class FilesystemImageProvider:
         self._resume_after = resume_after
         self._observer = observer or NullIndexingObserver()
         self._report_every = max(1, report_every)
+        self._excluded = tuple(
+            directory.resolve() for directory in excluded_directories
+        )
 
     def discover(self) -> Iterator[DiscoveredImageFile]:
         """Yield metadata for every supported image file the scan covers.
@@ -199,6 +212,8 @@ class FilesystemImageProvider:
         for path in sorted(scope_root.rglob("*"), key=discovery_sort_key):
             if not path.is_file():
                 continue
+            if self._is_excluded(path):
+                continue
             if path.suffix.lower() not in self._supported_extensions:
                 continue
             if not is_after_checkpoint(self._relative(path), self._resume_after):
@@ -218,6 +233,21 @@ class FilesystemImageProvider:
                     read_capture_date(path) if self._extract_capture_date else None
                 ),
             )
+
+    def _is_excluded(self, path: Path) -> bool:
+        """Whether `path` lies inside one of the excluded directories.
+
+        Compared as paths, so the platform's case rule applies: on Windows
+        `AppData/Local` and `appdata/local` are the same directory.
+
+        The discovered path is *not* resolved, although the excluded ones
+        are. Resolving is a system call per file on the one loop that runs
+        100,000 times, and it buys nothing here: the walk starts from a
+        resolved root and yields absolute paths spelled as the directory
+        listing spells them, which is how the excluded directory resolves
+        too.
+        """
+        return any(path.is_relative_to(excluded) for excluded in self._excluded)
 
     def _relative(self, path: Path) -> PurePath:
         """Express a discovered file the way a checkpoint names it.

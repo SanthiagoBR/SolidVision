@@ -54,3 +54,30 @@ class IndexMetadata:
     `update_index_metadata()` leaves it untouched even though it receives
     an `IndexMetadata`.
     """
+
+    thumbnail_path: str | None = None
+    """Where this row's thumbnail is stored, or `None` if it has none (RFC-030).
+
+    **NOT A CHANGE SIGNAL. `plan_indexing()` must never read it.** It rides
+    the prefetch for the same reason `capture_source` does: the thumbnail
+    backfill asks "which of these rows already has one?" once per window,
+    and the prefetch is that query already. A missing thumbnail says
+    nothing about whether the pixels changed, and re-embedding a photo
+    because its thumbnail failed to render would spend the most expensive
+    operation in the system to fix the cheapest.
+
+    The location itself rather than a flag, although the backfill only
+    needs the flag. `GET /images/{id}/thumbnail` needs the location and
+    the `content_hash` beside it, and a boolean here would have left the
+    column with no reader at all -- the route would have had to rebuild
+    the location from the id, and the stored one would have become a
+    second copy of a fact free to disagree with the first.
+
+    Only `ImageRepository.save_indexed*()` and `update_thumbnail_path*()`
+    write it; `update_index_metadata()` leaves it alone.
+    """
+
+    @property
+    def thumbnail_generated(self) -> bool:
+        """Whether a thumbnail was ever stored for this row."""
+        return self.thumbnail_path is not None

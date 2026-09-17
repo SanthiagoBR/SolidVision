@@ -183,3 +183,62 @@ class TestCaptureDate:
             self.SHOT, CaptureSource.EXIF_ORIGINAL
         )
         assert discovered[2].capture_date == CaptureDate.unknown()
+
+
+class TestExcludedDirectories:
+    """RFC-030: the thumbnail cache is never discovered, even inside the root."""
+
+    def test_nothing_under_an_excluded_directory_is_yielded(
+        self, tmp_path: Path
+    ) -> None:
+        """A whole-disk scan over the app's own cache would index its thumbnails.
+
+        And render thumbnails of those, and find *them* on the next run.
+        """
+        (tmp_path / "photo.jpg").write_bytes(b"data")
+        cache = tmp_path / "AppData" / "Local" / "SolidVision" / "thumbnails"
+        (cache / "3f").mkdir(parents=True)
+        (cache / "3f" / "thumbnail.jpg").write_bytes(b"data")
+
+        provider = FilesystemImageProvider(
+            tmp_path, SUPPORTED_EXTENSIONS, excluded_directories=(cache,)
+        )
+
+        assert [item.filename for item in provider.discover()] == ["photo"]
+
+    def test_the_exclusion_follows_the_platform_case_rule(self, tmp_path: Path) -> None:
+        (tmp_path / "Cache").mkdir()
+        (tmp_path / "Cache" / "thumbnail.jpg").write_bytes(b"data")
+        (tmp_path / "photo.jpg").write_bytes(b"data")
+        spelled_differently = Path(str(tmp_path / "Cache").swapcase())
+
+        provider = FilesystemImageProvider(
+            tmp_path, SUPPORTED_EXTENSIONS, excluded_directories=(spelled_differently,)
+        )
+
+        expected = ["photo"] if os.name == "nt" else ["thumbnail", "photo"]
+        assert sorted(item.filename for item in provider.discover()) == sorted(expected)
+
+    def test_a_sibling_whose_name_merely_starts_the_same_is_not_excluded(
+        self, tmp_path: Path
+    ) -> None:
+        """Compared as paths, not as string prefixes: `thumbnails-old` is a folder."""
+        (tmp_path / "thumbnails").mkdir()
+        (tmp_path / "thumbnails-old").mkdir()
+        (tmp_path / "thumbnails-old" / "photo.jpg").write_bytes(b"data")
+
+        provider = FilesystemImageProvider(
+            tmp_path,
+            SUPPORTED_EXTENSIONS,
+            excluded_directories=(tmp_path / "thumbnails",),
+        )
+
+        assert [item.filename for item in provider.discover()] == ["photo"]
+
+    def test_no_exclusion_changes_nothing(self, tmp_path: Path) -> None:
+        (tmp_path / "thumbnails").mkdir()
+        (tmp_path / "thumbnails" / "a.jpg").write_bytes(b"data")
+
+        provider = FilesystemImageProvider(tmp_path, SUPPORTED_EXTENSIONS)
+
+        assert [item.filename for item in provider.discover()] == ["a"]

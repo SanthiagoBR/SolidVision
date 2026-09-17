@@ -168,7 +168,10 @@ def main() -> None:
         # Extraction is always on here, whatever `settings.extract_capture_date`
         # says: reading the date is the only thing this command does.
         provider = FilesystemImageProvider(
-            root, settings.supported_extensions, extract_capture_date=True
+            root,
+            settings.supported_extensions,
+            extract_capture_date=True,
+            excluded_directories=(settings.thumbnail_directory,),
         )
         summary = BackfillCaptureDatesUseCase(
             repository=PostgresImageRepository(session),

@@ -74,3 +74,24 @@ def test_metadata_with_the_same_fields_compares_equal() -> None:
     assert IndexMetadata(1, modified_at, "a" * 64) != IndexMetadata(
         1, modified_at, "b" * 64
     )
+
+
+def test_thumbnail_path_defaults_to_none_meaning_no_thumbnail() -> None:
+    """RFC-030: a row indexed before thumbnails existed has none.
+
+    Defaulted like `content_hash`, so every construction site written
+    before RFC-030 -- the pipeline's metadata refresh among them -- keeps
+    describing a row without claiming a thumbnail it never rendered.
+    """
+    metadata = IndexMetadata(file_size=1, file_modified_at=None)
+
+    assert metadata.thumbnail_path is None
+    assert metadata.thumbnail_generated is False
+
+
+def test_thumbnail_generated_follows_the_stored_location() -> None:
+    metadata = IndexMetadata(
+        file_size=1, file_modified_at=None, thumbnail_path="ab/example.jpg"
+    )
+
+    assert metadata.thumbnail_generated is True

@@ -34,8 +34,15 @@ from tests.dataset.test_semantic_search_e2e import (
 )
 
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+from app.infrastructure.persistence.postgres_device_repository import (
+    PostgresDeviceRepository,
+)
 from app.presentation.api import app
-from app.presentation.dependencies import get_embedding_model, get_image_repository
+from app.presentation.dependencies import (
+    get_device_repository,
+    get_embedding_model,
+    get_image_repository,
+)
 
 pytestmark = pytest.mark.slow
 
@@ -64,14 +71,24 @@ def client(
 ) -> Iterator[TestClient]:
     """The production app, pointed at the indexed corpus.
 
-    Only the two seams are overridden, and both for isolation: the
-    repository so that requests read the corpus indexed inside a
+    Only the seams are overridden, and all for isolation: the
+    repositories so that requests read the corpus indexed inside a
     transaction that is always rolled back, and the model so that the
     checkpoint loaded once for the module is the same one that produced
     the stored embeddings. The route, the composition root, the use case,
     the encoder, and the SQL are all the real thing.
+
+    The device repository joined the list with RFC-030, whose search route
+    resolves each hit's disk. It reads the same transaction as the image
+    repository, because the device row the corpus points at exists only
+    inside it. The volume enumeration is *not* overridden: the test
+    device's volume is one no machine has, so the real answer is "not
+    plugged in".
     """
     app.dependency_overrides[get_image_repository] = lambda: indexed_corpus.repository
+    app.dependency_overrides[get_device_repository] = lambda: (
+        PostgresDeviceRepository(indexed_corpus.session)
+    )
     app.dependency_overrides[get_embedding_model] = lambda: embedding_model
     with TestClient(app) as test_client:
         yield test_client

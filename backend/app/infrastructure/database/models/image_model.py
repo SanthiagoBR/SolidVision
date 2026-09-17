@@ -127,6 +127,26 @@ class ImageModel(Base):
     does not need a migration.
     """
 
+    thumbnail_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    """Where this image's thumbnail is kept, relative to the thumbnail cache (RFC-030).
+
+    NULL means *no thumbnail*: the row predates RFC-030, or rendering
+    failed, or its bytes changed and the new thumbnail has not been made
+    yet. `GET /images/{id}/thumbnail` answers 404 for all three and the UI
+    shows a placeholder (RFC-030 section 7.2).
+
+    **Relative to `settings.thumbnail_directory`, never absolute** -- the
+    argument RFC-027 made for `relative_path`, one directory over. An
+    absolute location would bake the cache's current directory into every
+    row, so moving the cache would leave each one pointing at nothing.
+
+    **This column is why the cheap primary-key rewrite ends here** (RFC-030
+    section 7.3). The value is derived from `images.id`, and so is the
+    name of the file on disk; re-deriving the id after this point means
+    renaming files as well as updating rows. Recorded as an assumed
+    consequence, as RFC-029 section 11 anticipated.
+    """
+
     __table_args__ = (
         UniqueConstraint(
             "device_id", "relative_path", name="uq_images_device_relative_path"
@@ -167,6 +187,7 @@ class ImageModel(Base):
             capture_source=(
                 image.capture_source.value if image.capture_source else None
             ),
+            thumbnail_path=None,
         )
 
     def to_domain(self) -> Image:

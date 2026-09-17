@@ -16,18 +16,28 @@ from sqlalchemy.orm import Session
 
 from app.application.use_cases.cancel_indexing_job import CancelIndexingJobUseCase
 from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
+from app.application.use_cases.get_image_details import GetImageDetailsUseCase
 from app.application.use_cases.get_indexing_job import GetIndexingJobUseCase
+from app.application.use_cases.get_thumbnail import GetThumbnailUseCase
 from app.application.use_cases.index_image import IndexImageUseCase
 from app.application.use_cases.list_indexing_jobs import ListIndexingJobsUseCase
+from app.application.use_cases.resolve_image_location import (
+    ResolveImageLocationUseCase,
+)
+from app.application.use_cases.reveal_image import RevealImageUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.repositories.indexing_job_repository import IndexingJobRepository
 from app.domain.services.device_locator import DeviceLocator
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.services.file_revealer_port import FileRevealerPort
+from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 from app.infrastructure.config.settings import settings
+from app.infrastructure.filesystem.file_revealer import WindowsFileRevealer
 from app.infrastructure.filesystem.mounted_device_locator import MountedDeviceLocator
+from app.infrastructure.filesystem.thumbnail_store import FilesystemThumbnailStore
 from app.infrastructure.filesystem.volume_identity_provider import (
     WindowsVolumeIdentityProvider,
 )
@@ -208,16 +218,100 @@ def get_list_indexing_jobs_use_case(
     return ListIndexingJobsUseCase(job_repository=job_repository)
 
 
+def get_resolve_image_location_use_case(
+    device_repository: DeviceRepository = Depends(get_device_repository),
+    device_locator: DeviceLocator = Depends(get_device_locator),
+) -> ResolveImageLocationUseCase:
+    """Return the use case that says where images are right now (RFC-030).
+
+    Per request, like the locator under it, and for the same reason: the
+    answer is only true until someone pulls a cable.
+    """
+    return ResolveImageLocationUseCase(
+        device_repository=device_repository,
+        device_locator=device_locator,
+    )
+
+
+def get_image_details_use_case(
+    repository: ImageRepository = Depends(get_image_repository),
+    location_resolver: ResolveImageLocationUseCase = Depends(
+        get_resolve_image_location_use_case
+    ),
+) -> GetImageDetailsUseCase:
+    """Return the use case behind `GET /api/v1/images/{id}`.
+
+    The image and device repositories share the request's one session:
+    FastAPI resolves `get_db` once per request however many providers
+    depend on it.
+    """
+    return GetImageDetailsUseCase(
+        repository=repository, location_resolver=location_resolver
+    )
+
+
+def get_thumbnail_store() -> ThumbnailStorePort:
+    """Return the on-disk thumbnail cache at `settings.thumbnail_directory`.
+
+    Constructing it touches nothing -- the directory is created on the first
+    write, which the API never makes -- so a new one per request costs a
+    `Path.resolve()`.
+    """
+    return FilesystemThumbnailStore(settings.thumbnail_directory)
+
+
+def get_thumbnail_use_case(
+    repository: ImageRepository = Depends(get_image_repository),
+    thumbnail_store: ThumbnailStorePort = Depends(get_thumbnail_store),
+) -> GetThumbnailUseCase:
+    """Return the use case behind `GET /api/v1/images/{id}/thumbnail`.
+
+    No device locator: a thumbnail is served from the application's cache
+    whether or not the photo's disk is plugged in (RFC-030 section 4.1).
+    """
+    return GetThumbnailUseCase(repository=repository, thumbnail_store=thumbnail_store)
+
+
+def get_file_revealer() -> FileRevealerPort:
+    """Return the Windows Explorer adapter, the only one RFC-030 delivers."""
+    return WindowsFileRevealer()
+
+
+def get_reveal_image_use_case(
+    repository: ImageRepository = Depends(get_image_repository),
+    location_resolver: ResolveImageLocationUseCase = Depends(
+        get_resolve_image_location_use_case
+    ),
+    file_revealer: FileRevealerPort = Depends(get_file_revealer),
+) -> RevealImageUseCase:
+    """Return the use case behind `POST /api/v1/images/{id}/reveal`.
+
+    Only ever resolved after both guards passed: the route declares them on
+    its decorator, which FastAPI resolves before this.
+    """
+    return RevealImageUseCase(
+        repository=repository,
+        location_resolver=location_resolver,
+        file_revealer=file_revealer,
+    )
+
+
 __all__ = [
     "get_cancel_indexing_job_use_case",
     "get_create_indexing_job_use_case",
     "get_device_locator",
     "get_device_repository",
     "get_embedding_model",
+    "get_file_revealer",
+    "get_image_details_use_case",
     "get_image_repository",
     "get_index_image_use_case",
     "get_indexing_job_repository",
     "get_indexing_job_use_case",
     "get_list_indexing_jobs_use_case",
+    "get_resolve_image_location_use_case",
+    "get_reveal_image_use_case",
     "get_search_images_use_case",
+    "get_thumbnail_store",
+    "get_thumbnail_use_case",
 ]

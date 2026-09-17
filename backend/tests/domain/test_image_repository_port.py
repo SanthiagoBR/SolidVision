@@ -29,6 +29,8 @@ ALL_METHODS = (
     "update_capture_date",
     "update_capture_date_many",
     "count_unknown_capture_date",
+    "update_thumbnail_path",
+    "update_thumbnail_path_many",
 )
 
 
@@ -49,6 +51,8 @@ def test_image_repository_is_abstract() -> None:
         "update_capture_date",
         "update_capture_date_many",
         "count_unknown_capture_date",
+        "update_thumbnail_path",
+        "update_thumbnail_path_many",
     }
 
 
@@ -125,6 +129,14 @@ def test_image_repository_methods_use_domain_types_only() -> None:
         is SearchFilters
     )
     assert signatures["count_unknown_capture_date"].return_annotation is int
+    assert (
+        signatures["update_thumbnail_path"].parameters["image_id"].annotation is ImageId
+    )
+    assert signatures["update_thumbnail_path"].parameters["location"].annotation is str
+    assert (
+        signatures["update_thumbnail_path_many"].parameters["locations"].annotation
+        == Mapping[ImageId, str]
+    )
 
 
 def test_image_repository_methods_are_abstract() -> None:
