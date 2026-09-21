@@ -7,10 +7,12 @@ from collections.abc import Mapping, Sequence
 from app.domain.entities.image import Image
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.job_scope import JobScope
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
@@ -31,6 +33,8 @@ ALL_METHODS = (
     "count_unknown_capture_date",
     "update_thumbnail_path",
     "update_thumbnail_path_many",
+    "count_by_device",
+    "count_by_path_prefixes",
 )
 
 
@@ -53,6 +57,8 @@ def test_image_repository_is_abstract() -> None:
         "count_unknown_capture_date",
         "update_thumbnail_path",
         "update_thumbnail_path_many",
+        "count_by_device",
+        "count_by_path_prefixes",
     }
 
 
@@ -137,6 +143,20 @@ def test_image_repository_methods_use_domain_types_only() -> None:
         signatures["update_thumbnail_path_many"].parameters["locations"].annotation
         == Mapping[ImageId, str]
     )
+    # RFC-031's two counts. The return annotations carry the whole of
+    # their contract: a mapping rather than a scalar is what makes "one
+    # query for N devices" and "one query for N folders" expressible at
+    # all, and a signature that returned `int` would be the N+1 this
+    # method exists to avoid, wearing a name that hides it.
+    assert signatures["count_by_device"].return_annotation == dict[DeviceId, int]
+    assert (
+        signatures["count_by_path_prefixes"].parameters["device_id"].annotation
+        is DeviceId
+    )
+    assert (
+        signatures["count_by_path_prefixes"].parameters["parent"].annotation is JobScope
+    )
+    assert signatures["count_by_path_prefixes"].return_annotation == dict[str, int]
 
 
 def test_image_repository_methods_are_abstract() -> None:

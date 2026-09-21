@@ -11,10 +11,12 @@ from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.job_scope import JobScope
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.config.settings import settings
@@ -107,6 +109,56 @@ def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters)
         for image in indexed
         if image.captured_at is None and matches_filters(image, without_date)
     )
+
+
+def count_images_by_device(images: Iterable[Image]) -> dict[DeviceId, int]:
+    """Group images by device, the way a `GROUP BY device_id` does.
+
+    Shared by both in-process doubles for the reason `cosine_search()` is
+    shared: `test_image_counting_contract.py` holds all three
+    implementations to one answer, and two hand-written tallies would be
+    two chances to drift from PostgreSQL and from each other.
+
+    Devices with no images simply do not appear, because a `GROUP BY`
+    produces no row for them either (RFC-031 section 4.3).
+    """
+    counts: dict[DeviceId, int] = {}
+    for image in images:
+        counts[image.device_id] = counts.get(image.device_id, 0) + 1
+    return counts
+
+
+def count_images_by_path_prefix(
+    images: Iterable[Image], device_id: DeviceId, parent: JobScope
+) -> dict[str, int]:
+    """Group a device's images by the first path part below `parent`.
+
+    The in-process twin of the `split_part(substr(...))` grouping in
+    `PostgresImageRepository`, and it has to agree with it on the two
+    edge cases the port's docstring names -- an image sitting directly in
+    `parent`, which lands under its own filename, and a folder renamed on
+    disk, which lands under the name the rows still carry. Both are
+    discarded by the caller rather than here.
+
+    The separator appended to the prefix is the whole correctness
+    argument: without it `2018` would match `2018b`, which is a different
+    folder (RFC-029 section 10). The whole-device scope renders as `""`
+    and therefore appends nothing, which is right -- every path is below
+    the device root.
+    """
+    lead = f"{parent}/" if parent.parts else ""
+    counts: dict[str, int] = {}
+    for image in images:
+        if image.device_id != device_id:
+            continue
+        path = str(image.relative_path)
+        if not path.startswith(lead):
+            continue
+        head = path[len(lead) :].split("/", 1)[0]
+        if not head:
+            continue
+        counts[head] = counts.get(head, 0) + 1
+    return counts
 
 
 def store_thumbnail(thumbnails: dict[uuid.UUID, str], record: IndexingRecord) -> None:
@@ -368,3 +420,11 @@ class InMemoryImageRepository(ImageRepository):
         for image_id, location in locations.items():
             if image_id in known:
                 self._thumbnails[image_id.value] = location
+
+    def count_by_device(self) -> dict[DeviceId, int]:
+        return count_images_by_device(self._images)
+
+    def count_by_path_prefixes(
+        self, device_id: DeviceId, parent: JobScope
+    ) -> dict[str, int]:
+        return count_images_by_path_prefix(self._images, device_id, parent)

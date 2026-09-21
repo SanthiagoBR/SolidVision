@@ -64,6 +64,9 @@ from app.application.use_cases.resolve_image_location import (  # noqa: E402
 from app.application.use_cases.reveal_image import RevealImageUseCase  # noqa: E402
 from app.domain.entities.device import Device  # noqa: E402
 from app.domain.entities.image import Image  # noqa: E402
+from app.domain.services.device_identity import (  # noqa: E402
+    compute_device_id,
+)
 from app.domain.services.device_locator import DeviceLocator  # noqa: E402
 from app.domain.value_objects.device_id import VolumeIdentity, VolumeKind  # noqa: E402
 from app.domain.value_objects.embedding_vector import EmbeddingVector  # noqa: E402
@@ -73,9 +76,6 @@ from app.domain.value_objects.job_scope import JobScope  # noqa: E402
 from app.infrastructure.config.settings import settings  # noqa: E402
 from app.infrastructure.database.models.image_model import (  # noqa: E402
     EMBEDDING_DIMENSION,
-)
-from app.infrastructure.filesystem.device_identity import (  # noqa: E402
-    compute_device_id,
 )
 from app.infrastructure.filesystem.file_revealer import (  # noqa: E402
     WindowsFileRevealer,

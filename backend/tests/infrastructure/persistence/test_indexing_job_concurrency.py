@@ -34,11 +34,11 @@ from sqlalchemy.orm import Session
 from app.domain.entities.device import Device
 from app.domain.entities.indexing_job import IndexingJob, JobStatus
 from app.domain.exceptions import DeviceBusyError
+from app.domain.services.device_identity import compute_device_id
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.job_id import JobId
 from app.infrastructure.database.models.device_model import DeviceModel
 from app.infrastructure.database.models.indexing_job_model import IndexingJobModel
-from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.persistence.postgres_device_repository import (
     PostgresDeviceRepository,
 )

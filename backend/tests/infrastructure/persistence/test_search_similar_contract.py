@@ -29,6 +29,7 @@ from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.services.device_identity import compute_device_id
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.date_range import DateRange
@@ -39,7 +40,6 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.search_filters import SearchFilters
 from app.infrastructure.database.models.image_model import EMBEDDING_DIMENSION
-from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.persistence.in_memory_image_repository import (
     InMemoryImageRepository,
 )

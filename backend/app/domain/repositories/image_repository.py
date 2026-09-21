@@ -7,10 +7,12 @@ from collections.abc import Mapping, Sequence
 
 from app.domain.entities.image import Image
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.job_scope import JobScope
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 
@@ -313,4 +315,73 @@ class ImageRepository(ABC):
           universe. The two numbers are not supposed to add up to anything.
         - It ignores the query text. Relevance is not the reason these
           images were left out; their missing date is.
+        """
+
+    @abstractmethod
+    def count_by_device(self) -> dict[DeviceId, int]:
+        """Return how many images each device has, as one grouped read.
+
+        **A mapping, not a count for one id, and the plural is the
+        contract.** `GET /api/v1/devices` renders every disk at once, so
+        a single-device version of this would be N queries behind a
+        signature that looks like one -- the same defect as enumerating
+        volumes once per device, one layer down (RFC-031 section 4.3 of
+        the build prompt).
+
+        Devices with no images are **absent** rather than present with a
+        zero, the way `get_index_metadata_many()` omits ids with no row.
+        Callers read it with `.get(device_id, 0)`; padding it here would
+        require this method to know which devices exist, which is the
+        other repository's question.
+
+        Counts every row, whether or not it carries an embedding. The
+        number answers *"how many files of this disk does the system
+        know"*, which is what sits beside `last_scan_file_count` in the
+        response, and a row without an embedding is still a file this
+        system knows about.
+        """
+
+    @abstractmethod
+    def count_by_path_prefixes(
+        self, device_id: DeviceId, parent: JobScope
+    ) -> dict[str, int]:
+        """Count images per immediate subfolder of `parent`, in one query.
+
+        The read behind `GET /api/v1/devices/{id}/folders`: a folder
+        listing shows `indexed_images` per row, and forty rows must not
+        be forty `COUNT(*)`s (RFC-031 section 8.2).
+
+        The result maps **one path component** -- the first segment below
+        `parent` -- to the number of rows anywhere beneath it. `parent`
+        being the whole-device scope groups by the first segment of
+        `relative_path` itself.
+
+        Two properties an implementation must reproduce exactly, because
+        the contract test pins both and the natural implementations
+        differ on them:
+
+        * **Images sitting directly in `parent` appear under their own
+          filename.** `2018/loose.jpg` under `parent="2018"` yields the
+          key `loose.jpg`, which is a file and not a folder. That is
+          deliberate rather than tolerated: filtering it out here would
+          mean this method deciding what is a directory, which it cannot
+          know without touching the disk. The caller already holds the
+          folder names the filesystem reported and keeps only those keys,
+          so these entries are discarded one layer up, together with the
+          other kind of key that must not become a row.
+        * **The other kind: a folder renamed on disk since it was
+          indexed.** Its rows are still filed under the old name, so the
+          old name comes back here and matches nothing the caller saw.
+          Same fate, same line of code.
+
+        Comparison is by exact text on a `/`-separated prefix, which is
+        what `relative_path` holds -- `ImagePath` stores posix form, so
+        there is no `\\` in the column to handle. The trailing separator
+        on the prefix is load-bearing: without it `2018` would match
+        `2018b`, which is a different folder (RFC-029 section 10).
+
+        A subfolder with no indexed images is absent, not zero, for the
+        reason `count_by_device()` omits an empty device: the names come
+        from the caller, and inventing keys here would mean guessing
+        them.
         """

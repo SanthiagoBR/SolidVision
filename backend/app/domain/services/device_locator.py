@@ -1,12 +1,19 @@
 """Asking the filesystem where a device is, without importing the filesystem.
 
-Two questions the Application must be able to ask before it accepts a job
--- *is this disk plugged in right now?* and *is this folder actually on
-it?* -- and both are questions for the operating system. The adapter that
-answers them is `WindowsVolumeIdentityProvider`, which is an
-Infrastructure ABC the Application is forbidden to import
+Three questions the Application must be able to ask -- *is this disk
+plugged in right now?*, *is this folder actually on it?* and, since
+RFC-031, *what folders are directly inside it?* -- and all three are
+questions for the operating system. The adapter that answers them is
+`WindowsVolumeIdentityProvider`, which is an Infrastructure ABC the
+Application is forbidden to import
 (`test_application_architecture.py` fails the build if it does), so the
 dependency is inverted here instead.
+
+*What is attached to this machine?* is deliberately **not** here. Every
+signature below takes a `Device`, because every question below is about a
+disk the system already knows; asking what is plugged in is asking about
+volumes that are not a device yet, and it has its own port
+(`VolumeCatalog`).
 
 **Nothing may cache across calls.** A device's mount point is a fact about
 this instant, and the whole of RFC-027 section 7 is that no stored value
@@ -18,10 +25,45 @@ letter that now belongs to a different disk.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.domain.entities.device import Device
 from app.domain.value_objects.job_scope import JobScope
+
+
+@dataclass(frozen=True)
+class FolderEntry:
+    """One folder directly inside another, and whether it has any of its own.
+
+    `has_children` travels with the name rather than being left for the
+    caller to work out, because working it out means **opening the
+    folder**: a listing of forty subfolders costs forty-one `readdir`
+    calls, not one, and only the adapter can pay that without the
+    Application touching a filesystem (RFC-031 section 4.4 of the build
+    prompt).
+
+    It is here at all because a UI that guessed would guess wrong in the
+    visible direction: an expand arrow drawn on a leaf folder is an error
+    the user only discovers by clicking it.
+    """
+
+    name: str
+    """The folder's own name, as the filesystem spells it.
+
+    A single path component, never a path. The caller joins it onto the
+    canonical spelling of the parent, which is what makes the result
+    something a client can send straight back as a job scope.
+    """
+
+    has_children: bool
+    """Whether this folder contains at least one subfolder.
+
+    `False` for a folder the platform refused to open -- a permission
+    wall, a disk that went away mid-listing. An implementation logs that
+    and carries on rather than failing the whole listing, which is the
+    same rule RFC-027 applies to a volume that will not be named.
+    """
 
 
 class DeviceLocator(ABC):
@@ -65,4 +107,33 @@ class DeviceLocator(ABC):
         mounted at all answers `None` for every scope; callers check the
         connection first so that the user is told which disk to plug in
         rather than that their folder is wrong.
+        """
+
+    @abstractmethod
+    def list_folders(self, device: Device, scope: JobScope) -> list[FolderEntry] | None:
+        """Return the folders directly inside `scope`, or `None` if it is absent.
+
+        **One level, and no files.** The caller is drawing one step of a
+        tree the user is walking, so the cost follows what they opened
+        rather than the size of the disk (RFC-031 section 8.1). Files are
+        not returned at all: what this feeds is a folder picker whose
+        output goes back as `scopes[]`, and a file is not a scope.
+
+        **Nothing counts anything here.** How many images a folder has
+        indexed is a fact about our own table, answered by
+        `ImageRepository`; how many files are on the disk under it is the
+        subtree walk RFC-029 section 7.2 measured as the dominant cost on
+        a cold mechanical disk, and RFC-031 section 2.3 refuses to pay it
+        twice.
+
+        `None` carries exactly the meaning it carries in
+        `resolve_scope()`: this is not a folder on this device -- absent,
+        a file, or outside the device once NTFS junctions are resolved. A
+        device that is not mounted answers `None` for everything, and
+        callers check the connection first so the user is told which disk
+        to plug in.
+
+        Order is not part of the contract, because the platform's own is
+        not: `scandir` returns entries in whatever order the filesystem
+        keeps them. A caller that renders the list sorts it.
         """

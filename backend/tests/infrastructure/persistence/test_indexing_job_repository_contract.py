@@ -35,13 +35,13 @@ from app.domain.entities.device import Device
 from app.domain.entities.indexing_job import IndexingJob, JobStatus
 from app.domain.exceptions import DeviceBusyError
 from app.domain.repositories.indexing_job_repository import IndexingJobRepository
+from app.domain.services.device_identity import compute_device_id
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
 from app.domain.value_objects.job_id import JobId
 from app.domain.value_objects.job_scope import JobScope
 from app.infrastructure.database.models.indexing_job_model import IndexingJobModel
-from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.persistence.in_memory_indexing_job_repository import (
     InMemoryIndexingJobRepository,
 )
