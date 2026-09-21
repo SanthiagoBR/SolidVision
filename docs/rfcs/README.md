@@ -66,9 +66,17 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 | 029 | [Jobs de Indexação e Indexação Seletiva](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md) | `indexing_jobs`, `POST /jobs`, executor sondando, cancelamento cooperativo | ✅ |
 | 030 | [Acesso ao Arquivo](rfc-030-acesso-ao-arquivo.md) | Caminho na resposta, thumbnails com `ETag`, `POST /images/{id}/reveal` atrás de dois guardas | ✅ |
 
-> **De onde veio esta sprint.** Um mockup de interface no Figma desenhou uma barra lateral de HDs, um filtro de datas e uma tela de pastas indexadas — e a pergunta era se aquilo fazia sentido para o projeto. Fazia: três das quatro peças já estavam desenhadas no [ARCHITECTURE.md](../../ARCHITECTURE.md) §15 e nunca construídas. A quarta encontrou um defeito no código entregue: [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md) mostra que a identidade de uma imagem é derivada do caminho absoluto, e que **a letra de unidade de um HD externo muda sozinha** — reindexando um disco inteiro em silêncio, a ~5 h de inferência por vez.
+> **De onde veio a Sprint 5.** Um mockup de interface no Figma desenhou uma barra lateral de HDs, um filtro de datas e uma tela de pastas indexadas — e a pergunta era se aquilo fazia sentido para o projeto. Fazia: três das quatro peças já estavam desenhadas no [ARCHITECTURE.md](../../ARCHITECTURE.md) §15 e nunca construídas. A quarta encontrou um defeito no código entregue: [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md) mostra que a identidade de uma imagem é derivada do caminho absoluto, e que **a letra de unidade de um HD externo muda sozinha** — reindexando um disco inteiro em silêncio, a ~5 h de inferência por vez.
 >
 > **A ordem não é arbitrária.** O RFC-027 reescreveu a chave primária de `images`, o que era um `UPDATE` em uma tabela enquanto nada referenciasse `images.id` — e nada referenciava. O RFC-029 preservou essa propriedade de propósito ([§11](rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md)); o RFC-030 a encerrou, ao nomear os arquivos de thumbnail pelo id ([§7.3](rfc-030-acesso-ao-arquivo.md)). A janela para a correção barata ficou aberta exatamente o tempo necessário, e fechou no fim desta sprint, como previsto.
+
+## Sprint 6 — Interface
+
+| # | RFC | Entrega | Status |
+|---|---|---|---|
+| 031 | [Dispositivos, Volumes e Pastas pela API](rfc-031-dispositivos-e-pastas-pela-api.md) | `GET /devices`, `GET /volumes`, `POST /devices`, `PATCH /devices/{id}`, `GET /devices/{id}/folders`, `GET /capabilities` | ✅ |
+
+> **Por que este RFC existe.** A Sprint 5 resolveu tudo o que acontece *depois* que um dispositivo existe, e nada sobre como ele passa a existir para um cliente que não é um terminal. `POST /api/v1/jobs` recebe `{device_id, scopes[]}` e **nenhuma rota devolve um `device_id` ou um `scope` válido** — a rota mais importante da Sprint 5 só é chamável por quem já consultou o banco à mão. A revisão da segunda versão do mockup encontrou o mesmo buraco pelo outro lado: as três telas desenhadas não têm de onde desenhar ([RFC-031 §1](rfc-031-dispositivos-e-pastas-pela-api.md)).
 
 ---
 

@@ -32,6 +32,7 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.job_scope import JobScope
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.database.models.image_model import (
@@ -529,6 +530,78 @@ class PostgresImageRepository(ImageRepository):
         except Exception:
             self._session.rollback()
             raise
+
+    def count_by_device(self) -> dict[DeviceId, int]:
+        """One `GROUP BY device_id` for every device at once (RFC-031 section 4.3).
+
+        A `COUNT(*)` per device would be N round trips behind a call that
+        looks like one, and `GET /api/v1/devices` renders every disk in
+        the sidebar -- so N is however many disks the user owns, on every
+        page load.
+
+        Devices with no rows produce no group and are therefore absent
+        from the result, which is the contract: callers read it with
+        `.get(device_id, 0)`.
+        """
+        statement = select(ImageModel.device_id, func.count()).group_by(
+            ImageModel.device_id
+        )
+        return {
+            DeviceId(device_id): int(total)
+            for device_id, total in self._session.execute(statement).all()
+        }
+
+    def count_by_path_prefixes(
+        self, device_id: DeviceId, parent: JobScope
+    ) -> dict[str, int]:
+        r"""One grouped query for every subfolder of `parent` (RFC-031 section 8.2).
+
+        The whole reason this method exists rather than a per-folder
+        `COUNT(*)`: a listing of forty folders must cost one query, not
+        forty.
+
+        The grouping key is `split_part(substr(relative_path, cut), '/',
+        1)` -- everything after the parent prefix, up to the next
+        separator. `cut` is one past the `/` that follows the prefix, and
+        `1` for the whole-device scope, where the first part of
+        `relative_path` is already the answer.
+
+        **The `LIKE` is left-anchored on purpose and the trailing `/` is
+        load-bearing.** `'2018b' LIKE '2018%'` is true and `2018b` is a
+        different folder; `'2018b/x.jpg' LIKE '2018/%'` is false, which
+        is the behaviour RFC-029 section 10 requires and `JobScope`
+        enforces one layer up. `startswith(..., autoescape=True)` is used
+        rather than a hand-built pattern so that a folder whose name
+        contains `%` or `_` is matched literally instead of as a wildcard.
+
+        Whether an index serves this is measured rather than assumed --
+        see `experiments/rfc-031-devices-api/measure_folder_listing.log`
+        for the `EXPLAIN` and the cluster's collation, which decide
+        whether a B-tree on `(device_id, relative_path)` is usable for a
+        left-anchored `LIKE` at all.
+
+        The two kinds of key a caller must discard -- a file sitting
+        directly in `parent`, and a folder renamed on disk since it was
+        indexed -- are documented on the port and are deliberately not
+        filtered here: this query cannot tell a directory from a file
+        without touching the disk, and the caller already holds the
+        names the filesystem reported.
+        """
+        prefix = str(parent)
+        cut = len(prefix) + 2 if parent.parts else 1
+        folder = func.split_part(func.substr(ImageModel.relative_path, cut), "/", 1)
+        statement = select(folder, func.count()).where(
+            ImageModel.device_id == device_id.value
+        )
+        if parent.parts:
+            statement = statement.where(
+                ImageModel.relative_path.startswith(f"{prefix}/", autoescape=True)
+            )
+        statement = statement.group_by(folder)
+        return {
+            str(name): int(total)
+            for name, total in self._session.execute(statement).all()
+        }
 
 
 def _device_clause(filters: SearchFilters) -> ColumnElement[bool]:

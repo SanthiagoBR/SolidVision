@@ -53,6 +53,9 @@ from app.application.use_cases.index_or_update_images import (  # noqa: E402
 )
 from app.domain.entities.device import Device  # noqa: E402
 from app.domain.entities.indexing_job import IndexingJob, JobStatus  # noqa: E402
+from app.domain.services.device_identity import (  # noqa: E402
+    compute_device_id,
+)
 from app.domain.value_objects.device_id import (  # noqa: E402
     VolumeIdentity,
     VolumeKind,
@@ -65,9 +68,6 @@ from app.infrastructure.ai.fake_embedding_model import (  # noqa: E402
 from app.infrastructure.database.models.image_model import ImageModel  # noqa: E402
 from app.infrastructure.database.models.indexing_job_model import (  # noqa: E402
     IndexingJobModel,
-)
-from app.infrastructure.filesystem.device_identity import (  # noqa: E402
-    compute_device_id,
 )
 from app.infrastructure.filesystem.sha256_content_hasher import (  # noqa: E402
     Sha256ContentHasher,

@@ -14,7 +14,6 @@ rather than the code reshaped to match the documentation (RFC-024 section 12).
 from __future__ import annotations
 
 import argparse
-import datetime
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -25,6 +24,7 @@ from app.application.use_cases.index_or_update_images import (
     IndexOrUpdateImagesUseCase,
 )
 from app.application.use_cases.indexing_plan import IndexCandidate
+from app.application.use_cases.register_device import RegisterDeviceUseCase
 from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.entities.indexing_job import IndexingJob
@@ -33,11 +33,14 @@ from app.domain.repositories.indexing_job_repository import IndexingJobRepositor
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.job_id import JobId
 from app.domain.value_objects.job_scope import JobScope
-from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
 from app.infrastructure.filesystem.image_identity import compute_image_id
+from app.infrastructure.filesystem.volume_catalog import (
+    MountedVolumeCatalog,
+    as_mounted_volume,
+)
 from app.infrastructure.filesystem.volume_identity_provider import (
     ResolvedVolume,
     VolumeIdentityProvider,
@@ -233,33 +236,32 @@ def register_device(
     not be a dry run, and the device id is derived rather than allocated,
     so nothing has to be written for it to be known.
 
-    Shared with `device_reconcile` rather than written twice. The rules
-    about which fields survive an existing row are the kind that drift
-    apart in two copies, and the two callers must agree, because both mint
-    ids from the device they produce.
+    **Since RFC-031 the merge rule itself lives in the Application
+    layer**, in `RegisterDeviceUseCase`, because an HTTP route needs it
+    too and a route cannot reach into `app.infrastructure.workers`. What
+    is left here is the half that genuinely belongs below the line:
+    asking the platform *which volume holds this path*, which is a
+    question only a `--root` has and which the route replaces with a
+    lookup in an enumeration.
+
+    **The signature did not change, and that is load-bearing.** Six
+    callers pass `root` and `label` and read the tuple back --
+    `indexing_worker.main()`, `device_reconcile` (with `persist=False`),
+    both backfills, `dataset_tools/seed_demo.py` and the RFC-029
+    measurement script -- and `test_cli_job_equivalence.py` is the net
+    under the move. A refactor that required touching any of them would
+    be the wrong refactor.
+
+    Shared rather than written twice, for the reason it always was: the
+    rules about which fields survive an existing row are the kind that
+    drift apart in two copies, and every caller mints image ids from the
+    device it produces.
     """
     volume = volume_provider.resolve(root)
-    now = datetime.datetime.now(tz=datetime.UTC)
-    existing = device_repository.get_by_volume_identity(volume.identity)
-
-    device = Device(
-        id=compute_device_id(volume.identity),
-        volume_identity=volume.identity,
-        label=(
-            label
-            or (existing.label if existing else None)
-            or volume.filesystem_label
-            or volume.identity.value
-        ),
-        filesystem_label=volume.filesystem_label,
-        total_bytes=volume.total_bytes,
-        first_seen_at=existing.first_seen_at if existing else now,
-        last_seen_at=now,
-        last_scan_at=existing.last_scan_at if existing else None,
-        last_scan_file_count=existing.last_scan_file_count if existing else None,
-    )
-    if persist:
-        device_repository.save(device)
+    device = RegisterDeviceUseCase(
+        volume_catalog=MountedVolumeCatalog(volume_provider),
+        device_repository=device_repository,
+    ).register(as_mounted_volume(volume), label=label, persist=persist)
     return device, volume
 
 

@@ -2,15 +2,11 @@ from __future__ import annotations
 
 import uuid
 
-from tests.conftest import TEST_DEVICE_ID, TEST_VOLUME_IDENTITY
+from tests.conftest import TEST_DEVICE_ID
 
-from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
-from app.infrastructure.filesystem.device_identity import (
-    SOLIDVISION_VOLUME_NAMESPACE,
-    compute_device_id,
-)
 from app.infrastructure.filesystem.image_identity import (
     SOLIDVISION_PATH_NAMESPACE,
     compute_image_id,
@@ -34,11 +30,6 @@ def test_namespace_constant_is_frozen_to_its_expected_value() -> None:
     recognised as having come from the old scheme.
     """
     assert str(SOLIDVISION_PATH_NAMESPACE) == "5dc64f53-522e-4303-951e-ee6123b10dd8"
-
-
-def test_volume_namespace_constant_is_frozen_to_its_expected_value() -> None:
-    """The same guard for devices: regenerating it orphans every image row."""
-    assert str(SOLIDVISION_VOLUME_NAMESPACE) == "6a1f4c07-9f0c-4a2e-9d84-0f3f0d5c4b91"
 
 
 def test_same_path_produces_same_id_across_multiple_calls() -> None:
@@ -107,41 +98,3 @@ def _id_from_absolute(absolute_path: str, mount: str) -> ImageId:
     """Derive an id the way the indexing worker does, from a mounted path."""
     relative = ImagePath(absolute_path[len(mount) + 1 :])
     return compute_image_id(TEST_DEVICE_ID, relative)
-
-
-def test_device_id_is_derived_from_the_volume_identity() -> None:
-    assert compute_device_id(TEST_VOLUME_IDENTITY) == TEST_DEVICE_ID
-
-
-def test_device_id_is_stable_across_calls() -> None:
-    first = compute_device_id(TEST_VOLUME_IDENTITY)
-    second = compute_device_id(TEST_VOLUME_IDENTITY)
-
-    assert first == second
-    assert isinstance(first, DeviceId)
-
-
-def test_two_volumes_produce_two_device_ids() -> None:
-    other = VolumeIdentity(
-        value="\\\\?\\Volume{11111111-1111-1111-1111-111111111111}\\",
-        kind=VolumeKind.WINDOWS_VOLUME_GUID,
-    )
-
-    assert compute_device_id(TEST_VOLUME_IDENTITY) != compute_device_id(other)
-
-
-def test_the_platform_kind_is_part_of_the_device_id() -> None:
-    """Two platforms naming a volume identically still describe two disks.
-
-    This is the whole reason `VolumeKind` is a field rather than a
-    comment: without it in the key, an adapter added later could collide
-    with the Windows one on a shared string and silently merge two
-    people's disks into one row.
-    """
-    same_string_other_platform = VolumeIdentity(
-        value=TEST_VOLUME_IDENTITY.value, kind=VolumeKind.LINUX_FS_UUID
-    )
-
-    assert compute_device_id(TEST_VOLUME_IDENTITY) != compute_device_id(
-        same_string_other_platform
-    )

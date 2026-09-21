@@ -11,10 +11,11 @@ from app.domain.entities.image import Image
 from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
-from app.domain.services.device_locator import DeviceLocator
+from app.domain.services.device_locator import DeviceLocator, FolderEntry
 from app.domain.services.file_revealer_port import FileRevealerPort
 from app.domain.services.thumbnail_generator_port import ThumbnailGeneratorPort
 from app.domain.services.thumbnail_store_port import ThumbnailStorePort
+from app.domain.services.volume_catalog import VolumeCatalog
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
@@ -23,6 +24,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.mounted_volume import MountedVolume
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
@@ -35,6 +37,8 @@ from app.infrastructure.persistence.in_memory_device_repository import (
 )
 from app.infrastructure.persistence.in_memory_image_repository import (
     cosine_search,
+    count_images_by_device,
+    count_images_by_path_prefix,
     count_unknown_capture_date,
     matches_filters,
     store_thumbnail,
@@ -61,6 +65,23 @@ class FakeImageRepository(ImageRepository):
         self.update_capture_date_calls: list[tuple[ImageId, CaptureDate]] = []
         self.update_capture_date_many_calls: list[dict[ImageId, CaptureDate]] = []
         self.count_unknown_capture_date_calls: list[SearchFilters] = []
+        self.count_by_device_calls = 0
+        """How many times the grouped device count was asked for.
+
+        A counter rather than a list because the method takes no
+        arguments, and the only thing worth asserting about it is that
+        `GET /api/v1/devices` asks **once** for twenty devices rather
+        than twenty times (RFC-031 section 4.3).
+        """
+
+        self.count_by_path_prefixes_calls: list[tuple[DeviceId, str]] = []
+        """Every grouped folder count, so a test can prove there was one.
+
+        Forty folders must produce one query, not forty, and a spy that
+        only counted calls without recording the prefix could not tell a
+        single grouped read from a loop over one folder.
+        """
+
         self.update_thumbnail_path_calls: list[tuple[ImageId, str]] = []
         self.update_thumbnail_path_many_calls: list[dict[ImageId, str]] = []
         self.search_similar_calls: list[
@@ -246,6 +267,24 @@ class FakeImageRepository(ImageRepository):
             (image for image in self._images if image.id.value in self._embeddings),
             filters,
         )
+
+    def count_by_device(self) -> dict[DeviceId, int]:
+        """Delegates to the shared tally, and records that it was asked.
+
+        Shared for the reason `search_similar()` delegates to
+        `cosine_search()`: `test_image_counting_contract.py` holds this
+        fake, `InMemoryImageRepository` and PostgreSQL to one answer, and
+        a second hand-written tally here would be the first to drift.
+        """
+        self.count_by_device_calls += 1
+        return count_images_by_device(self._images)
+
+    def count_by_path_prefixes(
+        self, device_id: DeviceId, parent: JobScope
+    ) -> dict[str, int]:
+        """The grouped folder count, delegated and recorded; see above."""
+        self.count_by_path_prefixes_calls.append((device_id, str(parent)))
+        return count_images_by_path_prefix(self._images, device_id, parent)
 
 
 class RecordingContentHasher(ContentHasherPort):
@@ -457,20 +496,77 @@ class FakeDeviceLocator(DeviceLocator):
         self._mounts = dict(mounts or {})
         self.mount_point_calls: list[DeviceId] = []
         self.resolve_scope_calls: list[tuple[DeviceId, str]] = []
+        self.list_folders_calls: list[tuple[DeviceId, str]] = []
 
     def mount_point(self, device: Device) -> Path | None:
         self.mount_point_calls.append(device.id)
         return self._mounts.get(device.id)
 
     def resolve_scope(self, device: Device, scope: JobScope) -> JobScope | None:
+        """Resolve against the real `tmp_path`, and return what the disk says.
+
+        **The returned scope is the filesystem's spelling, not the one
+        that was asked for**, which is half the reason `resolve_scope()`
+        exists at all: Windows is case-insensitive while
+        `normalize_scopes()` compares parts exactly, so a locator that
+        echoed `FOTOS` back would hand `POST /jobs` a scope it would
+        rewrite into a different one (RFC-031 section 4.5 of the build
+        prompt).
+
+        This double used to return `scope` unchanged, which was
+        indistinguishable from correct on every test that asked for a
+        folder by its real name -- and would have made the canonical-
+        spelling test in `test_devices_api.py` a test of this method
+        rather than of the route. `Path.resolve()` is what
+        `MountedDeviceLocator` uses for exactly this, and on Windows it
+        returns the real case.
+        """
         self.resolve_scope_calls.append((device.id, str(scope)))
+        mount = self._mounts.get(device.id)
+        if mount is None:
+            return None
+        root = mount.resolve()
+        target = (root / str(scope)) if scope.parts else root
+        resolved = target.resolve()
+        if not resolved.is_dir():
+            return None
+        if resolved != root and not resolved.is_relative_to(root):
+            return None
+        if resolved == root:
+            return JobScope()
+        return JobScope(resolved.relative_to(root))
+
+    def list_folders(self, device: Device, scope: JobScope) -> list[FolderEntry] | None:
+        """List real subdirectories of a real `tmp_path`, in the worst order.
+
+        Filesystem-backed like the rest of this double, so `has_children`
+        is answered by looking rather than by a flag the test set --
+        which is what makes a test about expand arrows a test about
+        folders.
+
+        **The order is deliberately reversed, and that is not
+        arbitrariness.** `DeviceLocator.list_folders()` promises no order
+        at all, because `scandir` has none to promise, and the sorting
+        belongs to whoever renders the list (RFC-031 section 4.5 of the
+        build prompt). Returning entries already sorted would let a use
+        case that forgot to sort pass every test here and then hand a
+        real Windows client its folders in NTFS order.
+        """
+        self.list_folders_calls.append((device.id, str(scope)))
         mount = self._mounts.get(device.id)
         if mount is None:
             return None
         target = mount / str(scope) if scope.parts else mount
         if not target.is_dir():
             return None
-        return scope
+        return [
+            FolderEntry(
+                name=child.name,
+                has_children=any(grandchild.is_dir() for grandchild in child.iterdir()),
+            )
+            for child in sorted(target.iterdir(), key=lambda p: p.name, reverse=True)
+            if child.is_dir()
+        ]
 
     def connect(self, device_id: DeviceId, mount_point: Path) -> None:
         self._mounts[device_id] = mount_point
@@ -478,6 +574,62 @@ class FakeDeviceLocator(DeviceLocator):
     def disconnect(self, device_id: DeviceId) -> None:
         """Pull the cable, as far as anything asking this locator can tell."""
         self._mounts.pop(device_id, None)
+
+
+class FakeVolumeCatalog(VolumeCatalog):
+    """Answers with volumes a test invented, and counts how often it was asked.
+
+    The counting is the point rather than a convenience. RFC-031 section
+    4.1 requires `GET /api/v1/devices` to enumerate the filesystem
+    **once** however many devices are registered, and the only way to
+    know that is to count -- a use case that called `mount_points()` per
+    device would return exactly the same JSON.
+
+    The two methods are counted separately because they cost differently:
+    `list_mounted()` reads a label and a capacity per volume, and reading
+    a capacity can wake a sleeping external disk. A route that reached
+    for the rich one where the cheap one would do is a real regression
+    with no visible symptom, and this is what notices.
+    """
+
+    def __init__(self, volumes: list[MountedVolume] | None = None) -> None:
+        self._volumes = list(volumes or [])
+        self.mount_points_calls = 0
+        self.list_mounted_calls = 0
+
+    def mount_points(self) -> dict[VolumeIdentity, Path]:
+        self.mount_points_calls += 1
+        return {volume.identity: volume.mount_point for volume in self._volumes}
+
+    def list_mounted(self) -> list[MountedVolume]:
+        self.list_mounted_calls += 1
+        return list(self._volumes)
+
+    def attach(self, volume: MountedVolume) -> None:
+        self._volumes.append(volume)
+
+    def detach(self, identity: VolumeIdentity) -> None:
+        """Pull the cable, as far as anything asking this catalogue can tell."""
+        self._volumes = [
+            volume for volume in self._volumes if volume.identity != identity
+        ]
+
+
+def make_mounted_volume(
+    mount_point: Path,
+    volume_value: str = "\\\\?\\Volume{00000000-0000-0000-0000-000000000001}\\",
+    filesystem_label: str | None = None,
+    total_bytes: int | None = None,
+) -> MountedVolume:
+    """Build a `MountedVolume` shaped like one the Windows adapter would report."""
+    return MountedVolume(
+        identity=VolumeIdentity(
+            value=volume_value, kind=VolumeKind.WINDOWS_VOLUME_GUID
+        ),
+        mount_point=mount_point,
+        filesystem_label=filesystem_label,
+        total_bytes=total_bytes,
+    )
 
 
 def make_device(
@@ -492,7 +644,7 @@ def make_device(
     would make the fixture describe a device the system could never
     produce.
     """
-    from app.infrastructure.filesystem.device_identity import compute_device_id
+    from app.domain.services.device_identity import compute_device_id
 
     identity = VolumeIdentity(value=volume_value, kind=VolumeKind.WINDOWS_VOLUME_GUID)
     now = datetime.datetime.now(tz=datetime.UTC)

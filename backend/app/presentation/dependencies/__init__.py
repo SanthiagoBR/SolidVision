@@ -16,11 +16,17 @@ from sqlalchemy.orm import Session
 
 from app.application.use_cases.cancel_indexing_job import CancelIndexingJobUseCase
 from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
+from app.application.use_cases.describe_devices import DescribeDevicesUseCase
 from app.application.use_cases.get_image_details import GetImageDetailsUseCase
 from app.application.use_cases.get_indexing_job import GetIndexingJobUseCase
 from app.application.use_cases.get_thumbnail import GetThumbnailUseCase
 from app.application.use_cases.index_image import IndexImageUseCase
+from app.application.use_cases.list_device_folders import ListDeviceFoldersUseCase
+from app.application.use_cases.list_devices import ListDevicesUseCase
 from app.application.use_cases.list_indexing_jobs import ListIndexingJobsUseCase
+from app.application.use_cases.list_mounted_volumes import ListMountedVolumesUseCase
+from app.application.use_cases.register_device import RegisterDeviceUseCase
+from app.application.use_cases.rename_device import RenameDeviceUseCase
 from app.application.use_cases.resolve_image_location import (
     ResolveImageLocationUseCase,
 )
@@ -33,11 +39,13 @@ from app.domain.services.device_locator import DeviceLocator
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.services.file_revealer_port import FileRevealerPort
 from app.domain.services.thumbnail_store_port import ThumbnailStorePort
+from app.domain.services.volume_catalog import VolumeCatalog
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 from app.infrastructure.config.settings import settings
 from app.infrastructure.filesystem.file_revealer import WindowsFileRevealer
 from app.infrastructure.filesystem.mounted_device_locator import MountedDeviceLocator
 from app.infrastructure.filesystem.thumbnail_store import FilesystemThumbnailStore
+from app.infrastructure.filesystem.volume_catalog import MountedVolumeCatalog
 from app.infrastructure.filesystem.volume_identity_provider import (
     WindowsVolumeIdentityProvider,
 )
@@ -296,9 +304,123 @@ def get_reveal_image_use_case(
     )
 
 
+def get_volume_catalog() -> VolumeCatalog:
+    """Return the catalogue that answers "what is plugged into this machine".
+
+    **Built per request, and it must not be cached.** The rule is
+    `get_device_locator`'s, inherited word for word: the answer changes
+    when the user pulls a cable and nothing notifies this process
+    (RFC-027 section 7), so an `lru_cache` here -- of the kind
+    `get_embedding_model` legitimately uses -- would report a disk as
+    connected minutes after it left. The adapter is a shell over an
+    enumeration it has not yet performed, so constructing one costs a
+    reference.
+
+    Separate from `get_device_locator()` although both wrap the same
+    provider, because the two ports answer different questions: the
+    locator is asked about a `Device` the system knows, and this is asked
+    about the machine, including volumes that are not a device yet
+    (RFC-031 section 4.2).
+    """
+    return MountedVolumeCatalog(WindowsVolumeIdentityProvider())
+
+
+def get_describe_devices_use_case(
+    image_repository: ImageRepository = Depends(get_image_repository),
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+    volume_catalog: VolumeCatalog = Depends(get_volume_catalog),
+) -> DescribeDevicesUseCase:
+    """Return the use case that resolves what is only true now (RFC-031 section 4).
+
+    Per request, like the catalogue under it, and for the same reason:
+    the answer is only true until somebody pulls a cable.
+    """
+    return DescribeDevicesUseCase(
+        image_repository=image_repository,
+        job_repository=job_repository,
+        volume_catalog=volume_catalog,
+    )
+
+
+def get_list_devices_use_case(
+    device_repository: DeviceRepository = Depends(get_device_repository),
+    describer: DescribeDevicesUseCase = Depends(get_describe_devices_use_case),
+) -> ListDevicesUseCase:
+    """Return the use case behind `GET /api/v1/devices`.
+
+    Every repository in the graph shares the request's one session:
+    FastAPI resolves `get_db` once per request however many providers
+    depend on it, so the device rows, the grouped image count and the two
+    job queries are one connection's work.
+    """
+    return ListDevicesUseCase(device_repository=device_repository, describer=describer)
+
+
+def get_list_mounted_volumes_use_case(
+    volume_catalog: VolumeCatalog = Depends(get_volume_catalog),
+    device_repository: DeviceRepository = Depends(get_device_repository),
+) -> ListMountedVolumesUseCase:
+    """Return the use case behind `GET /api/v1/volumes` (RFC-031 section 5)."""
+    return ListMountedVolumesUseCase(
+        volume_catalog=volume_catalog, device_repository=device_repository
+    )
+
+
+def get_register_device_use_case(
+    volume_catalog: VolumeCatalog = Depends(get_volume_catalog),
+    device_repository: DeviceRepository = Depends(get_device_repository),
+) -> RegisterDeviceUseCase:
+    """Return the use case behind `POST /api/v1/devices` (RFC-031 section 6).
+
+    The same class the CLI reaches through
+    `indexing_worker.register_device()`, composed differently: there it
+    is handed a volume the platform resolved from a `--root` path, here
+    it looks an identity up in an enumeration. One merge rule, two ways
+    in (RFC-031 section 4.2).
+    """
+    return RegisterDeviceUseCase(
+        volume_catalog=volume_catalog, device_repository=device_repository
+    )
+
+
+def get_rename_device_use_case(
+    device_repository: DeviceRepository = Depends(get_device_repository),
+    describer: DescribeDevicesUseCase = Depends(get_describe_devices_use_case),
+) -> RenameDeviceUseCase:
+    """Return the use case behind `PATCH /api/v1/devices/{id}` (RFC-031 section 7).
+
+    The describer is here to *report* the disk's state, not to require
+    it: renaming succeeds with the disk in a drawer, and RFC-027 section
+    2.3 says why.
+    """
+    return RenameDeviceUseCase(device_repository=device_repository, describer=describer)
+
+
+def get_list_device_folders_use_case(
+    device_repository: DeviceRepository = Depends(get_device_repository),
+    image_repository: ImageRepository = Depends(get_image_repository),
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+    device_locator: DeviceLocator = Depends(get_device_locator),
+) -> ListDeviceFoldersUseCase:
+    """Return the use case behind `GET /api/v1/devices/{id}/folders`.
+
+    The `DeviceLocator` rather than the `VolumeCatalog`, and the
+    difference is the point of there being two ports: every question this
+    route asks is about one device the system already knows -- where it
+    is, whether this scope is on it, what is inside that scope.
+    """
+    return ListDeviceFoldersUseCase(
+        device_repository=device_repository,
+        image_repository=image_repository,
+        job_repository=job_repository,
+        device_locator=device_locator,
+    )
+
+
 __all__ = [
     "get_cancel_indexing_job_use_case",
     "get_create_indexing_job_use_case",
+    "get_describe_devices_use_case",
     "get_device_locator",
     "get_device_repository",
     "get_embedding_model",
@@ -308,10 +430,16 @@ __all__ = [
     "get_index_image_use_case",
     "get_indexing_job_repository",
     "get_indexing_job_use_case",
+    "get_list_device_folders_use_case",
+    "get_list_devices_use_case",
     "get_list_indexing_jobs_use_case",
+    "get_list_mounted_volumes_use_case",
+    "get_register_device_use_case",
+    "get_rename_device_use_case",
     "get_resolve_image_location_use_case",
     "get_reveal_image_use_case",
     "get_search_images_use_case",
     "get_thumbnail_store",
     "get_thumbnail_use_case",
+    "get_volume_catalog",
 ]

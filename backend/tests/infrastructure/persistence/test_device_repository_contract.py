@@ -30,6 +30,7 @@ from tests.conftest import TEST_DEVICE_ID, TEST_VOLUME_IDENTITY
 from app.domain.entities.device import Device
 from app.domain.entities.image import Image
 from app.domain.repositories.device_repository import DeviceRepository
+from app.domain.services.device_identity import compute_device_id
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -40,7 +41,6 @@ from app.infrastructure.database.models.image_model import (
     EMBEDDING_DIMENSION,
     ImageModel,
 )
-from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.persistence.in_memory_device_repository import (
     InMemoryDeviceRepository,
 )

@@ -10,10 +10,10 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.domain.entities.device import Device
+from app.domain.services.device_identity import compute_device_id
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.infrastructure.database.models.device_model import DeviceModel
 from app.infrastructure.database.models.image_model import ImageModel
-from app.infrastructure.filesystem.device_identity import compute_device_id
 from app.infrastructure.persistence.engine import EngineInstance
 from app.infrastructure.persistence.postgres_device_repository import (
     PostgresDeviceRepository,
