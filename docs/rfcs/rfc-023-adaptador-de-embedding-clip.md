@@ -628,3 +628,15 @@ Também adiado: **cache de embeddings de texto**. Embeddings de consulta são de
 | esquema | `embedding vector(512)` |
 | índice | `ix_images_embedding_hnsw hnsw (embedding vector_cosine_ops)` |
 | linhas residuais de teste | `SELECT count(*) FROM images` → 0 |
+
+---
+
+## 22. Errata (2026-09-27)
+
+**A premissa da seção 7.2 estava errada.** `opus-mt-ROMANCE-en` não é um checkpoint um-para-muitos que precise de um token de destino para escolher o idioma de saída — é **muitos-para-um** (várias línguas românicas → inglês, sempre). Modelos Marian muitos-para-um não carregam nenhum token `>>xx<<` no vocabulário; a família que usa esses tokens é a direção oposta, um-para-muitos (ex.: `opus-mt-en-ROMANCE`, inglês → uma língua românica à escolha).
+
+Prepender `>>por<<` ao texto, como o código fazia desde este RFC, tokenizava para `<unk>` (verificado: `tokenizer.get_vocab()` não contém um único token `>>xx<<`). Esse `<unk>` inicial tirava a decodificação gulosa (`num_beams=1`, `do_sample=False`, sem penalidade de repetição) da distribuição que o modelo conhece. Para consultas curtas o efeito era um "." espúrio no início da tradução, inofensivo. Para frases completas — exatamente o caso que a seção 7.1 mede como o que `langdetect` classifica melhor — o decodificador entrava em loop repetindo "." até `MAX_TRANSLATION_TOKENS` (128) cortar a geração, produzindo prompts como `"a photo of . . . . . . ."` para o CLIP: a consulta inteira perdida, sem nenhuma exceção para sinalizar o problema.
+
+**Correção:** o prefixo foi removido; o texto vai para o tokenizer sem alteração. Verificado no checkpoint: a mesma consulta que antes degenerava em pontos agora produz uma tradução real (`"chácara com um galpão à esquerda"` → `"a log with a shed on the left"`) — sem sotaque (a acentuação segue afetando a qualidade da tradução, mas isso é uma limitação de vocabulário do checkpoint, não o defeito corrigido aqui). Ver `MarianQueryTranslator` em `query_translator.py` e o teste `test_portuguese_input_is_sent_untagged`.
+
+Este defeito nunca apareceu na seção 3 ou na tabela da seção 7.1: o bake-off e a tabela de detecção de idioma usam consultas curtas (uma frase de 4-6 palavras ou menos), curtas o bastante para o `.` espúrio não virar loop. As 25 consultas de *ground truth* do RFC-022 são desse tamanho. O defeito só se manifesta em consultas mais longas e naturais, o tipo de entrada que a seção 7.1 documenta como a que `langdetect` classifica com mais confiança — exatamente a que mais se beneficiaria da tradução.

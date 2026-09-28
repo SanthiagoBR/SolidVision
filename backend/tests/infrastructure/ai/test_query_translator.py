@@ -15,7 +15,6 @@ import torch
 from langdetect import DetectorFactory
 
 from app.infrastructure.ai.query_translator import (
-    PORTUGUESE_TOKEN,
     TRANSLATION_MODEL,
     MarianQueryTranslator,
     QueryTranslator,
@@ -124,14 +123,17 @@ def test_portuguese_text_is_routed_through_translation(
     assert result == "a translated english query"
 
 
-def test_portuguese_input_is_tagged_with_the_source_language_token(
-    stub_marian: StubLoads,
-) -> None:
-    """opus-mt-ROMANCE-en is many-to-one; `>>por<<` picks Portuguese."""
+def test_portuguese_input_is_sent_untagged(stub_marian: StubLoads) -> None:
+    """opus-mt-ROMANCE-en is many-to-one and has no source-language tokens.
+
+    A leading `>>por<<` tag resolves to `<unk>` on this checkpoint, which was
+    verified to knock greedy decoding out of distribution -- the decoder
+    looped on "." until generation was cut off instead of translating.
+    """
     query = "piscina em uma casa rural"
     _translator().to_english(query)
 
-    assert stub_marian.tokenizer.encoded == [f"{PORTUGUESE_TOKEN} {query}"]
+    assert stub_marian.tokenizer.encoded == [query]
 
 
 def test_translation_output_is_stripped(stub_marian: StubLoads) -> None:

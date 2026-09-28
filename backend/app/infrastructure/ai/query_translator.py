@@ -32,9 +32,6 @@ DetectorFactory.seed = 0
 
 TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-ROMANCE-en"
 PORTUGUESE = "pt"
-# opus-mt-ROMANCE-en is many-to-one over the Romance languages, so the source
-# language is selected by a leading target token rather than by the checkpoint.
-PORTUGUESE_TOKEN = ">>por<<"
 MAX_TRANSLATION_TOKENS = 128
 
 
@@ -52,8 +49,16 @@ class MarianQueryTranslator(QueryTranslator):
     Loaded through `AutoTokenizer` / `AutoModelForSeq2SeqLM` rather than
     `pipeline("translation")`: this checkpoint is not reliably registered
     under that generic task in transformers 5.15, and the explicit pair also
-    keeps the `>>por<<` source token and the decoding parameters visible
-    instead of buried in pipeline defaults.
+    keeps the decoding parameters visible instead of buried in pipeline
+    defaults.
+
+    No leading `>>xx<<` language token is sent: this checkpoint is
+    many-to-one (every Romance language into English), and many-to-one
+    Marian models carry no such tokens in their vocabulary. Prepending one
+    anyway -- e.g. `>>por<<` -- resolves to `<unk>`, which knocks greedy
+    decoding out of distribution; verified on this checkpoint, that made the
+    decoder loop on "." until `MAX_TRANSLATION_TOKENS` cut it off instead of
+    producing a translation.
 
     Decoding is greedy (`num_beams=1`, `do_sample=False`) so the same query
     always yields the same English string, and therefore the same embedding.
@@ -99,7 +104,7 @@ class MarianQueryTranslator(QueryTranslator):
         tokenizer, model = self._ensure_loaded()
 
         batch = tokenizer(
-            [f"{PORTUGUESE_TOKEN} {text}"],
+            [text],
             return_tensors="pt",
             padding=True,
         )
