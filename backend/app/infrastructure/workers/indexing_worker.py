@@ -334,8 +334,8 @@ def follow(
         sleep(poll_interval)
 
 
-def main() -> None:
-    """Create a job for the named root and run it in this very process.
+def run(root: Path, label: str) -> None:
+    """Create a job for `root` and run it in this very process.
 
     The composition root -- the one place allowed to know every concrete
     class at once. Two decisions here are RFC-029 corrections, and both
@@ -352,6 +352,10 @@ def main() -> None:
 
     If an executor *is* running and claims the job first, this follows it
     by polling and reports the same outcome.
+
+    Extracted out of `main()` so `app.cli`'s `index` subcommand can call the
+    same composition after parsing its own arguments, without a second copy
+    of this wiring.
 
     The provider imports are function-local rather than module-level so
     that importing `IndexingWorker` never drags Presentation, and through
@@ -376,9 +380,6 @@ def main() -> None:
     from app.infrastructure.persistence.session import SessionLocal
     from app.infrastructure.workers.job_runner import build_runner
 
-    args = _build_arg_parser().parse_args()
-    root = args.root.resolve()
-
     job_session = SessionLocal()
     image_session = SessionLocal()
     try:
@@ -388,7 +389,7 @@ def main() -> None:
             volume_provider=volume_provider,
             device_repository=devices,
             root=root,
-            label=args.label,
+            label=label,
         )
         scope = scope_for(root, volume.mount_point)
         logger.info(
@@ -430,6 +431,19 @@ def main() -> None:
     finally:
         image_session.close()
         job_session.close()
+
+
+def main() -> None:
+    """Parse `sys.argv` and run the command, as a standalone entry point.
+
+        python -m app.infrastructure.workers.indexing_worker --root PATH
+
+    `app.cli`'s `index` subcommand parses its own arguments the same way and
+    calls `run()` directly; this function exists so the module keeps working
+    as a script on its own.
+    """
+    args = _build_arg_parser().parse_args()
+    run(args.root.resolve(), args.label)
 
 
 if __name__ == "__main__":
