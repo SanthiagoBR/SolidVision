@@ -1,0 +1,17 @@
+{
+    "files.watcherExclude": {
+        "**/frontend/release/**": true,
+        "**/frontend/node_modules/**": true,
+        "**/frontend/resources/**": true,
+        "**/.venv/**": true,
+        "**/experiments/**/.venv/**": true,
+        "**/__pycache__/**": true
+    },
+    "search.exclude": {
+        "**/frontend/release": true,
+        "**/frontend/node_modules": true,
+        "**/frontend/resources": true,
+        "**/.venv": true,
+        "**/experiments/**/.venv": true
+    }
+}
