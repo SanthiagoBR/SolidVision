@@ -10,6 +10,7 @@ fakes, so no Postgres connection and no CLIP checkpoint are ever touched.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 import pytest
 from tests.application.fakes import FakeImageRepository
@@ -119,5 +120,115 @@ class TestRun:
 
         with pytest.raises(RuntimeError):
             search.run("anything", limit=None)
+
+        assert closed == [True]
+
+
+class TestQueryImage:
+    def test_it_wraps_the_file_where_the_adapter_reads_it(self, tmp_path: Path) -> None:
+        picture = tmp_path / "Print.JPG"
+
+        image = search.query_image(picture)
+
+        assert image.absolute_path == ImagePath(picture.resolve())
+        assert image.filename == "Print"
+        assert image.extension == "jpg"
+
+    def test_it_belongs_to_no_device(self, tmp_path: Path) -> None:
+        """Never persisted: the nil UUID says so rather than borrowing a real disk."""
+        assert search.query_image(tmp_path / "a.jpg").device_id.value == uuid.UUID(
+            int=0
+        )
+
+    def test_the_same_file_builds_the_same_query(self, tmp_path: Path) -> None:
+        assert (
+            search.query_image(tmp_path / "a.jpg").id
+            == search.query_image(tmp_path / "a.jpg").id
+        )
+
+
+class TestRunImage:
+    def _wire(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        repository: FakeImageRepository,
+        closed: list[bool],
+    ) -> FakeEmbeddingModel:
+        model = FakeEmbeddingModel()
+
+        class _Session:
+            def close(self) -> None:
+                closed.append(True)
+
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.session.SessionLocal", lambda: _Session()
+        )
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.postgres_image_repository."
+            "PostgresImageRepository",
+            lambda session: repository,
+        )
+        monkeypatch.setattr(
+            "app.presentation.dependencies.get_embedding_model", lambda: model
+        )
+        return model
+
+    def test_ranks_the_index_against_the_pictures_own_embedding(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        picture = tmp_path / "print.jpg"
+        picture.write_bytes(b"pixels")
+        repository = FakeImageRepository()
+        repository.seed_embedding(
+            _image("original"), EmbeddingVector([1.0] + [0.0] * 511)
+        )
+        closed: list[bool] = []
+        model = self._wire(monkeypatch, repository, closed)
+
+        search.run_image(picture, limit=20)
+
+        assert "images/original.png" in capsys.readouterr().out
+        ((embedding, limit, _),) = repository.search_similar_calls
+        assert embedding == model.encode_image(search.query_image(picture))
+        assert limit == 20
+        assert closed == [True]
+
+    def test_a_missing_file_is_refused_before_anything_is_opened(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def refuse() -> None:
+            raise AssertionError("the model must not be built for a missing file")
+
+        monkeypatch.setattr("app.presentation.dependencies.get_embedding_model", refuse)
+        monkeypatch.setattr(
+            "app.infrastructure.persistence.session.SessionLocal", refuse
+        )
+
+        with pytest.raises(SystemExit, match="No image file"):
+            search.run_image(tmp_path / "nowhere.jpg", limit=None)
+
+    def test_the_session_is_closed_even_when_the_search_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        picture = tmp_path / "print.jpg"
+        picture.write_bytes(b"pixels")
+
+        class _ExplodingRepository(FakeImageRepository):
+            def search_similar(
+                self,
+                embedding: EmbeddingVector,
+                limit: int,
+                filters: object = None,
+            ) -> list[SearchHit]:
+                raise RuntimeError("boom")
+
+        closed: list[bool] = []
+        self._wire(monkeypatch, _ExplodingRepository(), closed)
+
+        with pytest.raises(RuntimeError):
+            search.run_image(picture, limit=None)
 
         assert closed == [True]

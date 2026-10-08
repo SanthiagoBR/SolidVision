@@ -2,11 +2,13 @@
 
     python -m app.cli index --root PATH [--label LABEL]
     python -m app.cli search "query text" [--limit N]
+    python -m app.cli search-image PATH/TO/PICTURE.jpg [--limit N]
 
 A thin dispatcher, not a new abstraction: each subcommand parses its own
 arguments and calls straight into the composition an existing worker module
 already owns -- `indexing_worker.run()` for indexing,
-`app.cli.search.run()` for search. No business logic lives here.
+`app.cli.search.run()` for search, `app.cli.search.run_image()` for search
+by picture. No business logic lives here.
 """
 
 from __future__ import annotations
@@ -58,6 +60,25 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Maximum number of results (defaults to settings.top_k_results).",
     )
 
+    image_parser = subparsers.add_parser(
+        "search-image",
+        help="Find the indexed images that look most like a given picture.",
+    )
+    image_parser.add_argument(
+        "image",
+        type=Path,
+        help=(
+            "The picture to search with -- e.g. a photo of a printed photo. "
+            "Crop it to the picture first: the background is compared too."
+        ),
+    )
+    image_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of results (defaults to settings.top_k_results).",
+    )
+
     return parser
 
 
@@ -72,6 +93,10 @@ def main() -> None:
         from app.cli import search
 
         search.run(args.query, args.limit)
+    elif args.command == "search-image":
+        from app.cli import search
+
+        search.run_image(args.image, args.limit)
 
 
 if __name__ == "__main__":

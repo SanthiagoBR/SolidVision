@@ -6,6 +6,10 @@ The full query path, and the layer that owns none of its mechanics:
                -> ImageRepository.search_similar()
                -> ranked SearchHit list
 
+or, with a picture as the query (`execute_similar_to()`):
+
+    query image -> EmbeddingModelPort.encode_image() -> the same two steps
+
 Language detection, translation, and the prompt template live inside the
 embedding adapter; cosine distance, ordering, and top-K live inside the
 repository. What is left here is the part that belongs to neither: deciding
@@ -15,6 +19,7 @@ place that can rank against it.
 
 from __future__ import annotations
 
+from app.domain.entities.image import Image
 from app.domain.exceptions import (
     EmptySearchQueryError,
     InvalidGeoCircleError,
@@ -108,13 +113,45 @@ class SearchImagesUseCase:
                 "Search query cannot be empty or only whitespace."
             )
 
+        effective_limit = self._validated_request(limit, filters)
+        embedding = self._embedding_model.encode_text(query)
+        return self._repository.search_similar(embedding, effective_limit, filters)
+
+    def execute_similar_to(
+        self,
+        image: Image,
+        limit: int | None = None,
+        filters: SearchFilters | None = None,
+    ) -> list[SearchHit]:
+        """Return the indexed images that look most like `image`, most similar first.
+
+        The same search with a picture in place of words: CLIP puts images
+        and text in one space, so the image's own embedding is ranked against
+        the index exactly as a text embedding is. It is the stronger query
+        whenever the user *has* a picture -- a photo of a print, a copy
+        someone sent -- because no description carries as much of the image
+        as the image does.
+
+        `image` need not be indexed; it only has to be readable at its
+        `absolute_path`, which is where the embedding adapter opens it. The
+        same request policy as `execute()` applies -- page size, and the
+        radius floor of a circle -- and the order is the repository's,
+        untouched. If `image` *is* indexed, it comes back first, with a
+        similarity of ~1: an honest answer, not one this layer hides.
+        """
+        effective_limit = self._validated_request(limit, filters)
+        embedding = self._embedding_model.encode_image(image)
+        return self._repository.search_similar(embedding, effective_limit, filters)
+
+    def _validated_request(
+        self, limit: int | None, filters: SearchFilters | None
+    ) -> int:
+        """The page size to use, after the checks every kind of query shares."""
         effective_limit = self._default_limit if limit is None else limit
         self._validate_limit(effective_limit)
         if filters is not None and filters.taken_within is not None:
             self._validate_radius(filters.taken_within)
-
-        embedding = self._embedding_model.encode_text(query)
-        return self._repository.search_similar(embedding, effective_limit, filters)
+        return effective_limit
 
     def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
         """How many searchable images a date range left out for having no date.
