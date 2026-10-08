@@ -1,20 +1,57 @@
 """Unified command-line entry point over SolidVision's use cases.
 
     python -m app.cli index --root PATH [--label LABEL]
-    python -m app.cli search "query text" [--limit N]
+    python -m app.cli search "query text" [--limit N] [--near LAT LON --radius M]
     python -m app.cli search-image PATH/TO/PICTURE.jpg [--limit N]
+                                   [--near LAT LON --radius M]
 
 A thin dispatcher, not a new abstraction: each subcommand parses its own
 arguments and calls straight into the composition an existing worker module
 already owns -- `indexing_worker.run()` for indexing,
 `app.cli.search.run()` for search, `app.cli.search.run_image()` for search
-by picture. No business logic lives here.
+by picture. No business logic lives here: `--near` and `--radius` are
+parsed into numbers and handed on, and `app.cli.search` decides what makes a
+circle.
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+
+
+def _add_circle_arguments(parser: argparse.ArgumentParser) -> None:
+    """`--near LAT LON --radius METRES`: only photos taken inside the circle.
+
+    The API's `near_lat`/`near_lon`/`radius_m` (RFC-032 section 6). The
+    centre is one option taking two numbers, so latitude and longitude cannot
+    be given apart; the radius is a second option with no default, because
+    completing a missing radius would invent the one quantity the drone's
+    offset makes critical. argparse reads `-26.3` as a number here, not as
+    an option, since no option of this parser looks like a negative number.
+    """
+    parser.add_argument(
+        "--near",
+        nargs=2,
+        type=float,
+        metavar=("LAT", "LON"),
+        default=None,
+        help=(
+            "Only photos taken within --radius of this point, in decimal "
+            "degrees (e.g. --near -26.3214 -48.8163). A photo's position is "
+            "where the drone was, not the ground it photographed."
+        ),
+    )
+    parser.add_argument(
+        "--radius",
+        type=float,
+        metavar="METRES",
+        default=None,
+        help=(
+            "Radius of the --near circle, in metres. Required with --near and "
+            "never defaulted; at least settings.min_radius_m (300 by default)."
+        ),
+    )
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -59,6 +96,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Maximum number of results (defaults to settings.top_k_results).",
     )
+    _add_circle_arguments(search_parser)
 
     image_parser = subparsers.add_parser(
         "search-image",
@@ -78,6 +116,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Maximum number of results (defaults to settings.top_k_results).",
     )
+    _add_circle_arguments(image_parser)
 
     return parser
 
@@ -92,11 +131,11 @@ def main() -> None:
     elif args.command == "search":
         from app.cli import search
 
-        search.run(args.query, args.limit)
+        search.run(args.query, args.limit, args.near, args.radius)
     elif args.command == "search-image":
         from app.cli import search
 
-        search.run_image(args.image, args.limit)
+        search.run_image(args.image, args.limit, args.near, args.radius)
 
 
 if __name__ == "__main__":
