@@ -353,3 +353,51 @@ class TestMinimumRadius:
     def test_a_negative_minimum_is_a_wiring_error(self) -> None:
         with pytest.raises(ValueError):
             self._floored(minimum=-1)
+
+
+class TestExecuteSimilarTo:
+    """A picture as the query: the image's own embedding, ranked like text's."""
+
+    def test_the_repository_receives_the_images_embedding(self) -> None:
+        use_case, repository = _build_use_case()
+        _seed(repository, 3)
+        query = _image("photo-of-a-print")
+
+        use_case.execute_similar_to(query)
+
+        ((embedding, limit, filters),) = repository.search_similar_calls
+        assert embedding == FakeEmbeddingModel().encode_image(query)
+        assert limit == DEFAULT_LIMIT
+        assert filters is None
+
+    def test_an_indexed_image_finds_itself_first(self) -> None:
+        """Not hidden: a query that is in the index scores ~1 against itself."""
+        use_case, repository = _build_use_case()
+        _seed(repository, 3)
+        original = _image("original")
+        repository.seed_embedding(original, FakeEmbeddingModel().encode_image(original))
+
+        hits = use_case.execute_similar_to(original)
+
+        assert hits[0].image == original
+        assert hits[0].similarity == pytest.approx(1.0)
+
+    @pytest.mark.parametrize("limit", [0, MAX_SEARCH_LIMIT + 1])
+    def test_the_page_size_policy_is_the_same(self, limit: int) -> None:
+        use_case, _ = _build_use_case()
+
+        with pytest.raises(InvalidSearchLimitError):
+            use_case.execute_similar_to(_image("x"), limit=limit)
+
+    def test_the_radius_floor_is_the_same(self) -> None:
+        use_case = SearchImagesUseCase(
+            repository=FakeImageRepository(),
+            embedding_model=FakeEmbeddingModel(),
+            default_limit=DEFAULT_LIMIT,
+            min_radius_m=300.0,
+        )
+
+        with pytest.raises(InvalidGeoCircleError):
+            use_case.execute_similar_to(
+                _image("x"), filters=SearchFilters(taken_within=GeoCircle(FARM, 50))
+            )

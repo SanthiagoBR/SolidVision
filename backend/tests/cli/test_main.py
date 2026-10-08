@@ -55,6 +55,28 @@ class TestArgumentParsing:
 
         assert args.limit is None
 
+    def test_search_image_requires_a_picture(self) -> None:
+        with pytest.raises(SystemExit):
+            _build_arg_parser().parse_args(["search-image"])
+
+    def test_search_image_accepts_a_path_and_optional_limit(
+        self, tmp_path: Path
+    ) -> None:
+        picture = tmp_path / "print.jpg"
+
+        args = _build_arg_parser().parse_args(
+            ["search-image", str(picture), "--limit", "20"]
+        )
+
+        assert args.command == "search-image"
+        assert args.image == picture
+        assert args.limit == 20
+
+    def test_search_image_limit_defaults_to_none(self, tmp_path: Path) -> None:
+        args = _build_arg_parser().parse_args(["search-image", str(tmp_path / "a.jpg")])
+
+        assert args.limit is None
+
 
 class TestDispatch:
     def test_index_is_dispatched_to_the_indexing_worker(
@@ -82,10 +104,25 @@ class TestDispatch:
             "app.cli.search.run",
             lambda query, limit: calls.append((query, limit)),
         )
-        monkeypatch.setattr(
-            "sys.argv", ["app.cli", "search", "a lake", "--limit", "5"]
-        )
+        monkeypatch.setattr("sys.argv", ["app.cli", "search", "a lake", "--limit", "5"])
 
         main()
 
         assert calls == [("a lake", 5)]
+
+    def test_search_image_is_dispatched_to_the_search_module(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[Path, int | None]] = []
+        monkeypatch.setattr(
+            "app.cli.search.run_image",
+            lambda image, limit: calls.append((image, limit)),
+        )
+        picture = tmp_path / "print.jpg"
+        monkeypatch.setattr(
+            "sys.argv", ["app.cli", "search-image", str(picture), "--limit", "20"]
+        )
+
+        main()
+
+        assert calls == [(picture, 20)]
