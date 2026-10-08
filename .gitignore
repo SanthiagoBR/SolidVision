@@ -13,3 +13,8 @@ venv/
 
 # Runtime data materialized by the indexing worker / dataset_tools (RFC-022 9.1)
 data/
+
+# Frontend build artifacts (Electron)
+frontend/node_modules/
+frontend/release/
+frontend/resources/
