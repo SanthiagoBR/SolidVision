@@ -11,7 +11,7 @@ file a re-scan skips would turn a `stat` per file into a decode per file.
 This command is where that work is paid for, once, when the operator asks.
 
 **It never loads, imports, or constructs the embedding model**, the property
-`capture_date_backfill` established and
+`capture_date_backfill` established (now `exif_backfill`, RFC-032) and
 `tests/infrastructure/workers/test_thumbnail_backfill.py` checks on the real
 import graph. Pillow is imported; torch is not.
 
@@ -109,7 +109,7 @@ def _log_summary(summary: ThumbnailBackfillSummary) -> None:
 def main() -> None:
     """Compose the backfill and run it against one explicitly named root.
 
-    Function-local imports, as in `capture_date_backfill`, so that importing
+    Function-local imports, as in `exif_backfill`, so that importing
     this module for its parser or its tests pulls in no database driver.
     `app.presentation.dependencies` is absent from the list for the reason
     it is absent there: it is where the CLIP adapter is composed.
@@ -164,6 +164,7 @@ def main() -> None:
             root,
             settings.supported_extensions,
             extract_capture_date=False,
+            extract_gps=False,
             excluded_directories=(settings.thumbnail_directory,),
         )
         summary = BackfillThumbnailsUseCase(

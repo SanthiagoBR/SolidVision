@@ -1,7 +1,7 @@
 """The thumbnail backfill command (RFC-030 section 7.2).
 
 The model-never-loads property is checked on the import graph in a fresh
-interpreter, for the reason `test_capture_date_backfill.py` gives: a mock of
+interpreter, for the reason `test_exif_backfill.py` gives: a mock of
 `encode_image` proves nobody called it, and passes just as happily with
 `import torch` somewhere in the modules the command drags in.
 """
@@ -19,7 +19,7 @@ from tests.application.fakes import (
     StubVolumeIdentityProvider,
     make_device,
 )
-from tests.infrastructure.workers.test_capture_date_backfill import (
+from tests.infrastructure.workers.test_exif_backfill import (
     FORBIDDEN_MODULES,
     _every_import_in,
     _loaded_after_importing,

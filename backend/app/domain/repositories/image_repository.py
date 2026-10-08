@@ -13,6 +13,11 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.position import (
+    BoundingBox,
+    PositionCells,
+    PositionReading,
+)
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 
@@ -59,7 +64,9 @@ class ImageRepository(ABC):
 
         The same holds for `record.thumbnail_path` (RFC-030): written as
         given, `None` included, because a thumbnail rendered from the old
-        bytes no longer depicts the file.
+        bytes no longer depicts the file -- and for the position (RFC-032):
+        `latitude`, `longitude` and `position_source` come from the entity,
+        `None` included, for the capture date's reason.
         """
 
     @abstractmethod
@@ -127,6 +134,15 @@ class ImageRepository(ABC):
           unknown never matches a range, however wide: unknown never
           means "matches" (RFC-020). The device set and the range combine
           with AND.
+        - A circle (RFC-032) keeps the images whose position is within
+          `radius_m` metres of its centre by **exact haversine distance**,
+          the edge included, computed with `EARTH_RADIUS_M`. A bounding box
+          may narrow the rows first, but only as a pre-filter that can never
+          remove a row the distance would keep. An image whose position is
+          unknown never matches a circle, however large -- the in-memory
+          implementations must say `is None` explicitly, because Python
+          raises where SQL quietly compares NULL as false. All three
+          clauses combine with AND.
         - `filters=None` and `filters=SearchFilters()` mean the same
           thing: no narrowing, and byte-for-byte the query RFC-025
           shipped. Neither may be read as "an empty set of devices",
@@ -136,7 +152,9 @@ class ImageRepository(ABC):
           without a date.
         - Every hit's `Image` carries its `captured_at` and
           `capture_source`, so a caller can show why a photo matched a
-          date filter and how much that date is worth.
+          date filter and how much that date is worth -- and, since
+          RFC-032, its `latitude`, `longitude` and `position_source`, for
+          the same reason about a circle.
         - A filtered search obeys every rule above, including ordering,
           the cosine range, and skipping images with no embedding. It
           restricts the candidate set; it does not change the ranking
@@ -174,9 +192,9 @@ class ImageRepository(ABC):
         Returns `IndexMetadata(None, None)` when a row exists but has no
         metadata yet -- callers must treat that as changed, not unchanged.
 
-        Includes the row's `capture_source` (RFC-028) and `thumbnail_path`
-        (RFC-030), neither of which is a change signal; see
-        `IndexMetadata`.
+        Includes the row's `capture_source` (RFC-028), `thumbnail_path`
+        (RFC-030) and `position_source` (RFC-032), none of which is a
+        change signal; see `IndexMetadata`.
         """
 
     @abstractmethod
@@ -218,9 +236,10 @@ class ImageRepository(ABC):
         says: that belongs to `update_capture_date()`, and a refresh that
         also wrote it would reset an examined row to "never examined"
         whenever a caller built its `IndexMetadata` without one. The
-        thumbnail location is left alone for the same reason -- a refresh
-        means the bytes did not change, so the thumbnail still depicts
-        them.
+        position is left alone for the same reason, whatever
+        `metadata.position_source` says (RFC-032 section 8), and so is the
+        thumbnail location -- a refresh means the bytes did not change, so
+        the thumbnail still depicts them.
         """
 
     @abstractmethod
@@ -262,6 +281,38 @@ class ImageRepository(ABC):
         """
 
     @abstractmethod
+    def update_position(self, image_id: ImageId, reading: PositionReading) -> None:
+        """Record the examined position of an existing row (RFC-032 section 8).
+
+        Writes `latitude`, `longitude` and `position_source` and nothing
+        else -- no embedding, no change signal, no capture date -- because a
+        position is a searchable attribute of the photograph, not a reason
+        to reindex it. This is how an already-indexed image gains a
+        position without paying for inference.
+
+        Takes a `PositionReading`, never `None`: nothing legitimate un-reads
+        a file, so there is no call that marks a row "never examined" again.
+
+        Does nothing when no row exists for `image_id`, the contract of
+        `update_capture_date()`.
+
+        Unconditional. Deciding *whether* to write is the caller's policy,
+        in `position_to_write()`.
+        """
+
+    @abstractmethod
+    def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
+        """Record many positions as one write.
+
+        The bulk counterpart of `update_position()`, used once per prefetch
+        window for the reason `update_capture_date_many()` exists: the
+        first scan after RFC-032 places an entire already-indexed
+        collection, and one statement per file would be 100,000 round
+        trips. Ids with no row are skipped silently; an empty mapping
+        writes nothing.
+        """
+
+    @abstractmethod
     def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
         """Record where an existing row's thumbnail was stored (RFC-030).
 
@@ -296,12 +347,12 @@ class ImageRepository(ABC):
         section 2.1 exists to remove.
 
         Counts images that (a) have an embedding, so a search could have
-        returned them, (b) satisfy every *other* clause of `filters` --
-        today, the device set -- and (c) have `captured_at` NULL, whether
-        never examined or examined without a date. When
-        `filters.captured_between` is `None` there was no date clause to
-        hide anything, the answer is 0, and an implementation must return
-        it without querying.
+        returned them, (b) satisfy every *other* clause of `filters` -- the
+        device set and, since RFC-032, the circle -- and (c) have
+        `captured_at` NULL, whether never examined or examined without a
+        date. When `filters.captured_between` is `None` there was no date
+        clause to hide anything, the answer is 0, and an implementation
+        must return it without querying.
 
         Three properties to know before "fixing" what looks inconsistent:
 
@@ -315,6 +366,79 @@ class ImageRepository(ABC):
           universe. The two numbers are not supposed to add up to anything.
         - It ignores the query text. Relevance is not the reason these
           images were left out; their missing date is.
+        """
+
+    @abstractmethod
+    def count_unknown_position(self, filters: SearchFilters) -> int:
+        """Count the searchable images that have no position (RFC-032 section 6.2).
+
+        The number behind "N photos were left out because they have no
+        coordinates". Without it a circle answers with the most expensive
+        lie the product can tell -- *there is no photo of this place* --
+        when the truth is *1,200 photos have no coordinates and none of
+        them was looked at*.
+
+        Counts images that (a) have an embedding, (b) satisfy every *other*
+        clause of `filters` -- the device set and the capture-date range --
+        and (c) have `latitude` NULL, whether never examined or examined
+        without a fix. `filters.taken_within` is ignored: it is the clause
+        whose victims are being counted.
+
+        **Unlike `count_unknown_capture_date()`, this does not answer 0 for
+        a filter without a circle.** `GET /images/map` asks exactly this
+        question with no circle at all (RFC-032 section 7) -- how many
+        photos the map cannot draw -- and it must be the same number over
+        the same universe. Not paying for the query on a search with no
+        circle is still a rule; it is enforced one layer up, where
+        `SearchImagesUseCase` does not call this method at all.
+
+        The three properties of `count_unknown_capture_date()` hold: a
+        second query, over the whole table under the filters rather than
+        the neighbourhood an approximate index explored, ignoring the
+        query text.
+        """
+
+    @abstractmethod
+    def aggregate_positions(
+        self,
+        filters: SearchFilters,
+        area: BoundingBox,
+        precision: int,
+        cell_limit: int | None,
+    ) -> PositionCells:
+        """Group the searchable images in `area` into map cells (RFC-032 section 7).
+
+        A map cannot be drawn from search hits: the top 100 of a 100,000-
+        image index says nothing about where the photos are, and moving
+        100,000 points to the client to group them is moving the collection
+        across the wire to answer a question `GROUP BY` answers here.
+
+        The universe is **the filters', not the ranking's**: images with an
+        embedding, satisfying the device set and the capture-date range of
+        `filters`, whose position lies inside `area` (edges included). That
+        is the universe of `count_unknown_position()` restricted to images
+        that have a position -- the two numbers describe one population,
+        split by whether it can be drawn. There is no query text; ranking
+        is the search's business.
+
+        Each cell is the pair of coordinates rounded to `precision` decimal
+        places, half away from zero, **as PostgreSQL rounds a
+        `double precision` cast to `numeric`** -- the value's 15 significant
+        digits rounded in decimal, not the binary float rounded by Python's
+        `round()`. The in-memory implementations reproduce that exactly
+        (`round_to_cell()`), or a photo on a cell boundary would land in
+        different cells in different implementations.
+
+        At most `cell_limit` cells come back -- every cell when it is
+        `None` -- ordered by latitude and then longitude so a truncated
+        answer is still deterministic. A caller that needs to know whether
+        the area holds *more* than N cells asks for N + 1: the ceiling is
+        the caller's policy (`MAX_MAP_CELLS`), and this method only stops
+        counting past it.
+
+        `filters.taken_within` is not consulted: the map's area is the
+        viewport, and "near here" is a different question (RFC-032
+        section 9).
         """
 
     @abstractmethod

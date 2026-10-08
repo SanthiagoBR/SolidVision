@@ -309,7 +309,7 @@ class TestDamagedFilesNeverRaise:
             raise OSError(errno.EIO, "I/O error")
 
         monkeypatch.setattr(
-            "app.infrastructure.filesystem.exif_capture_date._exif_sub_ifd",
+            "app.infrastructure.filesystem.exif_capture_date._exif_ifds",
             failing_read,
         )
 

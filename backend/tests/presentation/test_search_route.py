@@ -43,8 +43,11 @@ from app.domain.entities.image import Image
 from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.device_id import DeviceId
+from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.position import Position
+from app.domain.value_objects.position_source import PositionSource
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
@@ -72,6 +75,8 @@ class RecordingSearchUseCase:
         self.filters: list[SearchFilters | None] = []
         self.excluded_unknown_date: int | None = None
         self.count_calls: list[SearchFilters | None] = []
+        self.excluded_unknown_position: int | None = None
+        self.position_count_calls: list[SearchFilters | None] = []
 
     def execute(
         self,
@@ -86,6 +91,12 @@ class RecordingSearchUseCase:
     def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
         self.count_calls.append(filters)
         return self.excluded_unknown_date
+
+    def count_hidden_by_unknown_position(
+        self, filters: SearchFilters | None
+    ) -> int | None:
+        self.position_count_calls.append(filters)
+        return self.excluded_unknown_position
 
 
 def make_hit(
@@ -171,6 +182,9 @@ def test_a_normal_query_returns_the_documented_body(
                 "similarity": 0.3255,
                 "captured_at": None,
                 "capture_source": None,
+                "latitude": None,
+                "longitude": None,
+                "position_source": None,
                 "device": {
                     "id": str(TEST_DEVICE_ID.value),
                     "label": "HD-TEST",
@@ -181,6 +195,7 @@ def test_a_normal_query_returns_the_documented_body(
             }
         ],
         "excluded_unknown_date": None,
+        "excluded_unknown_position": None,
     }
 
 
@@ -291,6 +306,9 @@ def test_a_result_publishes_where_the_file_is_and_nothing_more(
         "similarity",
         "captured_at",
         "capture_source",
+        "latitude",
+        "longitude",
+        "position_source",
         "device",
         "relative_path",
         "absolute_path",
@@ -750,3 +768,198 @@ class TestCaptureDateInTheResponse:
         body = client.get(SEARCH_URL, params={"q": "lake"}).json()
 
         assert body["excluded_unknown_date"] is None
+
+
+FARM_LAT = -26.3214
+FARM_LON = -48.8163
+CIRCLE_PARAMS = {"near_lat": FARM_LAT, "near_lon": FARM_LON, "radius_m": 2000}
+
+
+@pytest.fixture
+def floored_use_case() -> SearchImagesUseCase:
+    """The real use case with a radius floor, for the policy cases."""
+    use_case = SearchImagesUseCase(
+        repository=FakeImageRepository(),
+        embedding_model=FakeEmbeddingModel(),
+        default_limit=settings.top_k_results,
+        min_radius_m=300.0,
+    )
+    app.dependency_overrides[get_search_images_use_case] = lambda: use_case
+    return use_case
+
+
+class TestCircleParameters:
+    """RFC-032 section 6 at the HTTP edge: a point and a radius, all or nothing."""
+
+    def test_omitted_parameters_mean_no_circle(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        client.get(SEARCH_URL, params={"q": "telhado"})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.taken_within is None
+        assert filters.is_empty()
+
+    def test_the_three_parameters_become_one_circle_in_metres(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """Metres on the wire and in the domain: no conversion to get backwards."""
+        client.get(SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS})
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.taken_within == GeoCircle(Position(FARM_LAT, FARM_LON), 2000)
+
+    def test_the_circle_combines_with_the_other_filters(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        client.get(
+            SEARCH_URL,
+            params={
+                "q": "telhado",
+                "device_id": str(TEST_DEVICE_ID.value),
+                "captured_from": "2018-01-01",
+                **CIRCLE_PARAMS,
+            },
+        )
+
+        (filters,) = stub.filters
+        assert filters is not None
+        assert filters.device_ids == frozenset({TEST_DEVICE_ID})
+        assert filters.captured_between is not None
+        assert filters.taken_within is not None
+
+    @pytest.mark.parametrize(
+        "missing",
+        [("near_lat",), ("near_lon",), ("radius_m",), ("near_lon", "radius_m")],
+        ids=["no-lat", "no-lon", "no-radius", "lat-only"],
+    )
+    def test_part_of_a_circle_is_a_400_naming_what_is_missing(
+        self,
+        client: TestClient,
+        real_use_case: SearchImagesUseCase,
+        missing: tuple[str, ...],
+    ) -> None:
+        """Two of three is malformed, and no default radius is invented."""
+        params = {
+            name: value for name, value in CIRCLE_PARAMS.items() if name not in missing
+        }
+
+        response = client.get(SEARCH_URL, params={"q": "telhado", **params})
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        for name in missing:
+            assert name in detail
+
+    @pytest.mark.parametrize(
+        ("name", "value"),
+        [
+            ("near_lat", 91),
+            ("near_lat", -90.5),
+            ("near_lon", 180.5),
+            ("near_lon", -181),
+        ],
+    )
+    def test_a_coordinate_off_the_planet_is_a_400(
+        self,
+        client: TestClient,
+        real_use_case: SearchImagesUseCase,
+        name: str,
+        value: float,
+    ) -> None:
+        response = client.get(
+            SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS, name: value}
+        )
+
+        assert response.status_code == 400
+        assert "outside" in response.json()["detail"]
+
+    @pytest.mark.parametrize("radius", [0, -5])
+    def test_a_radius_that_is_not_positive_is_a_400(
+        self, client: TestClient, real_use_case: SearchImagesUseCase, radius: float
+    ) -> None:
+        response = client.get(
+            SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS, "radius_m": radius}
+        )
+
+        assert response.status_code == 400
+        assert "positive" in response.json()["detail"]
+
+    def test_a_radius_below_the_minimum_is_a_400_that_explains_why(
+        self, client: TestClient, floored_use_case: SearchImagesUseCase
+    ) -> None:
+        """RFC-032 section 2.2: the message names the aircraft, not just a number."""
+        response = client.get(
+            SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS, "radius_m": 50}
+        )
+
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "300" in detail
+        assert "drone" in detail
+
+    def test_the_minimum_itself_is_accepted(
+        self, client: TestClient, floored_use_case: SearchImagesUseCase
+    ) -> None:
+        response = client.get(
+            SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS, "radius_m": 300}
+        )
+
+        assert response.status_code == 200
+
+    @pytest.mark.parametrize("name", ["near_lat", "near_lon", "radius_m"])
+    def test_a_value_that_is_not_a_number_is_a_422(
+        self, client: TestClient, stub: RecordingSearchUseCase, name: str
+    ) -> None:
+        response = client.get(
+            SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS, name: "perto"}
+        )
+
+        assert response.status_code == 422
+        assert stub.calls == []
+
+
+class TestPositionInTheResponse:
+    def test_a_hit_publishes_its_position_and_source(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        image = Image(
+            id=ImageId(uuid.uuid4()),
+            device_id=TEST_DEVICE_ID,
+            relative_path=ImagePath("fotos/DJI_0013.JPG"),
+            filename="DJI_0013",
+            extension="jpg",
+            latitude=-26.321406,
+            longitude=-48.816307,
+            position_source=PositionSource.EXIF_GPS,
+        )
+        stub.hits = [SearchHit(image=image, similarity=0.4)]
+
+        (result,) = client.get(SEARCH_URL, params={"q": "telhado"}).json()["results"]
+
+        assert result["latitude"] == -26.321406
+        assert result["longitude"] == -48.816307
+        assert result["position_source"] == "exif_gps"
+
+    def test_the_excluded_count_is_published_for_a_circle(
+        self, client: TestClient, stub: RecordingSearchUseCase
+    ) -> None:
+        """RFC-032 section 6.2: "no photo here" must not hide "1,200 unplaced"."""
+        stub.excluded_unknown_position = 1200
+
+        body = client.get(SEARCH_URL, params={"q": "telhado", **CIRCLE_PARAMS}).json()
+
+        assert body["excluded_unknown_position"] == 1200
+        (filters,) = stub.position_count_calls
+        assert filters is not None
+        assert filters.taken_within is not None
+
+    def test_the_excluded_count_is_null_without_a_circle(
+        self, client: TestClient, real_use_case: SearchImagesUseCase
+    ) -> None:
+        """Null, not 0: there was no circle to hide anything."""
+        body = client.get(SEARCH_URL, params={"q": "telhado"}).json()
+
+        assert body["excluded_unknown_position"] is None

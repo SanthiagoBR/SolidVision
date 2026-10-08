@@ -1,15 +1,15 @@
 """Give already-indexed images a thumbnail, without the model (RFC-030 section 7.2).
 
-The shape of `BackfillCaptureDatesUseCase`, and on purpose: the same
-discovered candidates, the same metadata prefetch per window, the same one
-bulk write per window with a per-row fallback. What differs is what a file
-costs. A capture date is a header read; a thumbnail is a full decode, a
-resize and an encode -- still a small fraction of the inference a reindex
-would pay, and still never the model.
+The shape of `BackfillExifUseCase` -- RFC-032's, which superseded RFC-028's
+capture-date backfill -- and on purpose: the same discovered candidates, the
+same metadata prefetch per window, the same one bulk write per window with a
+per-row fallback. What differs is what a file costs. An EXIF fact is a header
+read; a thumbnail is a full decode, a resize and an encode -- still a small
+fraction of the inference a reindex would pay, and still never the model.
 
 It needs no embedding model and no content hasher, and takes neither.
 `tests/infrastructure/workers/test_thumbnail_backfill.py` checks the command's
-import graph for them, as RFC-028's backfill test does.
+import graph for them, as the EXIF backfill's test does.
 """
 
 from __future__ import annotations

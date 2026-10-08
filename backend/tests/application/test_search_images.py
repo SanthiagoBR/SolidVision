@@ -22,11 +22,17 @@ from app.application.use_cases.search_images import (
     SearchImagesUseCase,
 )
 from app.domain.entities.image import Image
-from app.domain.exceptions import EmptySearchQueryError, InvalidSearchLimitError
+from app.domain.exceptions import (
+    EmptySearchQueryError,
+    InvalidGeoCircleError,
+    InvalidSearchLimitError,
+)
 from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.embedding_vector import EmbeddingVector
+from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.position import Position
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
@@ -256,3 +262,94 @@ class TestCountHiddenByUnknownDate:
 
         assert use_case.count_hidden_by_unknown_date(filters) == 3
         assert repository.count_unknown_capture_date_calls == [filters]
+
+
+FARM = Position(-26.321406, -48.816307)
+NEAR_FARM = SearchFilters(taken_within=GeoCircle(FARM, 2000))
+
+
+class TestCountHiddenByUnknownPosition:
+    """RFC-032 section 6.2, in the mould of the date count above."""
+
+    def test_no_filters_asks_the_repository_nothing(self) -> None:
+        use_case, repository = _build_use_case()
+
+        assert use_case.count_hidden_by_unknown_position(None) is None
+        assert repository.count_unknown_position_calls == []
+
+    def test_a_filter_without_a_circle_asks_the_repository_nothing(self) -> None:
+        """Null, not 0, and no query: the repository is not called at all.
+
+        The rule lives here because the repository's count does not
+        short-circuit -- the map asks it the same question with no circle.
+        """
+        use_case, repository = _build_use_case()
+        filters = SearchFilters(
+            device_ids=frozenset({TEST_DEVICE_ID}),
+            captured_between=TestCountHiddenByUnknownDate.YEAR_2018,
+        )
+
+        assert use_case.count_hidden_by_unknown_position(filters) is None
+        assert repository.count_unknown_position_calls == []
+
+    def test_a_search_without_a_circle_never_triggers_the_count(self) -> None:
+        use_case, repository = _build_use_case()
+        _seed(repository, 3)
+
+        use_case.execute("lake", filters=SearchFilters())
+        use_case.count_hidden_by_unknown_position(SearchFilters())
+
+        assert repository.count_unknown_position_calls == []
+
+    def test_a_circle_is_counted_with_the_same_filters(self) -> None:
+        use_case, repository = _build_use_case()
+        _seed(repository, 3)
+
+        assert use_case.count_hidden_by_unknown_position(NEAR_FARM) == 3
+        assert repository.count_unknown_position_calls == [NEAR_FARM]
+
+
+class TestMinimumRadius:
+    """RFC-032 sections 2.2 and 6: Application policy, injected, never read."""
+
+    def _floored(self, minimum: float = 300.0) -> SearchImagesUseCase:
+        return SearchImagesUseCase(
+            repository=FakeImageRepository(),
+            embedding_model=FakeEmbeddingModel(),
+            default_limit=DEFAULT_LIMIT,
+            min_radius_m=minimum,
+        )
+
+    def test_a_radius_below_the_minimum_is_refused_before_encoding(self) -> None:
+        use_case = self._floored()
+        tight = SearchFilters(taken_within=GeoCircle(FARM, 50))
+
+        with pytest.raises(InvalidGeoCircleError, match="drone"):
+            use_case.execute("telhado", filters=tight)
+
+    def test_the_minimum_itself_is_accepted(self) -> None:
+        use_case = self._floored()
+
+        assert (
+            use_case.execute(
+                "telhado", filters=SearchFilters(taken_within=GeoCircle(FARM, 300))
+            )
+            == []
+        )
+
+    def test_without_a_circle_the_minimum_is_irrelevant(self) -> None:
+        assert self._floored().execute("telhado", filters=SearchFilters()) == []
+
+    def test_the_default_floor_keeps_older_compositions_unchanged(self) -> None:
+        use_case, _ = _build_use_case()
+
+        assert (
+            use_case.execute(
+                "telhado", filters=SearchFilters(taken_within=GeoCircle(FARM, 1))
+            )
+            == []
+        )
+
+    def test_a_negative_minimum_is_a_wiring_error(self) -> None:
+        with pytest.raises(ValueError):
+            self._floored(minimum=-1)

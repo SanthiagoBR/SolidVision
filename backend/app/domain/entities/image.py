@@ -11,6 +11,12 @@ from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.position import (
+    Position,
+    PositionReading,
+    validate_position_fields,
+)
+from app.domain.value_objects.position_source import PositionSource
 
 
 @dataclass(frozen=True)
@@ -101,8 +107,42 @@ class Image:
     4.2).
     """
 
+    latitude: float | None = None
+    """Where the photograph was taken, north-south, in decimal degrees (RFC-032).
+
+    Paired with `longitude`: both or neither, never half a position
+    (RFC-032 section 4.3). `None` means unknown -- never examined, or
+    examined without a usable GPS fix -- and an image whose position is
+    unknown never matches a search circle (RFC-020).
+
+    **The aircraft's position, not the subject's.** For an oblique shot the
+    photographed ground can be tens to hundreds of metres away (RFC-032
+    section 2.2), and nothing corrects for that here.
+
+    On the entity, beside `captured_at`, for the reason that field gives: a
+    position is a searchable attribute of the photograph, it reaches the
+    response through `SearchHit`, and the in-memory filter predicate reads
+    it off the `Image`. Never named `location`, which in this codebase is
+    where the *file* is (RFC-032 section 4.5).
+
+    Not part of equality, which stays by `id`, like every other field.
+    """
+
+    longitude: float | None = None
+    """Where the photograph was taken, east-west, in decimal degrees; see `latitude`."""
+
+    position_source: PositionSource | None = None
+    """Where the position came from; `None` if the file was never examined.
+
+    `None` and `PositionSource.UNKNOWN` are different answers, for the
+    reason `capture_source` gives: `None` rows get their position written on
+    the next scan that sees them, `UNKNOWN` rows are left alone (RFC-032
+    section 4.4).
+    """
+
     def __post_init__(self) -> None:
         validate_capture_fields(self.captured_at, self.capture_source)
+        validate_position_fields(self.latitude, self.longitude, self.position_source)
 
     @property
     def capture_date(self) -> CaptureDate | None:
@@ -110,6 +150,25 @@ class Image:
         if self.capture_source is None:
             return None
         return CaptureDate(captured_at=self.captured_at, source=self.capture_source)
+
+    @property
+    def position(self) -> Position | None:
+        """The point, when one is known; `None` for unknown and never examined alike.
+
+        For the questions that only care about the point -- is it inside a
+        circle, which map cell is it in. Callers that must tell "never
+        examined" from "examined, none" read `position_reading` instead.
+        """
+        if self.latitude is None or self.longitude is None:
+            return None
+        return Position(self.latitude, self.longitude)
+
+    @property
+    def position_reading(self) -> PositionReading | None:
+        """The examined position as one value, or `None` if never examined."""
+        if self.position_source is None:
+            return None
+        return PositionReading(position=self.position, source=self.position_source)
 
     @property
     def display_path(self) -> ImagePath:

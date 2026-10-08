@@ -176,6 +176,9 @@ class TestImageDetails:
             "filename": "DJI_0042",
             "captured_at": "2018-06-12T14:30:00",
             "capture_source": "exif_original",
+            "latitude": None,
+            "longitude": None,
+            "position_source": None,
             "device": {
                 "id": str(TEST_DEVICE_ID.value),
                 "label": "HD3",

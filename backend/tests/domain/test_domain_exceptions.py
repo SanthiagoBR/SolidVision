@@ -14,13 +14,16 @@ from app.domain.exceptions import (
     IllegalJobTransitionError,
     ImageAlreadyExistsError,
     ImageNotFoundError,
+    InvalidBoundingBoxError,
     InvalidCaptureDateError,
     InvalidDateRangeError,
     InvalidDeviceIdentifierError,
+    InvalidGeoCircleError,
     InvalidImageIdentifierError,
     InvalidImagePathError,
     InvalidJobIdentifierError,
     InvalidJobScopeError,
+    InvalidPositionError,
     InvalidSearchLimitError,
     InvalidVolumeIdentityError,
     JobNotFoundError,
@@ -45,6 +48,9 @@ def test_all_domain_exceptions_inherit_from_domain_error() -> None:
     assert issubclass(InvalidVolumeIdentityError, DomainError)
     assert issubclass(InvalidCaptureDateError, DomainError)
     assert issubclass(InvalidDateRangeError, DomainError)
+    assert issubclass(InvalidPositionError, DomainError)
+    assert issubclass(InvalidGeoCircleError, DomainError)
+    assert issubclass(InvalidBoundingBoxError, DomainError)
     assert issubclass(JobNotFoundError, DomainError)
     assert issubclass(DeviceBusyError, DomainError)
     assert issubclass(IllegalJobTransitionError, DomainError)
@@ -78,6 +84,9 @@ def test_default_messages_are_assigned() -> None:
     assert str(InvalidVolumeIdentityError()) == "Invalid volume identity."
     assert str(InvalidCaptureDateError()) == "Invalid capture date."
     assert str(InvalidDateRangeError()) == "Invalid date range."
+    assert str(InvalidPositionError()) == "Invalid position."
+    assert str(InvalidGeoCircleError()) == "Invalid search circle."
+    assert str(InvalidBoundingBoxError()) == "Invalid map area."
     assert str(JobNotFoundError()) == "Indexing job not found."
     assert str(DeviceBusyError()) == "Device already has an active job."
     assert str(IllegalJobTransitionError()) == "Illegal indexing job transition."
@@ -105,8 +114,11 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "IllegalJobTransitionError",
         "ImageAlreadyExistsError",
         "ImageNotFoundError",
+        "InvalidBoundingBoxError",
         "InvalidCaptureDateError",
         "InvalidDateRangeError",
+        "InvalidGeoCircleError",
+        "InvalidPositionError",
         "InvalidDeviceIdentifierError",
         "InvalidEmbeddingVectorError",
         "InvalidImageIdentifierError",
@@ -150,7 +162,13 @@ def test_a_malformed_request_stays_a_plain_domain_error() -> None:
     or the queue emptied, which is exactly what separates it from the
     conflict cases above.
     """
-    for error in (InvalidJobScopeError, InvalidJobIdentifierError):
+    for error in (
+        InvalidJobScopeError,
+        InvalidJobIdentifierError,
+        InvalidPositionError,
+        InvalidGeoCircleError,
+        InvalidBoundingBoxError,
+    ):
         assert issubclass(error, DomainError)
         assert not issubclass(error, NotFoundError)
         assert not issubclass(error, ConflictError)

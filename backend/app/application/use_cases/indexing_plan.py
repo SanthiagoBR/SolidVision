@@ -34,9 +34,11 @@ class IndexCandidate:
 
     The capture date the scan read (RFC-028) travels on `image`, where it
     is a field of the entity, rather than as two more fields here beside
-    `file_size` and `file_modified_at`. That placement is also a guard:
-    the fields of this class are the change signals `plan_indexing()`
-    compares, and a capture date is not one (RFC-028 section 6.1).
+    `file_size` and `file_modified_at` -- and so does the position
+    (RFC-032). That placement is also a guard: the fields of this class
+    are the change signals `plan_indexing()` compares, and neither a
+    capture date nor a position is one (RFC-028 section 6.1, RFC-032
+    section 8).
     """
 
     image: Image
@@ -102,6 +104,14 @@ def plan_indexing(
     re-embed would spend the most expensive operation in the system on
     it. `tests/application/test_indexing_plan.py` fails if a comparison is
     added.
+
+    **Neither is the position** (RFC-032 section 8), and for the same
+    reason: `existing.position_source` rides the prefetch for the
+    conditional position write. A coordinate read today describes the same
+    pixels it described yesterday. The tests vary that field on the stored
+    metadata and were checked by mutation -- adding
+    `existing.position_source == candidate.image.position_source` to the
+    first condition makes them fail.
 
     A stored hash of `None` never matches a computed one, which is a plain
     consequence of `None != str` rather than a special case. Rows written

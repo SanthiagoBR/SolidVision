@@ -37,6 +37,8 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.position import Position, PositionReading
+from app.domain.value_objects.position_source import PositionSource
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.persistence.engine import EngineInstance
 from app.infrastructure.persistence.postgres_image_repository import (
@@ -309,3 +311,89 @@ def test_a_hit_on_a_disk_that_is_not_plugged_in_is_a_full_answer(
     }
     assert first["relative_path"] == str(seeded["identical"].relative_path)
     assert first["absolute_path"] is None
+
+
+def _place(
+    repository: PostgresImageRepository,
+    filename: str,
+    vector: EmbeddingVector,
+    position: PositionReading | None,
+) -> None:
+    image = dataclasses.replace(
+        make_image(filename),
+        latitude=position.latitude if position else None,
+        longitude=position.longitude if position else None,
+        position_source=position.source if position else None,
+    )
+    repository.save_indexed(
+        IndexingRecord(
+            image=image, embedding=vector, file_size=1, file_modified_at=None
+        )
+    )
+
+
+def test_a_circle_filters_real_rows_and_reports_the_unplaced(
+    client: TestClient, empty_db_session: Session, model: FakeEmbeddingModel
+) -> None:
+    """RFC-032 end to end: query string -> GeoCircle -> haversine SQL -> JSON.
+
+    Every row shares the query's vector, so only the position decides: one
+    1.5 km from the centre, one 40 km away, one examined without a fix, one
+    never examined. Only the first comes back, and the two without a
+    position are counted in `excluded_unknown_position`.
+    """
+    repository = PostgresImageRepository(empty_db_session)
+    vector = model.encode_text(QUERY)
+    gps = PositionSource.EXIF_GPS
+    _place(
+        repository, "near", vector, PositionReading(Position(-26.3080, -48.8163), gps)
+    )
+    _place(repository, "far", vector, PositionReading(Position(-26.551, -49.133), gps))
+    _place(repository, "no_fix", vector, PositionReading.unknown())
+    _place(repository, "never_examined", vector, None)
+
+    response = client.get(
+        SEARCH_URL,
+        params={
+            "q": QUERY,
+            "near_lat": -26.321406,
+            "near_lon": -48.816307,
+            "radius_m": 2000,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [result["filename"] for result in body["results"]] == ["near"]
+    assert body["results"][0]["latitude"] == -26.308
+    assert body["results"][0]["position_source"] == "exif_gps"
+    assert body["excluded_unknown_position"] == 2
+    assert body["excluded_unknown_date"] is None
+
+
+def test_the_map_groups_real_rows(
+    client: TestClient, empty_db_session: Session, model: FakeEmbeddingModel
+) -> None:
+    """`GET /images/map` through the production wiring and PostgreSQL's `round()`."""
+    repository = PostgresImageRepository(empty_db_session)
+    vector = model.encode_text(QUERY)
+    gps = PositionSource.EXIF_GPS
+    _place(
+        repository, "a", vector, PositionReading(Position(-26.32141, -48.81631), gps)
+    )
+    _place(
+        repository, "b", vector, PositionReading(Position(-26.32139, -48.81629), gps)
+    )
+    _place(repository, "c", vector, PositionReading.unknown())
+
+    response = client.get(
+        "/api/v1/images/map",
+        params={"min_lat": -27, "min_lon": -49.5, "max_lat": -26, "max_lon": -48.5},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "precision_applied": 3,
+        "cells": [{"latitude": -26.321, "longitude": -48.816, "count": 2}],
+        "excluded_unknown_position": 1,
+    }

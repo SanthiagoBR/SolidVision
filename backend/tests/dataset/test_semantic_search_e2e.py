@@ -48,6 +48,7 @@ from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 from app.infrastructure.config.constants import SUPPORTED_IMAGE_EXTENSIONS
 from app.infrastructure.database.models.device_model import DeviceModel
 from app.infrastructure.database.models.image_model import ImageModel
+from app.infrastructure.database.models.indexing_job_model import IndexingJobModel
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
@@ -271,6 +272,10 @@ def indexed_corpus(
 
     try:
         session.execute(delete(ImageModel))
+        # Jobs before devices: `indexing_jobs.device_id` is a foreign key
+        # since RFC-029, and a development database that has run a real job
+        # refuses the device delete otherwise (see `empty_db_session`).
+        session.execute(delete(IndexingJobModel))
         session.execute(delete(DeviceModel))
         session.commit()
         # RFC-027: `images.device_id` is a NOT NULL foreign key, so the

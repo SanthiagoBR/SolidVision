@@ -13,6 +13,11 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.position import (
+    BoundingBox,
+    PositionCell,
+    PositionReading,
+)
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
@@ -31,6 +36,10 @@ ALL_METHODS = (
     "update_capture_date",
     "update_capture_date_many",
     "count_unknown_capture_date",
+    "update_position",
+    "update_position_many",
+    "count_unknown_position",
+    "aggregate_positions",
     "update_thumbnail_path",
     "update_thumbnail_path_many",
     "count_by_device",
@@ -55,6 +64,10 @@ def test_image_repository_is_abstract() -> None:
         "update_capture_date",
         "update_capture_date_many",
         "count_unknown_capture_date",
+        "update_position",
+        "update_position_many",
+        "count_unknown_position",
+        "aggregate_positions",
         "update_thumbnail_path",
         "update_thumbnail_path_many",
         "count_by_device",
@@ -135,6 +148,26 @@ def test_image_repository_methods_use_domain_types_only() -> None:
         is SearchFilters
     )
     assert signatures["count_unknown_capture_date"].return_annotation is int
+    # RFC-032. A position is written as a `PositionReading`, never as two
+    # floats and a string: the reading is where the pairing rule lives, so
+    # a port that took loose fields would let a caller write half of one.
+    assert (
+        signatures["update_position"].parameters["reading"].annotation
+        is PositionReading
+    )
+    assert (
+        signatures["update_position_many"].parameters["readings"].annotation
+        == Mapping[ImageId, PositionReading]
+    )
+    assert (
+        signatures["count_unknown_position"].parameters["filters"].annotation
+        is SearchFilters
+    )
+    assert signatures["count_unknown_position"].return_annotation is int
+    assert (
+        signatures["aggregate_positions"].parameters["area"].annotation is BoundingBox
+    )
+    assert signatures["aggregate_positions"].return_annotation == list[PositionCell]
     assert (
         signatures["update_thumbnail_path"].parameters["image_id"].annotation is ImageId
     )

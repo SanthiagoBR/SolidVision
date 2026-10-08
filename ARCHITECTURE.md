@@ -549,6 +549,51 @@ Because both images and text are embedded into the same semantic vector space, u
 
 The search process never reloads or reprocesses original image files.
 
+## Filters
+
+The ranking can be narrowed by three named axes, held in `SearchFilters`,
+each with its own `WHERE` clause, its own query parameters, and — where it
+can hide photos for lack of data — its own count of what it excluded:
+
+| Axis | Parameters | Clause | Excluded count |
+|------|------------|--------|----------------|
+| Device (RFC-027) | `device_id` (repeatable) | `device_id IN (...)` | — |
+| Capture date (RFC-028) | `captured_from`, `captured_to` | half-open range on `captured_at` | `excluded_unknown_date` |
+| Position (RFC-032) | `near_lat`, `near_lon`, `radius_m` (all or none) | bounding-box pre-filter + exact haversine distance | `excluded_unknown_position` |
+
+The axes combine with AND. An empty `SearchFilters()` emits the RFC-025 query
+unchanged, character for character. An image whose date or position is
+unknown never matches that axis's filter, however wide. The position filter
+is a **circle**, never a point: the user knows a place on a map, not
+coordinates, and the GPS recorded the aircraft rather than the subject, so
+the radius — in metres everywhere, with a configured minimum
+(`MIN_RADIUS_M`) — is part of the question. Distance is a haversine
+expression over two plain columns; no PostGIS, no `earthdistance`.
+
+Any filter can return fewer than `limit` results when PostgreSQL keeps the
+approximate HNSW index and post-filters its candidates. For a circle over
+clustered positions this was measured at 20% selectivity: 13 of 20 queries
+came back short (RFC-032 section 6.1). Every HNSW mitigation measured fixed
+it, but none met the latency criterion RFC-032 declared, so none is applied;
+the `search_similar()` contract still allows a short result.
+
+The axes are deliberately named fields rather than a query language sent by
+the client: each one is a readable `WHERE`, a measurable plan, and a contract
+test the three `ImageRepository` implementations must agree on.
+
+## Map
+
+`GET /api/v1/images/map?min_lat=&min_lon=&max_lat=&max_lon=&precision=`
+groups the photos inside a viewport into cells (coordinates rounded to
+`precision` decimal places; 3 is ~100 m) and returns each cell's centre and
+count, plus how many photos under the same filters have no position. It
+accepts the device and date filters and **ignores the query text**: the top
+100 of a ranking says nothing about where the photos are, so the map answers
+"where are the photos the filters allow" and search answers "which look like
+this". Above `MAX_MAP_CELLS` the grid coarsens and the response says so in
+`precision_applied`; it never truncates. The route is declared before
+`/images/{image_id}`, or it would be matched as an id.
+
 # 15. Database Design
 
 SolidVision stores only metadata and semantic representations of images.
@@ -652,6 +697,9 @@ Represents a single indexed image.
 | content_hash | SHA256 hash |
 | captured_at | When the photo was taken, from EXIF (`TIMESTAMP` **without** time zone) |
 | capture_source | Where `captured_at` came from: `exif_original`, `exif_digitized`, `unknown`, or NULL |
+| latitude | Where the photo was taken, decimal degrees (`double precision`), from the EXIF GPS IFD; NULL if unknown |
+| longitude | Paired with `latitude`: both NULL or both set (`ck_images_position_pairing`) |
+| position_source | Where the position came from: `exif_gps`, `unknown`, or NULL (never examined) |
 | thumbnail_path | Thumbnail location, relative to the application's thumbnail cache; NULL if none yet |
 
 An image's location is the pair `(device_id, relative_path)`; there is no
@@ -679,12 +727,28 @@ rewrites it.
 `capture_source` distinguishes a row that was never examined (NULL) from one
 examined and found to have no date (`unknown`). A scan writes the capture
 date only for NULL rows, so re-scanning an unchanged collection costs no
-writes; `python -m app.infrastructure.workers.capture_date_backfill --root
-PATH` dates an indexed disk without loading the embedding model, and
+writes. An image with an unknown capture date never matches a date-range
+filter; the search response reports how many were excluded that way.
+
+`latitude`/`longitude` (RFC-032) are the position the GPS recorded — the
+**aircraft's**, not the photographed ground, which for an oblique drone shot
+can be tens to hundreds of metres away. They come from the GPS IFD (tag
+`0x8825`), read in the **same open of the file** as the capture date: one
+header read, two facts, each with its own source and its own NULL /
+`unknown` / value states. The `0, 0` "no satellite fix" placeholder is
+`unknown`, never a point in the Gulf of Guinea. Three CHECKs refuse half a
+position and coordinates off the planet for every writer, not only the
+Domain. The word is **position**, never *location*, which in this codebase
+is where the *file* is.
+
+Neither fact is a change signal: a new date or position on identical pixels
+never triggers a re-embed. Both are written conditionally — only for rows
+never examined — in both branches that skip inference. `python -m
+app.infrastructure.workers.exif_backfill --root PATH` fills both for an
+indexed disk from one read per file, without loading the embedding model;
 `--force` re-reads `unknown` rows after the extraction improves, never
-replacing a source with a weaker one. An image with an unknown capture date
-never matches a date-range filter; the search response reports how many were
-excluded that way.
+replacing a source with a weaker one, and judges the two facts independently.
+It replaced RFC-028's `capture_date_backfill`.
 
 ### Thumbnail Serving
 
