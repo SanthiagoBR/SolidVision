@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from .constants import PROJECT_ENCODING, SUPPORTED_IMAGE_EXTENSIONS
 
@@ -186,7 +187,14 @@ class Settings(BaseSettings):
     have a reader at all. Without a bound, a file whose decoder takes the
     whole process down would kill every worker that resumed onto it.
     """
-    supported_extensions: tuple[str, ...] = Field(
+    # `NoDecode` opts this field out of pydantic-settings' default behaviour
+    # for complex types: without it, the dotenv/env source runs the raw
+    # string through `json.loads()` before validation ever sees it, and
+    # ".jpg,.jpeg,.png" is not JSON -- every `.env` shipped by this project
+    # would fail to load. With it, the raw string reaches
+    # `parse_supported_extensions` below, which does the comma-splitting
+    # that `SUPPORTED_EXTENSIONS=.jpg,.jpeg,...` in `.env.example` expects.
+    supported_extensions: Annotated[tuple[str, ...], NoDecode] = Field(
         default=SUPPORTED_IMAGE_EXTENSIONS,
         description="Supported image extensions",
     )
@@ -342,6 +350,19 @@ class Settings(BaseSettings):
     def validate_environment(cls, value: str) -> str:
         """Normalize the environment name."""
         return value.strip().lower()
+
+    @field_validator("supported_extensions", mode="before")
+    @classmethod
+    def parse_supported_extensions(cls, value: object) -> object:
+        """Split the comma-separated form `NoDecode` leaves untouched.
+
+        Only strings need this: the default (already a tuple) and
+        programmatic construction (e.g. in tests) pass a tuple straight
+        through to `validate_supported_extensions`.
+        """
+        if isinstance(value, str):
+            return tuple(item.strip() for item in value.split(",") if item.strip())
+        return value
 
     @field_validator("supported_extensions")
     @classmethod
