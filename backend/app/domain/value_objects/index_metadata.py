@@ -6,6 +6,7 @@ import datetime
 from dataclasses import dataclass
 
 from app.domain.value_objects.capture_source import CaptureSource
+from app.domain.value_objects.position_source import PositionSource
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,27 @@ class IndexMetadata:
     Only `ImageRepository.update_capture_date*()` writes this column;
     `update_index_metadata()` leaves it untouched even though it receives
     an `IndexMetadata`.
+    """
+
+    position_source: PositionSource | None = None
+    """Whether this row's position was ever examined, and from where (RFC-032).
+
+    **NOT A CHANGE SIGNAL. `plan_indexing()` must never read it.** It rides
+    the prefetch for the reason `capture_source` does: the scan writes a
+    position only for rows whose source is still `None` -- never examined
+    -- so that re-scanning an unchanged collection costs zero writes after
+    the first pass (RFC-032 section 8).
+
+    A coordinate read today says nothing about whether the pixels changed.
+    Comparing it in the skip decision would re-embed a photo -- the most
+    expensive operation in the system -- for a metadata fact, and
+    `test_indexing_plan.py` fails, verified by mutation, if that comparison
+    is ever added.
+
+    Only `ImageRepository.update_position*()` and `save_indexed*()` write
+    this column; `update_index_metadata()` leaves it untouched even though it
+    receives an `IndexMetadata`, because a refresh that wrote it would reset
+    an examined row to "never examined".
     """
 
     thumbnail_path: str | None = None

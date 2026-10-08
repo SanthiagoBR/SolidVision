@@ -10,6 +10,7 @@ from app.application.use_cases.indexing_plan import (
     IndexCandidate,
     plan_indexing,
 )
+from app.application.use_cases.position_plan import position_to_write
 from app.domain.entities.image import Image
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
@@ -37,7 +38,9 @@ class IndexOrUpdateImageUseCase:
     - metadata differs and the content genuinely changed -> re-index.
 
     Since RFC-028 a skipped image whose row was never examined for a
-    capture date also gets the date `image` carries, without re-embedding.
+    capture date also gets the date `image` carries, without re-embedding
+    -- and since RFC-032 its position, decided separately by
+    `position_to_write()`.
 
     RFC-024 kept this class deliberately, rather than retiring it in favour
     of `IndexOrUpdateImagesUseCase`. It is the single-file entry point: the
@@ -97,6 +100,12 @@ class IndexOrUpdateImageUseCase:
             )
             if capture is not None:
                 self._repository.update_capture_date(image.id, capture)
+            position = position_to_write(
+                existing.position_source if existing else None,
+                image.position_reading,
+            )
+            if position is not None:
+                self._repository.update_position(image.id, position)
             return False
 
         embedding = self._embedding_model.encode_image(image)

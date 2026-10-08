@@ -6,6 +6,7 @@ import dataclasses
 import math
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
@@ -17,6 +18,12 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.position import (
+    BoundingBox,
+    PositionCell,
+    PositionCells,
+    PositionReading,
+)
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.config.settings import settings
@@ -78,6 +85,13 @@ def matches_filters(image: Image, filters: SearchFilters | None) -> bool:
     Python does not: `start <= None` raises `TypeError` instead of
     returning `False`, so without the check an unknown date would crash
     the in-memory search where the database quietly excludes the row.
+
+    The position check is explicit for the same reason (RFC-032 section
+    6): `haversine(None, ...)` raises where SQL compares NULL as false.
+    **An unknown position never matches a circle, however large.** The
+    circle is tested by exact distance alone -- there is no index here for
+    a bounding box to help, and adding one would only be a second place
+    for the answer to differ from the exact one.
     """
     if filters is None or filters.is_empty():
         return True
@@ -86,7 +100,14 @@ def matches_filters(image: Image, filters: SearchFilters | None) -> bool:
     if filters.captured_between is not None:
         if image.captured_at is None:
             return False
-        return filters.captured_between.contains(image.captured_at)
+        if not filters.captured_between.contains(image.captured_at):
+            return False
+    if filters.taken_within is not None:
+        position = image.position
+        if position is None:
+            return False
+        if not filters.taken_within.contains(position):
+            return False
     return True
 
 
@@ -94,7 +115,8 @@ def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters)
     """Count what a date range hid for having no date, over searchable images.
 
     `indexed` must already be restricted to images with an embedding,
-    exactly as `cosine_search()` expects. The device set is applied through
+    exactly as `cosine_search()` expects. Every other clause -- the device
+    set and, since RFC-032, the circle -- is applied through
     `matches_filters()` with the date range removed, so the definition of
     "every other clause" cannot drift from the search predicate.
 
@@ -103,12 +125,85 @@ def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters)
     """
     if filters.captured_between is None:
         return 0
-    without_date = SearchFilters(device_ids=filters.device_ids)
+    without_date = dataclasses.replace(filters, captured_between=None)
     return sum(
         1
         for image in indexed
         if image.captured_at is None and matches_filters(image, without_date)
     )
+
+
+def count_unknown_position(indexed: Iterable[Image], filters: SearchFilters) -> int:
+    """Count the searchable images with no position, under every other clause.
+
+    `count_unknown_capture_date()`'s twin for RFC-032 section 6.2, with the
+    one difference the port documents: no short-circuit to 0 without a
+    circle, because the map asks the same question with none. The circle
+    itself is removed before `matches_filters()` -- it is the clause whose
+    victims are being counted.
+    """
+    without_circle = dataclasses.replace(filters, taken_within=None)
+    return sum(
+        1
+        for image in indexed
+        if image.latitude is None and matches_filters(image, without_circle)
+    )
+
+
+def round_to_cell(value: float, precision: int) -> float:
+    """Round a coordinate the way `round(value::numeric, precision)` does in PostgreSQL.
+
+    Not Python's `round()`, which rounds the *binary* float half to even:
+    `round(2.675, 2)` is 2.67 because 2.675 is stored as 2.67499999...
+    PostgreSQL casts a `double precision` to `numeric` through its 15
+    significant decimal digits and then rounds that decimal half away from
+    zero. A photo exactly on a cell boundary must land in the same cell in
+    all three implementations, so this reproduces the cast and the rule
+    rather than approximating them.
+    """
+    decimal = Decimal(format(value, ".15g"))
+    step = Decimal(1).scaleb(-precision)
+    return float(decimal.quantize(step, rounding=ROUND_HALF_UP))
+
+
+def aggregate_positions(
+    indexed: Iterable[Image],
+    filters: SearchFilters,
+    area: BoundingBox,
+    precision: int,
+    cell_limit: int | None,
+) -> PositionCells:
+    """Group searchable images in `area` into cells, as the `GROUP BY` does.
+
+    `indexed` must already be restricted to images with an embedding. The
+    device and date clauses come from `matches_filters()` with the circle
+    removed, and the area is tested edges-included, so this agrees with
+    PostgreSQL's `BETWEEN`s. Ordered by latitude then longitude, and cut at
+    `cell_limit`, for the same deterministic truncation.
+
+    Shared by both in-process doubles for the reason `matches_filters()`
+    is: `test_position_filter_contract.py` holds all three implementations
+    to one answer.
+    """
+    universe = dataclasses.replace(filters, taken_within=None)
+    counts: dict[tuple[float, float], int] = {}
+    for image in indexed:
+        position = image.position
+        if position is None or not area.contains(position):
+            continue
+        if not matches_filters(image, universe):
+            continue
+        key = (
+            round_to_cell(position.latitude, precision),
+            round_to_cell(position.longitude, precision),
+        )
+        counts[key] = counts.get(key, 0) + 1
+
+    cells = [
+        PositionCell(latitude=latitude, longitude=longitude, count=count)
+        for (latitude, longitude), count in sorted(counts.items())
+    ]
+    return cells if cell_limit is None else cells[:cell_limit]
 
 
 def count_images_by_device(images: Iterable[Image]) -> dict[DeviceId, int]:
@@ -179,6 +274,21 @@ def with_capture_date(image: Image, capture: CaptureDate) -> Image:
     """Return `image` carrying `capture`, for the frozen entity's two fields."""
     return dataclasses.replace(
         image, captured_at=capture.captured_at, capture_source=capture.source
+    )
+
+
+def with_position(image: Image, reading: PositionReading) -> Image:
+    """Return `image` carrying `reading`, for the frozen entity's three fields.
+
+    All three in one `replace()`, as the PostgreSQL `UPDATE` writes them in
+    one statement: `Image` validates the pairing on construction, so a
+    double that set them one at a time would refuse a legal write.
+    """
+    return dataclasses.replace(
+        image,
+        latitude=reading.latitude,
+        longitude=reading.longitude,
+        position_source=reading.source,
     )
 
 
@@ -344,10 +454,25 @@ class InMemoryImageRepository(ImageRepository):
         )
 
     def count_unknown_capture_date(self, filters: SearchFilters) -> int:
-        return count_unknown_capture_date(
-            (image for image in self._images if image.id.value in self._embeddings),
-            filters,
+        return count_unknown_capture_date(self._indexed(), filters)
+
+    def count_unknown_position(self, filters: SearchFilters) -> int:
+        return count_unknown_position(self._indexed(), filters)
+
+    def aggregate_positions(
+        self,
+        filters: SearchFilters,
+        area: BoundingBox,
+        precision: int,
+        cell_limit: int | None,
+    ) -> PositionCells:
+        return aggregate_positions(
+            self._indexed(), filters, area, precision, cell_limit
         )
+
+    def _indexed(self) -> Sequence[Image]:
+        """The images a search could return: those with an embedding."""
+        return [image for image in self._images if image.id.value in self._embeddings]
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         """Return the stored change signals plus the image's capture source.
@@ -356,7 +481,8 @@ class InMemoryImageRepository(ImageRepository):
         `_metadata` as well. The entity is where the capture date lives in
         this implementation; a second copy here would be free to disagree
         with it -- for instance after `update_index_metadata()` stored a
-        caller's `IndexMetadata` that never had a source in it.
+        caller's `IndexMetadata` that never had a source in it. The position
+        source (RFC-032) is read off the entity for the same reason.
         """
         image = self.get(image_id)
         if image is None:
@@ -367,6 +493,7 @@ class InMemoryImageRepository(ImageRepository):
         return dataclasses.replace(
             stored,
             capture_source=image.capture_source,
+            position_source=image.position_source,
             thumbnail_path=self._thumbnails.get(image_id.value),
         )
 
@@ -408,6 +535,16 @@ class InMemoryImageRepository(ImageRepository):
                 if image.id in captures
                 else image
             )
+            for image in self._images
+        ]
+
+    def update_position(self, image_id: ImageId, reading: PositionReading) -> None:
+        self.update_position_many({image_id: reading})
+
+    def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
+        """Replace each named image with a copy carrying its position; skip the rest."""
+        self._images = [
+            with_position(image, readings[image.id]) if image.id in readings else image
             for image in self._images
         ]
 

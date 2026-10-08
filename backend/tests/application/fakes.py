@@ -25,6 +25,11 @@ from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
 from app.domain.value_objects.mounted_volume import MountedVolume
+from app.domain.value_objects.position import (
+    BoundingBox,
+    PositionCells,
+    PositionReading,
+)
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 from app.infrastructure.filesystem.sha256_content_hasher import Sha256ContentHasher
@@ -36,13 +41,16 @@ from app.infrastructure.persistence.in_memory_device_repository import (
     InMemoryDeviceRepository,
 )
 from app.infrastructure.persistence.in_memory_image_repository import (
+    aggregate_positions,
     cosine_search,
     count_images_by_device,
     count_images_by_path_prefix,
     count_unknown_capture_date,
+    count_unknown_position,
     matches_filters,
     store_thumbnail,
     with_capture_date,
+    with_position,
 )
 
 
@@ -65,6 +73,19 @@ class FakeImageRepository(ImageRepository):
         self.update_capture_date_calls: list[tuple[ImageId, CaptureDate]] = []
         self.update_capture_date_many_calls: list[dict[ImageId, CaptureDate]] = []
         self.count_unknown_capture_date_calls: list[SearchFilters] = []
+        self.update_position_calls: list[tuple[ImageId, PositionReading]] = []
+        self.update_position_many_calls: list[dict[ImageId, PositionReading]] = []
+        self.count_unknown_position_calls: list[SearchFilters] = []
+        """Every unknown-position count, so a test can prove there was none.
+
+        RFC-032 section 6.2 forbids the query for a search without a circle
+        -- not merely a zero answer -- and only a record of the calls can
+        tell those apart.
+        """
+
+        self.aggregate_positions_calls: list[
+            tuple[SearchFilters, BoundingBox, int, int | None]
+        ] = []
         self.count_by_device_calls = 0
         """How many times the grouped device count was asked for.
 
@@ -203,8 +224,8 @@ class FakeImageRepository(ImageRepository):
         """The metadata for one id, with the capture source read off the image.
 
         Same rule as `InMemoryImageRepository.get_index_metadata()`: the
-        entity holds the capture date, and `_metadata` does not keep a
-        second copy of it that could disagree.
+        entity holds the capture date and the position, and `_metadata`
+        does not keep a second copy of either that could disagree.
         """
         image = self.get(image_id)
         if image is None:
@@ -215,6 +236,7 @@ class FakeImageRepository(ImageRepository):
         return dataclasses.replace(
             stored,
             capture_source=image.capture_source,
+            position_source=image.position_source,
             thumbnail_path=self._thumbnails.get(image_id.value),
         )
 
@@ -241,6 +263,20 @@ class FakeImageRepository(ImageRepository):
             for image in self._images
         ]
 
+    def update_position(self, image_id: ImageId, reading: PositionReading) -> None:
+        self.update_position_calls.append((image_id, reading))
+        self._apply_positions({image_id: reading})
+
+    def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
+        self.update_position_many_calls.append(dict(readings))
+        self._apply_positions(readings)
+
+    def _apply_positions(self, readings: Mapping[ImageId, PositionReading]) -> None:
+        self._images = [
+            with_position(image, readings[image.id]) if image.id in readings else image
+            for image in self._images
+        ]
+
     def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
         self.update_thumbnail_path_calls.append((image_id, location))
         self._apply_thumbnail_paths({image_id: location})
@@ -263,10 +299,33 @@ class FakeImageRepository(ImageRepository):
         the extra query must not exist at all, not merely return 0.
         """
         self.count_unknown_capture_date_calls.append(filters)
-        return count_unknown_capture_date(
-            (image for image in self._images if image.id.value in self._embeddings),
-            filters,
+        return count_unknown_capture_date(self._indexed(), filters)
+
+    def count_unknown_position(self, filters: SearchFilters) -> int:
+        """Delegates to the shared counter, and records that it was asked.
+
+        The record is what lets a use-case test prove the count is *not*
+        requested for a search without a circle (RFC-032 section 6.2).
+        """
+        self.count_unknown_position_calls.append(filters)
+        return count_unknown_position(self._indexed(), filters)
+
+    def aggregate_positions(
+        self,
+        filters: SearchFilters,
+        area: BoundingBox,
+        precision: int,
+        cell_limit: int | None,
+    ) -> PositionCells:
+        """The shared grouping, recorded so a test can see each precision tried."""
+        self.aggregate_positions_calls.append((filters, area, precision, cell_limit))
+        return aggregate_positions(
+            self._indexed(), filters, area, precision, cell_limit
         )
+
+    def _indexed(self) -> Sequence[Image]:
+        """The images a search could return: those with an embedding."""
+        return [image for image in self._images if image.id.value in self._embeddings]
 
     def count_by_device(self) -> dict[DeviceId, int]:
         """Delegates to the shared tally, and records that it was asked.

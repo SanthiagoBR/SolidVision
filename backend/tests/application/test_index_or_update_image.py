@@ -13,6 +13,8 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.position import Position, PositionReading
+from app.domain.value_objects.position_source import PositionSource
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from tests.application.fakes import FakeImageRepository, StubContentHasher
 from tests.conftest import TEST_DEVICE_ID
@@ -352,3 +354,73 @@ class TestCaptureDateOnTheSingleImagePath:
         use_case.execute(image, file_size=1024, file_modified_at=modified_at)
 
         assert repository.update_capture_date_calls == []
+
+
+class TestPositionOnTheSingleImagePath:
+    """The single-file entry point follows RFC-032 section 8's write policy too."""
+
+    FARM = PositionReading(Position(-26.321406, -48.816307), PositionSource.EXIF_GPS)
+
+    def _use_case(
+        self, repository: FakeImageRepository
+    ) -> tuple[IndexOrUpdateImageUseCase, _RecordingEmbeddingModel]:
+        model = _RecordingEmbeddingModel()
+        return (
+            IndexOrUpdateImageUseCase(
+                repository=repository,
+                embedding_model=model,
+                content_hasher=StubContentHasher(),
+            ),
+            model,
+        )
+
+    def _placed(self, image: Image) -> Image:
+        return dataclasses.replace(
+            image,
+            latitude=self.FARM.latitude,
+            longitude=self.FARM.longitude,
+            position_source=PositionSource.EXIF_GPS,
+        )
+
+    def test_an_unchanged_unplaced_row_gains_its_position(self) -> None:
+        repository = FakeImageRepository()
+        use_case, model = self._use_case(repository)
+        image = _build_image()
+        modified_at = datetime.datetime.now(datetime.UTC)
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        was_indexed = use_case.execute(
+            self._placed(image), file_size=1024, file_modified_at=modified_at
+        )
+
+        assert was_indexed is False
+        assert len(model.encode_image_calls) == 1
+        assert repository.update_position_calls == [(image.id, self.FARM)]
+
+    def test_a_touched_identical_unplaced_row_gains_its_position(self) -> None:
+        repository = FakeImageRepository()
+        use_case, model = self._use_case(repository)
+        image = _build_image()
+        modified_at = datetime.datetime.now(datetime.UTC)
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        use_case.execute(
+            self._placed(image),
+            file_size=1024,
+            file_modified_at=modified_at + datetime.timedelta(hours=1),
+        )
+
+        assert len(model.encode_image_calls) == 1
+        assert len(repository.update_index_metadata_calls) == 1
+        assert len(repository.update_position_calls) == 1
+
+    def test_a_placed_row_is_not_rewritten(self) -> None:
+        repository = FakeImageRepository()
+        use_case, _ = self._use_case(repository)
+        image = self._placed(_build_image())
+        modified_at = datetime.datetime.now(datetime.UTC)
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        use_case.execute(image, file_size=1024, file_modified_at=modified_at)
+
+        assert repository.update_position_calls == []

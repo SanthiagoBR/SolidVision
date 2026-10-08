@@ -4,7 +4,7 @@ import datetime
 import uuid
 
 import pytest
-from sqlalchemy import DateTime, Enum, String, text
+from sqlalchemy import DateTime, Double, Enum, String, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tests.conftest import TEST_DEVICE_ID
@@ -14,6 +14,7 @@ from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.position_source import PositionSource
 from app.infrastructure.database.models.image_model import ImageModel
 
 
@@ -336,3 +337,123 @@ class TestThumbnailPathColumn:
         )
 
         assert ImageModel.from_domain(image).thumbnail_path is None
+
+
+class TestPositionColumns:
+    """RFC-032 section 5: two doubles, a plain string, and three CHECKs."""
+
+    def test_latitude_and_longitude_are_nullable_doubles(self) -> None:
+        for name in ("latitude", "longitude"):
+            column = ImageModel.__table__.c[name]
+            assert column.nullable is True
+            assert isinstance(column.type, Double)
+
+    def test_position_source_is_a_plain_string_not_a_database_enum(self) -> None:
+        column = ImageModel.__table__.c.position_source
+
+        assert column.nullable is True
+        assert isinstance(column.type, String)
+        assert not isinstance(column.type, Enum)
+
+    def test_the_position_round_trips_through_the_mapping(self) -> None:
+        image = Image(
+            id=ImageId(uuid.uuid4()),
+            device_id=TEST_DEVICE_ID,
+            relative_path=ImagePath("fotos/DJI_0013.JPG"),
+            filename="DJI_0013",
+            extension="jpg",
+            latitude=-26.321406,
+            longitude=-48.816307,
+            position_source=PositionSource.EXIF_GPS,
+        )
+
+        model = ImageModel.from_domain(image)
+        reconstructed = model.to_domain()
+
+        assert model.position_source == "exif_gps"
+        assert reconstructed.position_reading == image.position_reading
+
+    def test_an_unexamined_image_maps_to_null_not_unknown(self) -> None:
+        image = Image(
+            id=ImageId(uuid.uuid4()),
+            device_id=TEST_DEVICE_ID,
+            relative_path=ImagePath("fotos/old.jpg"),
+            filename="old",
+            extension="jpg",
+        )
+
+        model = ImageModel.from_domain(image)
+
+        assert model.position_source is None
+        assert model.to_domain().position_source is None
+
+
+class TestThePositionChecksHoldWithoutTheDomain:
+    """The CHECKs are what no writer can go around: tested by direct INSERT.
+
+    Each statement goes straight to the table, past `Image` and every
+    validation in Python, because that is exactly the writer the CHECKs
+    exist for -- a manual `UPDATE`, a careless backfill, a fixture built by
+    hand (RFC-032 section 5).
+    """
+
+    @staticmethod
+    def insert(session: Session, **position: object) -> None:
+        columns = ", ".join(position)
+        values = ", ".join(f":{name}" for name in position)
+        session.execute(
+            text(
+                "INSERT INTO images (id, device_id, relative_path, filename, "
+                f"extension{', ' if position else ''}{columns}) VALUES (:id, "
+                f":device_id, :relative_path, 'x', 'jpg'{', ' if position else ''}"
+                f"{values})"
+            ),
+            {
+                "id": uuid.uuid4(),
+                "device_id": TEST_DEVICE_ID.value,
+                "relative_path": f"fotos/{uuid.uuid4().hex}.jpg",
+                **position,
+            },
+        )
+
+    def test_a_full_position_is_accepted(self, db_session: Session) -> None:
+        self.insert(
+            db_session,
+            latitude=-26.321406,
+            longitude=-48.816307,
+            position_source="exif_gps",
+        )
+        db_session.flush()
+
+    @pytest.mark.parametrize(
+        "half", [{"latitude": -26.3}, {"longitude": -48.8}], ids=["lat", "lon"]
+    )
+    def test_half_a_position_is_refused(
+        self, db_session: Session, half: dict[str, float]
+    ) -> None:
+        with pytest.raises(IntegrityError, match="ck_images_position_pairing"):
+            self.insert(db_session, **half)
+
+    @pytest.mark.parametrize(
+        ("latitude", "longitude", "constraint"),
+        [
+            (90.0001, 0.0, "ck_images_latitude_range"),
+            (-91.0, 0.0, "ck_images_latitude_range"),
+            (0.0, 180.0001, "ck_images_longitude_range"),
+            (0.0, -181.0, "ck_images_longitude_range"),
+        ],
+    )
+    def test_a_coordinate_off_the_planet_is_refused(
+        self,
+        db_session: Session,
+        latitude: float,
+        longitude: float,
+        constraint: str,
+    ) -> None:
+        with pytest.raises(IntegrityError, match=constraint):
+            self.insert(db_session, latitude=latitude, longitude=longitude)
+
+    def test_the_planet_edges_are_accepted(self, db_session: Session) -> None:
+        self.insert(db_session, latitude=-90.0, longitude=180.0)
+        self.insert(db_session, latitude=90.0, longitude=-180.0)
+        db_session.flush()

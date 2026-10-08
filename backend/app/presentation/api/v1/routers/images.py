@@ -19,6 +19,12 @@ and nothing else**. No route accepts a file path in a body, a query string
 or a header -- that is the security property of `/reveal` (RFC-030 section
 5.1), and it holds for the other two because there is nothing a path could
 be used for that the id does not already do.
+
+RFC-032 added `GET /map` and a circle on `/search`. **Declaration order in
+this file is load-bearing**: FastAPI matches routes in the order they are
+declared, so every literal path -- `/search`, `/map` -- must come before
+`/{image_id}`, or it is read as an image id and refused with a 422 for a
+route that exists.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Response, status
 from fastapi.responses import FileResponse
 
+from app.application.use_cases.aggregate_positions import AggregatePositionsUseCase
 from app.application.use_cases.get_image_details import GetImageDetailsUseCase
 from app.application.use_cases.get_thumbnail import (
     GetThumbnailUseCase,
@@ -40,13 +47,17 @@ from app.application.use_cases.resolve_image_location import (
 )
 from app.application.use_cases.reveal_image import RevealImageUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
+from app.domain.exceptions import InvalidGeoCircleError
 from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.device_id import DeviceId
+from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.position import BoundingBox, Position
 from app.domain.value_objects.search_filters import SearchFilters
 from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
 from app.presentation.dependencies import (
+    get_aggregate_positions_use_case,
     get_image_details_use_case,
     get_resolve_image_location_use_case,
     get_reveal_image_use_case,
@@ -58,6 +69,7 @@ from app.presentation.local_file_actions import (
     require_loopback_client,
 )
 from app.presentation.schemas.image_schema import ImageSchema
+from app.presentation.schemas.map_schema import MapResponseSchema
 from app.presentation.schemas.search_schema import SearchResponseSchema
 
 router = APIRouter(prefix="/images", tags=["images"])
@@ -97,6 +109,26 @@ def search_images(
             "Only photos taken strictly before this camera-local time; "
             "2019-01-01 ends the year 2018. Must not carry a time zone or "
             "offset."
+        ),
+    ),
+    near_lat: float | None = Query(
+        default=None,
+        description=(
+            "Latitude of the centre of a 'near here' circle, decimal degrees. "
+            "Sent with near_lon and radius_m, or not at all."
+        ),
+    ),
+    near_lon: float | None = Query(
+        default=None,
+        description="Longitude of the centre of the circle, decimal degrees.",
+    ),
+    radius_m: float | None = Query(
+        default=None,
+        description=(
+            "Radius of the circle in metres. The photo positions are where the "
+            "drone was, not the ground it photographed, so radii below the "
+            "configured minimum are refused. Photos with no position never "
+            "match, however large the circle."
         ),
     ),
     use_case: SearchImagesUseCase = Depends(get_search_images_use_case),
@@ -181,23 +213,41 @@ def search_images(
 
     `excluded_unknown_date` is only computed when a range was sent. It is
     a second query, and an unfiltered search must not pay for it.
+
+    `near_lat` / `near_lon` / `radius_m` (RFC-032 section 6) are **all or
+    nothing**: two of three is a malformed request and answers 400 naming
+    what is missing. Completing an absent radius with a default would invent
+    the user's intention in exactly the quantity RFC-032 section 2.2 showed
+    is critical. A coordinate off the planet, a radius that is not positive,
+    or one below `settings.min_radius_m` is a 400 with the domain's message;
+    a value that is not a number is FastAPI's 422. Metres, never kilometres:
+    one unit across the whole stack. `excluded_unknown_position` follows the
+    rule of its date twin -- computed only when a circle was sent.
+
+    Neither the query nor the coordinates are logged: where a user searched
+    near is as private as what they searched for (RFC-026 section 16.1), so
+    the log says only that a circle was present.
     """
     effective_limit = settings.top_k_results if limit is None else limit
     filters = SearchFilters(
         device_ids=frozenset(DeviceId(value) for value in device_id or ()),
         captured_between=_capture_range(captured_from, captured_to),
+        taken_within=_search_circle(near_lat, near_lon, radius_m),
     )
     logger.info(
-        "search requested: query_length=%d, limit=%d, devices=%d, date_range=%s",
+        "search requested: query_length=%d, limit=%d, devices=%d, date_range=%s, "
+        "circle=%s",
         len(q),
         effective_limit,
         len(filters.device_ids),
         filters.captured_between is not None,
+        filters.taken_within is not None,
     )
 
     started_at = time.perf_counter()
     hits = use_case.execute(q, effective_limit, filters)
     excluded_unknown_date = use_case.count_hidden_by_unknown_date(filters)
+    excluded_unknown_position = use_case.count_hidden_by_unknown_position(filters)
     searched_at = time.perf_counter()
     located = locations.execute([hit.image for hit in hits])
     located_at = time.perf_counter()
@@ -217,7 +267,88 @@ def search_images(
         hits=hits,
         locations=located,
         excluded_unknown_date=excluded_unknown_date,
+        excluded_unknown_position=excluded_unknown_position,
     )
+
+
+@router.get(
+    "/map",
+    status_code=status.HTTP_200_OK,
+    response_model=MapResponseSchema,
+    summary="Where the photos are: counts per map cell inside an area",
+)
+def map_images(
+    min_lat: float = Query(description="South edge of the area, decimal degrees"),
+    min_lon: float = Query(description="West edge of the area, decimal degrees"),
+    max_lat: float = Query(description="North edge of the area, decimal degrees"),
+    max_lon: float = Query(description="East edge of the area, decimal degrees"),
+    precision: int | None = Query(
+        default=None,
+        ge=0,
+        description=(
+            "Decimal places of a degree to round positions to: 3 is about "
+            "100 m cells. Omitted means 3. The response says which precision "
+            "was applied, which is coarser when the grid would have too many "
+            "cells."
+        ),
+    ),
+    device_id: list[UUID] | None = Query(
+        default=None,
+        description="Only photos on these devices; repeat for several",
+    ),
+    captured_from: datetime.datetime | None = Query(
+        default=None,
+        description="Only photos taken at or after this camera-local time",
+    ),
+    captured_to: datetime.datetime | None = Query(
+        default=None,
+        description="Only photos taken strictly before this camera-local time",
+    ),
+    use_case: AggregatePositionsUseCase = Depends(get_aggregate_positions_use_case),
+) -> MapResponseSchema:
+    """Count the photos in a viewport, cell by cell (RFC-032 section 7).
+
+    **Declared before `/{image_id}`, beside `/search`, and that order is the
+    point.** Declared after it, `/images/map` would be matched as
+    `image_id="map"` and refused with a 422 -- for a route that exists.
+    `tests/presentation/test_map_api.py` asks for it and requires a 200.
+
+    **The query text is ignored -- there is no `q` -- by design.** A map
+    that reflected the query could only aggregate the top K, and the top 100
+    of a 100,000-image index says nothing about geography. The map shows
+    where the photos the *filters* allow are; ranking is `/search`'s job.
+    The filters are search's own -- `device_id`, `captured_from`,
+    `captured_to`, by the same parameters and the same rules -- and a circle
+    is not one of them: the area is the viewport.
+
+    An area whose `min` exceeds its `max` is a 400 -- on longitude that is
+    either swapped corners or a viewport across the 180th meridian, which
+    this endpoint does not support (RFC-032 section 11). A synchronous `def`,
+    like `/search`, because the grouping is a blocking database call.
+    """
+    area = BoundingBox(
+        min_latitude=min_lat,
+        min_longitude=min_lon,
+        max_latitude=max_lat,
+        max_longitude=max_lon,
+    )
+    filters = SearchFilters(
+        device_ids=frozenset(DeviceId(value) for value in device_id or ()),
+        captured_between=_capture_range(captured_from, captured_to),
+    )
+    started_at = time.perf_counter()
+    answer = use_case.execute(area, filters, precision)
+    logger.info(
+        "map completed: cells=%d, precision=%d->%d, devices=%d, date_range=%s, "
+        "elapsed_ms=%.0f",
+        len(answer.cells),
+        answer.precision_requested,
+        answer.precision_applied,
+        len(filters.device_ids),
+        filters.captured_between is not None,
+        (time.perf_counter() - started_at) * 1000,
+    )
+    return MapResponseSchema.from_map(answer)
 
 
 @router.get(
@@ -237,9 +368,9 @@ def get_image(
     exists and this describes the row; `device.connected: false` with
     `device.label` is the answer "it is on HD3", not an error.
 
-    Declared after `/search`, and that order is load-bearing: routes match
-    in declaration order, and `/{image_id}` would otherwise capture
-    `/search` and refuse it as a malformed UUID.
+    Declared after `/search` and `/map`, and that order is load-bearing:
+    routes match in declaration order, and `/{image_id}` would otherwise
+    capture either and refuse it as a malformed UUID.
     """
     return ImageSchema.from_located(use_case.execute(ImageId(image_id)))
 
@@ -391,3 +522,25 @@ def _capture_range(
         start=captured_from if captured_from is not None else datetime.datetime.min,
         end=captured_to if captured_to is not None else datetime.datetime.max,
     )
+
+
+def _search_circle(
+    near_lat: float | None, near_lon: float | None, radius_m: float | None
+) -> GeoCircle | None:
+    """The three circle parameters as one value -- all of them, or none.
+
+    `None` when none was sent: no spatial filter, not a circle around the
+    planet. Two of three is refused, naming what is missing, rather than
+    completed with a default radius (RFC-032 section 6).
+    """
+    given = {"near_lat": near_lat, "near_lon": near_lon, "radius_m": radius_m}
+    missing = [name for name, value in given.items() if value is None]
+    if len(missing) == len(given):
+        return None
+    if missing:
+        raise InvalidGeoCircleError(
+            "A 'near here' search needs near_lat, near_lon and radius_m together; "
+            f"missing: {', '.join(missing)}."
+        )
+    assert near_lat is not None and near_lon is not None and radius_m is not None
+    return GeoCircle(center=Position(near_lat, near_lon), radius_m=radius_m)

@@ -45,7 +45,8 @@ class SearchResultSchema(ImageSchema):
 
     `captured_at` and `capture_source` are attributes of the photograph,
     identical for every caller and every query, and the two things that
-    make a date-filtered result legible (RFC-028 section 12).
+    make a date-filtered result legible (RFC-028 section 12). `latitude`,
+    `longitude` and `position_source` do the same for a circle (RFC-032).
     """
 
     similarity: float = Field(
@@ -112,6 +113,14 @@ class SearchResponseSchema(BaseModel):
             "filter was sent."
         )
     )
+    excluded_unknown_position: int | None = Field(
+        description=(
+            "How many indexed images the near_lat/near_lon/radius_m circle left "
+            "out because they have no position, counted over the whole index "
+            "under the other filters rather than over this page. Null -- not "
+            "0 -- when no circle was sent: 0 would mean the circle hid nothing."
+        )
+    )
 
     @classmethod
     def from_hits(
@@ -121,6 +130,7 @@ class SearchResponseSchema(BaseModel):
         hits: Sequence[SearchHit],
         locations: Sequence[LocatedImage],
         excluded_unknown_date: int | None = None,
+        excluded_unknown_position: int | None = None,
     ) -> SearchResponseSchema:
         """Wrap a ranking without reordering, filtering, or truncating it.
 
@@ -142,4 +152,5 @@ class SearchResponseSchema(BaseModel):
                 for hit, located in zip(hits, locations, strict=True)
             ],
             excluded_unknown_date=excluded_unknown_date,
+            excluded_unknown_position=excluded_unknown_position,
         )

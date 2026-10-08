@@ -158,7 +158,8 @@ class IndexingWorker:
         (RFC-027 section 5.2).
 
         The capture date the scan read goes onto the entity too (RFC-028
-        section 6), so the use case can write it for a row it skips.
+        section 6), so the use case can write it for a row it skips -- and
+        so does the position (RFC-032 section 8), for the same reason.
         """
         yield from discovered_candidates(
             self._filesystem_provider, self._device, self._mount_point, undiscoverable
@@ -173,11 +174,11 @@ def discovered_candidates(
 ) -> Iterator[IndexCandidate]:
     """Turn discovered files into candidates for one device; see `_candidates()`.
 
-    A module function rather than a private method so that
-    `capture_date_backfill` mints the same ids from the same discovered
-    files. The backfill writes to rows the indexing worker created, so a
-    second copy of this translation would be a second chance to compute a
-    different `ImageId` for the same file -- and to date nothing.
+    A module function rather than a private method so that `exif_backfill`
+    mints the same ids from the same discovered files. The backfill writes
+    to rows the indexing worker created, so a second copy of this
+    translation would be a second chance to compute a different `ImageId`
+    for the same file -- and to fill nothing.
     """
     for discovered in filesystem_provider.discover():
         logger.info("Discovered file: %s", discovered.path)
@@ -185,6 +186,7 @@ def discovered_candidates(
             absolute_path = ImagePath(str(discovered.path))
             relative_path = ImagePath(discovered.path.relative_to(mount_point))
             capture = discovered.capture_date
+            position = discovered.position
             image = Image(
                 id=compute_image_id(device.id, relative_path),
                 device_id=device.id,
@@ -194,6 +196,9 @@ def discovered_candidates(
                 absolute_path=absolute_path,
                 captured_at=capture.captured_at if capture else None,
                 capture_source=capture.source if capture else None,
+                latitude=position.latitude if position else None,
+                longitude=position.longitude if position else None,
+                position_source=position.source if position else None,
             )
         except Exception as exc:
             undiscoverable.append(IndexingFailure(path=str(discovered.path), error=exc))

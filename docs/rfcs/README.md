@@ -75,8 +75,11 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 | # | RFC | Entrega | Status |
 |---|---|---|---|
 | 031 | [Dispositivos, Volumes e Pastas pela API](rfc-031-dispositivos-e-pastas-pela-api.md) | `GET /devices`, `GET /volumes`, `POST /devices`, `PATCH /devices/{id}`, `GET /devices/{id}/folders`, `GET /capabilities` | ✅ |
+| 032 | [Geolocalização e Busca por Proximidade](rfc-032-geolocalizacao-e-busca-por-proximidade.md) | `latitude`/`longitude` via EXIF, `position_source`, filtro por círculo, `GET /images/map`, `exif_backfill` | ✅ |
 
 > **Por que este RFC existe.** A Sprint 5 resolveu tudo o que acontece *depois* que um dispositivo existe, e nada sobre como ele passa a existir para um cliente que não é um terminal. `POST /api/v1/jobs` recebe `{device_id, scopes[]}` e **nenhuma rota devolve um `device_id` ou um `scope` válido** — a rota mais importante da Sprint 5 só é chamável por quem já consultou o banco à mão. A revisão da segunda versão do mockup encontrou o mesmo buraco pelo outro lado: as três telas desenhadas não têm de onde desenhar ([RFC-031 §1](rfc-031-dispositivos-e-pastas-pela-api.md)).
+>
+> **E por que o RFC-032 é o quarto eixo de busca.** O pedido era *"a pesquisa é muito básica para o acervo em que vai ser utilizado"*, e o eixo que falta é o único que o CLIP não pode aprender: duas fotos aéreas de propriedades rurais a 200 km uma da outra são vizinhas no espaço de embeddings. O [RFC-028 §11](rfc-028-data-de-captura-e-filtro-temporal.md) já havia nomeado o trabalho e a condição para ele existir — *"nada consumiria coordenadas ainda"* —, e o [RFC-032](rfc-032-geolocalizacao-e-busca-por-proximidade.md) entrega o leitor junto com o dado. Uma medição-piloto sobre 40 arquivos reais do acervo precedeu o documento, e já matou uma suposição dele ([§2.3](rfc-032-geolocalizacao-e-busca-por-proximidade.md)).
 
 ---
 
@@ -90,7 +93,7 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 
 **Se você quer aprender com os erros**, [RFC-012](rfc-012-interfaces-de-repositorio.md) (duplicata silenciosa), [RFC-014 §3.2](rfc-014-fake-embedding-model.md) (um bug que passava em todos os testes), [RFC-026 §7](rfc-026-api-de-busca.md) (um vazamento de sessão que só virou bug sob HTTP) e [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md) (uma identidade estável que não era).
 
-**Se você quer saber o que vem a seguir**, a Sprint 5 é a única escrita antes da implementação. Comece pelo [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md), que é o defeito que ordenou o resto.
+**Se você quer saber o que vem a seguir**, comece pelos riscos do [RFC-032 §11](rfc-032-geolocalizacao-e-busca-por-proximidade.md): o critério de [§6.1](rfc-032-geolocalizacao-e-busca-por-proximidade.md), aplicado como escrito, não deixou nenhuma mitigação do resultado curto passar — a decisão seguinte é sobre o critério, não sobre o código. Para ver como um RFC escrito antes da implementação envelhece, a Sprint 5 é toda assim: comece pelo [RFC-027 §2](rfc-027-dispositivos-e-identidade-de-volume.md), que é o defeito que ordenou o resto.
 
 ## Convenções
 

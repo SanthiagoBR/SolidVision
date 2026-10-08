@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.position import PositionReading
 
 
 @dataclass(frozen=True)
@@ -32,4 +33,16 @@ class DiscoveredImageFile:
     (RFC-028 section 6): the scan touches every file, including the ones
     the incremental check will skip, so an already-indexed photo gains a
     capture date without paying for inference.
+    """
+
+    position: PositionReading | None = None
+    """What the file says about where it was taken, read in the same open (RFC-032).
+
+    The same semantics of `None` as `capture_date`: *not examined* --
+    `Settings.extract_gps` is off, or the file could not be read -- which
+    is not `PositionReading.unknown()`, the file read and found without a
+    usable position. The two are filled by one `read_exif_facts()` call, so
+    a file costs one header open whichever of them is switched on, and they
+    are still independent: either can be `None` or `unknown` while the
+    other holds a value.
     """

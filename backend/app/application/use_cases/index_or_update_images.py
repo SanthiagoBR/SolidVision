@@ -33,6 +33,7 @@ from app.application.use_cases.indexing_plan import (
     IndexPlan,
     plan_indexing,
 )
+from app.application.use_cases.position_plan import position_to_write
 from app.application.use_cases.thumbnail_writer import ThumbnailWriter
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.content_hasher_port import ContentHasherPort
@@ -48,6 +49,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_progress import IndexingProgress
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.position import PositionReading
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,16 @@ class IndexingSummary:
     an unchanged collection. A non-zero value on a re-scan of a collection
     nobody touched would mean the conditional write has stopped being
     conditional, which is why it is reported rather than left implicit.
+    """
+    positions_written: int = 0
+    """Already-indexed rows that gained a position without re-embedding (RFC-032).
+
+    Counted apart from `capture_dates_written` although both come from one
+    header read: the two writes are decided separately, and a row can need
+    one and not the other -- examined for a date before RFC-032, never
+    examined for a position. Same reading as its neighbour: large on the
+    first scan after RFC-032, zero on every later scan of an unchanged
+    collection.
     """
     thumbnails_written: int = 0
     thumbnail_seconds: float = 0.0
@@ -203,6 +215,8 @@ class IndexingSummary:
                 f"Failed:         {self.failed:6d}",
                 f"Dated:          {self.capture_dates_written:6d}   "
                 "(capture date written, no re-embed)",
+                f"Placed:         {self.positions_written:6d}   "
+                "(position written, no re-embed)",
                 "",
                 "Inference:",
                 f"  images:       {self.indexed:6d}",
@@ -273,11 +287,11 @@ class DurableFrontier:
     photographs.
 
     One nuance, accepted and stated: a skipped file counts as durable
-    before its capture date is written, because that write happens once
-    per window (RFC-028 section 6). A resume past it leaves the row with
-    `capture_source` NULL -- which means *never examined*, so the next
-    full scan or `capture_date_backfill` writes it. A deferred metadata
-    write, not a lost one.
+    before its capture date and position are written, because those writes
+    happen once per window (RFC-028 section 6, RFC-032 section 8). A resume
+    past it leaves the row with `capture_source` or `position_source` NULL
+    -- which means *never examined*, so the next full scan or `exif_backfill`
+    writes it. A deferred metadata write, not a lost one.
     """
 
     def __init__(self) -> None:
@@ -407,6 +421,7 @@ class IndexOrUpdateImagesUseCase:
                 [candidate.image.id for candidate in window]
             )
             capture_dates: list[tuple[IndexCandidate, CaptureDate]] = []
+            positions: list[tuple[IndexCandidate, PositionReading]] = []
 
             for candidate in window:
                 plan = self._plan(candidate, existing, summary)
@@ -438,14 +453,20 @@ class IndexOrUpdateImagesUseCase:
                 else:
                     self._refresh_metadata(plan, summary)
 
+                stored = existing[candidate.image.id]
                 capture = capture_date_to_write(
-                    existing[candidate.image.id].capture_source,
-                    candidate.image.capture_date,
+                    stored.capture_source, candidate.image.capture_date
                 )
                 if capture is not None:
                     capture_dates.append((candidate, capture))
+                position = position_to_write(
+                    stored.position_source, candidate.image.position_reading
+                )
+                if position is not None:
+                    positions.append((candidate, position))
 
             self._write_capture_dates(capture_dates, summary)
+            self._write_positions(positions, summary)
             watcher.window_decided(summary.as_progress(), frontier.durable_through)
 
             if summary.stopped:
@@ -760,6 +781,49 @@ class IndexOrUpdateImagesUseCase:
             return
 
         summary.capture_dates_written += len(capture_dates)
+
+    def _write_positions(
+        self,
+        positions: list[tuple[IndexCandidate, PositionReading]],
+        summary: IndexingSummary,
+    ) -> None:
+        """Place the rows this window skipped, in one write, degrading per row.
+
+        `_write_capture_dates()`'s twin, for RFC-032 section 8, and fed by
+        the same two branches for the same reason: forgetting
+        `REFRESH_METADATA` would leave every file ever copied between disks
+        without a position for good -- and copying between disks is the
+        central operation of the collection this RFC serves (RFC-027
+        section 2.3). `EMBED` does not come through here; `save_indexed_many()`
+        writes the whole row from the entity, position included.
+
+        A separate write rather than one combined with the dates, because
+        the two decisions are separate: a row can need a position and not a
+        date, and folding them into one statement would either write a
+        value nobody decided to write or need a third code path to avoid it.
+        """
+        if not positions:
+            return
+
+        try:
+            self._repository.update_position_many(
+                {candidate.image.id: reading for candidate, reading in positions}
+            )
+        except Exception:
+            for candidate, reading in positions:
+                try:
+                    self._repository.update_position(candidate.image.id, reading)
+                except Exception as exc:
+                    summary.failures.append(
+                        IndexingFailure(
+                            path=str(candidate.image.display_path), error=exc
+                        )
+                    )
+                    continue
+                summary.positions_written += 1
+            return
+
+        summary.positions_written += len(positions)
 
 
 def windowed(

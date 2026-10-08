@@ -1,4 +1,4 @@
-"""RFC-028 section 6.1: the capture date is not a change signal.
+"""RFC-028 section 6.1 and RFC-032 section 8: neither EXIF fact is a change signal.
 
 The test that matters here is written against `IndexMetadata`, not against
 `IndexCandidate`, and the level is the whole point. `plan_indexing()` has no
@@ -8,6 +8,14 @@ passing after someone added `existing.capture_source != ...` to the
 comparison, because the prefetched metadata is where the stored source
 actually arrives. These tests vary exactly that field and fail if the skip
 decision ever starts reading it.
+
+The position (RFC-032) is held to the same rule, at the same level, and the
+tests for it were **verified by mutation**: adding
+`and existing.position_source == candidate.image.position_source` to the
+first condition of `plan_indexing()` makes
+`test_identical_signals_skip_whatever_the_stored_position_source` fail for
+every stored source that differs from the candidate's -- the file is hashed,
+found identical, and refreshed instead of skipped.
 """
 
 from __future__ import annotations
@@ -23,12 +31,15 @@ from app.application.use_cases.indexing_plan import (
     IndexCandidate,
     plan_indexing,
 )
+from app.application.use_cases.position_plan import position_to_write
 from app.domain.entities.image import Image
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
+from app.domain.value_objects.position import Position, PositionReading
+from app.domain.value_objects.position_source import PositionSource
 from tests.application.fakes import StubContentHasher
 from tests.conftest import TEST_DEVICE_ID
 
@@ -37,10 +48,14 @@ HASH = "a" * 64
 SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
 
 EVERY_STORED_SOURCE = [None, *CaptureSource]
+EVERY_STORED_POSITION_SOURCE = [None, *PositionSource]
+FARM = PositionReading(Position(-26.321406, -48.816307), PositionSource.EXIF_GPS)
 
 
 def candidate(
-    capture: CaptureDate | None = None, file_size: int = 1024
+    capture: CaptureDate | None = None,
+    file_size: int = 1024,
+    position: PositionReading | None = None,
 ) -> IndexCandidate:
     return IndexCandidate(
         image=Image(
@@ -51,6 +66,9 @@ def candidate(
             extension="jpg",
             captured_at=capture.captured_at if capture else None,
             capture_source=capture.source if capture else None,
+            latitude=position.latitude if position else None,
+            longitude=position.longitude if position else None,
+            position_source=position.source if position else None,
         ),
         file_size=file_size,
         file_modified_at=MODIFIED_AT,
@@ -124,6 +142,137 @@ class TestTheCaptureDateNeverDrivesTheSkipDecision:
         plan = plan_indexing(candidate(), existing, StubContentHasher(default="b" * 64))
 
         assert plan.action is IndexAction.EMBED
+
+
+class TestThePositionNeverDrivesTheSkipDecision:
+    """RFC-032 section 8: a coordinate read today describes yesterday's pixels."""
+
+    @pytest.mark.parametrize("stored", EVERY_STORED_POSITION_SOURCE)
+    def test_identical_signals_skip_whatever_the_stored_position_source(
+        self, stored: PositionSource | None
+    ) -> None:
+        """The mutation target: the candidate carries `exif_gps`, the row varies."""
+        existing = IndexMetadata(
+            file_size=1024,
+            file_modified_at=MODIFIED_AT,
+            content_hash=HASH,
+            position_source=stored,
+        )
+        hasher = StubContentHasher(default=HASH)
+
+        plan = plan_indexing(candidate(position=FARM), existing, hasher)
+
+        assert plan.action is IndexAction.SKIP_UNCHANGED
+        assert hasher.hashed == []
+
+    def test_two_metadata_differing_only_in_position_source_plan_identically(
+        self,
+    ) -> None:
+        never_examined = IndexMetadata(1024, MODIFIED_AT, HASH, position_source=None)
+        placed = IndexMetadata(
+            1024, MODIFIED_AT, HASH, position_source=PositionSource.EXIF_GPS
+        )
+        hasher = StubContentHasher(default=HASH)
+
+        first = plan_indexing(candidate(position=FARM), never_examined, hasher)
+        second = plan_indexing(candidate(position=FARM), placed, hasher)
+
+        assert first.action is second.action is IndexAction.SKIP_UNCHANGED
+        assert hasher.hashed == []
+
+    @pytest.mark.parametrize("stored", EVERY_STORED_POSITION_SOURCE)
+    def test_a_touched_identical_file_refreshes_whatever_the_stored_position(
+        self, stored: PositionSource | None
+    ) -> None:
+        existing = IndexMetadata(
+            file_size=1024,
+            file_modified_at=MODIFIED_AT - datetime.timedelta(days=1),
+            content_hash=HASH,
+            position_source=stored,
+        )
+
+        plan = plan_indexing(
+            candidate(position=FARM), existing, StubContentHasher(default=HASH)
+        )
+
+        assert plan.action is IndexAction.REFRESH_METADATA
+
+    @pytest.mark.parametrize("stored", EVERY_STORED_POSITION_SOURCE)
+    def test_changed_bytes_embed_whatever_the_stored_position(
+        self, stored: PositionSource | None
+    ) -> None:
+        existing = IndexMetadata(
+            file_size=2048,
+            file_modified_at=MODIFIED_AT,
+            content_hash=HASH,
+            position_source=stored,
+        )
+
+        plan = plan_indexing(
+            candidate(position=FARM), existing, StubContentHasher(default="b" * 64)
+        )
+
+        assert plan.action is IndexAction.EMBED
+
+
+class TestPositionToWrite:
+    """RFC-032 section 8's conditional write, and the backfill's `--force` (§8.1)."""
+
+    UNKNOWN = PositionReading.unknown()
+    MOVED = PositionReading(Position(-26.3215, -48.8164), PositionSource.EXIF_GPS)
+
+    @pytest.mark.parametrize("discovered", [FARM, UNKNOWN])
+    def test_a_row_never_examined_is_written(self, discovered: PositionReading) -> None:
+        """Including `unknown`: recording "examined, no position" is the point."""
+        assert position_to_write(None, discovered) == discovered
+
+    @pytest.mark.parametrize("stored", list(PositionSource))
+    @pytest.mark.parametrize("discovered", [FARM, UNKNOWN])
+    def test_an_examined_row_is_never_rewritten_by_a_scan(
+        self, stored: PositionSource, discovered: PositionReading
+    ) -> None:
+        assert position_to_write(stored, discovered) is None
+
+    @pytest.mark.parametrize("stored", EVERY_STORED_POSITION_SOURCE)
+    @pytest.mark.parametrize("force", [False, True])
+    def test_an_unexamined_file_never_writes(
+        self, stored: PositionSource | None, force: bool
+    ) -> None:
+        assert position_to_write(stored, None, force=force) is None
+
+    def test_force_upgrades_unknown_when_a_position_appears(self) -> None:
+        assert position_to_write(PositionSource.UNKNOWN, FARM, force=True) == FARM
+
+    def test_force_rewrites_an_equally_strong_source(self) -> None:
+        assert (
+            position_to_write(PositionSource.EXIF_GPS, self.MOVED, force=True)
+            == self.MOVED
+        )
+
+    def test_force_never_downgrades_exif_gps(self) -> None:
+        """A file that fails to open today must not erase yesterday's position."""
+        assert (
+            position_to_write(PositionSource.EXIF_GPS, self.UNKNOWN, force=True) is None
+        )
+
+    def test_force_skips_unknown_over_unknown_as_a_no_op(self) -> None:
+        assert (
+            position_to_write(PositionSource.UNKNOWN, self.UNKNOWN, force=True) is None
+        )
+
+    def test_the_decision_ignores_the_capture_date_entirely(self) -> None:
+        """A separate function from `capture_date_to_write()`, so they cannot mix.
+
+        Nothing about the date is an input here: the signature takes the
+        position's stored source and reading, and nothing else.
+        """
+        import inspect
+
+        assert list(inspect.signature(position_to_write).parameters) == [
+            "stored",
+            "discovered",
+            "force",
+        ]
 
 
 class TestCaptureDateToWrite:

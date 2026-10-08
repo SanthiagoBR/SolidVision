@@ -14,6 +14,7 @@ from functools import lru_cache
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.aggregate_positions import AggregatePositionsUseCase
 from app.application.use_cases.cancel_indexing_job import CancelIndexingJobUseCase
 from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
 from app.application.use_cases.describe_devices import DescribeDevicesUseCase
@@ -155,11 +156,30 @@ def get_search_images_use_case(
     configuration (`test_application_architecture.py` enforces it), so
     this is the layer that turns a setting into an argument -- the same
     arrangement `IndexOrUpdateImagesUseCase` uses for `batch_size`.
+
+    `settings.min_radius_m` arrives the same way (RFC-032 section 6): the
+    floor under a "near here" circle is Application policy, injected here
+    and never read by the use case.
     """
     return SearchImagesUseCase(
         repository=repository,
         embedding_model=embedding_model,
         default_limit=settings.top_k_results,
+        min_radius_m=settings.min_radius_m,
+    )
+
+
+def get_aggregate_positions_use_case(
+    repository: ImageRepository = Depends(get_image_repository),
+) -> AggregatePositionsUseCase:
+    """Return the use case behind `GET /api/v1/images/map` (RFC-032 section 7).
+
+    No embedding model: the map ignores the query text by design, so
+    composing CLIP here would load a model the route can never use.
+    `settings.max_map_cells` is injected, as `min_radius_m` is above.
+    """
+    return AggregatePositionsUseCase(
+        repository=repository, max_cells=settings.max_map_cells
     )
 
 
@@ -418,6 +438,7 @@ def get_list_device_folders_use_case(
 
 
 __all__ = [
+    "get_aggregate_positions_use_case",
     "get_cancel_indexing_job_use_case",
     "get_create_indexing_job_use_case",
     "get_describe_devices_use_case",

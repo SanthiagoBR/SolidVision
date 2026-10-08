@@ -34,7 +34,7 @@ from app.domain.services.indexing_observer import (
 )
 from app.domain.value_objects.job_scope import JobScope
 from app.infrastructure.filesystem.discovered_image_file import DiscoveredImageFile
-from app.infrastructure.filesystem.exif_capture_date import read_capture_date
+from app.infrastructure.filesystem.exif_capture_date import read_exif_facts
 
 
 def discovery_sort_key(relative_path: PurePath) -> PurePath:
@@ -74,7 +74,8 @@ class FilesystemImageProvider:
 
     Knows nothing about repositories, embeddings, PostgreSQL, workers, or
     use cases -- it only reads the filesystem via the standard library and,
-    since RFC-028, each file's EXIF header via Pillow. Since RFC-029 it
+    since RFC-028, each file's EXIF header via Pillow -- once per file,
+    for both the date and, since RFC-032, the position. Since RFC-029 it
     also knows how to walk *part* of a root and how to pick up where a
     previous run stopped, which are both properties of a scan rather than
     of a job: nothing here knows that jobs exist.
@@ -90,6 +91,7 @@ class FilesystemImageProvider:
         observer: IndexingObserver | None = None,
         report_every: int = 200,
         excluded_directories: tuple[Path, ...] = (),
+        extract_gps: bool = True,
     ) -> None:
         """Configure a scan of `root`, or of some folders within it.
 
@@ -129,10 +131,20 @@ class FilesystemImageProvider:
         run -- a collection that grows every time it is scanned. Excluded
         files are skipped before they count as examined, so they are not
         part of the sequence a checkpoint names either.
+
+        `extract_gps` is `extract_capture_date`'s twin for RFC-032, in the
+        same mould and for the same reasons: passed in from
+        `settings.extract_gps`, on by default, and off means "not
+        examined", never "no position". The two are separate switches over
+        **one** header read: with either on, each file is opened once and
+        both requested facts come out of that open; with both off, the file
+        is not opened at all. Added last, as a keyword, so no existing
+        caller's positional arguments move.
         """
         self._root = root
         self._supported_extensions = {ext.lower() for ext in supported_extensions}
         self._extract_capture_date = extract_capture_date
+        self._extract_gps = extract_gps
         self._scopes = scopes
         self._resume_after = resume_after
         self._observer = observer or NullIndexingObserver()
@@ -156,7 +168,8 @@ class FilesystemImageProvider:
         that lands mid-sequence would compare against a checkpoint from a
         different ordering.
 
-        The capture date is read in the same pass as `stat()`, not in a
+        The capture date and the position are read in the same pass as
+        `stat()`, from one open of the file (RFC-032 section 4.2), not in a
         second walk and not lazily. A lazy field -- a callable on
         `DiscoveredImageFile` -- was considered and deferred until a
         measurement asks for it (RFC-028 section 11): it would move the
@@ -221,6 +234,11 @@ class FilesystemImageProvider:
                 continue
 
             stat = path.stat()
+            facts = read_exif_facts(
+                path,
+                capture_date=self._extract_capture_date,
+                position=self._extract_gps,
+            )
             yield DiscoveredImageFile(
                 path=path,
                 filename=path.stem,
@@ -229,9 +247,8 @@ class FilesystemImageProvider:
                 file_modified_at=datetime.datetime.fromtimestamp(
                     stat.st_mtime, tz=datetime.UTC
                 ),
-                capture_date=(
-                    read_capture_date(path) if self._extract_capture_date else None
-                ),
+                capture_date=facts.capture_date,
+                position=facts.position,
             )
 
     def _is_excluded(self, path: Path) -> bool:

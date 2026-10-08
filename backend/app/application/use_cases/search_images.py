@@ -17,10 +17,12 @@ from __future__ import annotations
 
 from app.domain.exceptions import (
     EmptySearchQueryError,
+    InvalidGeoCircleError,
     InvalidSearchLimitError,
 )
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
@@ -40,6 +42,16 @@ class SearchImagesUseCase:
     layer must not import `settings` (it would be a dependency on
     Infrastructure, which `test_application_architecture.py` enforces), so
     the composition root passes `settings.top_k_results` in.
+
+    `min_radius_m` arrives the same way, from `settings.min_radius_m`
+    (RFC-032 section 6). It is policy rather than a property of circles --
+    `GeoCircle` accepts any positive radius -- and the policy is about
+    aircraft: the GPS records where the drone was, and an oblique shot
+    shows ground tens to hundreds of metres away (section 2.2). A circle
+    smaller than that offset hides, with complete confidence and no error,
+    exactly the photo being looked for. Defaulted to `0.0` -- no floor --
+    so the compositions written before RFC-032 keep behaving as they did;
+    the API passes the configured one.
     """
 
     def __init__(
@@ -47,11 +59,15 @@ class SearchImagesUseCase:
         repository: ImageRepository,
         embedding_model: EmbeddingModelPort,
         default_limit: int,
+        min_radius_m: float = 0.0,
     ) -> None:
         self._validate_limit(default_limit)
+        if min_radius_m < 0:
+            raise ValueError(f"min_radius_m must not be negative, got {min_radius_m}")
         self._repository = repository
         self._embedding_model = embedding_model
         self._default_limit = default_limit
+        self._min_radius_m = min_radius_m
 
     def execute(
         self,
@@ -82,6 +98,10 @@ class SearchImagesUseCase:
         section 9). Checking would also mean this use case acquiring a
         `DeviceRepository` it otherwise has no reason to hold, to reject
         the one case that already answers correctly.
+
+        The one exception is a circle's radius (RFC-032 section 6): a
+        radius below `min_radius_m` *is* an unusable request, in the way an
+        absurd page size is, and it is refused before the query is encoded.
         """
         if not query.strip():
             raise EmptySearchQueryError(
@@ -90,6 +110,8 @@ class SearchImagesUseCase:
 
         effective_limit = self._default_limit if limit is None else limit
         self._validate_limit(effective_limit)
+        if filters is not None and filters.taken_within is not None:
+            self._validate_radius(filters.taken_within)
 
         embedding = self._embedding_model.encode_text(query)
         return self._repository.search_similar(embedding, effective_limit, filters)
@@ -118,6 +140,45 @@ class SearchImagesUseCase:
         if filters is None or filters.captured_between is None:
             return None
         return self._repository.count_unknown_capture_date(filters)
+
+    def count_hidden_by_unknown_position(
+        self, filters: SearchFilters | None
+    ) -> int | None:
+        """How many searchable images a circle left out for having no position.
+
+        RFC-032 section 6.2, in the exact mould of
+        `count_hidden_by_unknown_date()`. Without it the spatial filter
+        answers *"there is no photo of this place"* when the truth is
+        *"1,200 photos have no coordinates and none of them was looked
+        at"* -- and with the ~4% of smartphone photos, every export that
+        strips EXIF, and everything indexed before RFC-032, that number
+        starts out large.
+
+        `None` -- not 0 -- when there is no circle, and then **the
+        repository is not called at all**. That rule lives here and not in
+        the repository, because `count_unknown_position()` answers the same
+        question for the map with no circle (RFC-032 section 7) and must not
+        short-circuit there.
+        """
+        if filters is None or filters.taken_within is None:
+            return None
+        return self._repository.count_unknown_position(filters)
+
+    def _validate_radius(self, circle: GeoCircle) -> None:
+        """Refuse a circle smaller than what the aircraft's offset can hide.
+
+        The message explains the offset rather than just quoting a number,
+        because the person reading it chose the radius on a map and needs
+        to know why a precise-looking one is the wrong one.
+        """
+        if circle.radius_m < self._min_radius_m:
+            raise InvalidGeoCircleError(
+                f"A search radius of {circle.radius_m:g} m is below the minimum "
+                f"of {self._min_radius_m:g} m. Photo coordinates record where the "
+                "drone was, not the ground it photographed, which for an oblique "
+                "shot can be tens to hundreds of metres away -- a smaller circle "
+                "would hide the very photo you are looking for."
+            )
 
     @staticmethod
     def _validate_limit(limit: int) -> None:

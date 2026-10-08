@@ -14,6 +14,7 @@ from app.domain.services.device_identity import compute_device_id
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.infrastructure.database.models.device_model import DeviceModel
 from app.infrastructure.database.models.image_model import ImageModel
+from app.infrastructure.database.models.indexing_job_model import IndexingJobModel
 from app.infrastructure.persistence.engine import EngineInstance
 from app.infrastructure.persistence.postgres_device_repository import (
     PostgresDeviceRepository,
@@ -111,6 +112,12 @@ def empty_db_session(db_session: Session) -> Session:
     cost real inference time. The test device is then put back, because
     every image the test goes on to write needs something to point at.
 
+    Indexing jobs go before the devices for the same reason: since RFC-029
+    `indexing_jobs.device_id` is a foreign key too (their scopes cascade
+    with them). The fixture predates that table, and passed only while the
+    development database had never run a job; the first real indexing run
+    made every test that asks for an empty table fail here instead.
+
     **Caveat, deliberately accepted (RFC-025 section 8.1).** This holds a
     write lock on every existing row for the duration of the test and does
     not protect against a *concurrent* writer -- another process would
@@ -124,6 +131,7 @@ def empty_db_session(db_session: Session) -> Session:
     `CREATE EXTENSION vector` plus every migration before the first test.
     """
     db_session.execute(delete(ImageModel))
+    db_session.execute(delete(IndexingJobModel))
     db_session.execute(delete(DeviceModel))
     db_session.commit()
     PostgresDeviceRepository(db_session).save(make_test_device())

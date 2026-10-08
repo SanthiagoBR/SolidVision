@@ -1,12 +1,15 @@
-"""The capture-date backfill command (RFC-028 section 7).
+"""The EXIF backfill command (RFC-032 section 8.1, superseding RFC-028 section 7).
 
-The property the RFC sells -- dates for an indexed disk without the model --
-is checked here against the *import graph*, in a fresh interpreter, rather than
-by mocking the model and observing that nobody called it. A mock proves that
-`encode_image` was not invoked; it passes just as happily with `import torch`
-at the top of this module or of anything it imports, which is where the real
-cost of "loading the model" lives: seconds of import and hundreds of megabytes
-before a single file is read.
+The property the RFC sells -- dates and positions for an indexed disk without
+the model -- is checked here against the *import graph*, in a fresh
+interpreter, rather than by mocking the model and observing that nobody called
+it. A mock proves that `encode_image` was not invoked; it passes just as
+happily with `import torch` at the top of this module or of anything it
+imports, which is where the real cost of "loading the model" lives: seconds of
+import and hundreds of megabytes before a single file is read.
+
+Migrated from `test_capture_date_backfill.py` with the command it tested;
+`test_thumbnail_backfill.py` imports its import-graph helpers from here.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image as PILImage
+from PIL.TiffImagePlugin import IFDRational
 from tests.application.fakes import (
     FakeDeviceRepository,
     FakeImageRepository,
@@ -33,16 +37,23 @@ from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.position import PositionReading
+from app.domain.value_objects.position_source import PositionSource
 from app.infrastructure.filesystem.exif_capture_date import (
     DATE_TIME_ORIGINAL,
     EXIF_IFD_POINTER,
+    GPS_IFD_POINTER,
+    GPS_LATITUDE,
+    GPS_LATITUDE_REF,
+    GPS_LONGITUDE,
+    GPS_LONGITUDE_REF,
 )
 from app.infrastructure.filesystem.image_identity import compute_image_id
-from app.infrastructure.workers import capture_date_backfill
-from app.infrastructure.workers.capture_date_backfill import _build_arg_parser, main
+from app.infrastructure.workers import exif_backfill
+from app.infrastructure.workers.exif_backfill import _build_arg_parser, main
 
 BACKEND_DIR = Path(__file__).resolve().parents[3]
-MODULE = "app.infrastructure.workers.capture_date_backfill"
+MODULE = "app.infrastructure.workers.exif_backfill"
 SHOT = datetime.datetime(2018, 7, 14, 15, 32, 5)
 
 FORBIDDEN_MODULES = (
@@ -98,7 +109,7 @@ def _every_import_in(module_path: Path) -> list[str]:
 
 
 class TestTheModelIsNeverLoaded:
-    """RFC-028 section 7, proven on the import graph rather than by a mock."""
+    """RFC-032 section 8.1, proven on the import graph rather than by a mock."""
 
     def test_importing_the_command_loads_no_model_module(self) -> None:
         loaded = _loaded_after_importing([MODULE])
@@ -112,10 +123,10 @@ class TestTheModelIsNeverLoaded:
 
         Those imports only run when the command does, so the module-level
         check above cannot see them -- and they are exactly where a
-        copy-paste from `indexing_worker.main()` would bring in
+        copy-paste from the job executor would bring in
         `get_embedding_model`.
         """
-        imports = _every_import_in(Path(capture_date_backfill.__file__))
+        imports = _every_import_in(Path(exif_backfill.__file__))
         assert any(name.endswith("postgres_image_repository") for name in imports)
 
         loaded = _loaded_after_importing(imports)
@@ -128,19 +139,21 @@ class TestTheModelIsNeverLoaded:
 
         If this ever stops being true, the two checks above prove nothing,
         because the subprocess would not be seeing model imports at all.
-
-        It points at `job_runner.py` rather than at `indexing_worker.py`,
-        which is where the model import moved when RFC-029 turned the CLI
-        into a client of the job machinery: the executor is now the thing
-        that composes the pipeline, and therefore the thing that reaches
-        for `get_embedding_model`.
+        `job_runner.py` is the thing that composes the pipeline, and
+        therefore the thing that reaches for `get_embedding_model`.
         """
-        runner = Path(capture_date_backfill.__file__).with_name("job_runner.py")
+        runner = Path(exif_backfill.__file__).with_name("job_runner.py")
 
         loaded = _loaded_after_importing(_every_import_in(runner))
 
         assert "app.presentation.dependencies" in loaded
         assert "torch" in loaded
+
+    def test_the_command_it_replaces_is_gone(self) -> None:
+        """One backfill, not two -- and no alias left behind (RFC-032 section 8.1)."""
+        workers = Path(exif_backfill.__file__).parent
+
+        assert not (workers / "capture_date_backfill.py").exists()
 
 
 class TestCommandLine:
@@ -180,10 +193,25 @@ class TestCommandLine:
             )
 
 
-def _write_jpeg(path: Path, date_time_original: str | None) -> None:
+def _write_jpeg(path: Path, date_time_original: str | None, gps: bool = False) -> None:
+    """A real JPEG, with the date in the Exif sub-IFD and the GPS in the GPS IFD."""
     exif = PILImage.Exif()
     if date_time_original is not None:
         exif.get_ifd(EXIF_IFD_POINTER)[DATE_TIME_ORIGINAL] = date_time_original
+    if gps:
+        block = exif.get_ifd(GPS_IFD_POINTER)
+        block[GPS_LATITUDE_REF] = "S"
+        block[GPS_LATITUDE] = (
+            IFDRational(26, 1),
+            IFDRational(19, 1),
+            IFDRational(170615, 10000),
+        )
+        block[GPS_LONGITUDE_REF] = "W"
+        block[GPS_LONGITUDE] = (
+            IFDRational(48, 1),
+            IFDRational(48, 1),
+            IFDRational(587052, 10000),
+        )
     PILImage.new("RGB", (8, 8)).save(path, "JPEG", exif=exif.tobytes())
 
 
@@ -196,10 +224,15 @@ class TestMainEndToEnd:
     ) -> FakeImageRepository:
         device = make_device()
         repository = FakeImageRepository()
-        for name in ("dated", "undated"):
+        for name, dated, placed in (
+            ("dated", True, True),
+            ("undated", False, False),
+            ("placed_only", False, True),
+        ):
             _write_jpeg(
                 tmp_path / f"{name}.jpg",
-                "2018:07:14 15:32:05" if name == "dated" else None,
+                "2018:07:14 15:32:05" if dated else None,
+                gps=placed,
             )
             relative = ImagePath(f"{name}.jpg")
             repository.save_indexed(
@@ -248,23 +281,37 @@ class TestMainEndToEnd:
         monkeypatch.setattr(
             "app.presentation.dependencies.get_embedding_model", no_model
         )
-        monkeypatch.setattr(
-            "sys.argv", ["capture_date_backfill", "--root", str(tmp_path)]
-        )
+        monkeypatch.setattr("sys.argv", ["exif_backfill", "--root", str(tmp_path)])
         return repository
 
-    def test_indexed_files_get_their_dates_and_no_embedding_is_touched(
+    def test_indexed_files_get_both_facts_and_no_embedding_is_touched(
         self, wired: FakeImageRepository
     ) -> None:
         main()
 
-        dates = {image.filename: image.capture_date for image in wired.list()}
-        assert dates == {
+        rows = {image.filename: image for image in wired.list()}
+        assert {name: row.capture_date for name, row in rows.items()} == {
             "dated": CaptureDate(SHOT, CaptureSource.EXIF_ORIGINAL),
             "undated": CaptureDate.unknown(),
+            "placed_only": CaptureDate.unknown(),
         }
+        assert rows["undated"].position_reading == PositionReading.unknown()
+        for name in ("dated", "placed_only"):
+            reading = rows[name].position_reading
+            assert reading is not None
+            assert reading.source is PositionSource.EXIF_GPS
+            assert reading.latitude == pytest.approx(-26.321406, abs=1e-6)
+            assert reading.longitude == pytest.approx(-48.816307, abs=1e-6)
         assert wired.save_indexed_calls == []
         assert wired.save_indexed_many_calls == []
+
+    def test_one_bulk_write_per_fact_for_the_window(
+        self, wired: FakeImageRepository
+    ) -> None:
+        main()
+
+        assert len(wired.update_capture_date_many_calls) == 1
+        assert len(wired.update_position_many_calls) == 1
 
     def test_a_dry_run_writes_nothing(
         self, wired: FakeImageRepository, monkeypatch: pytest.MonkeyPatch
@@ -274,4 +321,6 @@ class TestMainEndToEnd:
         main()
 
         assert all(image.capture_source is None for image in wired.list())
+        assert all(image.position_source is None for image in wired.list())
         assert wired.update_capture_date_many_calls == []
+        assert wired.update_position_many_calls == []

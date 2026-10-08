@@ -21,6 +21,7 @@ RFC_027_OWNERSHIP_REVISION = "b8e4d2a13c75"
 RFC_028_REVISION = "c5d1e8f24a90"
 RFC_029_REVISION = "e7a2c9b41f30"
 RFC_030_REVISION = "f4b9e2d7c615"
+RFC_032_REVISION = "6d77379a36a1"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -83,6 +84,7 @@ def test_history_is_linear_from_base_to_head() -> None:
         )
 
     assert chain == [
+        RFC_032_REVISION,
         RFC_030_REVISION,
         RFC_029_REVISION,
         RFC_028_REVISION,
@@ -436,4 +438,77 @@ def test_rfc_030_migration_downgrade_drops_only_the_new_column() -> None:
 
     assert downgrade_source.count("op.drop_column(") == 1
     assert 'op.drop_column("images", "thumbnail_path")' in downgrade_source
+    assert "drop_table" not in downgrade_source
+
+
+def test_rfc_032_migration_follows_rfc_030() -> None:
+    """`down_revision = 'f4b9e2d7c615'`, as RFC-032's header declares."""
+    assert _revision_after(RFC_030_REVISION).revision == RFC_032_REVISION
+
+
+def test_rfc_032_migration_adds_two_doubles_and_a_plain_string() -> None:
+    """RFC-032 sections 4.4 and 5, checked in the migration as well as the model.
+
+    `Double`, not `Numeric` (decimal arithmetic to store GNSS noise) and not
+    a `point` (which would make every `latitude` a `(position)[1]`); a plain
+    `String` for the source, not an `Enum`, so `manual` and
+    `subject_estimated` cost no migration.
+    """
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_030_REVISION).module.upgrade)
+    )
+
+    assert upgrade_source.count("op.add_column(") == 3
+    assert 'sa.Column("latitude", sa.Double(), nullable=True)' in upgrade_source
+    assert 'sa.Column("longitude", sa.Double(), nullable=True)' in upgrade_source
+    assert 'sa.Column("position_source", sa.String(), nullable=True)' in upgrade_source
+    assert "Numeric" not in upgrade_source
+    assert "Enum" not in upgrade_source
+    assert "point" not in upgrade_source.lower().replace("pointer", "")
+
+
+def test_rfc_032_migration_creates_the_three_checks() -> None:
+    """Never half a position, never off the planet -- for every writer."""
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_030_REVISION).module.upgrade)
+    )
+
+    assert upgrade_source.count("op.create_check_constraint(") == 3
+    assert "(latitude IS NULL) = (longitude IS NULL)" in upgrade_source
+    assert "latitude BETWEEN -90 AND 90" in upgrade_source
+    assert "longitude BETWEEN -180 AND 180" in upgrade_source
+
+
+def test_rfc_032_migration_needs_no_extension_and_touches_nothing_else() -> None:
+    """RFC-032 section 5.1: no PostGIS, no `cube`/`earthdistance`, no `point`.
+
+    And no index: whether one helps is a measurement (section 6.1), and the
+    measurement did not justify one -- see the migration's docstring.
+    """
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_030_REVISION).module.upgrade)
+    )
+
+    assert "CREATE EXTENSION" not in upgrade_source.upper()
+    assert "postgis" not in upgrade_source.lower()
+    assert "earthdistance" not in upgrade_source
+    assert "create_index" not in upgrade_source
+    assert "embedding" not in upgrade_source
+    assert "captured_at" not in upgrade_source
+    assert "drop_" not in upgrade_source
+
+
+def test_rfc_032_migration_downgrade_is_real() -> None:
+    """Every constraint and every column comes back out, and nothing else does."""
+    downgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_030_REVISION).module.downgrade)
+    )
+
+    assert downgrade_source.count("op.drop_constraint(") == 3
+    assert downgrade_source.count("op.drop_column(") == 3
+    for column in ("latitude", "longitude", "position_source"):
+        assert f'op.drop_column("images", "{column}")' in downgrade_source
+    # The column name as a statement would quote it: the docstring says, in
+    # prose, that no embedding is touched, and that sentence is not a drop.
+    assert '"embedding"' not in downgrade_source
     assert "drop_table" not in downgrade_source

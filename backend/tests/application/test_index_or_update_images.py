@@ -27,6 +27,8 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
+from app.domain.value_objects.position import Position, PositionReading
+from app.domain.value_objects.position_source import PositionSource
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from tests.application.fakes import (
     FakeImageRepository,
@@ -131,11 +133,19 @@ def _candidate(
     file_size: int = 1024,
     file_modified_at: datetime.datetime = MODIFIED_AT,
     capture: CaptureDate | None = None,
+    position: PositionReading | None = None,
 ) -> IndexCandidate:
     image = _image(name)
     if capture is not None:
         image = dataclasses.replace(
             image, captured_at=capture.captured_at, capture_source=capture.source
+        )
+    if position is not None:
+        image = dataclasses.replace(
+            image,
+            latitude=position.latitude,
+            longitude=position.longitude,
+            position_source=position.source,
         )
     return IndexCandidate(
         image=image,
@@ -897,6 +907,221 @@ class TestCaptureDateOnSkippedRows:
         )
 
         assert "Dated:               1" in report
+
+
+FARM = PositionReading(Position(-26.321406, -48.816307), PositionSource.EXIF_GPS)
+
+
+class TestPositionOnSkippedRows:
+    """RFC-032 section 8: a skipped image gains its position without inference."""
+
+    def _index_unplaced(
+        self, repository: FakeImageRepository, names: Sequence[str]
+    ) -> None:
+        """Index rows the way a pre-RFC-032 run left them: never examined."""
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate(name) for name in names]
+        )
+        repository.update_position_many_calls.clear()
+
+    def test_an_unchanged_row_never_examined_gains_its_position(self) -> None:
+        repository = FakeImageRepository()
+        self._index_unplaced(repository, ["photo"])
+
+        model = _RecordingModel()
+        summary = _use_case(repository, model).execute(
+            [_candidate("photo", position=FARM)]
+        )
+
+        assert summary.skipped_unchanged == 1
+        assert model.single_calls == []
+        assert summary.positions_written == 1
+        stored = repository.get(_image("photo").id)
+        assert stored is not None
+        assert stored.position_reading == FARM
+
+    def test_a_touched_identical_row_never_examined_gains_its_position(self) -> None:
+        """`REFRESH_METADATA`: a file copied between disks -- the central case.
+
+        Forget this branch and every photo that was ever copied would keep no
+        position for good: refreshed now, `SKIP_UNCHANGED` on every later
+        scan, against a row that still has none (RFC-032 section 8).
+        """
+        repository = FakeImageRepository()
+        self._index_unplaced(repository, ["photo"])
+
+        model = _RecordingModel()
+        summary = _use_case(repository, model).execute(
+            [
+                _candidate(
+                    "photo",
+                    file_modified_at=MODIFIED_AT + datetime.timedelta(days=1),
+                    position=FARM,
+                )
+            ]
+        )
+
+        assert summary.skipped_content_identical == 1
+        assert model.single_calls == []
+        assert summary.positions_written == 1
+        stored = repository.get(_image("photo").id)
+        assert stored is not None
+        assert stored.position_reading == FARM
+
+    def test_the_refresh_does_not_reset_the_position_it_just_wrote(self) -> None:
+        """`update_index_metadata()` must leave the position columns alone."""
+        repository = FakeImageRepository()
+        self._index_unplaced(repository, ["photo"])
+        touched = MODIFIED_AT + datetime.timedelta(days=1)
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", file_modified_at=touched, position=FARM)]
+        )
+
+        metadata = repository.get_index_metadata(_image("photo").id)
+
+        assert metadata is not None
+        assert metadata.file_modified_at == touched
+        assert metadata.position_source is PositionSource.EXIF_GPS
+
+    def test_a_rescan_of_a_placed_collection_writes_nothing(self) -> None:
+        """Steady state: zero writes, for unknown rows as much as for placed ones."""
+        repository = FakeImageRepository()
+        names = [f"photo_{index}" for index in range(6)]
+        self._index_unplaced(repository, names)
+        found = [
+            _candidate(name, position=FARM if index % 2 else PositionReading.unknown())
+            for index, name in enumerate(names)
+        ]
+        first = _use_case(repository, _RecordingModel()).execute(found)
+        repository.update_position_many_calls.clear()
+
+        second = _use_case(repository, _RecordingModel()).execute(found)
+
+        assert first.positions_written == 6
+        assert second.positions_written == 0
+        assert repository.update_position_many_calls == []
+        assert repository.update_position_calls == []
+
+    def test_a_row_examined_as_unknown_is_not_reexamined_by_a_scan(self) -> None:
+        """Only the backfill's `--force` revisits `unknown`."""
+        repository = FakeImageRepository()
+        self._index_unplaced(repository, ["photo"])
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", position=PositionReading.unknown())]
+        )
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", position=FARM)]
+        )
+
+        assert summary.positions_written == 0
+        stored = repository.get(_image("photo").id)
+        assert stored is not None
+        assert stored.position_source is PositionSource.UNKNOWN
+
+    def test_extraction_switched_off_writes_nothing(self) -> None:
+        repository = FakeImageRepository()
+        self._index_unplaced(repository, ["photo"])
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", position=None)]
+        )
+
+        assert summary.positions_written == 0
+        assert repository.update_position_many_calls == []
+
+    def test_positions_are_written_once_per_prefetch_window(self) -> None:
+        repository = FakeImageRepository()
+        names = [f"photo_{index}" for index in range(10)]
+        self._index_unplaced(repository, names)
+
+        _use_case(repository, _RecordingModel(), metadata_prefetch_size=4).execute(
+            [_candidate(name, position=FARM) for name in names]
+        )
+
+        assert [len(call) for call in repository.update_position_many_calls] == [
+            4,
+            4,
+            2,
+        ]
+        assert repository.update_position_calls == []
+
+    def test_a_new_image_carries_its_position_through_the_embedding_write(
+        self,
+    ) -> None:
+        """`EMBED` writes the whole row from the entity, position included."""
+        repository = FakeImageRepository()
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("brand_new", position=FARM)]
+        )
+
+        assert summary.indexed == 1
+        assert summary.positions_written == 0
+        assert repository.update_position_many_calls == []
+        (record,) = repository.save_indexed_calls
+        assert record.image.position_reading == FARM
+
+    def test_a_row_dated_before_rfc_032_still_gets_its_position(self) -> None:
+        """Two decisions, not one: the date is left alone, the position written.
+
+        Every row indexed between RFC-028 and RFC-032 is in this state --
+        examined for a date, never for a position. A single "does this row
+        need EXIF" decision keyed on the date would skip all of them.
+        """
+        repository = FakeImageRepository()
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", capture=ORIGINAL)]
+        )
+        repository.update_capture_date_many_calls.clear()
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate("photo", capture=ORIGINAL, position=FARM)]
+        )
+
+        assert summary.capture_dates_written == 0
+        assert summary.positions_written == 1
+        assert repository.update_capture_date_many_calls == []
+
+    def test_a_failed_bulk_position_write_degrades_to_per_row(self) -> None:
+        class _RejectsOnePosition(FakeImageRepository):
+            def update_position_many(
+                self, readings: Mapping[ImageId, PositionReading]
+            ) -> None:
+                raise RuntimeError("deadlock detected")
+
+            def update_position(
+                self, image_id: ImageId, reading: PositionReading
+            ) -> None:
+                if image_id == _image("photo_1").id:
+                    raise RuntimeError("row rejected")
+                super().update_position(image_id, reading)
+
+        repository = _RejectsOnePosition()
+        names = ["photo_0", "photo_1", "photo_2"]
+        _use_case(repository, _RecordingModel()).execute(
+            [_candidate(name) for name in names]
+        )
+
+        summary = _use_case(repository, _RecordingModel()).execute(
+            [_candidate(name, position=FARM) for name in names]
+        )
+
+        assert summary.positions_written == 2
+        (failure,) = summary.failures
+        assert failure.path.endswith("photo_1.png")
+
+    def test_the_report_counts_placed_rows(self) -> None:
+        repository = FakeImageRepository()
+        self._index_unplaced(repository, ["photo"])
+
+        report = (
+            _use_case(repository, _RecordingModel())
+            .execute([_candidate("photo", position=FARM)])
+            .format_report()
+        )
+
+        assert "Placed:              1" in report
 
 
 class TestThumbnails:

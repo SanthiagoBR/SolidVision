@@ -8,13 +8,19 @@ from typing import Any, cast
 
 from sqlalchemy import (
     ColumnElement,
+    Double,
+    Integer,
+    Numeric,
     Select,
     Table,
     bindparam,
+    case,
     func,
+    literal,
     select,
     update,
 )
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -24,15 +30,24 @@ from app.domain.exceptions import (
     ImageAlreadyExistsError,
 )
 from app.domain.repositories.image_repository import ImageRepository
+from app.domain.services.haversine import EARTH_RADIUS_M
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
+from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.position import (
+    BoundingBox,
+    PositionCell,
+    PositionCells,
+    PositionReading,
+)
+from app.domain.value_objects.position_source import PositionSource
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit, SearchHits
 from app.infrastructure.database.models.image_model import (
@@ -179,6 +194,9 @@ class PostgresImageRepository(ImageRepository):
             model.extension = record.image.extension
             model.captured_at = record.image.captured_at
             model.capture_source = _source_value(record.image.capture_source)
+            model.latitude = record.image.latitude
+            model.longitude = record.image.longitude
+            model.position_source = _position_value(record.image.position_source)
 
         model.embedding = list(record.embedding.values)
         model.file_size = record.file_size
@@ -248,6 +266,30 @@ class PostgresImageRepository(ImageRepository):
         suits devices does not exist for dates.
         `experiments/rfc-028-capture-date/planner_check.py` measures it.
 
+        **A circle is the worst of the three for the approximate index**
+        (RFC-032 section 6.1): high cardinality like a date, and *clustered*
+        -- in the pilot, 5 cells of ~100 m held 45% of the positions -- so a
+        few kilometres around a much-photographed place is not selective at
+        all, and lands in exactly the band RFC-028 measured returning 5 to
+        9 rows of 10. `experiments/rfc-032-geolocation/planner_check.py`
+        measures it on a clustered corpus, and RFC-032 section 6.1 decided
+        the mitigation against a criterion stated before the number: the
+        cheapest configuration returning `limit` of `limit` everywhere with
+        a filtered p95 no worse than twice the unfiltered one.
+
+        **No configuration met it, so none is applied here** -- the RFC's
+        own rule for that outcome. Measured on 20,000 images: every
+        mitigation (`hnsw.iterative_scan = strict_order`, `ef_search` 100 to
+        400) made every query full, where the baseline came back short in
+        13 of 20 queries at 20% selectivity; but the latency half failed for
+        every configuration, the baseline included, because the planner
+        answers low selectivities with *exact* sequential plans (23-65 ms
+        server-side at 5-10%, and up to ~340 ms under a forced generic plan)
+        against a 3.0 ms unfiltered p95. Those plans are untouched by any
+        HNSW setting. The verdict and the numbers are in RFC-032 section
+        6.1; adopting `strict_order` anyway would be a change to the
+        criterion, which is a decision for the RFC, not for this method.
+
         **The result is best-effort once the planner uses the index.**
         HNSW is an approximate index: a scan explores at most
         `hnsw.ef_search` (40 by default) candidates, and any of those that
@@ -261,7 +303,42 @@ class PostgresImageRepository(ImageRepository):
         of scope here and belongs with the scale benchmark.
         """
         self._require_indexed_dimension(embedding)
+        statement = self.search_statement(embedding, limit, filters)
 
+        return [
+            SearchHit(
+                image=Image(
+                    id=ImageId(row.id),
+                    device_id=DeviceId(row.device_id),
+                    relative_path=ImagePath(row.relative_path),
+                    filename=row.filename,
+                    extension=row.extension,
+                    captured_at=row.captured_at,
+                    capture_source=_source_member(row.capture_source),
+                    latitude=row.latitude,
+                    longitude=row.longitude,
+                    position_source=_position_member(row.position_source),
+                ),
+                similarity=1.0 - row.distance,
+            )
+            for row in self._session.execute(statement)
+        ]
+
+    @classmethod
+    def search_statement(
+        cls,
+        embedding: EmbeddingVector,
+        limit: int,
+        filters: SearchFilters | None = None,
+    ) -> Select[Any]:
+        """The exact `SELECT` `search_similar()` runs, without running it.
+
+        Public, and a `classmethod`, for one reader besides
+        `search_similar()`: `experiments/rfc-032-geolocation/planner_check.py`,
+        which has to `EXPLAIN` the query the application sends -- box
+        pre-filter, haversine and all -- rather than a hand-copied imitation
+        that would drift from it the first time either changed.
+        """
         distance = ImageModel.embedding.cosine_distance(list(embedding.values)).label(
             "distance"
         )
@@ -274,29 +351,16 @@ class PostgresImageRepository(ImageRepository):
                 ImageModel.extension,
                 ImageModel.captured_at,
                 ImageModel.capture_source,
+                ImageModel.latitude,
+                ImageModel.longitude,
+                ImageModel.position_source,
                 distance,
             )
             .where(ImageModel.embedding.is_not(None))
             .order_by(distance, ImageModel.id)
             .limit(limit)
         )
-        statement = self._apply_filters(statement, filters)
-
-        return [
-            SearchHit(
-                image=Image(
-                    id=ImageId(row.id),
-                    device_id=DeviceId(row.device_id),
-                    relative_path=ImagePath(row.relative_path),
-                    filename=row.filename,
-                    extension=row.extension,
-                    captured_at=row.captured_at,
-                    capture_source=_source_member(row.capture_source),
-                ),
-                similarity=1.0 - row.distance,
-            )
-            for row in self._session.execute(statement)
-        ]
+        return cls._apply_filters(statement, filters)
 
     @staticmethod
     def _apply_filters(
@@ -322,16 +386,19 @@ class PostgresImageRepository(ImageRepository):
         with NULL is NULL, which `WHERE` treats as false, so an image with
         an unknown date never matches. The in-memory implementations have
         no such free lunch and must say `is not None` explicitly.
+
+        A circle (RFC-032) adds its clauses the same way, and the same NULL
+        rule makes an unknown position fail them for free; see
+        `_circle_clauses()`.
         """
         if filters is None or filters.is_empty():
             return statement
         if filters.device_ids:
             statement = statement.where(_device_clause(filters))
         if filters.captured_between is not None:
-            statement = statement.where(
-                ImageModel.captured_at >= filters.captured_between.start,
-                ImageModel.captured_at < filters.captured_between.end,
-            )
+            statement = statement.where(*_date_clauses(filters))
+        if filters.taken_within is not None:
+            statement = statement.where(*_circle_clauses(filters.taken_within))
         return statement
 
     def count_unknown_capture_date(self, filters: SearchFilters) -> int:
@@ -339,9 +406,9 @@ class PostgresImageRepository(ImageRepository):
 
         Mirrors `search_similar()`'s `WHERE` minus the ranking and minus
         the date clause itself -- `embedding IS NOT NULL`, the device set
-        if any, and `captured_at IS NULL` -- so "the photos the filter
-        hid" and "the photos the search could have shown" are drawn from
-        the same definition of searchable.
+        if any, the circle if any (RFC-032), and `captured_at IS NULL` --
+        so "the photos the filter hid" and "the photos the search could
+        have shown" are drawn from the same definition of searchable.
 
         No query at all without a date range, so an unfiltered search
         never pays for a second round trip (RFC-028 section 8).
@@ -359,7 +426,113 @@ class PostgresImageRepository(ImageRepository):
         )
         if filters.device_ids:
             statement = statement.where(_device_clause(filters))
+        if filters.taken_within is not None:
+            statement = statement.where(*_circle_clauses(filters.taken_within))
         return int(self._session.execute(statement).scalar_one())
+
+    def count_unknown_position(self, filters: SearchFilters) -> int:
+        """Count, in one `COUNT(*)`, the searchable images that have no position.
+
+        `search_similar()`'s `WHERE` minus the ranking and minus the circle
+        -- `embedding IS NOT NULL`, the device set, the date range, and
+        `latitude IS NULL` (RFC-032 section 6.2). `latitude` alone is
+        enough: `ck_images_position_pairing` guarantees `longitude` is NULL
+        with it.
+
+        Queries whether or not `filters` has a circle, because the map asks
+        this exact question with none; not asking it for a search without a
+        circle is `SearchImagesUseCase`'s rule.
+        """
+        statement = (
+            select(func.count())
+            .select_from(ImageModel)
+            .where(
+                ImageModel.embedding.is_not(None),
+                ImageModel.latitude.is_(None),
+            )
+        )
+        if filters.device_ids:
+            statement = statement.where(_device_clause(filters))
+        if filters.captured_between is not None:
+            statement = statement.where(*_date_clauses(filters))
+        return int(self._session.execute(statement).scalar_one())
+
+    def aggregate_positions(
+        self,
+        filters: SearchFilters,
+        area: BoundingBox,
+        precision: int,
+        cell_limit: int | None,
+    ) -> PositionCells:
+        """One `GROUP BY` over rounded coordinates (RFC-032 section 7).
+
+        `round(latitude::numeric, p)`: PostgreSQL has no
+        `round(double precision, int)`, and the cast is also what fixes the
+        rounding rule -- the double's 15 significant digits, rounded half
+        away from zero in decimal -- that `round_to_cell()` reproduces for
+        the in-memory implementations.
+
+        **The precision is rendered into the SQL, not bound.** It appears
+        in the select list and in the `GROUP BY`, and with server-side
+        binding two separate parameters would be two different expressions
+        to PostgreSQL, which then refuses the select list as "not in GROUP
+        BY". `literal_execute` inlines the integer at execution time; it is
+        an `int` by type, so nothing a client sends reaches the text.
+
+        The area is two `BETWEEN`s on the plain columns -- the same shape as
+        a circle's pre-filter -- and the device and date clauses are the
+        search's own, so the map's universe cannot drift from the search's.
+        `filters.taken_within` is not applied (see the port).
+
+        Whether an index serves this over a large table is measured, not
+        assumed: `experiments/rfc-032-geolocation/planner_check.py`.
+        """
+        statement = self.aggregate_statement(filters, area, precision, cell_limit)
+        return [
+            PositionCell(
+                latitude=float(row.cell_latitude),
+                longitude=float(row.cell_longitude),
+                count=int(row.photos),
+            )
+            for row in self._session.execute(statement)
+        ]
+
+    @staticmethod
+    def aggregate_statement(
+        filters: SearchFilters,
+        area: BoundingBox,
+        precision: int,
+        cell_limit: int | None,
+    ) -> Select[Any]:
+        """The exact `SELECT` `aggregate_positions()` runs, for the same reader.
+
+        Public for the reason `search_statement()` is: the measurement has
+        to `EXPLAIN` what the endpoint sends.
+        """
+        digits = literal(int(precision), Integer, literal_execute=True)
+        cell_latitude = func.round(sql_cast(ImageModel.latitude, Numeric), digits)
+        cell_longitude = func.round(sql_cast(ImageModel.longitude, Numeric), digits)
+        statement = (
+            select(
+                cell_latitude.label("cell_latitude"),
+                cell_longitude.label("cell_longitude"),
+                func.count().label("photos"),
+            )
+            .where(
+                ImageModel.embedding.is_not(None),
+                ImageModel.latitude.between(area.min_latitude, area.max_latitude),
+                ImageModel.longitude.between(area.min_longitude, area.max_longitude),
+            )
+            .group_by(cell_latitude, cell_longitude)
+            .order_by(cell_latitude, cell_longitude)
+        )
+        if filters.device_ids:
+            statement = statement.where(_device_clause(filters))
+        if filters.captured_between is not None:
+            statement = statement.where(*_date_clauses(filters))
+        if cell_limit is not None:
+            statement = statement.limit(cell_limit)
+        return statement
 
     @staticmethod
     def _require_indexed_dimension(embedding: EmbeddingVector) -> None:
@@ -387,6 +560,7 @@ class PostgresImageRepository(ImageRepository):
             file_modified_at=model.file_modified_at,
             content_hash=model.content_hash,
             capture_source=_source_member(model.capture_source),
+            position_source=_position_member(model.position_source),
             thumbnail_path=model.thumbnail_path,
         )
 
@@ -405,7 +579,8 @@ class PostgresImageRepository(ImageRepository):
         `capture_source` is one of them since RFC-028, for the conditional
         capture-date write, and costs one short string per row in a query
         that was running anyway. `thumbnail_path` joined it in RFC-030 for
-        the thumbnail backfill, on the same terms.
+        the thumbnail backfill, on the same terms, and `position_source` in
+        RFC-032 for the conditional position write.
         """
         if not image_ids:
             return {}
@@ -416,6 +591,7 @@ class PostgresImageRepository(ImageRepository):
             ImageModel.file_modified_at,
             ImageModel.content_hash,
             ImageModel.capture_source,
+            ImageModel.position_source,
             ImageModel.thumbnail_path,
         ).where(ImageModel.id.in_([image_id.value for image_id in image_ids]))
 
@@ -425,6 +601,7 @@ class PostgresImageRepository(ImageRepository):
                 file_modified_at=row.file_modified_at,
                 content_hash=row.content_hash,
                 capture_source=_source_member(row.capture_source),
+                position_source=_position_member(row.position_source),
                 thumbnail_path=row.thumbnail_path,
             )
             for row in self._session.execute(statement)
@@ -490,6 +667,51 @@ class PostgresImageRepository(ImageRepository):
                 "new_capture_source": capture.source.value,
             }
             for image_id, capture in captures.items()
+        ]
+        try:
+            self._session.execute(statement, parameters)
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def update_position(self, image_id: ImageId, reading: PositionReading) -> None:
+        """Write one row's position with a targeted UPDATE (RFC-032 section 8)."""
+        self.update_position_many({image_id: reading})
+
+    def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
+        """Write many positions as one executemany UPDATE and one commit.
+
+        `update_capture_date_many()`'s shape, for its reasons: a Core
+        `UPDATE ... WHERE id = :target_id` so an id with no row is skipped
+        rather than refused, no read of the row -- which would drag the
+        embedding along -- and a rollback before re-raising so the caller's
+        per-row fallback starts from a clean session.
+
+        All three columns move in one statement, so the pairing CHECK never
+        sees a row mid-write holding half a position.
+        """
+        if not readings:
+            return
+
+        table = cast(Table, ImageModel.__table__)
+        statement = (
+            update(table)
+            .where(table.c.id == bindparam("target_id"))
+            .values(
+                latitude=bindparam("new_latitude"),
+                longitude=bindparam("new_longitude"),
+                position_source=bindparam("new_position_source"),
+            )
+        )
+        parameters = [
+            {
+                "target_id": image_id.value,
+                "new_latitude": reading.latitude,
+                "new_longitude": reading.longitude,
+                "new_position_source": reading.source.value,
+            }
+            for image_id, reading in readings.items()
         ]
         try:
             self._session.execute(statement, parameters)
@@ -605,10 +827,103 @@ class PostgresImageRepository(ImageRepository):
 
 
 def _device_clause(filters: SearchFilters) -> ColumnElement[bool]:
-    """The device-set predicate, shared by search and by the unknown-date count."""
+    """The device-set predicate, shared by search, the counts and the map."""
     return ImageModel.device_id.in_(
         [device_id.value for device_id in filters.device_ids]
     )
+
+
+def _date_clauses(filters: SearchFilters) -> tuple[ColumnElement[bool], ...]:
+    """The half-open capture-date range, shared by search, the counts and the map."""
+    date_range = filters.captured_between
+    if date_range is None:
+        return ()
+    return (
+        ImageModel.captured_at >= date_range.start,
+        ImageModel.captured_at < date_range.end,
+    )
+
+
+def _circle_clauses(circle: GeoCircle) -> tuple[ColumnElement[bool], ...]:
+    """A circle as SQL: a disposable box, then the exact distance (RFC-032 §6).
+
+    **The last clause is the one that answers.** The box --
+    `latitude BETWEEN ... AND longitude BETWEEN ...` -- exists only so an
+    index *can* be used; the haversine distance against `radius_m` is the
+    filter. A box alone would be a square, returning corners 1.41 times the
+    requested radius away.
+
+    **The box is omitted when it would be wrong** -- a circle over a pole,
+    or across the 180th meridian, for which `GeoCircle.bounding_box()`
+    returns `None` -- and then only the exact clause is emitted: slower,
+    and right.
+
+    No `IS NOT NULL`: a NULL latitude makes the box comparisons and the
+    distance NULL, which `WHERE` reads as false, so an image of unknown
+    position never matches, however large the circle (RFC-020). That holds
+    only because every step of the distance propagates NULL -- see the
+    clamp in `_distance_m()`, where the obvious `least()` did not.
+    """
+    clauses: list[ColumnElement[bool]] = []
+    box = circle.bounding_box()
+    if box is not None:
+        clauses.append(ImageModel.latitude.between(box.min_latitude, box.max_latitude))
+        clauses.append(
+            ImageModel.longitude.between(box.min_longitude, box.max_longitude)
+        )
+    clauses.append(_distance_m(circle) <= circle.radius_m)
+    return tuple(clauses)
+
+
+def _distance_m(circle: GeoCircle) -> ColumnElement[float]:
+    """The haversine distance from `circle.center` to each row, in metres.
+
+    Term for term the formula of `app.domain.services.haversine`, with the
+    same `EARTH_RADIUS_M` and the same order of operations -- differences
+    taken before `radians()`, the clamp to 1 before `asin` -- so a
+    point near a circle's edge falls on the same side here as in the
+    in-memory implementations. Plain arithmetic over two columns; no
+    extension (RFC-032 section 5.1).
+
+    "Same side" up to the last bit of `sin` and `cos`, which come from the
+    database server's maths library and not Python's: two libraries may
+    round the same argument one unit apart. A point within a nanometre of
+    the edge is not something a contract test can pin, and none tries.
+
+    Every function is typed `Double` on purpose. Untyped, SQLAlchemy treats
+    `radians(...) / 2` as a division of unknowns and renders the `2` as
+    `CAST(... AS NUMERIC)`; PostgreSQL would coerce it back, but the SQL
+    would no longer say what the Python says -- float arithmetic, start to
+    finish.
+    """
+    center = circle.center
+
+    def double(name: str, *arguments: Any) -> ColumnElement[float]:
+        expression: ColumnElement[float] = getattr(func, name)(*arguments, type_=Double)
+        return expression
+
+    def squared_sine_of_half(angle: ColumnElement[float]) -> ColumnElement[float]:
+        sine = double("sin", angle / 2.0)
+        return sine * sine
+
+    latitude_delta = double("radians", ImageModel.latitude - center.latitude)
+    longitude_delta = double("radians", ImageModel.longitude - center.longitude)
+    h = squared_sine_of_half(latitude_delta) + double(
+        "cos", double("radians", literal(center.latitude, Double))
+    ) * double("cos", double("radians", ImageModel.latitude)) * squared_sine_of_half(
+        longitude_delta
+    )
+    # The clamp is a CASE and must stay one. `least(1, sqrt(h))` reads the
+    # same and is a bug: PostgreSQL's LEAST *ignores* NULL arguments, so a
+    # row with no position got `least(1, NULL) = 1` and a distance of
+    # pi * R -- about 20,015 km -- instead of NULL. Any circle without a
+    # pre-filter box and with a radius that large then matched every photo
+    # with no position. `test_an_unknown_position_never_matches` caught it.
+    root = double("sqrt", h)
+    clamped: ColumnElement[float] = case(
+        (root > literal(1.0, Double), literal(1.0, Double)), else_=root
+    )
+    return literal(2 * EARTH_RADIUS_M, Double) * double("asin", clamped)
 
 
 def _source_value(source: CaptureSource | None) -> str | None:
@@ -622,3 +937,12 @@ def _source_member(value: str | None) -> CaptureSource | None:
     and the scan writes only rows in that state (RFC-028 section 4.2).
     """
     return CaptureSource(value) if value is not None else None
+
+
+def _position_value(source: PositionSource | None) -> str | None:
+    return source.value if source is not None else None
+
+
+def _position_member(value: str | None) -> PositionSource | None:
+    """Read a stored `position_source` back, keeping NULL as `None` (RFC-032 §4.4)."""
+    return PositionSource(value) if value is not None else None

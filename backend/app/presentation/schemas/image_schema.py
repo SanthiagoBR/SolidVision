@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from app.application.use_cases.resolve_image_location import LocatedImage
 from app.domain.value_objects.capture_source import CaptureSource
+from app.domain.value_objects.position_source import PositionSource
 
 
 class DeviceSchema(BaseModel):
@@ -64,6 +65,28 @@ class ImageSchema(BaseModel):
             "the shot), exif_digitized (when the image was digitised), or "
             "unknown (the file carries no date). Null if the file has not "
             "been examined yet."
+        )
+    )
+    latitude: float | None = Field(
+        description=(
+            "Where the photo was taken, north-south, in decimal degrees "
+            "(WGS 84; negative is south). This is where the drone was, not "
+            "the ground it photographed, which for an oblique shot can be "
+            "tens to hundreds of metres away. Null when unknown; latitude "
+            "and longitude are always both present or both null."
+        )
+    )
+    longitude: float | None = Field(
+        description=(
+            "Where the photo was taken, east-west, in decimal degrees "
+            "(negative is west). Null exactly when latitude is."
+        )
+    )
+    position_source: PositionSource | None = Field(
+        description=(
+            "Where latitude and longitude came from: exif_gps (the GPS block "
+            "of the file's EXIF) or unknown (the file has no usable position). "
+            "Null if the file has not been examined yet."
         )
     )
     device: DeviceSchema = Field(description="The disk the file is on")
@@ -104,6 +127,9 @@ class ImageFields(TypedDict):
     filename: str
     captured_at: datetime.datetime | None
     capture_source: CaptureSource | None
+    latitude: float | None
+    longitude: float | None
+    position_source: PositionSource | None
     device: DeviceSchema
     relative_path: str
     absolute_path: str | None
@@ -114,7 +140,9 @@ def image_fields(located: LocatedImage) -> ImageFields:
 
     Shared with `search_schema.py`, whose results are this shape plus a
     score, so the two responses cannot drift into describing one image two
-    ways.
+    ways. That is also why the position (RFC-032) is here rather than on the
+    search result alone: a photo found by "near here" and the same photo
+    opened by id must report the same coordinates.
     """
     image = located.image
     return {
@@ -122,6 +150,9 @@ def image_fields(located: LocatedImage) -> ImageFields:
         "filename": image.filename,
         "captured_at": image.captured_at,
         "capture_source": image.capture_source,
+        "latitude": image.latitude,
+        "longitude": image.longitude,
+        "position_source": image.position_source,
         "device": DeviceSchema(
             id=located.device.id.value,
             label=located.device.label,

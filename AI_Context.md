@@ -391,6 +391,15 @@ Thumbnails for images indexed before RFC-030, without loading the model:
 python -m app.infrastructure.workers.thumbnail_backfill --root PATH
 ```
 
+Capture dates and GPS positions for images indexed before RFC-028 / RFC-032,
+from one header read per file, without loading the model (`--force` re-reads
+`unknown` rows, never downgrading a stored source; `--dry-run` writes
+nothing). It replaced `capture_date_backfill` (RFC-032 section 8.1):
+
+```
+python -m app.infrastructure.workers.exif_backfill --root PATH
+```
+
 No route accepts a file path, in any form. `POST /api/v1/images/{id}/reveal`
 takes an id, builds the path on the server, and runs behind two guards
 (`ALLOW_LOCAL_FILE_ACTIONS` and a loopback check) that must stay independent

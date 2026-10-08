@@ -88,6 +88,7 @@ class JobRunner:
         sleep: Callable[[float], None] = time.sleep,
         warm_up: Callable[[], None] | None = None,
         excluded_directories: tuple[Path, ...] = (),
+        extract_gps: bool = True,
     ) -> None:
         self._jobs = jobs
         self._devices = devices
@@ -95,6 +96,12 @@ class JobRunner:
         self._indexer = indexer
         self._supported_extensions = tuple(supported_extensions)
         self._extract_capture_date = extract_capture_date
+        self._extract_gps = extract_gps
+        """`settings.extract_gps`, handed to every scan (RFC-032 section 4.2).
+
+        Last in the signature, as a keyword, so the RFC-029 callers and
+        tests that pass arguments by position are not moved.
+        """
         self._clock = clock
         self._poll_interval = poll_interval
         self._heartbeat_interval = heartbeat_interval
@@ -337,6 +344,7 @@ class JobRunner:
             mount,
             self._supported_extensions,
             extract_capture_date=self._extract_capture_date,
+            extract_gps=self._extract_gps,
             scopes=job.scopes,
             resume_after=_checkpoint_of(job),
             observer=observer,
@@ -496,6 +504,7 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
         ),
         supported_extensions=settings.supported_extensions,
         extract_capture_date=settings.extract_capture_date,
+        extract_gps=settings.extract_gps,
         warm_up=get_embedding_model().warm_up,
         poll_interval=settings.job_poll_interval,
         heartbeat_interval=settings.job_heartbeat_interval,

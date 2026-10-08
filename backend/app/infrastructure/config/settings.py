@@ -92,10 +92,20 @@ class Settings(BaseSettings):
     # that a measured cost can be answered by configuration rather than a
     # code change. Off means "not examined", never "no date": rows scanned
     # with it off keep `capture_source = NULL` and are picked up by the next
-    # scan that has it on, or by `capture_date_backfill`.
+    # scan that has it on, or by `exif_backfill`.
     extract_capture_date: bool = Field(
         default=True,
         description="Read each discovered file's EXIF capture date during the scan",
+    )
+    # RFC-032 section 4.2: the GPS position, read in the same open of the
+    # file as the capture date -- one header read, two facts -- so turning
+    # it on costs a parse of the GPS IFD, not a second open. The same rule
+    # as its twin: off means "not examined", never "no position", and rows
+    # scanned with it off keep `position_source = NULL` for the next scan
+    # with it on, or for `exif_backfill`.
+    extract_gps: bool = Field(
+        default=True,
+        description="Read each discovered file's EXIF GPS position during the scan",
     )
     worker_count: int = Field(
         default=1,
@@ -201,6 +211,50 @@ class Settings(BaseSettings):
         ge=1,
         description="Default number of search results returned per query",
     )
+
+    min_radius_m: float = Field(
+        default=300.0,
+        ge=0.0,
+        description="Smallest search radius, in metres, a 'near here' search accepts",
+    )
+    """The floor under a search circle (RFC-032 sections 2.2 and 6). Injected.
+
+    The GPS records where the drone was, and an oblique shot shows ground
+    tens to hundreds of metres from it. A circle smaller than that offset is
+    a machine for wrong answers: it hides, with complete confidence and no
+    error, exactly the photo the user is looking for. So this is product
+    policy, not a UI detail -- and Application policy, injected into
+    `SearchImagesUseCase` by the composition root, never read by it.
+
+    300 m is measured, by a criterion stated before the number: the 95th
+    percentile of the aircraft-to-subject ground offset, `altitude /
+    tan(|gimbal pitch|)`, over the real DJI files available, rounded up to
+    the next 50 m (`experiments/rfc-032-geolocation/measure_gps_cost.log`:
+    p50 96 m, p95 274 m, max 358 m, over the 20 frames whose camera records
+    its pitch -- the FC3682 writes a placeholder `0.00` and was excluded).
+    A larger sample of the collection may move it; the script re-measures.
+    """
+
+    max_map_cells: int = Field(
+        default=2000,
+        ge=1,
+        description="Most cells GET /images/map returns before coarsening its grid",
+    )
+    """The ceiling on one map answer (RFC-032 section 7). Injected.
+
+    Above it the grid is coarsened a decimal place at a time and the
+    response says so in `precision_applied`, rather than truncating the
+    list -- coarser squares hide no photo, a cut list hides whole places.
+
+    2000 is measured, by a criterion that bounds what the ceiling exists to
+    bound -- the payload: the largest of 500/1000/2000/5000 whose worst-case
+    answer stays within 256 KB, at the 54.8 bytes per cell measured on the
+    real `MapResponseSchema` JSON (2000 cells -> ~107 KB; 5000 -> ~268 KB).
+    `experiments/rfc-032-geolocation/planner_check.log` has the numbers,
+    and the first version of the criterion, which also bounded time and
+    selected nothing because the time it measured was the full scan, not
+    the ceiling.
+    """
 
     # Loading the CLIP checkpoint at API startup closes two problems at
     # once (RFC-026 sections 9.1 and 10): the ~5 s cold start the first

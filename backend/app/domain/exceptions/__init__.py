@@ -34,6 +34,11 @@ from app.domain.exceptions.job_errors import (
     InvalidJobScopeError,
     JobNotFoundError,
 )
+from app.domain.exceptions.position_errors import (
+    InvalidBoundingBoxError,
+    InvalidGeoCircleError,
+    InvalidPositionError,
+)
 from app.domain.exceptions.search_errors import (
     EmbeddingDimensionMismatchError,
     EmptySearchQueryError,
@@ -61,14 +66,17 @@ __all__ = [
     "IllegalJobTransitionError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
+    "InvalidBoundingBoxError",
     "InvalidCaptureDateError",
     "InvalidDateRangeError",
     "InvalidDeviceIdentifierError",
     "InvalidEmbeddingVectorError",
+    "InvalidGeoCircleError",
     "InvalidImageIdentifierError",
     "InvalidImagePathError",
     "InvalidJobIdentifierError",
     "InvalidJobScopeError",
+    "InvalidPositionError",
     "InvalidSearchLimitError",
     "InvalidVolumeIdentityError",
     "JobNotFoundError",

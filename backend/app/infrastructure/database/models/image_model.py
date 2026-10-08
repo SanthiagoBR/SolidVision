@@ -6,7 +6,15 @@ import datetime
 import uuid
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Double,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,6 +23,7 @@ from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.position_source import PositionSource
 from app.infrastructure.persistence.base import Base
 
 SHA256_HEX_LENGTH = 64
@@ -147,18 +156,78 @@ class ImageModel(Base):
     consequence, as RFC-029 section 11 anticipated.
     """
 
+    latitude: Mapped[float | None] = mapped_column(Double, nullable=True)
+    """North-south position where the photo was taken, decimal degrees (RFC-032).
+
+    **`double precision`, not `NUMERIC`.** 1e-7 degree is about a centimetre
+    and a `float8` carries ~15 significant digits: what is lost is orders
+    of magnitude below a drone's GNSS error, and many more below the
+    aircraft-to-subject offset the search radius absorbs (RFC-032 section
+    5). `NUMERIC` would buy decimal arithmetic to store noise.
+
+    **Two columns, not one `point`.** The entity has two fields, the
+    response publishes two numbers, and the pairing CHECK below says in SQL
+    what `validate_position_fields()` says in Python. A `point` would turn
+    every `latitude` in every query, log and migration into
+    `(images.position)[1]`.
+
+    Never called `location`: in this codebase that word is where the
+    *file* is (RFC-032 section 4.5).
+    """
+
+    longitude: Mapped[float | None] = mapped_column(Double, nullable=True)
+    """East-west position where the photo was taken, decimal degrees; see `latitude`."""
+
+    position_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    """Where the position came from -- a `PositionSource` value, or NULL.
+
+    Three states, as `capture_source` has (RFC-032 section 4.4):
+
+    - NULL: **never examined** -- older than RFC-032, or scanned with
+      `extract_gps` off;
+    - `'unknown'`: examined, and the file has no usable position, so
+      `latitude` and `longitude` are NULL;
+    - `'exif_gps'`: read from the GPS IFD.
+
+    A plain `String`, not an `ENUM`, so that `'manual'` and
+    `'subject_estimated'` -- named, and deliberately not members yet --
+    cost no migration when they arrive.
+    """
+
     __table_args__ = (
         UniqueConstraint(
             "device_id", "relative_path", name="uq_images_device_relative_path"
         ),
+        CheckConstraint(
+            "(latitude IS NULL) = (longitude IS NULL)",
+            name="position_pairing",
+        ),
+        CheckConstraint(
+            "latitude IS NULL OR (latitude BETWEEN -90 AND 90)",
+            name="latitude_range",
+        ),
+        CheckConstraint(
+            "longitude IS NULL OR (longitude BETWEEN -180 AND 180)",
+            name="longitude_range",
+        ),
     )
-    """One row per file per device.
+    """One row per file per device, and never half a position.
 
-    Replaces the old `UNIQUE (path)`, which looked like it prevented
-    duplicates and prevented nothing: `D:/fotos/x.JPG` and
+    The unique pair replaces the old `UNIQUE (path)`, which looked like it
+    prevented duplicates and prevented nothing: `D:/fotos/x.JPG` and
     `F:/fotos/x.JPG` are two different strings, so the same file on the
     same disk indexed under two drive letters satisfied the constraint
     twice over. The pair does constrain what it claims to.
+
+    The three CHECKs are the part of RFC-032's invariant that no future
+    writer can go around -- a manual `UPDATE`, a careless backfill, a test
+    fixture built by hand. The Domain still validates first and produces
+    the readable message; these make the database refuse what the Domain
+    was never asked about. Declared here as well as in the migration so a
+    schema built from the models (`Base.metadata.create_all`) has them too.
+    Their names are the short form because the naming convention in `base.py`
+    prefixes `ck_images_`: the database holds `ck_images_position_pairing`,
+    `ck_images_latitude_range` and `ck_images_longitude_range`.
     """
 
     @classmethod
@@ -171,7 +240,8 @@ class ImageModel(Base):
 
         The capture date *is* copied, because since RFC-028 it is a field of
         the entity: an attribute of the photograph rather than a change
-        signal for the pipeline.
+        signal for the pipeline. So is the position, since RFC-032, for the
+        same reason.
         """
         return cls(
             id=image.id.value,
@@ -186,6 +256,11 @@ class ImageModel(Base):
             captured_at=image.captured_at,
             capture_source=(
                 image.capture_source.value if image.capture_source else None
+            ),
+            latitude=image.latitude,
+            longitude=image.longitude,
+            position_source=(
+                image.position_source.value if image.position_source else None
             ),
             thumbnail_path=None,
         )
@@ -209,5 +284,10 @@ class ImageModel(Base):
             captured_at=self.captured_at,
             capture_source=(
                 CaptureSource(self.capture_source) if self.capture_source else None
+            ),
+            latitude=self.latitude,
+            longitude=self.longitude,
+            position_source=(
+                PositionSource(self.position_source) if self.position_source else None
             ),
         )
