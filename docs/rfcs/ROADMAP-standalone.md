@@ -53,6 +53,8 @@ Feita no [RFC-033a](rfc-033a-linha-de-base-do-postgres-embarcado.md) ✅. Duas e
 
 Transforma o spike em código de produção: um adaptador de infraestrutura que é dono do ciclo de vida do cluster.
 
+Proposto no [RFC-033](rfc-033-postgres-embarcado.md) 📋. Três itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.3](rfc-033-postgres-embarcado.md#23-três-coisas-que-o-roadmap-presumiu)). O `CREATE EXTENSION` já está na migration `999b801e80f4`, então o que falta é o `CREATE DATABASE`. O diretório do cluster é `postgres\16\data`, com a versão maior no caminho, para caberem dois clusters lado a lado. E "nunca pelo `PATH`" passa a valer também para as DLLs.
+
 **Escopo**
 - Localizar os binários vendorizados (`postgres.exe`, `initdb.exe`, `pg_ctl.exe`, `vector.dll`) por um caminho relativo à instalação, nunca pelo `PATH`.
 - Usar `%LOCALAPPDATA%\SolidVision\pgdata` como diretório do cluster, no mesmo padrão dos thumbnails.

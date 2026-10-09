@@ -88,6 +88,7 @@ Segue o [roadmap sem Docker](ROADMAP-standalone.md).
 | # | RFC | Entrega | Status |
 |---|---|---|---|
 | 033a | [Linha de Base do PostgreSQL Embarcado](rfc-033a-linha-de-base-do-postgres-embarcado.md) | Etapa 0: script do spike reescrito, ADR-008, dev em `pgvector/pgvector:0.8.6-pg16` com `UTF8` e localidade `C` | ✅ |
+| 033 | [PostgreSQL Embarcado](rfc-033-postgres-embarcado.md) | Adaptador dono do ciclo de vida do cluster: runtime por lockfile, `initdb` atômico, porta com fallback, adoção, recuperação de encerramento sujo, `run --` até o RFC-034 | 📋 |
 
 ---
 
