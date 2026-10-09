@@ -81,6 +81,14 @@ Documentos relacionados: [ARCHITECTURE.md](../../ARCHITECTURE.md) (arquitetura d
 >
 > **E por que o RFC-032 é o quarto eixo de busca.** O pedido era *"a pesquisa é muito básica para o acervo em que vai ser utilizado"*, e o eixo que falta é o único que o CLIP não pode aprender: duas fotos aéreas de propriedades rurais a 200 km uma da outra são vizinhas no espaço de embeddings. O [RFC-028 §11](rfc-028-data-de-captura-e-filtro-temporal.md) já havia nomeado o trabalho e a condição para ele existir — *"nada consumiria coordenadas ainda"* —, e o [RFC-032](rfc-032-geolocalizacao-e-busca-por-proximidade.md) entrega o leitor junto com o dado. Uma medição-piloto sobre 40 arquivos reais do acervo precedeu o documento, e já matou uma suposição dele ([§2.3](rfc-032-geolocalizacao-e-busca-por-proximidade.md)).
 
+## Standalone — sem Docker *(proposto)*
+
+Segue o [roadmap sem Docker](ROADMAP-standalone.md).
+
+| # | RFC | Entrega | Status |
+|---|---|---|---|
+| 033a | [Linha de Base do PostgreSQL Embarcado](rfc-033a-linha-de-base-do-postgres-embarcado.md) | Etapa 0: script do spike reescrito, ADR-008, dev em `pgvector/pgvector:0.8.6-pg16` com `UTF8` e localidade `C` | ✅ |
+
 ---
 
 ## Como ler estes documentos

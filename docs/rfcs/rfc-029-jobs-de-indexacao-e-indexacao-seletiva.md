@@ -526,6 +526,8 @@ Isso mantém um caminho de código, não dois. A alternativa — CLI indexando d
 - A UI em si — esta RFC entrega a API que a tela do Figma exigiria
 - **Rodar a API ou o executor em container.** Não é dívida a pagar: é uma consequência do alvo de distribuição — processo nativo no Windows, empacotado como instalador, com só o PostgreSQL em container. Em container Linux o sistema perderia a identidade de volume da RFC-027, a detecção de HD plugado a quente e a abertura no Explorer da RFC-030 (§6)
 
+> **Revisado pelo [ADR-008](../adr/adr-008-postgresql-embarcado.md) (2026-10-08).** A conclusão deste item e de §6 continua valendo: a API e o executor rodam no host, pelos motivos acima. O trecho *"com só o PostgreSQL em container"* não vale mais, porque o instalador embarca o banco como processo filho e o container ficou só no desenvolvimento. Os motivos acima não decidem isso, já que o PostgreSQL não abre foto, não lê GUID de volume e não chama o Explorer. Os motivos que decidem estão no ADR-008.
+
 ## 15. Riscos e trabalho futuro
 
 | risco | situação |

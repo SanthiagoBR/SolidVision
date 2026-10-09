@@ -3,6 +3,7 @@
 **Status:** Aceito e em vigor
 **Origem:** `ARCHITECTURE.md` §21
 **Implementado por:** [RFC-002](../rfcs/rfc-002-docker-e-postgres.md), [RFC-018](../rfcs/rfc-018-migrations-e-indice-hnsw.md), [RFC-025](../rfcs/rfc-025-busca-semantica.md)
+**Revisado por:** [ADR-008](adr-008-postgresql-embarcado.md), só na linha sobre deploy
 
 ---
 
@@ -13,6 +14,8 @@ Usar **PostgreSQL com a extensão pgvector** em vez de um banco vetorial dedicad
 ## Justificativa
 
 - **Deploy mais simples.** Um container, uma imagem oficial (`pgvector/pgvector:pg17`), nenhum serviço adicional a operar.
+
+  > **Revisado pelo [ADR-008](adr-008-postgresql-embarcado.md) (2026-10-08).** O produto não leva container: o instalador embarca o PostgreSQL 16.15 e o pgvector 0.8.6, e o app sobe o banco como processo filho. O container ficou só no desenvolvimento, hoje em `pgvector/pgvector:0.8.6-pg16`. O argumento desta linha continua de pé: um banco só, e nenhum serviço vetorial para operar ao lado.
 - **Um único banco.** Metadados de imagem e vetores vivem na mesma tabela, na mesma transação. Não existe o problema de manter dois armazenamentos sincronizados — a linha e seu vetor são gravados ou não são, juntos.
 - **Desempenho suficiente** para coleções de porte médio, que é o alvo declarado do projeto (`ARCHITECTURE.md` §22: 100 mil imagens).
 

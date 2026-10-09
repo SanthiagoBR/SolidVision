@@ -13,6 +13,7 @@ Estes ADRs foram originalmente escritos em inglês dentro de `ARCHITECTURE.md` �
 | 005 | [Metadados de embedding](adr-005-metadados-de-embedding.md) | Coleções registram modelo, versão e dimensão | ⚠️ Parcial — falta `Collections` |
 | 006 | [Repository Pattern](adr-006-repository-pattern.md) | Todo acesso a persistência passa por uma porta do Domain | ✅ Em vigor |
 | 007 | [Dimensão fixa por coluna](adr-007-dimensao-fixa-por-coluna.md) | Um modelo por coluna `vector(N)`; trocar exige reindexar | ✅ Em vigor |
+| 008 | [PostgreSQL embarcado](adr-008-postgresql-embarcado.md) | PostgreSQL 16.15 + pgvector 0.8.6 no instalador, como processo filho; Docker só no desenvolvimento | ✅ Em vigor |
 
 ---
 
