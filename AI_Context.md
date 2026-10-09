@@ -385,6 +385,13 @@ on is a Windows construct, and a container would see a mounted path
 instead. The product ships as a native Windows process with an installer,
 with only PostgreSQL in a container.
 
+> **Revised by ADR-008** (`docs/adr/adr-008-postgresql-embarcado.md`,
+> 2026-10-08): the installer embeds PostgreSQL 16.15 + pgvector 0.8.6 and
+> the app starts it as a child process. The container is a development
+> shortcut only, `pgvector/pgvector:0.8.6-pg16`, with `UTF8` and locale `C`
+> like the embedded cluster. The host-process reasons above still decide
+> where the API and the executor run; they never applied to the database.
+
 Thumbnails for images indexed before RFC-030, without loading the model:
 
 ```

@@ -10,16 +10,16 @@ Status segue as [convenções](README.md#convenções): todo número é `TBM` at
 
 ## Ponto de partida
 
-O que já foi medido, no spike de 2026-09-22 ([log](../../experiments/rfc-033-embedded-postgres/measure_embedded_postgres.log)):
+O que já foi medido no spike de 2026-09-22 ([log transcrito no RFC-033a, Apêndice A](rfc-033a-linha-de-base-do-postgres-embarcado.md#apêndice-a--o-log-do-spike-transcrito)), e o que o script reescrito mediu em 2026-10-08 ([RFC-033a §13](rfc-033a-linha-de-base-do-postgres-embarcado.md#13-validação)). **A linha de base do RFC-033 é a segunda coluna.**
 
-| Medição | Valor |
-|---|---|
-| Binários | PostgreSQL 16.15 + pgvector 0.8.6, conda-forge win-64 |
-| Payload depois de remover os `.pdb` | 110 MB (de 308 MB) |
-| `initdb`, uma vez por máquina | 27,2 s |
-| Postgres de `listening` a `ready` | 0,248 s |
-| `alembic upgrade head` | 3,3 s |
-| Suíte padrão contra o cluster embarcado | 1616 passed, Docker desligado |
+| Medição | Spike (head `f4b9e2d7c615`) | Linha de base (head `6d77379a36a1`) |
+|---|---|---|
+| Binários | PostgreSQL 16.15 + pgvector 0.8.6, conda-forge win-64 | Os mesmos, com as builds fixadas e o ambiente explícito no log |
+| Payload depois de remover os `.pdb` | 110 MB (de 308 MB) | 123 MB (de 308 MB). A conta do spike não fechava ([§14](rfc-033a-linha-de-base-do-postgres-embarcado.md#14-correções-feitas-durante-a-implementação)) |
+| `initdb`, uma vez por máquina | 27,2 s | 24,7 s, num HDD |
+| Postgres de `listening` a `ready` | 0,248 s | 0,216 s |
+| `alembic upgrade head` | 3,3 s | 2,5 s |
+| Suíte padrão contra o cluster embarcado | 1616 passed, Docker desligado | 2085 passed, Docker desligado, alvo provado pela porta e por `xact_commit` |
 
 O que **está faltando ou divergente** no repositório hoje:
 
@@ -27,12 +27,17 @@ O que **está faltando ou divergente** no repositório hoje:
 - **O ADR-008 não existe.** A decisão de embarcar o Postgres foi tomada, mas não está registrada em `docs/adr/`.
 - **Dev e produção rodam versões maiores diferentes do Postgres.** O `docker-compose.yml` usa `pgvector/pgvector:pg17`, e o alvo embarcado é 16.15. O pgvector do conda-forge win-64 está preso à libpq 16.x, então o 16 não é negociável. Testar em 17 e entregar em 16 é uma divergência silenciosa.
 - **O spike rodou contra o head `f4b9e2d7c615`.** A migration do RFC-032 (`6d77379a36a1_add_image_position`) veio depois e ainda não passou pelo Postgres embarcado.
+
+> **Os quatro itens acima foram resolvidos pela Etapa 0** ([RFC-033a](rfc-033a-linha-de-base-do-postgres-embarcado.md)). Os dois abaixo são do RFC-034 e do RFC-035.
+
 - **A configuração presume um checkout do repositório.** O `Settings` lê `.env` de `parents[4]`, ou seja, da raiz do repositório. `log_directory` é relativo ao diretório de trabalho (`"logs"`), e `indexing_root_path` tem um default relativo. Só `thumbnail_directory` já usa `%LOCALAPPDATA%\SolidVision`.
 - **Os dois modelos são baixados do Hugging Face na primeira execução.** O CLIP e o tradutor PT→EN usam `from_pretrained(nome)`. Sem rede, a primeira busca falha.
 
 ---
 
-## Etapa 0 — Reconstruir o que se perdeu
+## Etapa 0 — Reconstruir o que se perdeu ✅
+
+Feita no [RFC-033a](rfc-033a-linha-de-base-do-postgres-embarcado.md) ✅. Duas entregas saíram diferentes da tabela abaixo, e o RFC diz por quê. A tag ficou fixa em `pgvector/pgvector:0.8.6-pg16`, porque `pg16` já traz o pgvector 0.8.7. E o ADR-008 separa os motivos que valem para o banco (Docker Desktop como pré-requisito, transporte medido, ciclo de vida) dos quatro que já decidiram onde a API roda.
 
 | Entrega | Critério de pronto |
 |---|---|

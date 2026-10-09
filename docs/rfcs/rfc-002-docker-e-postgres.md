@@ -7,6 +7,8 @@
 **Commit:** `fb27cbc`
 **Última atualização:** 2026-08-24
 
+> **Nota (2026-10-08).** A imagem passou a `pgvector/pgvector:0.8.6-pg16`, com `POSTGRES_INITDB_ARGS="--encoding=UTF8 --locale=C"` e o volume `postgres_data_pg16`, pelo [RFC-033a](rfc-033a-linha-de-base-do-postgres-embarcado.md). O desenvolvimento passou a rodar a mesma versão maior, o mesmo pgvector e a mesma localidade do PostgreSQL embarcado ([ADR-008](../adr/adr-008-postgresql-embarcado.md)). O texto abaixo é o original e fica como estava.
+
 ---
 
 ## 1. Contexto
