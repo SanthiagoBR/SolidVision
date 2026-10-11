@@ -2,7 +2,7 @@
 
 **Status:** Aceito
 **Origem:** spike de 2026-09-22, reconstruído pelo [RFC-033a](../rfcs/rfc-033a-linha-de-base-do-postgres-embarcado.md); [roadmap sem Docker](../rfcs/ROADMAP-standalone.md)
-**Implementado por:** RFC-033 (adaptador de produção, proposto)
+**Implementado por:** [RFC-033](../rfcs/rfc-033-postgres-embarcado.md) (adaptador de produção, implementado em 2026-10-11)
 **Revisa:** [RFC-029 §14](../rfcs/rfc-029-jobs-de-indexacao-e-indexacao-seletiva.md), a linha sobre deploy do [ADR-002](adr-002-postgresql-em-vez-de-banco-vetorial.md) e o `AI_Context.md`
 
 ---
@@ -70,6 +70,11 @@ Dois números do spike não se sustentam como estavam escritos:
 - **O ciclo de vida do banco passa a ser código do projeto** (RFC-033), e não do Docker: primeira execução, porta ocupada, encerramento sujo, processo órfão.
 - **Atualizar de versão maior exige um `pg_upgrade` que nunca foi medido.** O diretório de dados precisa deixar espaço para dois clusters lado a lado, e o volume de desenvolvimento já leva a versão maior no nome (`postgres_data_pg16`).
 - **Colação `C`.** A ordem é por bytes, e o `lower()` do SQL só converte ASCII. Nenhuma consulta de produto ordena texto no SQL. O efeito conhecido é o pré-filtro do `device_reconcile`, que só serve a linhas anteriores ao RFC-027 (RFC-033a §5 e §10).
+
+> **Medido pelo RFC-033, em 2026-10-11 ([§18 e §19](../rfcs/rfc-033-postgres-embarcado.md)).** Dois dos custos acima ganharam número, e um deles mudou de natureza.
+>
+> - **O ICU não dá para tirar.** O servidor não foi compilado com ele, mas o processo o carrega mesmo assim: um `postgres.exe` em execução tem `icuuc78.dll` e `icudt78.dll` entre os seus módulos, trazidos pelo `libxml2.dll`. Os 47 MB ficam.
+> - **O ciclo de vida virou código, e o código achou o que o Docker escondia.** O `pg_ctl` no Windows não tem como conferir se o `postmaster.pid` é do servidor que ele acabou de subir, o arquivo continua dizendo `ready` enquanto o servidor se reinicializa, e os processos de um servidor morto seguram o `startup.log` por dezenas de milissegundos. Os três estão tratados no adaptador.
 
 ## O que este ADR revisa
 

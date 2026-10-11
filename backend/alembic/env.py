@@ -5,7 +5,7 @@ from __future__ import annotations
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import Connection, engine_from_config, pool
 
 from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
@@ -43,9 +43,25 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _run_migrations_on(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     logger.info("Alembic running in online mode")
+    # RFC-033 section 7.4: a caller that already holds a connection -- the
+    # embedded cluster adapter -- hands it over in `config.attributes`, which
+    # is Alembic's own pattern for sharing one. `alembic upgrade head` on the
+    # command line hands over nothing and gets the engine below, as before.
+    shared_connection = config.attributes.get("connection")
+    if shared_connection is not None:
+        _run_migrations_on(shared_connection)
+        return
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -53,10 +69,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-
-        with context.begin_transaction():
-            context.run_migrations()
+        _run_migrations_on(connection)
 
 
 if context.is_offline_mode():

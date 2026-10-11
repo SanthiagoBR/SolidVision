@@ -333,6 +333,37 @@ class Settings(BaseSettings):
     than a wrong one.
     """
 
+    embedded_postgres_runtime_directory: Path = Field(
+        default_factory=lambda: _default_embedded_postgres_runtime_directory(),
+        description="Directory holding the vendored PostgreSQL runtime",
+    )
+    """Where the embedded binaries are (RFC-033 section 5.2). Never the `PATH`.
+
+    The default is `runtime/postgres` under the code root -- the same anchor
+    the `.env` and the logs already use. In development that is the
+    repository root, and `scripts/vendor_postgres.py` materializes the
+    runtime there; installed, it is wherever the installer puts the code,
+    with the runtime beside it. How that root is known in a frozen app is
+    RFC-034's; here the path is only guaranteed configurable and absolute.
+
+    `EMBEDDED_` keeps both names out of the `POSTGRES_*` namespace, which the
+    Docker image reads from the same `.env`.
+    """
+
+    embedded_postgres_directory: Path = Field(
+        default_factory=lambda: _default_embedded_postgres_directory(),
+        description="Per-user directory the embedded PostgreSQL cluster lives in",
+    )
+    """The user's cluster (RFC-033 section 6): `%LOCALAPPDATA%/SolidVision/postgres`.
+
+    `LOCALAPPDATA` for the thumbnails' reason and one more: OneDrive does not
+    sync it, and a sync client that locks or rewrites files inside a live
+    cluster corrupts the cluster. The adapter adds the major version below
+    this (`postgres/16/data`), so a future `17/` fits beside it. The setting
+    exists for tests, for diagnosis, and for a developer whose checkout must
+    not share a cluster with an installed app.
+    """
+
     log_level: str = Field(default="INFO", description="Logging level")
     log_directory: str = Field(default="logs", description="Directory for log files")
     log_filename: str = Field(default="application.log", description="Log filename")
@@ -384,6 +415,23 @@ def _default_thumbnail_directory() -> Path:
     if local_app_data:
         return Path(local_app_data) / "SolidVision" / "thumbnails"
     return Path.home() / ".cache" / "solidvision" / "thumbnails"
+
+
+def _default_embedded_postgres_runtime_directory() -> Path:
+    """`runtime/postgres` beside the code, anchored like the `.env` is."""
+    return Path(__file__).resolve().parents[4] / "runtime" / "postgres"
+
+
+def _default_embedded_postgres_directory() -> Path:
+    """Beside the thumbnails, absolute and per user, for the same reasons.
+
+    The fallback keeps the default absolute on a platform where the adapter
+    refuses to be built anyway (RFC-033 section 4.1).
+    """
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "SolidVision" / "postgres"
+    return Path.home() / ".local" / "share" / "solidvision" / "postgres"
 
 
 settings = Settings()
