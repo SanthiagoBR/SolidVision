@@ -66,7 +66,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 python_files = ["test_*.py"]
-addopts = "-ra --strict-markers -m 'not slow'"
+addopts = "-ra --strict-markers -m 'not slow and not embedded'"
 pythonpath = [".", "backend"]
 markers = [
     # Opt-in only: downloads and runs the real Hugging Face checkpoints
@@ -74,4 +74,9 @@ markers = [
     # a plain `pytest` stays offline, fast, and deterministic. Run them
     # with `pytest -m slow` or `pytest -m ""`.
     "slow: requires downloading and running real AI models",
+    # Opt-in only, like `slow`: starts real PostgreSQL servers from the
+    # vendored runtime, in temporary directories (RFC-033 section 12). Run
+    # them with `pytest -m embedded`. Without `runtime/postgres` they are
+    # skipped with the command that materializes it, not failed.
+    "embedded: requires the vendored PostgreSQL runtime (scripts/vendor_postgres.py)",
 ]

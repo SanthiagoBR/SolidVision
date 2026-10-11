@@ -49,11 +49,11 @@ Feita no [RFC-033a](rfc-033a-linha-de-base-do-postgres-embarcado.md) ✅. Duas e
 
 ---
 
-## RFC-033 — PostgreSQL embarcado 📋
+## RFC-033 — PostgreSQL embarcado ✅
 
 Transforma o spike em código de produção: um adaptador de infraestrutura que é dono do ciclo de vida do cluster.
 
-Proposto no [RFC-033](rfc-033-postgres-embarcado.md) 📋. Três itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.3](rfc-033-postgres-embarcado.md#23-três-coisas-que-o-roadmap-presumiu)). O `CREATE EXTENSION` já está na migration `999b801e80f4`, então o que falta é o `CREATE DATABASE`. O diretório do cluster é `postgres\16\data`, com a versão maior no caminho, para caberem dois clusters lado a lado. E "nunca pelo `PATH`" passa a valer também para as DLLs.
+Feito no [RFC-033](rfc-033-postgres-embarcado.md) ✅, em 2026-10-11. Três itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.3](rfc-033-postgres-embarcado.md#23-três-coisas-que-o-roadmap-presumiu)). O `CREATE EXTENSION` já está na migration `999b801e80f4`, então o que falta é o `CREATE DATABASE`. O diretório do cluster é `postgres\16\data`, com a versão maior no caminho, para caberem dois clusters lado a lado. E "nunca pelo `PATH`" passa a valer também para as DLLs.
 
 **Escopo**
 - Localizar os binários vendorizados (`postgres.exe`, `initdb.exe`, `pg_ctl.exe`, `vector.dll`) por um caminho relativo à instalação, nunca pelo `PATH`.
@@ -65,10 +65,10 @@ Proposto no [RFC-033](rfc-033-postgres-embarcado.md) 📋. Três itens abaixo sa
 - Testar caminhos com espaço e acento (`C:\Users\João Silva\...`).
 
 **Critérios de pronto**
-- Primeira execução numa máquina limpa: `TBM` s, com o `initdb` medido separado do resto.
-- Execução a quente, do comando até o banco aceitar conexões: `TBM` s.
+- Primeira execução numa máquina limpa: **14,0 s** (era `TBM`), com o `initdb` medido separado do resto: 9,8 s do `initdb.exe` e 4,2 s de todo o resto (subida, `CREATE DATABASE`, migrations). Num SSD NVMe, com o runtime já materializado ([RFC-033 §18](rfc-033-postgres-embarcado.md#18-validação)).
+- Execução a quente, do comando até o banco aceitar conexões: **1,11 s** (era `TBM`), do `start()` até a conexão aceita, na mediana de dez. Conferir as migrations (`prepare()`) soma 0,39 s. O `pg_ctl` é 87% desse tempo.
 - A suíte inteira passa contra o cluster que o adaptador gerencia, com o Docker desligado.
-- Matar o `postgres.exe` à força e reiniciar recupera sem intervenção manual. Isso foi testado, não presumido.
+- Matar o `postgres.exe` à força e reiniciar recupera sem intervenção manual. Isso foi testado, não presumido. **Testado:** seis mortes do postmaster e seis da árvore inteira, sob escrita, todas recuperadas pelo `start()` seguinte, em 4,0 a 8,0 s, sem perder nenhuma transação confirmada.
 
 **Riscos**
 - Antivírus e SmartScreen podem bloquear o `postgres.exe` fora de `Program Files`.

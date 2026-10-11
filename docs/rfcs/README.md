@@ -88,7 +88,9 @@ Segue o [roadmap sem Docker](ROADMAP-standalone.md).
 | # | RFC | Entrega | Status |
 |---|---|---|---|
 | 033a | [Linha de Base do PostgreSQL Embarcado](rfc-033a-linha-de-base-do-postgres-embarcado.md) | Etapa 0: script do spike reescrito, ADR-008, dev em `pgvector/pgvector:0.8.6-pg16` com `UTF8` e localidade `C` | ✅ |
-| 033 | [PostgreSQL Embarcado](rfc-033-postgres-embarcado.md) | Adaptador dono do ciclo de vida do cluster: runtime por lockfile, `initdb` atômico, porta com fallback, adoção, recuperação de encerramento sujo, `run --` até o RFC-034 | 📋 |
+| 033 | [PostgreSQL Embarcado](rfc-033-postgres-embarcado.md) | Adaptador dono do ciclo de vida do cluster: runtime por lockfile, `initdb` atômico, porta com fallback, adoção, recuperação de encerramento sujo, `run --` até o RFC-034. Uma verificação manual de §18 ficou por fazer (logoff) | ✅ |
+
+> **O que o RFC-033 mediu e não esperava.** Três coisas que o documento presumia caíram na medição, e as três mudaram código ([§19](rfc-033-postgres-embarcado.md)). O coletor de logs do PostgreSQL 16 sobe antes dos sockets, então a recusa de um `bind` não está onde o texto dizia. O `pg_ctl start -w` devolve sucesso sobre o arquivo de lock de um servidor que acabou de morrer. E o `postmaster.pid` continua dizendo `ready` enquanto o servidor se reinicializa depois da morte de um dos seus processos.
 
 ---
 

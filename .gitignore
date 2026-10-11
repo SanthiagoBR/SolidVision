@@ -18,3 +18,7 @@ data/
 frontend/node_modules/
 frontend/release/
 frontend/resources/
+
+# The embedded PostgreSQL runtime, materialized from scripts/postgres-win-64.lock
+# by scripts/vendor_postgres.py (RFC-033 section 5.1)
+/runtime/
