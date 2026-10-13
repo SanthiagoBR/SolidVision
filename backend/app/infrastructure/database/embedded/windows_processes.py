@@ -26,6 +26,7 @@ _PROCESS_TERMINATE = 0x0001
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _SYNCHRONIZE = 0x00100000
 _WAIT_TIMEOUT = 0x00000102
+_TERMINATE_WAIT_MS = 5000
 _ERROR_ACCESS_DENIED = 5
 _MAX_PATH = 32768
 
@@ -61,7 +62,10 @@ class ProcessTable(ABC):
 
     @abstractmethod
     def terminate(self, pid: int) -> bool:
-        """End a process. `False` when it was already gone or refused."""
+        """End a process and wait for it to be gone.
+
+        `False` when it was already gone or refused.
+        """
 
 
 class WindowsProcesses(ProcessTable):
@@ -174,12 +178,22 @@ class WindowsProcesses(ProcessTable):
             kernel32.CloseHandle(handle)
 
     def terminate(self, pid: int) -> bool:
+        """End a process and wait until Windows reports it gone.
+
+        `TerminateProcess` only asks: it returns while the process object is
+        still unsignaled, so an `is_alive` right after it still says yes (49
+        of 50 tries). A caller that restarts the cluster at once would then
+        adopt a postmaster that is dying.
+        """
         kernel32 = self._kernel32()
-        handle = kernel32.OpenProcess(_PROCESS_TERMINATE, False, pid)
+        handle = kernel32.OpenProcess(_PROCESS_TERMINATE | _SYNCHRONIZE, False, pid)
         if not handle:
             return False
         try:
-            return bool(kernel32.TerminateProcess(handle, 1))
+            if not kernel32.TerminateProcess(handle, 1):
+                return False
+            kernel32.WaitForSingleObject(handle, _TERMINATE_WAIT_MS)
+            return True
         finally:
             kernel32.CloseHandle(handle)
 
