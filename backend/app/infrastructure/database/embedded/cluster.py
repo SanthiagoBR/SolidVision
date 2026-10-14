@@ -7,6 +7,7 @@
     started = cluster.start(on_phase=report)  # creates if needed; starts or adopts
     cluster.prepare(started.connection)       # database and migrations, idempotent
     cluster.status()                          # absent | stopped | starting | ready
+    cluster.locate()                          # the connection of a ready cluster
     cluster.stop()                            # fast; immediate if fast fails
 
 What `start()` observes, and what it does (section 9.1):
@@ -55,6 +56,7 @@ from .database_setup import (
     verify_login,
 )
 from .errors import (
+    ClusterNotRunningError,
     ClusterRefusedError,
     EmbeddedPostgresError,
     ServerNotReadyError,
@@ -83,6 +85,29 @@ BIND_FAILURE_MARKERS = (
 `--locale=C` set `lc_messages = 'C'` besides (section 8.1)."""
 
 SHARED_MEMORY_IN_USE = "pre-existing shared memory block is still in use"
+
+ENVIRONMENT_VARIABLES = (
+    "DATABASE_SOURCE",
+    "EMBEDDED_POSTGRES_DIRECTORY",
+    "EMBEDDED_POSTGRES_RUNTIME_DIRECTORY",
+)
+"""What `run -- <command>` gives the command, named in one place (RFC-034 7.6).
+
+The source and the two directories, and no longer host, port and password:
+with these the command's own engine finds the cluster by `locate()`, as an
+installed app does, and the password travels in no process's environment.
+
+A test checks that every name is a field of `Settings`. A misspelt one would
+not fail: `Settings` would fall back to the `.env`, the `.env` points at
+Docker, and the suite would pass against the wrong database printing the
+same `passed` (RFC-033a section 4.2).
+"""
+
+EMBEDDED_SOURCE = "embedded"
+"""`DATABASE_SOURCE`'s value, spelt here because this package reads no
+`settings`. The same test checks it against `DatabaseSource`."""
+
+HOW_TO_START = "python -m app.infrastructure.database.embedded start"
 
 _WSAEACCES = 10013
 _WSAEADDRINUSE = 10048
@@ -480,6 +505,61 @@ class EmbeddedPostgres:
             pid=pid_file.pid if pid_file else None,
             detail=state.detail,
         )
+
+    def locate(self) -> ClusterConnection:
+        """The connection of a cluster that is up. Reads; starts nothing.
+
+        RFC-034 section 7.2. No lock, no connection, no waiting: the port the
+        server is *using*, from line 4 of `postmaster.pid`, and the password
+        from its file, after the checks `status()` makes -- the PID is alive,
+        the executable is this runtime's, and the lock file names this
+        `data\\`. Anything but `ready` is `ClusterNotRunningError`.
+
+        `ready` in the file is not `ready` in the server (RFC-033 section
+        8.4). A connection opened while the server reinitializes is refused
+        by the server, and the caller gets an ordinary database error.
+        """
+        manifest = self._runtime.manifest()
+        shown = self._home.files(manifest.major).data
+        files = self._home.for_commands(self._home.files(manifest.major))
+        if not files.data.exists():
+            raise ClusterNotRunningError(
+                f"There is no embedded cluster in {shown} yet. "
+                f"Create and start it with `{HOW_TO_START}`."
+            )
+        state = self._observe(files, manifest, leftover_initdb=False)
+        if state.observation is not Observation.READY or state.pid_file is None:
+            found = state.observation.value
+            if state.detail:
+                found = f"{found} ({state.detail})"
+            raise ClusterNotRunningError(
+                f"The embedded cluster in {shown} is not ready to be connected "
+                f"to: {found}. Start it with `{HOW_TO_START}`."
+            )
+        if state.pid_file.port is None:
+            raise ClusterNotRunningError(
+                f"The embedded cluster in {shown} is up, but "
+                f"{files.postmaster_pid} names no port yet."
+            )
+        password = self._home.read_password(files)
+        if password is None:
+            raise ClusterRefusedError(
+                f"{shown} holds a running cluster, but {files.password} is "
+                "missing: the password-cluster pair is lost."
+            )
+        return ClusterConnection(port=state.pid_file.port, password=password)
+
+    def environment(self) -> dict[str, str]:
+        """`ENVIRONMENT_VARIABLES` for a child process, pointing it at this cluster.
+
+        Above the `.env` in a checkout (RFC-004). Neither the port nor the
+        password is here: the child reads both from the cluster, by `locate()`.
+        """
+        return {
+            "DATABASE_SOURCE": EMBEDDED_SOURCE,
+            "EMBEDDED_POSTGRES_DIRECTORY": str(self._home.root),
+            "EMBEDDED_POSTGRES_RUNTIME_DIRECTORY": str(self._runtime.root),
+        }
 
     def stop(self) -> StopOutcome:
         """`fast`; `immediate` if `fast` fails; an error if both do (8.5)."""

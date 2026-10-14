@@ -23,10 +23,10 @@ with the migration chain (section 2.3).
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import psycopg
@@ -36,7 +36,12 @@ from sqlalchemy.engine import URL
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.pool import NullPool
 
+from app.infrastructure.config.layout import layout
+from app.infrastructure.logging.logger import get_logger
+
 from .errors import ClusterRefusedError, ServerNotReadyError, StartupFailedError
+
+logger = get_logger(__name__)
 
 LOOPBACK = "127.0.0.1"
 """The literal, not `localhost`: the server listens on IPv4 only, and the
@@ -47,34 +52,66 @@ DATABASE = "solidvision"
 EXPECTED_ENCODING = "UTF8"
 EXPECTED_LOCALE = "C"
 
-BACKEND_DIRECTORY = Path(__file__).resolve().parents[4]
-ALEMBIC_INI = BACKEND_DIRECTORY / "alembic.ini"
-ALEMBIC_SCRIPTS = BACKEND_DIRECTORY / "alembic"
+# The layout is the geometry of directories, not configuration: taking the
+# two paths from it keeps this package free of `settings`, as RFC-033 section
+# 4.1 asks, and of an anchor of its own (RFC-034 section 4.1).
+ALEMBIC_INI = layout.backend_directory / "alembic.ini"
+ALEMBIC_SCRIPTS = layout.backend_directory / "alembic"
 
 MIGRATION_LOCK_KEY = 0x5356_3033
 """`pg_advisory_xact_lock` key ("SV03"): two callers migrating at once wait."""
 
-ENVIRONMENT_VARIABLES = {
-    "DATABASE_HOST": "host",
-    "DATABASE_PORT": "port",
-    "DATABASE_USER": "user",
-    "DATABASE_PASSWORD": "password",
-    "DATABASE_NAME": "database",
-}
-"""The bridge until RFC-034 (section 11), named in one place.
-
-A test checks that every name is a field of `Settings`. A misspelt one would
-make `Settings` fall back to the `.env`, which points at Docker, and the
-suite would pass against the wrong database printing the same `passed`
-(RFC-033a section 4.2).
-"""
-
 LIBPQ_OVERRIDES = {"options": "", "sslmode": "disable", "gssencmode": "disable"}
 """Explicit, so that `PGOPTIONS`, `PGSSLMODE` or `PGGSSENCMODE` in the
-caller's environment cannot change the adapter's own connections. libpq falls
-back to the environment only for a parameter that was not given at all."""
+caller's environment cannot change a connection to the cluster. libpq falls
+back to the environment only for a parameter that was not given at all.
+
+One constant for the adapter's own connections and for the project's engine
+(RFC-034 section 7.5): a parameter added here protects both."""
+
+LIBPQ_VARIABLE_PREFIX = "PG"
 
 CONNECT_TIMEOUT_SECONDS = 10
+
+
+def discard_libpq_environment() -> tuple[str, ...]:
+    """Take every `PG*` variable out of this process's environment.
+
+    `LIBPQ_OVERRIDES` answers a variable by giving libpq the parameter it
+    stands for, and some variables have no parameter to give. `PGTZ`,
+    `PGDATESTYLE` and `PGGEQO` are sent to the server as settings of the
+    session, and an invalid one makes the server refuse the connection;
+    `PGSERVICE` names an entry of a service file, and a name that is not
+    there is an error before any connection is tried. Measured, with every
+    variable libpq reads (RFC-034 section 16).
+
+    It is the rule `PostgresRuntime.child_environment` already applies to the
+    server's own processes, here applied to the process that connects. To the
+    whole process, and not around one connection: libpq reads the variables
+    while it connects, and putting them back afterwards would race with every
+    other thread that is connecting at the same moment. Called before every
+    connection to the cluster -- the adapter's and the engine's -- and never
+    for the `external` source, whose `PG*` variables stay the developer's.
+
+    Returns the names it removed: nothing, after the first call. They are
+    logged by name, never by value -- `PGPASSWORD` is one of them.
+    """
+    removed = tuple(
+        sorted(
+            name
+            for name in os.environ
+            if name.upper().startswith(LIBPQ_VARIABLE_PREFIX)
+        )
+    )
+    for name in removed:
+        os.environ.pop(name, None)
+    if removed:
+        logger.warning(
+            "Removed %s from this process's environment: libpq would have "
+            "applied them to the connection to the embedded cluster",
+            ", ".join(removed),
+        )
+    return removed
 
 
 @dataclass(frozen=True)
@@ -87,13 +124,6 @@ class ClusterConnection:
     host: str = LOOPBACK
     user: str = SUPERUSER
     database: str = DATABASE
-
-    def environment(self) -> dict[str, str]:
-        """`DATABASE_*` for a child process: above the `.env` (RFC-004)."""
-        return {
-            name: str(getattr(self, attribute))
-            for name, attribute in ENVIRONMENT_VARIABLES.items()
-        }
 
     def url(self, database: str | None = None) -> URL:
         return URL.create(
@@ -173,6 +203,7 @@ def verify_login(connection: ClusterConnection) -> None:
     that says it cannot take connections *yet* is the one case worth
     retrying. Any other failure is the server not answering.
     """
+    discard_libpq_environment()
     try:
         with psycopg.connect(connection.conninfo("postgres")):
             return
@@ -195,6 +226,7 @@ def verify_login(connection: ClusterConnection) -> None:
 
 
 def _engine(connection: ClusterConnection, database: str | None = None) -> Engine:
+    discard_libpq_environment()
     return create_engine(
         connection.url(database),
         poolclass=NullPool,

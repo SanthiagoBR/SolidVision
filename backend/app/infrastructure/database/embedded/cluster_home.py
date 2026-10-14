@@ -263,11 +263,10 @@ class ClusterHome:
     def write_new_password(self, files: ClusterFiles) -> str:
         """Generate the cluster's password and write it before `initdb` runs.
 
-        `token_urlsafe` matters for its alphabet (`A-Z a-z 0-9 _ -`):
-        `Settings.database_url` interpolates the password into the URL
-        without escaping anything, and an `@`, `:` or `/` would break the
-        connection in a way that is hard to diagnose. Written to a temporary
-        name and renamed, so a reader never sees half a password.
+        `token_urlsafe` matters for its alphabet (`A-Z a-z 0-9 _ -`): nothing
+        in it needs escaping or quoting, in a URL or in a libpq connection
+        string, wherever the password is put. Written to a temporary name and
+        renamed, so a reader never sees half a password.
         """
         password = secrets.token_urlsafe(24)
         files.password_tmp.write_text(password + "\n", encoding="ascii")

@@ -10,14 +10,12 @@ pipeline -- `FilesystemImageProvider` -> `IndexingWorker` ->
 `IndexOrUpdateImagesUseCase` -> `PostgresImageRepository` -- against it,
 using `FakeEmbeddingModel` (no AI library is loaded).
 
-The default target is deliberately NOT `settings.indexing_root_path`, even
-though that is the directory the production worker CLI
-(`python -m app.infrastructure.workers.indexing_worker`) scans.
-Defaulting there would silently mix 40 demo photos into a user's real
-photo collection the first time they configure `INDEXING_ROOT_PATH` and
-run this script from habit. Anyone who wants the running app to actually
-serve the demo data must point `INDEXING_ROOT_PATH` at `--target`
-themselves -- a deliberate, visible `.env` change, not a script default.
+The default target is a directory of this script's own, and never a real
+photo collection: materializing there would silently mix 40 demo photos
+into a user's photos. No setting names a collection to borrow, either --
+`INDEXING_ROOT_PATH` was removed by RFC-034, because nothing read it: the
+worker CLI (`python -m app.infrastructure.workers.indexing_worker`) requires
+`--root`, and jobs index by device and scopes (RFC-029).
 
 Unlike the test suite, which uses a SAVEPOINT-isolated session rolled back
 on teardown (see `backend/tests/conftest.py`), this commits for real: it
@@ -116,8 +114,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SEED_TARGET,
         help=(
             "Directory to materialize the demo corpus into before indexing "
-            "(default: %(default)s -- deliberately separate from "
-            "indexing_root_path, see module docstring)"
+            "(default: %(default)s -- deliberately not a real photo "
+            "collection, see module docstring)"
         ),
     )
     return parser

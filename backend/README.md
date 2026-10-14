@@ -48,12 +48,122 @@ mypy backend
 pytest backend/tests
 ```
 
+## Configuration and user directories (RFC-034)
+
+### Two modes, read from the disk
+The backend is in `development` mode when `pyproject.toml` is at the root of
+the tree the code is running from, and in `installed` mode otherwise. Nothing
+sets the mode: no variable, no file. `GET /health` reports it, and every
+process writes it in the first lines of its log, with the file it read and the
+directories it resolved.
+
+The tree is the same in both modes:
+```text
+<root>\
+    backend\           app\, alembic\, alembic.ini
+    runtime\postgres\  the embedded PostgreSQL runtime
+    pyproject.toml     only in a checkout
+    .env               only in a checkout
+```
+
+### Where the settings come from
+Strongest first:
+
+| | development | installed |
+|---|---|---|
+| 1 | constructor arguments (tests) | constructor arguments (tests) |
+| 2 | the process environment | — |
+| 3 | `<repository>\.env` | `%LOCALAPPDATA%\SolidVision\solidvision.env` |
+| 4 | defaults | defaults |
+
+Each mode reads one file and never the other's. Installed, the process
+environment is not a source: a `DEBUG=*` left there by another program changes
+nothing. The connection to the embedded cluster is in neither column: the
+engine reads the port and the password from the cluster at every new
+connection. Nor do libpq's own variables reach it: before connecting to the
+cluster, a process removes every `PG*` variable from its environment, because
+`PGTZ`, `PGSERVICE` and a dozen others would change or refuse the connection.
+With the `external` source they stay yours.
+
+Both files are dotenv, UTF-8 with or without a BOM, with the keys of
+`.env.example`. `solidvision.env` is optional and the app never creates it.
+In Notepad, set **Save as type** to *All files* before saving it: with the
+default type, Notepad saves `solidvision.env.txt`, which the app does not read
+(it says so in the log).
+- A key that is not a setting, a retired key (`ENVIRONMENT`,
+  `INDEXING_ROOT_PATH`), or a `DATABASE_*` key in `solidvision.env` is ignored
+  and named in a warning in the log.
+- A value that does not validate stops the process, with one line on stderr
+  that names the file and the key, and no traceback.
+- Write paths without quotes, spaces included. Double quotes turn the `\f`,
+  `\n`, `\r` and `\t` of a Windows path into control characters, and the path
+  is refused. So are `%NAME%` (write `${NAME}`), `D:thumbs`, `\thumbs` and an
+  empty value. A relative path is relative to the folder of the file it is
+  written in.
+
+### Where the user's data is
+| Mode | Data directory |
+|---|---|
+| installed | `%LOCALAPPDATA%\SolidVision` |
+| development | `%LOCALAPPDATA%\SolidVision-dev` |
+
+```text
+%LOCALAPPDATA%\SolidVision\
+    solidvision.env    optional; never created by the app
+    logs\              one file per program: uvicorn.log, job_runner.log, ...
+    thumbnails\
+    postgres\          the embedded cluster, its password and its logs
+```
+`THUMBNAIL_DIRECTORY`, `LOG_DIRECTORY` and `EMBEDDED_POSTGRES_DIRECTORY` move
+each of the three. The data directory itself is not configurable.
+
+Each program writes its own log file, named after the module given to `-m`
+(`uvicorn.log`, `job_runner.log`, `embedded.log`, `pytest.log`), because two
+processes rotating one file lose records on Windows. `LOG_FILENAME` gives every
+process one fixed name instead; two processes that share a file do not rotate
+it while both are running.
+
+### If you already had a checkout
+The development defaults moved from `SolidVision` to `SolidVision-dev`. The
+code moves and deletes nothing.
+- **Thumbnails** stay in `%LOCALAPPDATA%\SolidVision\thumbnails`. Move the
+  folder to `SolidVision-dev\thumbnails`, or run the thumbnail backfill.
+- **A cluster** the checkout created in `%LOCALAPPDATA%\SolidVision\postgres`
+  is where an installed app will look for its own. Stop it and move it to
+  `SolidVision-dev\postgres`, or delete it.
+- **The log** goes to `SolidVision-dev\logs` unless the `.env` has
+  `LOG_DIRECTORY`. `LOG_DIRECTORY=logs` still means `<repository>\logs`.
+
+### Development without Docker
+One line in the `.env`:
+```
+DATABASE_SOURCE=embedded
+```
+The API, the job runner and the CLI then use the embedded cluster of
+`SolidVision-dev`, which has to be up (`... embedded start`, below). With
+`external`, the default in a checkout, nothing changes: `DATABASE_*` and the
+container.
+
+### Running the code as an installed app
+`scripts/stage_installation.py` copies the installed tree to a directory
+outside the repository, without `pyproject.toml`, `.env` and the tests:
+```powershell
+python scripts/stage_installation.py C:\stage\SolidVision --read-only
+$env:PYTHONPATH = "C:\stage\SolidVision\backend"
+$env:LOCALAPPDATA = "C:\stage\profile"      # leave the real profile alone
+python -m app.infrastructure.database.embedded start
+python -m uvicorn app.presentation.api:app
+python scripts/stage_installation.py C:\stage\SolidVision --remove
+```
+`--read-only` locks the tree as `C:\Program Files` is locked to an ordinary
+process. It is not the installer: the interpreter is the virtualenv's.
+
 ## Embedded PostgreSQL (RFC-033)
 
-The development database is still the one in `docker-compose.yml`, and a plain
-`pytest` still goes to it through the `.env`. The embedded cluster is the same
-PostgreSQL 16.15 and pgvector 0.8.6 without Docker, as a child process, and is
-optional until the launcher of RFC-036. Windows only.
+The default development database is still the one in `docker-compose.yml`, and
+a plain `pytest` still goes to it through the `.env`. The embedded cluster is
+the same PostgreSQL 16.15 and pgvector 0.8.6 without Docker, as a child
+process. Windows only.
 
 ### Materialize the runtime, once per checkout
 ```bash
@@ -78,23 +188,25 @@ The first `start` creates the cluster, which takes tens of seconds on a hard
 disk, creates the `solidvision` database and applies the migrations. Later
 starts take about a second.
 
-`run -- <command>` starts the cluster, runs the command with `DATABASE_HOST`,
-`DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD` and `DATABASE_NAME` set
-for it, and returns the command's exit code. It leaves the cluster as it found
-it: a cluster it started is stopped at the end, and one that was already up is
-left up. The port is chosen at start and the password at creation, so nothing
-else knows them: reach the cluster through `run`, not through the `.env`.
+`run -- <command>` starts the cluster, runs the command with
+`DATABASE_SOURCE=embedded`, `EMBEDDED_POSTGRES_DIRECTORY` and
+`EMBEDDED_POSTGRES_RUNTIME_DIRECTORY` set for it, and returns the command's
+exit code. It leaves the cluster as it found it: a cluster it started is
+stopped at the end, and one that was already up is left up. Neither the port
+nor the password is exported. The port is chosen at start and can change at
+the next one, so the command's engine reads both from the cluster whenever it
+opens a connection.
 
 ### Where it lives
 | Setting | Default | What it is |
 |---|---|---|
-| `EMBEDDED_POSTGRES_RUNTIME_DIRECTORY` | `runtime/postgres` under the repository | The binaries. Never taken from `PATH`. |
-| `EMBEDDED_POSTGRES_DIRECTORY` | `%LOCALAPPDATA%\SolidVision\postgres` | The cluster, its password and its logs, per user. |
+| `EMBEDDED_POSTGRES_RUNTIME_DIRECTORY` | `runtime\postgres` under the root | The binaries. Never taken from `PATH`. |
+| `EMBEDDED_POSTGRES_DIRECTORY` | `postgres` under the data directory | The cluster, its password and its logs, per user. |
 
 The cluster is in `postgres\16\data`; the server's log is in `data\log`, one
 file per weekday, and `postgres\16\startup.log` holds what the server says
-before its logging starts. Set `EMBEDDED_POSTGRES_DIRECTORY` to keep a
-checkout's cluster apart from an installed app's.
+before its logging starts. A checkout's cluster and an installed app's are
+apart by default, because the two data directories are.
 
 ### Its tests
 ```bash

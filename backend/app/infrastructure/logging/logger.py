@@ -3,24 +3,19 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any
 
-from app.infrastructure.config.settings import settings
+from app.infrastructure.config.settings import configuration_report, settings
 
 from .handlers import build_console_handler, build_rotating_file_handler
+from .program import program_name
 
 _APP_LOGGER_NAME = "app"
 
 
-def _resolve_log_directory() -> Path:
-    """Resolve the log directory to an absolute path using the project root."""
-    configured_directory = Path(settings.log_directory)
-    if configured_directory.is_absolute():
-        return configured_directory
-
-    project_root = Path(__file__).resolve().parents[4]
-    return project_root / configured_directory
+def _log_filename() -> str:
+    """`LOG_FILENAME` when set; otherwise one file per program (RFC-034 8.2)."""
+    return settings.log_filename or f"{program_name()}.log"
 
 
 def _configure_root_logger() -> logging.Logger:
@@ -33,13 +28,24 @@ def _configure_root_logger() -> logging.Logger:
     root_logger.propagate = False
 
     root_logger.addHandler(build_console_handler())
+    # Absolute already: `Settings` anchors every path (RFC-034 section 6.3).
     root_logger.addHandler(
-        build_rotating_file_handler(
-            _resolve_log_directory(),
-            settings.log_filename,
-        )
+        build_rotating_file_handler(settings.log_directory, _log_filename())
     )
+    _write_configuration_report(root_logger)
     return root_logger
+
+
+def _write_configuration_report(root_logger: logging.Logger) -> None:
+    """Say where this process's configuration came from (RFC-034 section 5.6).
+
+    Written here because `settings` cannot log: this module imports it. The
+    warnings name every key of the file that did not do what it seems to.
+    """
+    for line in configuration_report.lines():
+        root_logger.info(line)
+    for warning in configuration_report.warnings:
+        root_logger.warning(warning)
 
 
 def get_logger(name: str) -> logging.Logger:

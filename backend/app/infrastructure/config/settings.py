@@ -1,31 +1,248 @@
-"""Application configuration settings loaded from environment variables."""
+"""Application configuration: the fields, and where each mode reads them from.
+
+Two modes, read from the disk by `layout.py` and never declared (RFC-034
+section 4.2), and one precedence for each (section 5.1), strongest first:
+
+    development                         installed
+    1  constructor arguments (tests)    constructor arguments (tests)
+    2  the process environment          --
+    3  <repository>\\.env                %LOCALAPPDATA%\\SolidVision\\solidvision.env
+    4  defaults                         defaults
+
+Each mode reads one file and never the other's. Installed, the process
+environment is not a source: there it is whatever the other programs on the
+machine left behind, and a `DEBUG=*` meant for one of them would otherwise
+stop this one from importing (section 2.3).
+
+The connection to the embedded cluster is in neither column. The engine reads
+it from the cluster at every new connection, and it is never a field here
+(section 7).
+"""
 
 from __future__ import annotations
 
 import os
+import re
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from enum import StrEnum
+from functools import cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, ClassVar, NamedTuple, Self
 
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from dotenv import dotenv_values
+from pydantic import Field, ValidationError, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
-from .constants import PROJECT_ENCODING, SUPPORTED_IMAGE_EXTENSIONS
+from .constants import SUPPORTED_IMAGE_EXTENSIONS
+from .layout import Environment, Layout, layout
+
+CONFIG_FILE_ENCODING = "utf-8-sig"
+"""UTF-8, with or without a BOM (RFC-034 section 5.3).
+
+Notepad's "UTF-8 with BOM" is the silent case: read as plain `utf-8`, the BOM
+becomes part of the first key, and the first line of the file is dropped
+without an error. Measured in section 2.4.
+"""
+
+PATH_DEFAULTS: dict[str, Callable[[Layout], Path]] = {
+    "thumbnail_directory": lambda where: where.thumbnail_directory,
+    "log_directory": lambda where: where.log_directory,
+    "embedded_postgres_directory": lambda where: where.postgres_directory,
+    "embedded_postgres_runtime_directory": lambda where: where.postgres_runtime,
+}
+"""Every path setting, and where its default comes from: the layout.
+
+The four are `Path`, and each leaves `Settings` absolute (section 6.3). A
+test checks that no other field is a path, and that none of these is ever
+relative.
+"""
+
+
+def _layout_default(name: str) -> Callable[[], Path]:
+    """The default of a path setting, for the layout of the running code."""
+    return lambda: PATH_DEFAULTS[name](layout)
+
+
+RETIRED_KEYS = {
+    "ENVIRONMENT": "the mode is read from the installation itself -- development "
+    "when pyproject.toml is beside the code -- and nothing sets it (RFC-034 "
+    "section 4.2)",
+    "INDEXING_ROOT_PATH": "indexing is per device and scopes (RFC-029), and "
+    "nothing reads a root path",
+}
+"""Keys that used to be settings, with what replaced each (section 5.4)."""
+
+DATABASE_KEYS = (
+    "database_source",
+    "database_host",
+    "database_port",
+    "database_name",
+    "database_user",
+    "database_password",
+)
+"""Without effect in the user's file: installed, the connection is always the
+embedded cluster's (section 7.1)."""
+
+
+class DatabaseSource(StrEnum):
+    """Where the database connection comes from (RFC-034 section 7.1)."""
+
+    EXTERNAL = "external"
+    EMBEDDED = "embedded"
+
+
+class ConfigurationError(Exception):
+    """The configuration cannot be used, and the process must not start with it.
+
+    One line: the file, the key and the problem (RFC-034 section 5.5). Starting
+    with the default in place of an invalid value would be worse -- whoever
+    pointed `THUMBNAIL_DIRECTORY` at another disk and mistyped the path would
+    get the thumbnails exactly where they said they did not want them.
+    """
+
+
+_CONTROL_CHARACTER = re.compile(r"[\x00-\x1f\x7f]")
+_PERCENT_VARIABLE = re.compile(r"%([A-Za-z_][A-Za-z0-9_()]*)%")
+
+
+def absolute_path(value: str, base: Path) -> Path:
+    """A path setting as it leaves `Settings`: absolute (RFC-034 section 6.3).
+
+    The five rules, in order. None of them consults the disk.
+    """
+    if not value.strip():
+        # Before the five: `THUMBNAIL_DIRECTORY=` is the path `.`, which rule
+        # 4 would anchor on the folder of the file itself -- installed, the
+        # thumbnails would land loose in the data directory. Nobody means
+        # that, and guessing the default instead would be the silence of
+        # section 5.5.
+        raise ValueError(
+            "the value is empty. Delete the line to use the default, or write "
+            "the path after the equals sign."
+        )
+    if _CONTROL_CHARACTER.search(value):
+        # Rule 1. No Windows path has one. It is the trace of double quotes:
+        # the dotenv format reads `\f`, `\r`, `\t` and `\n` inside them, and
+        # `"D:\fotos\raw\thumbs"` arrives as six fragments (section 2.4).
+        raise ValueError(
+            f"{ascii(value)} has a control character in it. Double quotes turn "
+            "the \\f, \\n, \\r and \\t of a Windows path into one: write the "
+            "path without quotes, spaces included."
+        )
+    variable = _PERCENT_VARIABLE.search(value)
+    if variable:
+        # Rule 2. The format does not expand this form, and the result would
+        # be a folder called `%LOCALAPPDATA%`.
+        name = variable.group(1)
+        raise ValueError(
+            f"{value!r} uses %{name}%, which is not expanded here. "
+            f"Write ${{{name}}} instead."
+        )
+    path = Path(value)
+    if not path.is_absolute():
+        # Rule 3: the two halfway forms of Windows.
+        if path.drive:
+            raise ValueError(
+                f"{value!r} names a drive and no root, so it is relative to "
+                f"whatever that drive's current directory is. Write "
+                f"{path.drive}\\... instead."
+            )
+        if path.root:
+            raise ValueError(
+                f"{value!r} starts with a slash and names no drive, so it "
+                "inherits the drive of wherever it is read from. Name the drive."
+            )
+        # Rule 4: relative to the folder of the configuration file.
+        path = base / path
+    # Rule 5.
+    return Path(os.path.normpath(path))
+
+
+class _LayoutDefaults(PydanticBaseSettingsSource):
+    """The weakest source: the path defaults of the layout being loaded.
+
+    The defaults written on the fields are the running code's layout's. This
+    is what gives any other layout its own.
+    """
+
+    def __init__(self, settings_cls: type[BaseSettings], where: Layout) -> None:
+        super().__init__(settings_cls)
+        self._where = where
+
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return {name: default(self._where) for name, default in PATH_DEFAULTS.items()}
+
+
+class _Without(PydanticBaseSettingsSource):
+    """Another source, minus the keys that have no effect in this mode."""
+
+    def __init__(
+        self,
+        settings_cls: type[BaseSettings],
+        source: PydanticBaseSettingsSource,
+        dropped: Sequence[str],
+    ) -> None:
+        super().__init__(settings_cls)
+        self._source = source
+        self._dropped = frozenset(dropped)
+
+    def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return {
+            name: value
+            for name, value in self._source().items()
+            if name not in self._dropped
+        }
 
 
 class Settings(BaseSettings):
-    """Strongly typed application settings for SolidVision."""
+    """Strongly typed application settings for SolidVision.
+
+    `Settings()` reads the sources of the layout the running code was found
+    in. A `Settings` for any other layout comes from `load_settings`.
+    """
 
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[4] / ".env",
-        env_file_encoding=PROJECT_ENCODING,
+        env_file=layout.config_file,
+        env_file_encoding=CONFIG_FILE_ENCODING,
         case_sensitive=False,
+        # A key the class does not know is dropped here and named in the log
+        # by `load_settings`. Refusing to start over it would let an optional
+        # file take the app down for a typing mistake (RFC-034 section 5.4).
         extra="ignore",
     )
 
+    _layout: ClassVar[Layout] = layout
+
     project_name: str = Field(default="SolidVision", description="Application name")
     project_version: str = Field(default="0.1.0", description="Application version")
-    environment: str = Field(default="development", description="Runtime environment")
     debug: bool = Field(default=False, description="Enable debug mode")
+
+    database_source: DatabaseSource = Field(
+        default=DatabaseSource.EXTERNAL,
+        description="Where the database connection comes from",
+    )
+    """`external` or `embedded` (RFC-034 section 7.1).
+
+    `external` is the five `DATABASE_*` fields below: the `.env` and the
+    Docker container. `embedded` is the user's cluster, whose port and
+    password the engine asks the adapter for at every new connection; none of
+    the five fields is read then, not even as a fallback (section 7.4).
+
+    Installed, this is always `embedded`, whatever a file says. In a checkout,
+    `DATABASE_SOURCE=embedded` in the `.env` is development without Docker.
+    """
 
     database_host: str = Field(default="localhost", description="Database host")
     database_port: int = Field(
@@ -36,9 +253,13 @@ class Settings(BaseSettings):
     )
     database_name: str = Field(default="solidvision", description="Database name")
     database_user: str = Field(default="solidvision", description="Database user")
+    # Out of `repr`, and so out of every log line and traceback that prints
+    # the settings (RFC-034 section 7.7). The embedded cluster's password is
+    # not here at all.
     database_password: str = Field(
         default="solidvision",
         description="Database password",
+        repr=False,
     )
 
     embedding_model: str = Field(
@@ -198,10 +419,11 @@ class Settings(BaseSettings):
         default=SUPPORTED_IMAGE_EXTENSIONS,
         description="Supported image extensions",
     )
-    indexing_root_path: Path = Field(
-        default=Path("data/images"),
-        description="Root directory scanned by the indexing worker",
-    )
+    # `indexing_root_path` used to sit here and was removed by RFC-034, on
+    # the precedent `minimum_similarity` set below: it had no reader. The
+    # indexing worker requires `--root`, and jobs index by device and scopes
+    # (RFC-029). Left in place, its relative default would also have been the
+    # one path setting that moved with the working directory.
 
     # Injected into `SearchImagesUseCase` by the composition root as its
     # default page size; the use case itself never reads settings.
@@ -303,19 +525,25 @@ class Settings(BaseSettings):
         "manager on this machine (loopback callers only)",
     )
 
+    # The default of each of the four path settings comes from the layout,
+    # through `PATH_DEFAULTS`, because it depends on the mode. What is written
+    # on the field is the default for the layout of the running code; for any
+    # other layout, `load_settings` supplies that layout's. Each path is
+    # absolute by the time it leaves this class, whoever wrote it and however
+    # (RFC-034 section 6.3).
     thumbnail_directory: Path = Field(
-        default_factory=lambda: _default_thumbnail_directory(),
+        default_factory=_layout_default("thumbnail_directory"),
         description="Directory the application keeps thumbnails in",
     )
     """The thumbnail cache (RFC-030 section 7.1). Never inside a collection.
 
-    The default is the per-user application data directory --
-    `%LOCALAPPDATA%/SolidVision/thumbnails` on Windows -- rather than a
-    path relative to the working directory like `log_directory`. A relative
-    default sits beside `indexing_root_path`'s `data/images`, and would be
-    inside the collection the moment someone indexed `data/`. Wherever it
-    is, scans skip it (`FilesystemImageProvider(excluded_directories=...)`),
-    so indexing a whole system disk does not index the thumbnails.
+    The default is `thumbnails` under the user's data directory --
+    `%LOCALAPPDATA%\\SolidVision`, or `SolidVision-dev` in a checkout, so that
+    a developer's thumbnails and an installed app's never share a folder:
+    they are named by image id, and an id only means something inside one
+    database (RFC-034 section 2.5). Wherever it is, scans skip it
+    (`FilesystemImageProvider(excluded_directories=...)`), so indexing a
+    whole system disk does not index the thumbnails.
     """
 
     thumbnail_max_edge: int = Field(
@@ -334,53 +562,101 @@ class Settings(BaseSettings):
     """
 
     embedded_postgres_runtime_directory: Path = Field(
-        default_factory=lambda: _default_embedded_postgres_runtime_directory(),
+        default_factory=_layout_default("embedded_postgres_runtime_directory"),
         description="Directory holding the vendored PostgreSQL runtime",
     )
     """Where the embedded binaries are (RFC-033 section 5.2). Never the `PATH`.
 
-    The default is `runtime/postgres` under the code root -- the same anchor
-    the `.env` and the logs already use. In development that is the
-    repository root, and `scripts/vendor_postgres.py` materializes the
-    runtime there; installed, it is wherever the installer puts the code,
-    with the runtime beside it. How that root is known in a frozen app is
-    RFC-034's; here the path is only guaranteed configurable and absolute.
+    The default is `runtime\\postgres` under the layout's root. In a checkout
+    that is the repository root, and `scripts/vendor_postgres.py` materializes
+    the runtime there; installed, it is wherever the installer puts the code,
+    with the runtime beside it.
 
     `EMBEDDED_` keeps both names out of the `POSTGRES_*` namespace, which the
     Docker image reads from the same `.env`.
     """
 
     embedded_postgres_directory: Path = Field(
-        default_factory=lambda: _default_embedded_postgres_directory(),
+        default_factory=_layout_default("embedded_postgres_directory"),
         description="Per-user directory the embedded PostgreSQL cluster lives in",
     )
-    """The user's cluster (RFC-033 section 6): `%LOCALAPPDATA%/SolidVision/postgres`.
+    """The user's cluster (RFC-033 section 6): `postgres` under the data directory.
 
     `LOCALAPPDATA` for the thumbnails' reason and one more: OneDrive does not
     sync it, and a sync client that locks or rewrites files inside a live
     cluster corrupts the cluster. The adapter adds the major version below
-    this (`postgres/16/data`), so a future `17/` fits beside it. The setting
-    exists for tests, for diagnosis, and for a developer whose checkout must
-    not share a cluster with an installed app.
+    this (`postgres\\16\\data`), so a future `17\\` fits beside it. A checkout's
+    cluster and an installed app's are apart by default since RFC-034; the
+    setting is for tests, for diagnosis, and for a system disk too small to
+    hold the cluster.
     """
 
     log_level: str = Field(default="INFO", description="Logging level")
-    log_directory: str = Field(default="logs", description="Directory for log files")
-    log_filename: str = Field(default="application.log", description="Log filename")
+    log_directory: Path = Field(
+        default_factory=_layout_default("log_directory"),
+        description="Directory for log files",
+    )
+    """`logs` under the data directory (RFC-034 section 8.1).
+
+    The server's own log stays where RFC-033 put it, in `postgres\\16\\data\\log`:
+    two places, one per owner.
+    """
+
+    log_filename: str | None = Field(
+        default=None,
+        description="Log filename; unset, the name of the program that is running",
+    )
+    """Unset, each program writes its own file (RFC-034 section 8.2).
+
+    `uvicorn.log`, `job_runner.log`, `pytest.log`: two programs appending to
+    one rotating file lose the lines of whichever writes most (section 2.6).
+    Setting it gives every process the one fixed name, as before.
+    """
 
     @property
-    def database_url(self) -> str:
-        """Build the SQLAlchemy-style database connection URL."""
-        return (
-            f"postgresql+psycopg://{self.database_user}:{self.database_password}"
-            f"@{self.database_host}:{self.database_port}/{self.database_name}"
-        )
+    def environment(self) -> Environment:
+        """The mode of the layout these settings were loaded for.
 
-    @field_validator("environment")
+        No longer a field: a mode someone writes down has a default that lies
+        when nobody writes it (RFC-034 section 4.2). `/health` still reports it.
+        """
+        return type(self)._layout.environment
+
     @classmethod
-    def validate_environment(cls, value: str) -> str:
-        """Normalize the environment name."""
-        return value.strip().lower()
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """The precedence of RFC-034 section 5.1, decided by the mode."""
+        defaults = _LayoutDefaults(settings_cls, cls._layout)
+        if cls._layout.environment is Environment.INSTALLED:
+            user_file = _Without(settings_cls, dotenv_settings, DATABASE_KEYS)
+            return (init_settings, user_file, defaults)
+        return (init_settings, env_settings, dotenv_settings, defaults)
+
+    @field_validator(*PATH_DEFAULTS, mode="before")
+    @classmethod
+    def anchor_path(cls, value: object) -> object:
+        """Make every path absolute here, once, instead of in each consumer."""
+        if isinstance(value, str | Path):
+            return absolute_path(str(value), cls._layout.config_base)
+        return value
+
+    @field_validator("database_source", mode="before")
+    @classmethod
+    def normalize_database_source(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def installed_is_always_embedded(self) -> Self:
+        """Installed, there is no external database to point at (section 7.1)."""
+        if type(self)._layout.environment is Environment.INSTALLED:
+            self.database_source = DatabaseSource.EMBEDDED
+        return self
 
     @field_validator("supported_extensions", mode="before")
     @classmethod
@@ -402,36 +678,165 @@ class Settings(BaseSettings):
         return tuple(ext.lower() for ext in value)
 
 
-def _default_thumbnail_directory() -> Path:
-    """The per-user application data directory, which no scan should be pointed at.
+@dataclass(frozen=True)
+class ConfigurationReport:
+    """Where one process's configuration came from (RFC-034 section 5.6).
 
-    `LOCALAPPDATA` rather than `APPDATA`: thumbnails are a cache that can be
-    rebuilt from the photos, and Windows roams `APPDATA` between machines
-    in a domain -- copying a hundred thousand JPEGs at every sign-in. The
-    fallback for other platforms is the XDG cache location, for a process
-    that will not get far there anyway (the volume adapter is Windows-only).
+    What makes the precedence checkable on a user's machine: the log says
+    which file was read. `settings` cannot log it -- the logger imports this
+    module -- so it is returned beside the `Settings`, and the logger writes
+    it the first time it is configured. The password is not in it.
     """
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "SolidVision" / "thumbnails"
-    return Path.home() / ".cache" / "solidvision" / "thumbnails"
+
+    environment: Environment
+    config_file: Path
+    config_file_exists: bool
+    data_directory: Path
+    directories: tuple[tuple[str, Path], ...]
+    database_source: DatabaseSource
+    warnings: tuple[str, ...]
+    """Keys that do not do what they seem to (section 5.4), by name."""
+
+    def lines(self) -> tuple[str, ...]:
+        found = "read" if self.config_file_exists else "absent, defaults in use"
+        return (
+            f"Configuration: mode {self.environment.value}",
+            f"Configuration: file {self.config_file} ({found})",
+            f"Configuration: data directory {self.data_directory}",
+            *(f"Configuration: {name} {path}" for name, path in self.directories),
+            f"Configuration: database source {self.database_source.value}",
+        )
 
 
-def _default_embedded_postgres_runtime_directory() -> Path:
-    """`runtime/postgres` beside the code, anchored like the `.env` is."""
-    return Path(__file__).resolve().parents[4] / "runtime" / "postgres"
+class LoadedSettings(NamedTuple):
+    settings: Settings
+    report: ConfigurationReport
 
 
-def _default_embedded_postgres_directory() -> Path:
-    """Beside the thumbnails, absolute and per user, for the same reasons.
+def load_settings(where: Layout, **overrides: Any) -> LoadedSettings:
+    """The settings of one layout, and the report of where they came from.
 
-    The fallback keeps the default absolute on a platform where the adapter
-    refuses to be built anyway (RFC-033 section 4.1).
+    The sources are decided here, before any `Settings` is built, because
+    they depend on the mode (section 5.2). `overrides` are constructor
+    arguments, the strongest source in both modes; they are for tests.
     """
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    if local_app_data:
-        return Path(local_app_data) / "SolidVision" / "postgres"
-    return Path.home() / ".local" / "share" / "solidvision" / "postgres"
+    file_keys = _keys_of(where.config_file)
+    try:
+        loaded = _settings_class(where)(**overrides)
+    except ValidationError as error:
+        raise ConfigurationError(_explain(error, where, file_keys)) from None
+    return LoadedSettings(loaded, _report(loaded, where, file_keys))
 
 
-settings = Settings()
+@cache
+def _settings_class(where: Layout) -> type[Settings]:
+    """`Settings`, bound to a layout. One class per layout, so that two loads
+    of the same layout give instances that can be compared."""
+    if where == Settings._layout:
+        return Settings
+
+    class LayoutSettings(Settings):
+        model_config = SettingsConfigDict(env_file=where.config_file)
+
+        _layout: ClassVar[Layout] = where
+
+    return LayoutSettings
+
+
+def _keys_of(config_file: Path) -> tuple[str, ...]:
+    """The keys written in the file, as written. Empty when there is no file."""
+    if not config_file.is_file():
+        return ()
+    try:
+        return tuple(dotenv_values(config_file, encoding=CONFIG_FILE_ENCODING))
+    except UnicodeDecodeError:
+        raise ConfigurationError(
+            f"{config_file}: the file is not UTF-8 text. Save it again as UTF-8 "
+            "(Notepad: Save As, Encoding: UTF-8)."
+        ) from None
+
+
+def _explain(error: ValidationError, where: Layout, file_keys: Sequence[str]) -> str:
+    """One line: where each bad value was written, its key, and what is wrong.
+
+    The value itself is left out. It may be a password.
+    """
+    in_file = {key.lower() for key in file_keys}
+    in_environment = {name.lower() for name in os.environ}
+    problems = []
+    for detail in error.errors(
+        include_url=False, include_context=False, include_input=False
+    ):
+        name = str(detail["loc"][0]) if detail["loc"] else "settings"
+        if where.environment is Environment.DEVELOPMENT and name in in_environment:
+            origin = "environment variable"
+        elif name in in_file:
+            origin = str(where.config_file)
+        else:
+            origin = "constructor argument"
+        message = detail["msg"].removeprefix("Value error, ")
+        problems.append(f"{origin}: {name.upper()}: {message}")
+    return "; ".join(problems)
+
+
+def _report(
+    loaded: Settings, where: Layout, file_keys: Sequence[str]
+) -> ConfigurationReport:
+    return ConfigurationReport(
+        environment=where.environment,
+        config_file=where.config_file,
+        config_file_exists=where.config_file.is_file(),
+        data_directory=where.data_directory,
+        directories=tuple((name, getattr(loaded, name)) for name in PATH_DEFAULTS),
+        database_source=loaded.database_source,
+        warnings=_warnings(where, file_keys),
+    )
+
+
+def _warnings(where: Layout, file_keys: Sequence[str]) -> tuple[str, ...]:
+    """Section 5.4: the three kinds of key that fail in silence otherwise."""
+    file = where.config_file
+    installed = where.environment is Environment.INSTALLED
+    warnings = []
+    for key in file_keys:
+        if key.upper() in RETIRED_KEYS:
+            warnings.append(
+                f"{file}: {key} is retired and was ignored: "
+                f"{RETIRED_KEYS[key.upper()]}."
+            )
+        elif installed and key.lower() in DATABASE_KEYS:
+            warnings.append(
+                f"{file}: {key} has no effect here and was ignored: an installed "
+                "SolidVision always uses its own embedded database."
+            )
+        elif key.lower() not in Settings.model_fields:
+            warnings.append(
+                f"{file}: {key} is not a setting and was ignored. "
+                "Check the spelling against .env.example."
+            )
+    # Notepad saves a new file named `solidvision.env` as `solidvision.env.txt`
+    # and hides the extension, so the file the user sees is not the file that
+    # is read (section 5.3; a hypothesis until section 16 tests it).
+    mistaken = file.with_name(file.name + ".txt")
+    if installed and not file.is_file() and mistaken.is_file():
+        warnings.append(
+            f"{mistaken} exists and {file.name} does not: the configuration file "
+            f"was saved with a .txt extension and was not read. Rename it to "
+            f"{file.name}."
+        )
+    return tuple(warnings)
+
+
+def _load_or_exit() -> LoadedSettings:
+    """The process's own settings, or one line on stderr and a non-zero exit.
+
+    No traceback (section 5.5): whoever reads this is a user or the launcher
+    of RFC-036, and the line already names the file and the key.
+    """
+    try:
+        return load_settings(layout)
+    except ConfigurationError as error:
+        raise SystemExit(f"SolidVision cannot start: {error}") from None
+
+
+settings, configuration_report = _load_or_exit()

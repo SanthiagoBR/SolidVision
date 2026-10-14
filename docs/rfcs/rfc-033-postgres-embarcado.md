@@ -749,7 +749,7 @@ Registradas à vista do texto original, como o RFC-033a fez com as suas. Nenhuma
 
 Dito aqui para não parecer medido em outro lugar.
 
-- **Um cluster criado por um processo elevado e usado depois sem elevação** (§8.3, §18). Não foi exercitado. O que foi lido é que uma pasta criada pelo próprio processo elevado tem o grupo Administradores como dono. De quem são os arquivos que o `initdb` e o servidor criam debaixo dela, não.
+- **Um cluster criado por um processo elevado e usado depois sem elevação** (§8.3, §18). Não foi exercitado. O que foi lido é que uma pasta criada pelo próprio processo elevado tem o grupo Administradores como dono. De quem são os arquivos que o `initdb` e o servidor criam debaixo dela, não. *Exercitado depois, à mão, pelo [RFC-034 §16](rfc-034-configuracao-e-diretorios-do-usuario.md#16-validação), em 2026-10-14: um cluster criado por um `start` elevado subiu de um processo comum e serviu a API, o que confirma que os arquivos do `initdb` são utilizáveis sem elevação. De quem eles são continua não lido.*
 - **O logoff** (§9.4, §18).
 - **O Docker desligado**, ao pé da letra (§18).
 - **Um volume sem nomes 8.3** (§10). O ramo da recusa é coberto por um teste unitário, e não por um volume de verdade.

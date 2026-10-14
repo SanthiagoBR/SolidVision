@@ -80,7 +80,7 @@ def test_securing_restricts_the_root_not_the_version_directory(tmp_path: Path) -
 
 
 def test_the_password_is_one_line_in_a_url_safe_alphabet(tmp_path: Path) -> None:
-    """Section 7.2. `Settings.database_url` interpolates it without escaping."""
+    """Section 7.2. Nothing in it needs escaping, wherever it is put."""
     home, _ = make_home(tmp_path)
     files = home.files(16)
     home.ensure_directory(files)
