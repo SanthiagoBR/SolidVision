@@ -99,6 +99,10 @@ Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.2](rfc-03
 
 ## RFC-035 — Modelos offline 📋
 
+Proposto no [RFC-035](rfc-035-modelos-offline.md) 📋. Um piloto, antes do documento, mediu o que o carregamento de hoje faz na rede ([§2](rfc-035-modelos-offline.md#2-problema)). Cada carregamento com rede pergunta ao Hub pelo `main`, mesmo com tudo no cache: o CLIP espera 3,2 s por isso a cada subida. E o tradutor, cujo `main` só tem um `.bin`, dispara uma thread do `transformers` que já baixou 312 MB de um `safetensors` que o app nunca carrega.
+
+Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.5](rfc-035-modelos-offline.md#25-seis-coisas-que-o-roadmap-presumiu)). Carregar pelo diretório tira o sentido do `EMBEDDING_MODEL`, que sai do `Settings`: o modelo passa a ser parte da versão do código. O `HF_HUB_OFFLINE` vale nos dois modos, e é a segunda linha de proteção: a primeira é carregar pelo diretório, que o piloto mediu com zero requisições. A variável só tem efeito antes da primeira importação do `huggingface_hub`, e é o próprio processo que a põe no ambiente. O checksum é conferido antes de cada carregamento, porque o tradutor é um pickle. O "atual" passa a ser duas revisões fixadas num lockfile, e o "bit a bit" vale no mesmo ambiente: entre máquinas, o RFC mede o tamanho da diferença. A busca por imagem só existe na CLI. E o RFC acrescenta duas coisas que o roadmap não pedia: o aquecimento passa a ser ligado no modo instalado, e o `torchinductor` e o cache do Hugging Face vão para a raiz de dados.
+
 **Escopo**
 - Carregar o CLIP (laion ViT-B/32, [RFC-023](rfc-023-adaptador-de-embedding-clip.md)) e o tradutor PT→EN de um diretório local, e não pelo nome no Hugging Face Hub.
 - Ligar `HF_HUB_OFFLINE=1` no modo instalado, para que uma falha de rede nunca vire um download silencioso.
