@@ -1,27 +1,31 @@
-"""Heads, facts and the bridge to `Settings` (RFC-033 sections 7.4 and 11).
+"""Heads, facts and the connection (RFC-033 section 7.4).
 
-No database here. The comparison of heads is a function of three sets, the
-facts are checked against a row a double returns, and the environment
-variables are checked against the `Settings` class itself -- the test that
-closes, in code, the trap RFC-033a section 4.2 closed with a port check.
+No database here. The comparison of heads is a function of three sets, and
+the facts are checked against a row a double returns. The environment `run`
+gives its command is checked beside the state machine, since RFC-034 made it
+the cluster's and no longer the connection's.
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any
 
 import psycopg
 import pytest
 
-from app.infrastructure.config.settings import Settings
+from app.infrastructure.config.layout import layout
 from app.infrastructure.database.embedded.database_setup import (
-    ENVIRONMENT_VARIABLES,
+    ALEMBIC_INI,
+    ALEMBIC_SCRIPTS,
     LIBPQ_OVERRIDES,
     ClusterConnection,
     HeadComparison,
     check_facts,
     code_revisions,
     compare_heads,
+    discard_libpq_environment,
     verify_login,
 )
 from app.infrastructure.database.embedded.errors import (
@@ -79,26 +83,11 @@ def test_the_code_knows_its_own_head_and_its_history() -> None:
     assert "999b801e80f4" in known, "the migration that creates the extension"
 
 
-def test_every_environment_variable_is_a_settings_field() -> None:
-    """Section 11. A misspelt name would not fail: `Settings` would fall back
-    to the `.env`, the `.env` points at Docker, and the suite would pass
-    against the wrong database printing the same `passed`."""
-    for variable in ENVIRONMENT_VARIABLES:
-        assert variable.lower() in Settings.model_fields, variable
-
-
-def test_the_variables_carry_the_connection_into_settings(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    connection = ClusterConnection(port=51336, password=PASSWORD)
-    for name, value in connection.environment().items():
-        monkeypatch.setenv(name, value)
-
-    settings = Settings()
-
-    assert settings.database_url == (
-        f"postgresql+psycopg://solidvision:{PASSWORD}@127.0.0.1:51336/solidvision"
-    )
+def test_the_alembic_paths_come_from_the_layout() -> None:
+    """RFC-034 section 4.1: no anchor of this package's own."""
+    assert ALEMBIC_INI == layout.backend_directory / "alembic.ini"
+    assert ALEMBIC_SCRIPTS == layout.backend_directory / "alembic"
+    assert ALEMBIC_INI.is_file() and ALEMBIC_SCRIPTS.is_dir()
 
 
 def test_the_host_is_the_literal_not_a_name() -> None:
@@ -122,6 +111,57 @@ def test_the_adapters_own_connections_ignore_the_callers_pg_variables() -> None:
     assert LIBPQ_OVERRIDES["options"] == ""
     assert LIBPQ_OVERRIDES["sslmode"] == "disable"
     assert LIBPQ_OVERRIDES["gssencmode"] == "disable"
+
+
+@pytest.fixture(autouse=True)
+def libpq_variables_restored(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Whatever `PG*` variables this process had come back after each test:
+    every login takes them out for good (`discard_libpq_environment`)."""
+    for name in [name for name in os.environ if name.upper().startswith("PG")]:
+        monkeypatch.setenv(name, os.environ[name])
+
+
+def test_the_libpq_variables_leave_the_process_and_nothing_else_does(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """RFC-034 section 7.5: `PGTZ`, `PGDATESTYLE`, `PGGEQO` and `PGSERVICE`
+    have no parameter that answers them, so they cannot stay."""
+    monkeypatch.setenv("PGTZ", "Mars/Phobos")
+    monkeypatch.setenv("PGSERVICE", "no-such-service")
+    monkeypatch.setenv("PGPASSWORD", PASSWORD)
+    monkeypatch.setenv("SOLIDVISION_UNRELATED", "stays")
+    app_logger = logging.getLogger("app")
+    app_logger.addHandler(caplog.handler)
+    try:
+        removed = discard_libpq_environment()
+        again = discard_libpq_environment()
+    finally:
+        app_logger.removeHandler(caplog.handler)
+
+    assert {"PGTZ", "PGSERVICE", "PGPASSWORD"} <= set(removed)
+    assert not [name for name in os.environ if name.upper().startswith("PG")]
+    assert os.environ["SOLIDVISION_UNRELATED"] == "stays"
+    assert again == ()
+    assert "PGTZ" in caplog.text and "PGPASSWORD" in caplog.text
+    assert PASSWORD not in caplog.text, "named, never shown"
+
+
+def test_the_adapter_takes_them_out_before_it_logs_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    present: list[list[str]] = []
+
+    def connect(*arguments: Any, **parameters: Any) -> None:
+        present.append([name for name in os.environ if name.startswith("PG")])
+        raise psycopg.OperationalError("connection refused")
+
+    monkeypatch.setattr(psycopg, "connect", connect)
+    monkeypatch.setenv("PGTZ", "Mars/Phobos")
+
+    with pytest.raises(StartupFailedError):
+        verify_login(ClusterConnection(port=51336, password=PASSWORD))
+
+    assert present == [[]]
 
 
 def test_an_empty_override_is_still_given_to_libpq() -> None:

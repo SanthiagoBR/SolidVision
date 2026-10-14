@@ -1,4 +1,4 @@
-"""The embedded cluster from a terminal, until RFC-034 and RFC-036 (RFC-033 11).
+"""The embedded cluster from a terminal, until RFC-036 (RFC-033 section 11).
 
     python -m app.infrastructure.database.embedded start
     python -m app.infrastructure.database.embedded status
@@ -6,11 +6,16 @@
     python -m app.infrastructure.database.embedded stop
 
 `run -- <command>` starts the cluster, prepares the database, and runs the
-command with `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`,
-`DATABASE_PASSWORD` and `DATABASE_NAME` in its environment, which
-`pydantic-settings` puts above the `.env` (RFC-004). The command's exit code
-is `run`'s exit code. **`run` leaves the cluster as it found it**: if it
-started the cluster it stops it at the end, and if it adopted one it does not.
+command with `DATABASE_SOURCE=embedded`, `EMBEDDED_POSTGRES_DIRECTORY` and
+`EMBEDDED_POSTGRES_RUNTIME_DIRECTORY` in its environment, which
+`pydantic-settings` puts above a checkout's `.env` (RFC-004). Neither the
+port nor the password is exported: the command's engine reads both from the
+cluster at every new connection, as an installed app does (RFC-034 section
+7.6). Nor are the caller's `PG*` variables: the adapter takes them out of
+this process before it connects (section 7.5), and the command gets what is
+left. The command's exit code is `run`'s exit code. **`run` leaves the
+cluster as it found it**: if it started the cluster it stops it at the end,
+and if it adopted one it does not.
 
 This is the composition root of the adapter, and the only place in the
 package that reads `settings`. Everything it prints about itself goes to
@@ -129,7 +134,7 @@ def _run(cluster: EmbeddedPostgres, command: Sequence[str]) -> int:
     started = _start_and_prepare(cluster)
     try:
         environment = os.environ.copy()
-        environment.update(started.connection.environment())
+        environment.update(cluster.environment())
         return _run_command(command, environment)
     finally:
         if started.started_here:
@@ -149,7 +154,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("status", help="Say what is there. Never the password.")
     run_parser = subparsers.add_parser(
         "run",
-        help="Run a command with DATABASE_* pointing at the cluster, and leave "
+        help="Run a command with its settings pointing at the cluster, and leave "
         "the cluster as it was found.",
     )
     run_parser.add_argument("command", nargs=argparse.REMAINDER)

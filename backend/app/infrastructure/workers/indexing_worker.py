@@ -280,8 +280,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help=(
-            "Directory to scan. Required on purpose: there is no default, "
-            "not even settings.indexing_root_path, so that running this "
+            "Directory to scan. Required on purpose: there is no default "
+            "and no setting to take one from, so that running this "
             "command can never start indexing a real photo collection "
             "nobody asked it to touch (same reasoning as "
             "dataset_tools/seed_demo.py)."

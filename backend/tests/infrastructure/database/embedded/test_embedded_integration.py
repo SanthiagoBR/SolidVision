@@ -27,8 +27,12 @@ from typing import Any
 
 import psycopg
 import pytest
+import sqlalchemy
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import QueuePool
 
-from app.infrastructure.config.settings import settings
+from app.infrastructure.config.layout import Environment, Layout, layout_at
+from app.infrastructure.config.settings import Settings, load_settings, settings
 from app.infrastructure.database.embedded.cluster import (
     INCLUDE_LINE,
     ClusterStatus,
@@ -48,6 +52,7 @@ from app.infrastructure.database.embedded.database_setup import (
     code_revisions,
 )
 from app.infrastructure.database.embedded.errors import (
+    ClusterNotRunningError,
     ClusterRefusedError,
     EmbeddedPostgresError,
     RuntimeInvalidError,
@@ -55,6 +60,7 @@ from app.infrastructure.database.embedded.errors import (
 from app.infrastructure.database.embedded.postmaster_pid import read_postmaster_pid
 from app.infrastructure.database.embedded.runtime import PostgresRuntime
 from app.infrastructure.database.embedded.windows_processes import WindowsProcesses
+from app.infrastructure.persistence.engine import build_engine
 
 pytestmark = [
     pytest.mark.embedded,
@@ -65,6 +71,14 @@ pytestmark = [
 ]
 
 BACKEND = Path(__file__).resolve().parents[4]
+
+NO_PARAMETER_ANSWERS = {
+    "PGTZ": "Mars/Phobos",
+    "PGDATESTYLE": "banana",
+    "PGGEQO": "banana",
+    "PGSERVICE": "no-such-service",
+}
+"""Hostile values of the libpq variables no connection parameter cancels."""
 
 
 @dataclass(frozen=True)
@@ -311,12 +325,15 @@ def test_an_environment_full_of_pg_variables_changes_nothing(
 
     `PGDATA` and `PGPORT` would send `pg_ctl` to another cluster; a read-only
     `PGOPTIONS` would make the `CREATE DATABASE` below fail if libpq picked
-    it up from this process.
+    it up from this process. The last four have no parameter that answers
+    them, and each refuses the login on its own (RFC-034 section 16).
     """
     monkeypatch.setenv("PGDATA", str(tmp_path / "another-cluster"))
     monkeypatch.setenv("PGPORT", "1")
     monkeypatch.setenv("PGPASSWORD", "wrong")
     monkeypatch.setenv("PGOPTIONS", "-c default_transaction_read_only=on")
+    for name, value in NO_PARAMETER_ANSWERS.items():
+        monkeypatch.setenv(name, value)
 
     started = cluster.start()
     prepared = cluster.prepare(started.connection)
@@ -554,13 +571,27 @@ def test_two_processes_starting_at_once_end_with_one_postmaster(
 
 
 PROBE = """
-import json, sys
+import json, os, sys
 from sqlalchemy import text
 from app.infrastructure.config.settings import settings
+from app.infrastructure.database.embedded.cluster import EmbeddedPostgres
+from app.infrastructure.database.embedded.cluster_home import ClusterHome
+from app.infrastructure.database.embedded.runtime import PostgresRuntime
 from app.infrastructure.persistence.engine import EngineInstance
+located = EmbeddedPostgres(
+    PostgresRuntime(settings.embedded_postgres_runtime_directory),
+    ClusterHome(settings.embedded_postgres_directory),
+).locate()
 with EngineInstance.connect() as connection:
     port = connection.execute(text("SELECT inet_server_port()")).scalar()
-print("RESULT " + json.dumps({"settings": settings.database_port, "server": port}))
+print("RESULT " + json.dumps({
+    "source": settings.database_source.value,
+    "home": str(settings.embedded_postgres_directory),
+    "located": located.port,
+    "server": port,
+    "url": EngineInstance.url.render_as_string(hide_password=False),
+    "password_in_environment": located.password in "".join(os.environ.values()),
+}))
 sys.exit(5)
 """
 
@@ -569,7 +600,11 @@ def test_run_points_the_projects_own_settings_at_the_cluster_and_stops_it(
     cluster: EmbeddedPostgres, home_root: Path
 ) -> None:
     """Section 11, end to end: the project's `settings` and the project's
-    engine, in a child of `run`, reach this cluster and no other."""
+    engine, in a child of `run`, reach this cluster and no other.
+
+    Since RFC-034 the child is told where the cluster is, not how to connect
+    to it: the port its engine reached is the one `locate()` read from
+    `postmaster.pid`, and neither is in the URL or in the environment."""
     environment = os.environ.copy()
     environment["EMBEDDED_POSTGRES_DIRECTORY"] = str(home_root)
     completed = subprocess.run(
@@ -595,8 +630,12 @@ def test_run_points_the_projects_own_settings_at_the_cluster_and_stops_it(
         text for text in completed.stdout.splitlines() if text.startswith("RESULT ")
     ]
     seen = json.loads(line.removeprefix("RESULT "))
-    assert seen["settings"] == seen["server"]
+    assert seen["source"] == "embedded"
+    assert Path(seen["home"]) == home_root
+    assert seen["located"] == seen["server"]
     assert seen["server"] != 5432
+    assert seen["url"] == "postgresql+psycopg://solidvision@127.0.0.1/solidvision"
+    assert seen["password_in_environment"] is False
     assert cluster.status().status is ClusterStatus.STOPPED
 
 
@@ -660,3 +699,207 @@ def test_a_cluster_under_a_directory_outside_the_code_page_starts_and_stops(
     finally:
         _leave_nothing_running(cluster, ClusterHome(root).for_commands(long_files))
         shutil.rmtree(root, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------
+# locate(), and the engine that asks it (RFC-034 section 7)
+# --------------------------------------------------------------------------
+
+
+def a_checkout(root: Path, profile: Path) -> Layout:
+    root.mkdir(parents=True)
+    (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    return layout_at(root, profile)
+
+
+def embedded_settings(where: Layout, runtime: PostgresRuntime, home: Path) -> Settings:
+    """Constructor arguments, the strongest source in both modes: nothing a
+    developer's `.env` or shell carries decides which cluster this reaches."""
+    return load_settings(
+        where,
+        database_source="embedded",
+        embedded_postgres_directory=home,
+        embedded_postgres_runtime_directory=runtime.root,
+    ).settings
+
+
+def test_locate_reads_the_connection_of_a_running_cluster_and_starts_nothing(
+    cluster: EmbeddedPostgres, files: ClusterFiles
+) -> None:
+    """Section 7.2, against a real server: the port is the one the server is
+    using, the password is the one it accepts, and a stopped cluster is an
+    error that leaves it stopped."""
+    with pytest.raises(ClusterNotRunningError, match="stopped"):
+        cluster.locate()
+    assert not files.postmaster_pid.exists(), "locate() started nothing"
+
+    started = cluster.start()
+    located = cluster.locate()
+
+    assert located == started.connection
+    with connect(located) as db:
+        assert db.execute("SELECT inet_server_port()").fetchone() == (located.port,)
+
+    cluster.stop()
+
+    with pytest.raises(ClusterNotRunningError, match="stopped"):
+        cluster.locate()
+    assert cluster.status().status is ClusterStatus.STOPPED
+
+
+def test_the_engine_follows_the_cluster_to_another_port_without_being_rebuilt(
+    cluster: EmbeddedPostgres,
+    runtime: PostgresRuntime,
+    home_root: Path,
+    tmp_path: Path,
+) -> None:
+    """Section 7.3's hypothesis, with the pool the project uses.
+
+    The cluster restarts on another port while the engine holds a pooled
+    connection to the old one. `pool_pre_ping` finds that connection dead,
+    and the one that replaces it asks `locate()` again. Nothing is rebuilt,
+    which is what lets the API and the job runner outlive a restart of the
+    database (section 14).
+    """
+    where = a_checkout(tmp_path / "checkout", tmp_path / "profile")
+    engine = build_engine(embedded_settings(where, runtime, home_root))
+    port = sqlalchemy.text("SELECT inet_server_port()")
+    try:
+        started = cluster.start()
+        cluster.prepare(started.connection)
+        first = started.connection.port
+        with engine.connect() as connection:
+            assert connection.execute(port).scalar() == first
+        pool = engine.pool
+        assert isinstance(pool, QueuePool)
+        assert pool.checkedin() == 1, "the connection went back to the pool"
+
+        cluster.stop()
+        with pytest.raises(OperationalError, match="not ready to be connected to"):
+            engine.connect()
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as squatter:
+            squatter.bind(("127.0.0.1", first))
+            squatter.listen()
+            second = cluster.start().connection.port
+
+            assert second != first
+            with engine.connect() as connection:
+                assert connection.execute(port).scalar() == second
+    finally:
+        engine.dispose()
+
+
+def test_the_engine_reaches_the_cluster_whatever_the_pg_variables_say(
+    cluster: EmbeddedPostgres,
+    runtime: PostgresRuntime,
+    home_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Section 7.5 against a real server: the variables the parameters answer,
+    and the ones only their absence answers. Each of them, left in place,
+    changes or refuses the connection (section 16)."""
+    started = cluster.start()
+    cluster.prepare(started.connection)
+    hostile = {
+        **NO_PARAMETER_ANSWERS,
+        "PGOPTIONS": "-c default_transaction_read_only=on",
+        "PGSSLMODE": "require",
+        "PGCLIENTENCODING": "LATIN1",
+        "PGTARGETSESSIONATTRS": "standby",
+        "PGHOSTADDR": "192.0.2.1",
+    }
+    for name, value in hostile.items():
+        monkeypatch.setenv(name, value)
+    where = a_checkout(tmp_path / "checkout", tmp_path / "profile")
+    engine = build_engine(embedded_settings(where, runtime, home_root))
+    name = "Łódź/東京/✈.jpg"
+    try:
+        with engine.connect() as connection:
+            port, zone, read_only, encoding = connection.execute(
+                sqlalchemy.text(
+                    "SELECT inet_server_port(), current_setting('TimeZone'), "
+                    "current_setting('default_transaction_read_only'), "
+                    "current_setting('client_encoding')"
+                )
+            ).one()
+            connection.execute(sqlalchemy.text("CREATE TABLE names (name text)"))
+            connection.execute(
+                sqlalchemy.text("INSERT INTO names VALUES (:name)"), {"name": name}
+            )
+            back = connection.execute(sqlalchemy.text("SELECT name FROM names"))
+            assert back.scalar() == name
+    finally:
+        engine.dispose()
+
+    assert port == started.connection.port
+    assert zone != "Mars/Phobos" and read_only == "off" and encoding == "UTF8"
+
+
+def test_a_checkouts_cluster_and_an_installations_run_side_by_side(
+    runtime: PostgresRuntime, template: Template, tmp_path: Path
+) -> None:
+    """Section 2.5 undone: one profile, two data directories, two servers.
+
+    Before RFC-034 a checkout created its cluster where an installed app
+    would look for its own. Here each layout's default is used as it comes,
+    both clusters are up at once, each engine reaches its own server, and
+    stopping one leaves the other answering.
+    """
+    profile = tmp_path / "AppData" / "Local"
+    installation = tmp_path / "Program Files" / "SolidVision"
+    installation.mkdir(parents=True)
+    layouts = [
+        a_checkout(tmp_path / "checkout", profile),
+        layout_at(installation, profile),
+    ]
+    assert [where.environment for where in layouts] == [
+        Environment.DEVELOPMENT,
+        Environment.INSTALLED,
+    ]
+    homes = [where.postgres_directory for where in layouts]
+    assert homes == [
+        profile / "SolidVision-dev" / "postgres",
+        profile / "SolidVision" / "postgres",
+    ]
+    clusters = []
+    engines = []
+    for where, home in zip(layouts, homes, strict=True):
+        shutil.copytree(template.root, home)
+        clusters.append(EmbeddedPostgres(runtime, ClusterHome(home)))
+        engines.append(build_engine(embedded_settings(where, runtime, home)))
+    seen = sqlalchemy.text(
+        "SELECT inet_server_port(), current_setting('data_directory')"
+    )
+    try:
+        started = [cluster.start() for cluster in clusters]
+        for cluster, one in zip(clusters, started, strict=True):
+            cluster.prepare(one.connection)
+
+        assert [one.started_here for one in started] == [True, True], "none adopted"
+        ports = [one.connection.port for one in started]
+        assert ports[0] != ports[1]
+        postmasters = [cluster.status().pid for cluster in clusters]
+        assert None not in postmasters and postmasters[0] != postmasters[1]
+        for engine, cluster, home, expected in zip(
+            engines, clusters, homes, ports, strict=True
+        ):
+            with engine.connect() as connection:
+                reached, data = connection.execute(seen).one()
+            assert reached == expected == cluster.locate().port
+            assert os.path.samefile(data, ClusterHome(home).files(16).data)
+
+        clusters[1].stop()
+
+        with pytest.raises(ClusterNotRunningError):
+            clusters[1].locate()
+        assert clusters[0].status().status is ClusterStatus.READY
+        with engines[0].connect() as connection:
+            assert connection.execute(seen).one()[0] == ports[0]
+    finally:
+        for engine in engines:
+            engine.dispose()
+        for cluster, home in zip(clusters, homes, strict=True):
+            _leave_nothing_running(cluster, ClusterHome(home).files(16))
+            shutil.rmtree(home, ignore_errors=True)

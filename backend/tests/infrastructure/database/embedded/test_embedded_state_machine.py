@@ -22,8 +22,11 @@ from pathlib import Path
 
 import pytest
 
+from app.infrastructure.config.settings import DatabaseSource, Settings
 from app.infrastructure.database.embedded import cluster as cluster_module
 from app.infrastructure.database.embedded.cluster import (
+    EMBEDDED_SOURCE,
+    ENVIRONMENT_VARIABLES,
     INCLUDE_LINE,
     SHARED_MEMORY_IN_USE,
     ClusterStatus,
@@ -41,6 +44,7 @@ from app.infrastructure.database.embedded.cluster_home import (
 )
 from app.infrastructure.database.embedded.database_setup import ClusterConnection
 from app.infrastructure.database.embedded.errors import (
+    ClusterNotRunningError,
     ClusterRefusedError,
     ServerNotReadyError,
     StartupFailedError,
@@ -1361,3 +1365,201 @@ def test_status_never_carries_the_password(rig: Rig) -> None:
     rig.running_server()
 
     assert password not in repr(rig.cluster.status())
+
+
+# --------------------------------------------------------------------------
+# locate (RFC-034 section 7.2): read, never start
+# --------------------------------------------------------------------------
+
+
+def test_locate_gives_the_connection_of_a_cluster_that_is_up(rig: Rig) -> None:
+    password = rig.existing_cluster()
+    rig.running_server()
+
+    found = rig.cluster.locate()
+
+    assert (found.host, found.port) == ("127.0.0.1", LAST_PORT)
+    assert found.password == password
+    assert (found.user, found.database) == ("solidvision", "solidvision")
+
+
+def test_locate_reads_the_port_the_server_is_using_not_the_one_asked_for(
+    rig: Rig,
+) -> None:
+    """Line 4 of `postmaster.pid`. The conf only says what the adapter asked."""
+    rig.existing_cluster(port=LAST_PORT)
+    rig.processes.add(3000, rig.runtime.postgres)
+    write_pid_file(rig.files, 3000, 60000)
+
+    assert configured_port(rig.files) == LAST_PORT
+    assert rig.cluster.locate().port == 60000
+
+
+def test_locate_follows_the_cluster_to_another_port(rig: Rig) -> None:
+    """Asked again after a restart, it answers again: nothing is remembered."""
+    rig.existing_cluster()
+    rig.running_server()
+    assert rig.cluster.locate().port == LAST_PORT
+
+    write_pid_file(rig.files, 3000, 60000)
+
+    assert rig.cluster.locate().port == 60000
+
+
+def test_locate_starts_nothing_and_connects_to_nothing(rig: Rig) -> None:
+    """No `pg_ctl`, no login, and no lock: `adapter.lock` is not even created."""
+    rig.existing_cluster()
+    rig.running_server()
+    before = sorted(path.name for path in rig.files.directory.iterdir())
+
+    rig.cluster.locate()
+
+    assert rig.commands.ports_asked == []
+    assert rig.commands.stop_calls == []
+    assert rig.logins == []
+    assert sorted(path.name for path in rig.files.directory.iterdir()) == before
+    assert not rig.files.lock.exists()
+
+
+def test_locate_where_there_is_no_cluster_says_so_and_creates_nothing(
+    rig: Rig,
+) -> None:
+    with pytest.raises(ClusterNotRunningError, match="no embedded cluster") as failure:
+        rig.cluster.locate()
+
+    assert "embedded start" in str(failure.value), "who starts it"
+    assert rig.commands.initdb_calls == []
+    assert not rig.files.data.exists()
+
+
+def test_locate_does_not_take_an_interrupted_first_run_for_a_cluster(
+    rig: Rig,
+) -> None:
+    rig.files.data_initdb.mkdir()
+
+    with pytest.raises(ClusterNotRunningError):
+        rig.cluster.locate()
+
+    assert rig.files.data_initdb.exists(), "locate only looks"
+
+
+def test_locate_on_a_stopped_cluster_says_what_it_found(rig: Rig) -> None:
+    rig.existing_cluster()
+
+    with pytest.raises(ClusterNotRunningError, match="stopped"):
+        rig.cluster.locate()
+
+    assert rig.commands.ports_asked == [], "and does not start it"
+
+
+def test_locate_does_not_believe_a_dead_postmasters_lock_file(rig: Rig) -> None:
+    """The file still says `ready` and still names a port. The PID is gone."""
+    rig.existing_cluster()
+    rig.stale_pid_file()
+
+    with pytest.raises(ClusterNotRunningError, match="stale"):
+        rig.cluster.locate()
+
+
+@pytest.mark.parametrize("written", ["starting", "stopping"])
+def test_locate_does_not_wait_for_a_server_that_is_not_ready(
+    rig: Rig, written: str
+) -> None:
+    rig.existing_cluster()
+    rig.running_server(status=written)
+
+    with pytest.raises(ClusterNotRunningError, match=written):
+        rig.cluster.locate()
+
+
+def test_locate_refuses_a_cluster_of_another_major_version(rig: Rig) -> None:
+    rig.existing_cluster(version="15")
+
+    with pytest.raises(ClusterNotRunningError, match="other major version"):
+        rig.cluster.locate()
+
+
+def test_locate_refuses_a_cluster_held_by_another_runtime(rig: Rig) -> None:
+    """Its port and this directory's password are not a pair."""
+    rig.existing_cluster()
+    rig.processes.add(3000, rig.other_runtime.postgres)
+    write_pid_file(rig.files, 3000, LAST_PORT)
+
+    with pytest.raises(ClusterNotRunningError, match="another runtime") as failure:
+        rig.cluster.locate()
+
+    assert str(rig.other_runtime.postgres) in str(failure.value)
+
+
+def test_locate_on_a_running_cluster_without_its_password_refuses(rig: Rig) -> None:
+    rig.existing_cluster()
+    rig.running_server()
+    rig.files.password.unlink()
+
+    with pytest.raises(ClusterRefusedError, match="pair is lost"):
+        rig.cluster.locate()
+
+
+def test_no_error_from_locate_carries_the_password(rig: Rig) -> None:
+    password = rig.existing_cluster()
+
+    with pytest.raises(ClusterNotRunningError) as failure:
+        rig.cluster.locate()
+
+    assert password not in str(failure.value)
+    rig.running_server()
+    assert password not in repr(rig.cluster.locate())
+
+
+# --------------------------------------------------------------------------
+# What `run --` gives its command (RFC-034 section 7.6)
+# --------------------------------------------------------------------------
+
+
+def test_the_environment_names_the_source_and_the_two_directories(rig: Rig) -> None:
+    environment = rig.cluster.environment()
+
+    assert tuple(environment) == ENVIRONMENT_VARIABLES
+    assert environment == {
+        "DATABASE_SOURCE": "embedded",
+        "EMBEDDED_POSTGRES_DIRECTORY": str(rig.home.root),
+        "EMBEDDED_POSTGRES_RUNTIME_DIRECTORY": str(rig.runtime.root),
+    }
+
+
+def test_neither_the_port_nor_the_password_travels_in_the_environment(
+    rig: Rig,
+) -> None:
+    """The child reads both from the cluster. A port exported here would be
+    wrong the day the cluster restarted on another (section 2.2)."""
+    password = rig.existing_cluster()
+    rig.running_server()
+
+    environment = rig.cluster.environment()
+
+    assert password not in "".join(environment.values())
+    assert str(LAST_PORT) not in "".join(environment.values())
+    assert not [name for name in environment if "PASSWORD" in name or "PORT" in name]
+
+
+def test_every_environment_variable_is_a_settings_field() -> None:
+    """A misspelt name would not fail: `Settings` would fall back to the
+    `.env`, the `.env` points at Docker, and the suite would pass against the
+    wrong database printing the same `passed` (RFC-033a section 4.2)."""
+    for variable in ENVIRONMENT_VARIABLES:
+        assert variable.lower() in Settings.model_fields, variable
+    assert DatabaseSource(EMBEDDED_SOURCE) is DatabaseSource.EMBEDDED
+
+
+def test_the_environment_points_the_projects_settings_at_this_cluster(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In a checkout, the environment is above the `.env` (RFC-004)."""
+    for name, value in rig.cluster.environment().items():
+        monkeypatch.setenv(name, value)
+
+    loaded = Settings()
+
+    assert loaded.database_source is DatabaseSource.EMBEDDED
+    assert loaded.embedded_postgres_directory == rig.home.root
+    assert loaded.embedded_postgres_runtime_directory == rig.runtime.root

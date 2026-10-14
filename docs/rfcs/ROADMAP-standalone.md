@@ -76,9 +76,13 @@ Feito no [RFC-033](rfc-033-postgres-embarcado.md) ✅, em 2026-10-11. Três iten
 
 ---
 
-## RFC-034 — Configuração e diretórios do usuário 📋
+## RFC-034 — Configuração e diretórios do usuário ✅
 
 Faz o backend funcionar sem um checkout do repositório.
+
+Feito no [RFC-034](rfc-034-configuracao-e-diretorios-do-usuario.md) ✅, em 2026-10-14. A medição mudou duas coisas no código ([§17](rfc-034-configuracao-e-diretorios-do-usuario.md#17-correções-feitas-durante-a-implementação)). As variáveis `PG*` do usuário alcançavam a conexão mesmo com a proteção do RFC-033: das 42 que a libpq lê, 14 derrubavam o login do adaptador e 15 a engine. Agora todo processo as tira do próprio ambiente antes de conectar ao cluster. E o intervalo da rotação do log ficou em 1 s. As duas verificações manuais foram feitas à mão. O que uma primeira execução elevada cria, os três programas usam depois sem elevação. E o Bloco de Notas grava `solidvision.env.txt` quando o usuário digita `solidvision.env`, que é o caso que o app já avisava no log.
+
+Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.2](rfc-034-configuracao-e-diretorios-do-usuario.md#22-cinco-coisas-que-o-roadmap-presumiu)). `indexing_root_path` sai inteiro, em vez de perder o default, porque não tem leitor e um campo sem default quebraria o primeiro critério. O `log_directory` já é ancorado na raiz do código, e o problema é essa raiz ficar debaixo de `Program Files`. As credenciais não viram campo do `Settings`, porque a porta muda a cada subida: a engine as pergunta ao adaptador a cada conexão. O `environment` passa a ser lido do layout, e não declarado. E o RFC acrescenta duas coisas que o roadmap não pedia: um log por programa, com rotação que não perde registros, e uma instalação simulada para testar "sem checkout".
 
 **Escopo**
 - Separar duas origens de configuração. No desenvolvimento, continua o `.env` da raiz. Instalado, um arquivo em `%LOCALAPPDATA%\SolidVision\` com precedência documentada.
@@ -88,8 +92,8 @@ Faz o backend funcionar sem um checkout do repositório.
 - Ler `environment` (`development` ou instalado) de um único lugar.
 
 **Critérios de pronto**
-- O backend sobe a partir de um diretório qualquer, sem `.env`, e grava tudo em `%LOCALAPPDATA%\SolidVision`.
-- Nenhum caminho relativo ao diretório de trabalho sobra no `Settings`. Um teste verifica isso.
+- O backend sobe a partir de um diretório qualquer, sem `.env`, e grava tudo em `%LOCALAPPDATA%\SolidVision`. **Medido numa instalação simulada, só para leitura, a partir de um diretório vazio:** o cluster, a API e o `job_runner` sobem e gravam só debaixo da raiz de dados. O diretório de trabalho e a árvore instalada ficam intactos, e nada aparece no primeiro nível de `%USERPROFILE%` e `%APPDATA%`. A exceção é do RFC-035: o `torch` cria `%TEMP%\torchinductor_<usuário>` ao carregar o modelo, como o Hugging Face já usa `~\.cache\huggingface` ([RFC-034 §16](rfc-034-configuracao-e-diretorios-do-usuario.md#16-validação)).
+- Nenhum caminho relativo ao diretório de trabalho sobra no `Settings`. Um teste verifica isso. **Quatro testes**: todo campo `Path` sai absoluto nos dois modos, com e sem arquivo; todo campo com nome de caminho é `Path`; dois processos em diretórios de trabalho diferentes imprimem os mesmos caminhos; e nenhum módulo além de `layout.py` usa `__file__` ou o diretório de trabalho.
 
 ---
 

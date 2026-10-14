@@ -3479,16 +3479,27 @@ Path(result_file).write_text(json.dumps(result), encoding="utf-8")
 
     # -- 9, 10, 35. suites (opt-in) ------------------------------------------
 
+    # Since RFC-034 section 7.6, `run --` exports the source and the two
+    # directories, and `settings.database_port` no longer carries the
+    # cluster's port. The target is proved by the port the engine reached
+    # against line 4 of `postmaster.pid`, which is what `locate()` reads.
     PROBE = (
         "import json\n"
         "from sqlalchemy import text\n"
         "from app.infrastructure.config.settings import settings\n"
+        "from app.infrastructure.database.embedded.cluster import EmbeddedPostgres\n"
+        "from app.infrastructure.database.embedded.cluster_home import ClusterHome\n"
+        "from app.infrastructure.database.embedded.runtime import PostgresRuntime\n"
         "from app.infrastructure.persistence.engine import EngineInstance\n"
+        "located = EmbeddedPostgres(\n"
+        "    PostgresRuntime(settings.embedded_postgres_runtime_directory),\n"
+        "    ClusterHome(settings.embedded_postgres_directory)).locate()\n"
         "with EngineInstance.connect() as connection:\n"
         "    port, version = connection.execute(\n"
         "        text('SELECT inet_server_port(), version()')).one()\n"
-        "print('RFC033-PROBE ' + json.dumps({'settings': settings.database_port,\n"
-        "    'host': settings.database_host, 'port': port, 'version': version}))\n"
+        "print('RFC033-PROBE ' + json.dumps({'settings': located.port,\n"
+        "    'host': located.host, 'source': settings.database_source.value,\n"
+        "    'port': port, 'version': version}))\n"
     )
 
     @staticmethod
@@ -3536,16 +3547,17 @@ Path(result_file).write_text(json.dumps(result), encoding="utf-8")
             )
         target = json.loads(found[0])
         say(
-            f"`run -- <probe>`: the project's settings say "
-            f"{target['host']}:{target['settings']}; the server it reached says port "
-            f"{target['port']}, {target['version']}"
+            f"`run -- <probe>`: the source is {target['source']}; postmaster.pid says "
+            f"{target['host']}:{target['settings']}; the server the engine reached "
+            f"says port {target['port']}, {target['version']}"
         )
         say(
             f"  and after it, the cluster is: {cluster.status().status.value} (run "
             f"stopped what it started)"
         )
         if (
-            target["settings"] != target["port"]
+            target["source"] != "embedded"
+            or target["settings"] != target["port"]
             or "Visual C++" not in target["version"]
             or target["port"] == 5432
         ):

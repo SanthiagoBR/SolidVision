@@ -2,7 +2,8 @@
 
 The cluster is a double; the command `run` launches is a real child process,
 because what is being checked is what a child process actually receives: the
-five `DATABASE_*` variables, and an exit code that comes back unchanged.
+source and the two directories (RFC-034 section 7.6), and an exit code that
+comes back unchanged.
 """
 
 from __future__ import annotations
@@ -79,6 +80,13 @@ class FakeCluster:
             pid=3000,
         )
 
+    def environment(self) -> dict[str, str]:
+        return {
+            "DATABASE_SOURCE": "embedded",
+            "EMBEDDED_POSTGRES_DIRECTORY": r"C:\somewhere\postgres",
+            "EMBEDDED_POSTGRES_RUNTIME_DIRECTORY": r"C:\code\runtime\postgres",
+        }
+
 
 def use(monkeypatch: pytest.MonkeyPatch, cluster: FakeCluster) -> FakeCluster:
     monkeypatch.setattr(cli, "_build_cluster", lambda: cluster)
@@ -91,20 +99,36 @@ def child(code: str) -> list[str]:
 
 SEES_THE_CLUSTER = (
     "import os, sys\n"
-    f"expected = {{'DATABASE_HOST': '127.0.0.1', 'DATABASE_PORT': '{PORT}', "
-    f"'DATABASE_USER': 'solidvision', 'DATABASE_PASSWORD': '{PASSWORD}', "
-    "'DATABASE_NAME': 'solidvision'}\n"
+    "expected = {'DATABASE_SOURCE': 'embedded', "
+    "'EMBEDDED_POSTGRES_DIRECTORY': r'C:\\somewhere\\postgres', "
+    "'EMBEDDED_POSTGRES_RUNTIME_DIRECTORY': r'C:\\code\\runtime\\postgres'}\n"
     "found = {name: os.environ.get(name) for name in expected}\n"
     "sys.exit(0 if found == expected else 9)\n"
 )
 
+CARRIES_NO_CONNECTION = (
+    "import os, sys\n"
+    f"leaked = [name for name, value in os.environ.items() if '{PASSWORD}' in value]\n"
+    "sys.exit(9 if leaked else 0)\n"
+)
 
-def test_run_gives_the_command_the_five_variables(
+
+def test_run_gives_the_command_the_source_and_the_two_directories(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     use(monkeypatch, FakeCluster(started_here=True))
 
     assert cli.main(child(SEES_THE_CLUSTER)) == 0
+
+
+def test_run_does_not_put_the_password_in_the_commands_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RFC-034 section 7.6: the command reads it from the cluster, as the
+    port. Before, it travelled in the environment block of every child."""
+    use(monkeypatch, FakeCluster(started_here=True))
+
+    assert cli.main(child(CARRIES_NO_CONNECTION)) == 0
 
 
 def test_the_commands_exit_code_is_runs_exit_code(

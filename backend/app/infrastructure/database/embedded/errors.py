@@ -33,6 +33,16 @@ class ClusterRefusedError(EmbeddedPostgresError):
     """
 
 
+class ClusterNotRunningError(EmbeddedPostgresError):
+    """`locate()` found no server ready to be connected to (RFC-034 section 7.2).
+
+    `locate()` only reads: it starts nothing, so anything other than a ready
+    cluster is this error, saying what was found instead and who starts it.
+    The engine turns it into a connection error (section 7.3), and it is
+    never answered by trying `DATABASE_*` instead (section 7.4).
+    """
+
+
 class StartupFailedError(EmbeddedPostgresError):
     """The server did not start, for a reason that retrying will not change.
 

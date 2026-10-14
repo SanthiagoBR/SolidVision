@@ -11,6 +11,10 @@ venv/
 .idea/
 .DS_Store
 
+# A checkout whose .env still says LOG_DIRECTORY=logs. `*.log` above does not
+# cover the rotated backups, which end in `.log.1` (RFC-034 section 2.6).
+/logs/
+
 # Runtime data materialized by the indexing worker / dataset_tools (RFC-022 9.1)
 data/
 
