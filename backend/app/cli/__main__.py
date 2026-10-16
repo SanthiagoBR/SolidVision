@@ -122,8 +122,22 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Dispatch, and turn a model that cannot be loaded into one line.
+
+    The line names the model, the file and what to do, and the exit code is
+    1 (RFC-035 section 6.5); a traceback would only bury it.
+    """
+    from app.infrastructure.ai.model_runtime import ModelUnavailableError
+
     args = _build_arg_parser().parse_args()
 
+    try:
+        _dispatch(args)
+    except ModelUnavailableError as error:
+        raise SystemExit(str(error)) from None
+
+
+def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "index":
         from app.infrastructure.workers import indexing_worker
 

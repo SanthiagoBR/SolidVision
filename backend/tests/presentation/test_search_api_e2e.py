@@ -2,7 +2,8 @@
 
 Real CLIP, real PostgreSQL, real pgvector, real ground truth, over HTTP.
 Marked `slow` and therefore deselected by the default `addopts`, because
-it downloads and runs real checkpoints (RFC-023 section 12.1).
+it runs real checkpoints (RFC-023 section 12.1), loaded from `runtime/models`
+and skipped without it (RFC-035).
 
 **Deliberately small.** `tests/dataset/test_semantic_search_e2e.py`
 already runs all 25 ground-truth queries through the real stack and gates

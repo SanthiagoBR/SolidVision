@@ -6,8 +6,8 @@ The whole RFC-025 path in one place -- `SearchImagesUseCase` ->
 queries and 45 images of the RFC-022 demo corpus.
 
 Marked `slow` and therefore deselected by the default `addopts`, because it
-downloads and runs real checkpoints (RFC-023 section 12.1). Run it with
-`pytest -m slow`.
+runs real checkpoints (RFC-023 section 12.1), loaded from `runtime/models`
+(RFC-035). Run it with `pytest -m slow`.
 
 **These tests measure aggregates, never individual results.** Asserting
 that a given query returns a given filename first would pin the model's
@@ -35,7 +35,7 @@ from typing import Any
 import pytest
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
-from tests.conftest import make_test_device
+from tests.conftest import make_test_device, materialized_embedding_model
 
 from app.application.use_cases.index_or_update_images import (
     IndexOrUpdateImagesUseCase,
@@ -214,8 +214,11 @@ def embedding_model() -> ClipEmbeddingModel:
     on first use. A function-scoped model would pay both per test, and
     would also make the search tests measure a differently-loaded model
     than the one that produced the stored embeddings.
+
+    It is the app's adapter, over `runtime/models` (RFC-035): without the
+    tree, the module is skipped with the command that materializes it.
     """
-    return ClipEmbeddingModel()
+    return materialized_embedding_model()
 
 
 @dataclass(frozen=True)

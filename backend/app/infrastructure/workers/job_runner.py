@@ -526,7 +526,18 @@ def main() -> None:
     **The model is loaded before the first poll**, not after a job is
     claimed -- and `JobRunner` owns that ordering rather than this
     function, so it holds however the executor is started.
+
+    **Without its models, the executor refuses to start** (RFC-035 section
+    6.5): one line on stderr and exit code 1, like a `ConfigurationError`.
+    It has nothing to do without CLIP, and staying up would claim jobs only
+    to fail each one. Both models are checked for presence first, which is
+    cheap; the load of CLIP then checks its hashes. Restarting fixes none
+    of it, which is what the launcher of RFC-036 needs to tell apart.
     """
+    from app.infrastructure.ai.model_runtime import (
+        ModelUnavailableError,
+        default_runtime,
+    )
     from app.infrastructure.persistence.session import SessionLocal
 
     args = _build_arg_parser().parse_args()
@@ -534,6 +545,9 @@ def main() -> None:
     job_session = SessionLocal()
     image_session = SessionLocal()
     try:
+        # Before `build_runner()`, which is what imports `torch`: a missing
+        # tree is refused in a second rather than after that import.
+        default_runtime().check_presence()
         runner = build_runner(job_session, image_session)
         if args.once:
             runner.warm_up_now()
@@ -541,6 +555,8 @@ def main() -> None:
             runner.claim_and_run()
         else:
             runner.run_forever()
+    except ModelUnavailableError as error:
+        raise SystemExit(f"SolidVision cannot start: {error}") from None
     finally:
         image_session.close()
         job_session.close()

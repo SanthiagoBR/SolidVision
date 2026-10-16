@@ -10,6 +10,7 @@ The tree is the same in both modes (section 4.1)::
     <root>\\
         backend\\           app\\, alembic\\, alembic.ini
         runtime\\postgres\\  RFC-033
+        runtime\\models\\    RFC-035
         pyproject.toml     only in a checkout
         .env               only in a checkout
 
@@ -92,6 +93,14 @@ class Layout:
         return self.root / "runtime" / "postgres"
 
     @property
+    def model_runtime(self) -> Path:
+        """The two models, materialized from the lockfile (RFC-035 section 4.2).
+
+        Per machine and read-only when installed, beside `runtime\\postgres`.
+        """
+        return self.root / "runtime" / "models"
+
+    @property
     def log_directory(self) -> Path:
         return self.data_directory / "logs"
 
@@ -103,6 +112,15 @@ class Layout:
     def postgres_directory(self) -> Path:
         """The user's cluster; the adapter adds the major version below it."""
         return self.data_directory / "postgres"
+
+    @property
+    def cache_directory(self) -> Path:
+        """What the model runtime writes (RFC-035 section 5.4).
+
+        Nothing in it is the source of anything, so all of it can be deleted
+        without loss, by the user or by an uninstaller.
+        """
+        return self.data_directory / "cache"
 
 
 def layout_at(root: Path, profile: Path) -> Layout:

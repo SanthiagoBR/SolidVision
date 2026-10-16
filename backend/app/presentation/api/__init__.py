@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.infrastructure.ai.model_runtime import ModelUnavailableError
 from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
 from app.presentation.api.v1 import api_v1_router
@@ -52,19 +53,28 @@ def _warm_up_models() -> None:
     race is inside the adapter. Loading before the server accepts
     anything means no request ever observes the unloaded state.
 
+    The models are checked first for presence and size, which is cheap
+    and finds a broken installation now rather than on the first search
+    (RFC-035 section 6.1); the load then checks the hashes.
+
     A failure is logged and swallowed rather than allowed to abort
     startup. Refusing to start would take `/health` down with search --
-    the probe an operator would use to diagnose exactly this -- and turn
-    a transient Hugging Face outage into a crash loop. The lazy path
-    remains: the first query retries the load and fails visibly if it
-    still cannot.
+    the probe an operator would use to diagnose exactly this -- and hide
+    the devices, folders, map and thumbnails, none of which needs a model
+    (RFC-035 section 6.5). The lazy path remains: every search retries the
+    load, and answers 503 with the same line while it still cannot.
     """
+    from app.infrastructure.ai.model_runtime import default_runtime
     from app.presentation.dependencies import get_embedding_model
 
     logger.info("Warming up the embedding model")
     started_at = time.perf_counter()
     try:
+        default_runtime().check_presence()
         get_embedding_model().encode_text(_WARM_UP_QUERY)
+    except ModelUnavailableError as error:
+        logger.error("Model warm-up failed, and search answers 503: %s", error)
+        return
     except Exception:
         logger.warning(
             "Model warm-up failed; the first query will retry", exc_info=True
@@ -82,13 +92,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     FastAPI deprecates; this is the project's first startup hook, so
     there is no existing style to match.
 
-    Warm-up is opt-in and defaults to off (`settings.warm_up_models`).
-    That is not timidity about a config flag: `TestClient(app)` used as a
-    context manager -- which `tests/presentation/test_health.py` does --
-    runs exactly this function, so an unconditional warm-up would
-    download and load 600 MB of checkpoint during a plain `pytest`, in a
-    test file that has nothing to do with search, for a route that never
-    touches the model.
+    Warm-up is `settings.warm_up_models`, whose default is the mode's: on
+    installed, off in a checkout (RFC-035 section 8). Off in a checkout is
+    not timidity about a config flag: `TestClient(app)` used as a context
+    manager -- which `tests/presentation/test_health.py` does -- runs
+    exactly this function, so an unconditional warm-up would load and hash
+    924 MB of checkpoints during a plain `pytest`, in a test file that has
+    nothing to do with search, for a route that never touches the model.
     """
     if settings.warm_up_models:
         _warm_up_models()

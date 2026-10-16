@@ -9,6 +9,7 @@ directory outside the repository::
     <target>\\
         backend\\           app\\, alembic\\, alembic.ini
         runtime\\postgres\\  RFC-033
+        runtime\\models\\    RFC-035
 
 **without** `pyproject.toml`, `.env` and the tests, which is what makes the
 copy an installation: the mode is read from the tree, and `pyproject.toml` is
@@ -62,8 +63,10 @@ COPIED = (
     "backend/alembic",
     "backend/alembic.ini",
     "runtime/postgres",
+    "runtime/models",
 )
-"""The tree of section 4.1, and nothing else of the repository."""
+"""The tree of section 4.1, and nothing else of the repository. Since RFC-035
+that includes the 924 MB of models, copied like any other file."""
 
 NEVER_STAGED = ("pyproject.toml", ".env")
 """Either one at the root would make the copy a checkout again: the first
@@ -142,8 +145,9 @@ def stage(
     missing = [name for name in COPIED if not (source / name).exists()]
     if missing:
         raise StagingError(
-            f"{source} has no {', '.join(missing)}. The runtime is materialized "
-            "with `python scripts/vendor_postgres.py`."
+            f"{source} has no {', '.join(missing)}. The PostgreSQL runtime is "
+            "materialized with `python scripts/vendor_postgres.py`, and the "
+            "models with `python scripts/vendor_models.py`."
         )
     target.mkdir(parents=True)
     try:

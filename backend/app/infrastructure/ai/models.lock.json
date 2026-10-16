@@ -1,0 +1,89 @@
+{
+  "clip": {
+    "repository": "laion/CLIP-ViT-B-32-laion2B-s34B-b79K",
+    "revision": "1a25a446712ba5ee05982a381eed697ef9b435cf",
+    "directory": "clip-vit-b-32-laion2b-s34b-b79k",
+    "license": "mit",
+    "files": {
+      "config.json": {
+        "size": 4355,
+        "sha256": "1284cbff35169abb23a1c5525a8b0f543c7bd191d4b9aed63880c1571bc4191c"
+      },
+      "merges.txt": {
+        "size": 524618,
+        "sha256": "f1cd414c2d113a28b296afc0fd66ae854c0e0c34d5de373a2f5b7f62e0c02344"
+      },
+      "model.safetensors": {
+        "size": 605157884,
+        "sha256": "74813fbcdc750f235c9784c367ca1394d2a5c25eb0aac92761752ac239db7cff"
+      },
+      "preprocessor_config.json": {
+        "size": 316,
+        "sha256": "910e70b3956ac9879ebc90b22fb3bc8a75b6a0677814500101a4c072bd7857bd"
+      },
+      "special_tokens_map.json": {
+        "size": 389,
+        "sha256": "f8c0d6c39aee3f8431078ef6646567b0aba7f2246e9c54b8b99d55c22b707cbf"
+      },
+      "tokenizer.json": {
+        "size": 2224041,
+        "sha256": "b556ac8c99757ffb677208af34bc8c6721572114111a6e0aaf5fa69ff0b8d842"
+      },
+      "tokenizer_config.json": {
+        "size": 904,
+        "sha256": "e19f34ef773563fb695f96cfcae1e4c7b112ab6ad532f6962061df5242d924f0"
+      },
+      "vocab.json": {
+        "size": 862328,
+        "sha256": "5047b556ce86ccaf6aa22b3ffccfc52d391ea4accdab9c2f2407da5b742d4363"
+      }
+    }
+  },
+  "translator": {
+    "repository": "Helsinki-NLP/opus-mt-ROMANCE-en",
+    "revision": "e9ca9975e3972afd80732f08ce01d3a1339f47f8",
+    "directory": "opus-mt-romance-en",
+    "license": "apache-2.0",
+    "files": {
+      "config.json": {
+        "size": 1366,
+        "sha256": "b11b54220c28a64966b51864dd4bf9688a935c3b6a18bbab73810d391d6ac39f"
+      },
+      "generation_config.json": {
+        "size": 293,
+        "sha256": "837839ed0534a27084f9b980fc33f47729052dd89cb26cca7ac830765ed30e49"
+      },
+      "model.safetensors": {
+        "size": 312062468,
+        "sha256": "4fcf563ef9020be62dea74a1d319dd88db0ce4b13c4191e84eb55dce2380c539"
+      },
+      "source.spm": {
+        "size": 800087,
+        "sha256": "baeab21ec00d0b490382b82499ef0348235c5a8e75de28aec8290adf62b007c4"
+      },
+      "target.spm": {
+        "size": 779494,
+        "sha256": "121d4e0a20cda2052945d790d335f421f7bea7fa6b0ff7fbc9112eed5f12036f"
+      },
+      "tokenizer_config.json": {
+        "size": 265,
+        "sha256": "bc9965c5b3ff411850236229245cdf8076e138e57f82f623833981dfa512a4e8"
+      },
+      "vocab.json": {
+        "size": 1460304,
+        "sha256": "1ffaf15a0b51f0774c1dc24a1a675859dc18fc7705ebe6a0ac45a9c560457c29"
+      }
+    },
+    "converted": {
+      "model.safetensors": {
+        "from": "pytorch_model.bin",
+        "size": 312087009,
+        "sha256": "9d77bbbd43a214959e027ffc8713fbe31f8609d14827fba645f1361ca20a6f3a",
+        "tied": [
+          "model.decoder.embed_tokens.weight",
+          "model.encoder.embed_tokens.weight"
+        ]
+      }
+    }
+  }
+}

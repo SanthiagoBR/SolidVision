@@ -206,6 +206,27 @@ def test_one_line_in_the_env_file_is_development_without_docker(
     assert load_settings(checkout).settings.database_source is DatabaseSource.EMBEDDED
 
 
+def test_warm_up_is_on_installed_and_off_in_a_checkout(
+    checkout: Layout, installation: Layout
+) -> None:
+    """RFC-035 section 8. Installed nobody writes the user's file, and the
+    environment is not read: a `False` there would leave the API cold for
+    ever. In a checkout, `TestClient(app)` must not load 924 MB."""
+    assert load_settings(installation).settings.warm_up_models is True
+    assert load_settings(checkout).settings.warm_up_models is False
+
+
+@pytest.mark.parametrize("mode", ["checkout", "installation"])
+@pytest.mark.parametrize("written", ["true", "false"])
+def test_the_file_still_decides_the_warm_up_in_both_modes(
+    mode: str, written: str, request: pytest.FixtureRequest
+) -> None:
+    where: Layout = request.getfixturevalue(mode)
+    write(where, f"WARM_UP_MODELS={written}\n")
+
+    assert load_settings(where).settings.warm_up_models is (written == "true")
+
+
 def test_installed_the_source_is_always_embedded(installation: Layout) -> None:
     write(installation, "DATABASE_SOURCE=external\n")
 
@@ -281,7 +302,27 @@ def test_a_retired_key_says_what_replaced_it(checkout: Layout) -> None:
     assert "INDEXING_ROOT_PATH is retired" in warning
     assert "RFC-029" in warning
     assert "indexing_root_path" not in Settings.model_fields
-    assert set(RETIRED_KEYS) == {"ENVIRONMENT", "INDEXING_ROOT_PATH"}
+    assert set(RETIRED_KEYS) == {"ENVIRONMENT", "INDEXING_ROOT_PATH", "EMBEDDING_MODEL"}
+
+
+def test_embedding_model_is_retired_and_says_where_the_model_is_now(
+    installation: Layout,
+) -> None:
+    """RFC-035 section 4.4: the key that used to swap the embedding space.
+
+    Written in the user's file it would have made the next process with a
+    network download another 512-dimensional model, and mixed two spaces in
+    one index without an error. It is now a warning and nothing else.
+    """
+    write(installation, "EMBEDDING_MODEL=openai/clip-vit-base-patch32\n")
+
+    loaded, report = load_settings(installation)
+
+    (warning,) = report.warnings
+    assert "EMBEDDING_MODEL is retired and was ignored" in warning
+    assert "lockfile" in warning and "runtime\\models" in warning
+    assert "embedding_model" not in Settings.model_fields
+    assert not hasattr(loaded, "embedding_model")
 
 
 def test_a_clean_file_warns_about_nothing(installation: Layout) -> None:
@@ -339,6 +380,7 @@ def test_the_report_says_where_the_configuration_came_from(
         "embedded_postgres_runtime_directory": (
             loaded.embedded_postgres_runtime_directory
         ),
+        "model_runtime_directory": loaded.model_runtime_directory,
     }
     assert "mode installed" in text
     assert f"file {installation.config_file} (read)" in text

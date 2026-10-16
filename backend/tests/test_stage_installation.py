@@ -59,6 +59,8 @@ def repository(tmp_path: Path) -> Path:
         "backend/requirements.txt": "pytest\n",
         "runtime/postgres/SOLIDVISION-RUNTIME.json": "{}\n",
         "runtime/postgres/Library/bin/postgres.exe": "not really\n",
+        "runtime/models/SOLIDVISION-MODELS.json": "{}\n",
+        "runtime/models/clip/model.safetensors": "not really either\n",
         "docs/README.md": "# docs\n",
     }
     for name, content in files.items():
@@ -104,6 +106,8 @@ def test_the_staging_is_the_installed_tree_and_nothing_else(
         "backend/app/package/deep.py",
         "runtime/postgres/SOLIDVISION-RUNTIME.json",
         "runtime/postgres/Library/bin/postgres.exe",
+        "runtime/models/SOLIDVISION-MODELS.json",
+        "runtime/models/clip/model.safetensors",
     }
 
 
@@ -146,6 +150,22 @@ def test_a_source_without_the_runtime_says_how_to_get_it(
     target = tmp_path / "staged"
 
     with pytest.raises(staging.StagingError, match="vendor_postgres.py"):
+        staging.stage(target, source=repository)
+
+    assert not target.exists()
+
+
+def test_a_source_without_the_models_says_how_to_get_them(
+    staging: ModuleType, repository: Path, tmp_path: Path
+) -> None:
+    """RFC-035 section 14: an installation carries the models beside the code."""
+    models = repository / "runtime" / "models"
+    for path in sorted(models.rglob("*"), reverse=True):
+        path.unlink() if path.is_file() else path.rmdir()
+    models.rmdir()
+    target = tmp_path / "staged"
+
+    with pytest.raises(staging.StagingError, match="runtime/models.*vendor_models"):
         staging.stage(target, source=repository)
 
     assert not target.exists()
@@ -296,6 +316,7 @@ def test_a_locked_staging_cannot_be_written_and_can_be_given_back(
         assert not writable(target)
         assert not writable(target / "backend" / "app" / "package")
         assert not writable(target / "runtime" / "postgres")
+        assert not writable(target / "runtime" / "models")
         with pytest.raises(PermissionError):
             (target / "backend" / "app" / "module.py").write_text("VALUE = 3\n")
         with pytest.raises(PermissionError):

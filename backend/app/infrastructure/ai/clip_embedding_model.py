@@ -6,11 +6,17 @@ transformers detail is confined to this package: Domain and Application see
 only `EmbeddingModelPort`, `Image`, and `EmbeddingVector`, so a future RFC can
 swap in a fine-tuned CLIP, SigLIP, or an ONNX backend without touching a
 single contract above Infrastructure.
+
+Since RFC-035 the checkpoint is loaded from a directory and never by name:
+the snapshot the lockfile pins, materialized in `runtime\\models` and checked
+by `model_runtime` before the first load. Which model this is, is decided by
+the lockfile, and so by the version of the code.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 import torch
 from PIL import Image as PILImage
@@ -21,10 +27,8 @@ from app.domain.entities.image import Image
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.infrastructure.ai.device import resolve_device
-from app.infrastructure.ai.query_translator import (
-    MarianQueryTranslator,
-    QueryTranslator,
-)
+from app.infrastructure.ai.model_runtime import ModelDirectory, load_failed
+from app.infrastructure.ai.query_translator import QueryTranslator
 from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
 
@@ -44,24 +48,29 @@ class ClipEmbeddingModel(EmbeddingModelPort):
     Both models are loaded lazily on first use and then reused for the life
     of the instance, so constructing the adapter -- which the dependency
     wiring does at import-adjacent time -- costs nothing and never touches
-    the network (RFC-023 section 10).
+    the disk (RFC-023 section 10). `model_directory` is called on that first
+    load, and is where the files are checked against the lockfile (RFC-035
+    section 6); the translator gets its own, for its own first load.
 
     Errors from Pillow and from model inference deliberately propagate.
     `IndexingWorker.run()` already isolates failures per file, so a second
-    generic `except` here would only hide which file failed and why.
+    generic `except` here would only hide which file failed and why. The one
+    exception is the load itself, which becomes a `ModelUnavailableError`:
+    a line for the user, and the traceback for the log.
     """
 
     def __init__(
         self,
-        model_name: str | None = None,
+        model_directory: ModelDirectory,
+        translator: QueryTranslator,
         expected_dimension: int | None = None,
         device: torch.device | None = None,
-        translator: QueryTranslator | None = None,
     ) -> None:
-        self._model_name = model_name or settings.embedding_model
+        self._model_directory = model_directory
         self._expected_dimension = expected_dimension or settings.embedding_dimension
         self._device = device if device is not None else resolve_device()
-        self._translator = translator or MarianQueryTranslator(device=self._device)
+        self._translator = translator
+        self._loaded_from: Path | None = None
         self._model: CLIPModel | None = None
         self._processor: ProcessorMixin | None = None
 
@@ -176,21 +185,36 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         self._ensure_loaded()
 
     def _ensure_loaded(self) -> tuple[CLIPModel, ProcessorMixin]:
-        """Load the checkpoint on first use and reuse it on every later call."""
+        """Load the checkpoint on first use and reuse it on every later call.
+
+        The directory comes first, checked: nothing is deserialized until
+        every file is the one the lockfile names (RFC-035 section 6.2).
+        `local_files_only` is written on the call rather than left to the
+        offline mode, so it holds even if the variable came too late (section
+        5.1): an optional file the directory does not have is then simply
+        absent, and never looked for on the Hub.
+        """
         if self._model is None or self._processor is None:
-            logger.info("Loading CLIP model %s onto %s", self._model_name, self._device)
-            model = CLIPModel.from_pretrained(self._model_name)
-            # Three upstream typing gaps in transformers 5.15, not real type
-            # errors: `nn.Module.eval` is unannotated, `PreTrainedModel.to`
-            # is wrapped in a decorator whose signature mypy reads as taking
-            # the model itself, and `AutoProcessor.from_pretrained` is
-            # unannotated. `warn_unused_ignores` will flag each of these the
-            # moment a release types them properly.
-            model.eval()  # type: ignore[no-untyped-call]
-            self._model = model.to(self._device)  # type: ignore[arg-type]
-            self._processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
-                self._model_name
-            )
+            directory = self._model_directory()
+            logger.info("Loading CLIP model from %s onto %s", directory, self._device)
+            try:
+                model = CLIPModel.from_pretrained(directory, local_files_only=True)
+                # Three upstream typing gaps in transformers 5.15, not real
+                # type errors: `nn.Module.eval` is unannotated,
+                # `PreTrainedModel.to` is wrapped in a decorator whose
+                # signature mypy reads as taking the model itself, and
+                # `AutoProcessor.from_pretrained` is unannotated.
+                # `warn_unused_ignores` will flag each of these the moment a
+                # release types them properly.
+                model.eval()  # type: ignore[no-untyped-call]
+                loaded = model.to(self._device)  # type: ignore[arg-type]
+                processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
+                    directory, local_files_only=True
+                )
+            except Exception as error:
+                raise load_failed(directory) from error
+            self._loaded_from = directory
+            self._model, self._processor = loaded, processor
 
         return self._model, self._processor
 
@@ -232,15 +256,16 @@ class ClipEmbeddingModel(EmbeddingModelPort):
                 else f"{expected_rows} ({expected_rows}, N) embeddings"
             )
             raise ValueError(
-                f"{self._model_name} returned features of shape "
+                f"The model in {self._loaded_from} returned features of shape "
                 f"{tuple(features.shape)}; expected {wanted}"
             )
 
         dimension = features.shape[1]
         if dimension != self._expected_dimension:
             raise ValueError(
-                f"{self._model_name} produced {dimension} dimensions, but "
-                f"settings.embedding_dimension is {self._expected_dimension}"
+                f"The model in {self._loaded_from} produced {dimension} "
+                f"dimensions, but settings.embedding_dimension is "
+                f"{self._expected_dimension}"
             )
 
         normalized = torch.nn.functional.normalize(features, p=2.0, dim=-1)
