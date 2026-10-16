@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+# First, before anything can import `transformers` or `huggingface_hub`: the
+# package sets the offline mode, which `huggingface_hub` reads once, on its
+# first import (RFC-035 section 2.3). A test module imports its third-party
+# libraries before the app's, so without this line the order would depend on
+# which test happened to be collected first.
+import app.infrastructure.ai  # noqa: F401, I001  # isort: skip
+
 import datetime
 from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import delete
@@ -19,6 +27,11 @@ from app.infrastructure.persistence.engine import EngineInstance
 from app.infrastructure.persistence.postgres_device_repository import (
     PostgresDeviceRepository,
 )
+
+if TYPE_CHECKING:
+    # Not imported for real at the top: it is `torch`, and most of the suite
+    # never loads a model.
+    from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
 
 TEST_VOLUME_IDENTITY = VolumeIdentity(
     value="\\\\?\\Volume{00000000-0000-0000-0000-0000000000ff}\\",
@@ -40,6 +53,32 @@ so a literal UUID here would put every test image in a namespace that no
 real device could occupy -- and the identity tests would then be checking
 arithmetic rather than the derivation the product uses.
 """
+
+
+def materialized_embedding_model() -> ClipEmbeddingModel:
+    """The app's own CLIP adapter, over `runtime\\models` -- or a skip.
+
+    For the `slow` tests (RFC-035 section 9): they load the real models the
+    way the app does, from the tree, checked against the lockfile, and never
+    download anything. Without the tree they are skipped with the line that
+    says how to materialize it, as the `embedded` tests are without
+    `runtime\\postgres`. The adapter is the process's one, so that every slow
+    module shares one load.
+    """
+    from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+    from app.infrastructure.ai.model_runtime import (
+        ModelUnavailableError,
+        default_runtime,
+    )
+    from app.presentation.dependencies import get_embedding_model
+
+    try:
+        default_runtime().check_presence()
+    except ModelUnavailableError as error:
+        pytest.skip(str(error))
+    model = get_embedding_model()
+    assert isinstance(model, ClipEmbeddingModel)
+    return model
 
 
 def make_test_device(label: str = "TEST-DEVICE") -> Device:

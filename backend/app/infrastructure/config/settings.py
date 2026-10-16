@@ -55,12 +55,21 @@ PATH_DEFAULTS: dict[str, Callable[[Layout], Path]] = {
     "log_directory": lambda where: where.log_directory,
     "embedded_postgres_directory": lambda where: where.postgres_directory,
     "embedded_postgres_runtime_directory": lambda where: where.postgres_runtime,
+    "model_runtime_directory": lambda where: where.model_runtime,
 }
 """Every path setting, and where its default comes from: the layout.
 
-The four are `Path`, and each leaves `Settings` absolute (section 6.3). A
+The five are `Path`, and each leaves `Settings` absolute (section 6.3). A
 test checks that no other field is a path, and that none of these is ever
 relative.
+"""
+
+MODE_DEFAULTS: dict[str, Callable[[Layout], Any]] = {
+    "warm_up_models": lambda where: where.environment is Environment.INSTALLED,
+}
+"""The settings whose default depends on the mode rather than on a path.
+
+`warm_up_models` is on installed and off in a checkout (RFC-035 section 8).
 """
 
 
@@ -69,12 +78,19 @@ def _layout_default(name: str) -> Callable[[], Path]:
     return lambda: PATH_DEFAULTS[name](layout)
 
 
+def _mode_default(name: str) -> Callable[[], Any]:
+    """The default of a mode setting, for the layout of the running code."""
+    return lambda: MODE_DEFAULTS[name](layout)
+
+
 RETIRED_KEYS = {
     "ENVIRONMENT": "the mode is read from the installation itself -- development "
     "when pyproject.toml is beside the code -- and nothing sets it (RFC-034 "
     "section 4.2)",
     "INDEXING_ROOT_PATH": "indexing is per device and scopes (RFC-029), and "
     "nothing reads a root path",
+    "EMBEDDING_MODEL": "the model is the lockfile's, materialized in "
+    "runtime\\models (RFC-035)",
 }
 """Keys that used to be settings, with what replaced each (section 5.4)."""
 
@@ -165,10 +181,11 @@ def absolute_path(value: str, base: Path) -> Path:
 
 
 class _LayoutDefaults(PydanticBaseSettingsSource):
-    """The weakest source: the path defaults of the layout being loaded.
+    """The weakest source: the defaults of the layout being loaded.
 
-    The defaults written on the fields are the running code's layout's. This
-    is what gives any other layout its own.
+    The path defaults and the mode defaults. The defaults written on the
+    fields are the running code's layout's. This is what gives any other
+    layout its own.
     """
 
     def __init__(self, settings_cls: type[BaseSettings], where: Layout) -> None:
@@ -179,7 +196,8 @@ class _LayoutDefaults(PydanticBaseSettingsSource):
         return None, field_name, False
 
     def __call__(self) -> dict[str, Any]:
-        return {name: default(self._where) for name, default in PATH_DEFAULTS.items()}
+        defaults = {**PATH_DEFAULTS, **MODE_DEFAULTS}
+        return {name: default(self._where) for name, default in defaults.items()}
 
 
 class _Without(PydanticBaseSettingsSource):
@@ -262,15 +280,18 @@ class Settings(BaseSettings):
         repr=False,
     )
 
-    embedding_model: str = Field(
-        default="laion/CLIP-ViT-B-32-laion2B-s34B-b79K",
-        description="Embedding model identifier",
-    )
+    # `embedding_model` used to sit here and was removed by RFC-035. Since the
+    # models load from a directory checked against a lockfile in the code, the
+    # setting could only agree with that directory -- redundant -- or disagree
+    # and lie. The model is part of the version of the code, like the
+    # migration that fixes `vector(512)` (RFC-035 section 4.4).
     embedding_dimension: int = Field(
         default=512,
         ge=1,
-        description="Embedding vector size produced by `embedding_model`",
+        description="Embedding vector size produced by the model of the lockfile",
     )
+    """A wrong value here does not swap the space in silence: the adapter
+    refuses every vector, on the first image, naming this setting."""
     device: str = Field(
         default="auto",
         description="Inference device: 'auto' (CUDA when available, else CPU), "
@@ -493,16 +514,17 @@ class Settings(BaseSettings):
     # in a threadpool and two concurrent first requests can both find the
     # model unloaded.
     #
-    # It defaults to `False` for the same reason RFC-024 gave `--root` no
-    # default: the safe default is the one that cannot download 600 MB
-    # into a process that never asked for it. `TestClient(app)` used as a
-    # context manager runs startup events, so a default of `True` would
-    # make a plain `pytest` reach Hugging Face through
-    # `tests/presentation/test_health.py` -- a test file that has nothing
-    # to do with search. Set `WARM_UP_MODELS=true` when running the API
-    # for real.
+    # The default comes from the mode (RFC-035 section 8): on installed, off
+    # in a checkout. RFC-026 chose `False` everywhere so that importing the
+    # app never downloaded 600 MB; loading no longer downloads anything, but
+    # the example still holds for another reason: `TestClient(app)` used as a
+    # context manager runs startup events, so a `True` in a checkout would
+    # make `tests/presentation/test_health.py` load and hash 924 MB, or fail
+    # without `runtime\models`. Installed there is no suite, and nobody
+    # writes the user's file: a `False` there would leave the API cold for
+    # ever. The file can still change it in both modes.
     warm_up_models: bool = Field(
-        default=False,
+        default_factory=_mode_default("warm_up_models"),
         description="Load the embedding model at API startup "
         "instead of on the first request",
     )
@@ -525,7 +547,7 @@ class Settings(BaseSettings):
         "manager on this machine (loopback callers only)",
     )
 
-    # The default of each of the four path settings comes from the layout,
+    # The default of each of the five path settings comes from the layout,
     # through `PATH_DEFAULTS`, because it depends on the mode. What is written
     # on the field is the default for the layout of the running code; for any
     # other layout, `load_settings` supplies that layout's. Each path is
@@ -574,6 +596,21 @@ class Settings(BaseSettings):
 
     `EMBEDDED_` keeps both names out of the `POSTGRES_*` namespace, which the
     Docker image reads from the same `.env`.
+    """
+
+    model_runtime_directory: Path = Field(
+        default_factory=_layout_default("model_runtime_directory"),
+        description="Directory holding the two models, materialized from the lockfile",
+    )
+    """Where CLIP and the translator are loaded from (RFC-035 section 4.5).
+
+    The default is `runtime\\models` under the layout's root, beside
+    `runtime\\postgres`: `scripts/vendor_models.py` materializes it in a
+    checkout, and the installer puts it beside the code. Configurable for the
+    reason the PostgreSQL runtime is: several checkouts can share one tree
+    instead of keeping 924 MB each. Pointing it elsewhere cannot change the
+    model, because whatever tree it names is checked against the lockfile of
+    the code before anything in it is loaded (section 6).
     """
 
     embedded_postgres_directory: Path = Field(

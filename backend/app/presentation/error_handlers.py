@@ -48,6 +48,7 @@ from app.domain.exceptions import (
     GoneError,
     NotFoundError,
 )
+from app.infrastructure.ai.model_runtime import ModelUnavailableError
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -116,6 +117,26 @@ def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=code, content={"detail": str(exc)})
 
 
+def model_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Answer a request that needs a model the installation cannot load.
+
+    503, and not 500, for the reason `/health` answers 503 when the database
+    is away (RFC-034): the service is unavailable, not broken (RFC-035
+    section 6.5). Only the routes that load a model reach this -- search,
+    today -- so devices, folders, the map and thumbnails keep answering.
+
+    Not a `DomainError`, and so a handler of its own: the domain has no
+    opinion about a hash. The `detail` is the error's one line, which names
+    the model, the file and what to do, and holds no file content.
+    """
+    logger.warning("A request needed a model that cannot be loaded: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": str(exc)},
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
-    """Attach the domain-error mapping to `app`."""
+    """Attach the domain-error mapping, and the models' 503, to `app`."""
     app.add_exception_handler(DomainError, domain_error_handler)
+    app.add_exception_handler(ModelUnavailableError, model_unavailable_handler)

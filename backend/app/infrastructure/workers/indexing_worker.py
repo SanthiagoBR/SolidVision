@@ -367,7 +367,16 @@ def run(root: Path, label: str) -> None:
     it the CLIP adapter, into an Infrastructure import graph. Most of the
     test suite imports this module; paying a torch import for a CLI that
     is not being run would be a real cost, not a hypothetical one.
+
+    The models are checked for presence before anything is registered or
+    queued (RFC-035 section 6.1): without them there is nothing this
+    command can do, and it says so in one line (`main()`) rather than
+    leaving a job behind that no model will run.
     """
+    from app.infrastructure.ai.model_runtime import default_runtime
+
+    default_runtime().check_presence()
+
     from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
     from app.infrastructure.config.settings import settings
     from app.infrastructure.filesystem.mounted_device_locator import (
@@ -446,9 +455,17 @@ def main() -> None:
     `app.cli`'s `index` subcommand parses its own arguments the same way and
     calls `run()` directly; this function exists so the module keeps working
     as a script on its own.
+
+    A model that cannot be loaded is one line on stderr and exit code 1
+    (RFC-035 section 6.5), not a traceback.
     """
+    from app.infrastructure.ai.model_runtime import ModelUnavailableError
+
     args = _build_arg_parser().parse_args()
-    run(args.root.resolve(), args.label)
+    try:
+        run(args.root.resolve(), args.label)
+    except ModelUnavailableError as error:
+        raise SystemExit(str(error)) from None
 
 
 if __name__ == "__main__":

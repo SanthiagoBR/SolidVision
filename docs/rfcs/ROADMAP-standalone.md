@@ -97,9 +97,11 @@ Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.2](rfc-03
 
 ---
 
-## RFC-035 — Modelos offline 📋
+## RFC-035 — Modelos offline ✅
 
-Proposto no [RFC-035](rfc-035-modelos-offline.md) 📋. Um piloto, antes do documento, mediu o que o carregamento de hoje faz na rede ([§2](rfc-035-modelos-offline.md#2-problema)). Cada carregamento com rede pergunta ao Hub pelo `main`, mesmo com tudo no cache: o CLIP espera 3,2 s por isso a cada subida. E o tradutor, cujo `main` só tem um `.bin`, dispara uma thread do `transformers` que já baixou 312 MB de um `safetensors` que o app nunca carrega.
+Feito no [RFC-035](rfc-035-modelos-offline.md) ✅, em 2026-10-15. Os dois modelos carregam de `runtime\models`, conferidos contra um lockfile no código, e nada do app alcança o Hub. Dois segundos ramos que o RFC declarou antes da medição entraram ([§16](rfc-035-modelos-offline.md#16-correções-feitas-durante-a-implementação)). O `sha256` dos pesos custa várias vezes o carregamento deles neste HDD (CLIP: +161% a frio, +373% a quente), e um registro de verificação abona o arquivo já conferido, em 2,6 ms. E o `safetensors` convertido do tradutor carrega 2 s mais rápido a frio que o `.bin`: o `vendor_models.py` converte o pickle depois de conferir o hash dele, e a árvore instalada não leva pickle nenhum. A verificação manual com a rede desligada de verdade ficou por fazer.
+
+Um piloto, antes do documento, mediu o que o carregamento de hoje faz na rede ([§2](rfc-035-modelos-offline.md#2-problema)). Cada carregamento com rede pergunta ao Hub pelo `main`, mesmo com tudo no cache: o CLIP espera 3,2 s por isso a cada subida. E o tradutor, cujo `main` só tem um `.bin`, dispara uma thread do `transformers` que já baixou 312 MB de um `safetensors` que o app nunca carrega.
 
 Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.5](rfc-035-modelos-offline.md#25-seis-coisas-que-o-roadmap-presumiu)). Carregar pelo diretório tira o sentido do `EMBEDDING_MODEL`, que sai do `Settings`: o modelo passa a ser parte da versão do código. O `HF_HUB_OFFLINE` vale nos dois modos, e é a segunda linha de proteção: a primeira é carregar pelo diretório, que o piloto mediu com zero requisições. A variável só tem efeito antes da primeira importação do `huggingface_hub`, e é o próprio processo que a põe no ambiente. O checksum é conferido antes de cada carregamento, porque o tradutor é um pickle. O "atual" passa a ser duas revisões fixadas num lockfile, e o "bit a bit" vale no mesmo ambiente: entre máquinas, o RFC mede o tamanho da diferença. A busca por imagem só existe na CLI. E o RFC acrescenta duas coisas que o roadmap não pedia: o aquecimento passa a ser ligado no modo instalado, e o `torchinductor` e o cache do Hugging Face vão para a raiz de dados.
 
@@ -110,9 +112,9 @@ Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.5](rfc-03
 - Garantir que o embedding produzido seja idêntico ao atual. Pesos trocados ou de outra revisão invalidam o acervo inteiro já indexado.
 
 **Critérios de pronto**
-- Com a rede desligada, indexar e buscar (por texto em PT, por texto em EN e por imagem) funcionam numa máquina que nunca acessou o Hugging Face.
-- Tamanho dos pesos em disco: `TBM` MB. Esse número alimenta a decisão do instalador.
-- Embeddings bit a bit iguais aos do carregamento atual, num conjunto fixo de imagens.
+- Com a rede desligada, indexar e buscar (por texto em PT, por texto em EN e por imagem) funcionam numa máquina que nunca acessou o Hugging Face. **Medido numa instalação simulada, só para leitura, com perfil, `%TEMP%` e `%APPDATA%` vazios e um sentinela no lugar da rede:** as 45 imagens indexadas, as buscas em PT (348 ms), em EN (100 ms) e por imagem respondidas, e **zero tentativas de conexão**. Nada gravado fora da raiz de dados ([RFC-035 §15](rfc-035-modelos-offline.md#15-validação)). Com a rede desligada de verdade, à mão, ficou por fazer.
+- Tamanho dos pesos em disco: **881,1 MB** (923 879 942 bytes); comprimidos, 813,8 MB em ZIP e 802,4 MB em LZMA2. Pesos `float32` quase não comprimem: é a maior parcela do instalador, sete vezes o runtime do PostgreSQL.
+- Embeddings bit a bit iguais aos do carregamento atual, num conjunto fixo de imagens. **Bit a bit**, no mesmo processo, contra o carregamento pelo nome: as 45 imagens, uma a uma e em lotes de 8, e as 25 consultas em inglês e em português, antes e depois da conversão do tradutor. Os vetores ficaram num arquivo de referência que um teste `slow` confere.
 
 ---
 

@@ -42,6 +42,9 @@ from app.domain.services.file_revealer_port import FileRevealerPort
 from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 from app.domain.services.volume_catalog import VolumeCatalog
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+from app.infrastructure.ai.device import resolve_device
+from app.infrastructure.ai.model_runtime import CLIP, TRANSLATOR, default_runtime
+from app.infrastructure.ai.query_translator import MarianQueryTranslator
 from app.infrastructure.config.settings import settings
 from app.infrastructure.filesystem.file_revealer import WindowsFileRevealer
 from app.infrastructure.filesystem.mounted_device_locator import MountedDeviceLocator
@@ -115,13 +118,24 @@ def get_embedding_model() -> EmbeddingModelPort:
     section 10 requires while keeping construction itself free: the adapter
     defers both the CLIP checkpoint and the translation model until an
     actual `encode_*` call, so neither importing this module nor calling
-    this provider downloads anything from Hugging Face.
+    this provider reads a model.
+
+    Each adapter is handed the directory of its model in the tree of
+    `settings.model_runtime_directory`, as a function that checks the files
+    against the lockfile and is called on the first load (RFC-035 section
+    5.1). One device for both, resolved once.
 
     `FakeEmbeddingModel` is untouched in
     `app.infrastructure.ai.fake_embedding_model` and remains the test
     double for everything that must not load a real model.
     """
-    return ClipEmbeddingModel()
+    runtime = default_runtime()
+    device = resolve_device()
+    return ClipEmbeddingModel(
+        runtime.loader(CLIP),
+        translator=MarianQueryTranslator(runtime.loader(TRANSLATOR), device=device),
+        device=device,
+    )
 
 
 def get_index_image_use_case(

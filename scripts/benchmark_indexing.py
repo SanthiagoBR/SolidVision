@@ -73,6 +73,7 @@ from app.infrastructure.persistence.postgres_image_repository import (  # noqa: 
     PostgresImageRepository,
 )
 from app.infrastructure.workers.indexing_worker import IndexingWorker  # noqa: E402
+from app.presentation.dependencies import get_embedding_model  # noqa: E402
 from dataset_tools.manifest import (  # noqa: E402
     DEMO_CORPUS_ROOT,
     DEMO_MANIFEST_PATH,
@@ -147,6 +148,17 @@ def _discovered_images(root: Path) -> list[Image]:
             )
         )
     return images
+
+
+def _new_clip() -> ClipEmbeddingModel:
+    """A new adapter, composed as the app composes it.
+
+    Over the checked tree of `runtime/models`, never by name (RFC-035): the
+    provider's undecorated body, so that each call loads its own model.
+    """
+    model = get_embedding_model.__wrapped__()
+    assert isinstance(model, ClipEmbeddingModel)
+    return model
 
 
 def _cosine(left: EmbeddingVector, right: EmbeddingVector) -> float:
@@ -269,7 +281,7 @@ def measure_pipeline(root: Path, batch_size: int) -> dict[str, float]:
             ),
             index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
                 repository=PostgresImageRepository(session),
-                embedding_model=ClipEmbeddingModel(),
+                embedding_model=_new_clip(),
                 content_hasher=Sha256ContentHasher(),
                 batch_size=batch_size,
                 metadata_prefetch_size=512,
@@ -351,7 +363,7 @@ def main() -> None:
         images = _discovered_images(root)
         print(f"Corpus: {len(images)} images from {DEMO_CORPUS_ROOT}")
 
-        model = ClipEmbeddingModel()
+        model = _new_clip()
         load_started = time.perf_counter()
         model.encode_image(images[0])
         print(f"Model load + first encode: {time.perf_counter() - load_started:.2f}s\n")

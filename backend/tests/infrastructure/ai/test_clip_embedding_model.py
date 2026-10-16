@@ -43,6 +43,9 @@ from app.infrastructure.ai.query_translator import QueryTranslator
 DIMENSION = 512
 PRE_PROJECTION_WIDTH = 768
 
+MODEL_DIRECTORY = Path("runtime", "models", "clip-vit-b-32-laion2b-s34b-b79k")
+"""Where the adapter is handed its model from. Never read: the loads are stubs."""
+
 CLIP_MODEL_TARGET = (
     "app.infrastructure.ai.clip_embedding_model.CLIPModel.from_pretrained"
 )
@@ -168,7 +171,7 @@ class StubLoads:
         self.processor = StubProcessor()
         self.model_loads = 0
         self.processor_loads = 0
-        self.requested_names: list[str] = []
+        self.requested: list[tuple[Any, dict[str, Any]]] = []
 
 
 @pytest.fixture()
@@ -179,14 +182,14 @@ def stub_clip(monkeypatch: pytest.MonkeyPatch) -> StubLoads:
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, stubs: StubLoads) -> None:
-    def load_model(name: str, **kwargs: Any) -> StubClipModel:
+    def load_model(source: Any, **kwargs: Any) -> StubClipModel:
         stubs.model_loads += 1
-        stubs.requested_names.append(name)
+        stubs.requested.append((source, kwargs))
         return stubs.model
 
-    def load_processor(name: str, **kwargs: Any) -> StubProcessor:
+    def load_processor(source: Any, **kwargs: Any) -> StubProcessor:
         stubs.processor_loads += 1
-        stubs.requested_names.append(name)
+        stubs.requested.append((source, kwargs))
         return stubs.processor
 
     # Patched by dotted path rather than through an imported symbol: the
@@ -198,8 +201,9 @@ def _install(monkeypatch: pytest.MonkeyPatch, stubs: StubLoads) -> None:
 
 def _adapter(translator: QueryTranslator | None = None) -> ClipEmbeddingModel:
     return ClipEmbeddingModel(
-        device=torch.device("cpu"),
+        lambda: MODEL_DIRECTORY,
         translator=translator or RecordingTranslator(),
+        device=torch.device("cpu"),
     )
 
 
@@ -235,14 +239,42 @@ class TestContract:
         assert stub_clip.model_loads == 0
         assert stub_clip.processor_loads == 0
 
-    def test_the_configured_checkpoint_is_the_one_the_bake_off_selected(
+    def test_the_model_and_the_processor_come_from_the_directory_it_was_handed(
         self, stub_clip: StubLoads, jpeg_path: Path
     ) -> None:
+        """RFC-035 section 5.1: a directory in place of the name, and the Hub out.
+
+        `local_files_only` is written on both calls, so it holds even if the
+        offline variable came too late. Which checkpoint this is -- the one
+        the bake-off selected -- is the lockfile's business now
+        (`test_model_runtime.py`).
+        """
         _adapter().encode_image(_image(jpeg_path))
 
-        assert set(stub_clip.requested_names) == {
-            "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"
-        }
+        assert stub_clip.requested == [
+            (MODEL_DIRECTORY, {"local_files_only": True}),
+            (MODEL_DIRECTORY, {"local_files_only": True}),
+        ]
+
+    def test_the_directory_is_asked_for_on_the_first_load_and_not_before(
+        self, stub_clip: StubLoads, jpeg_path: Path
+    ) -> None:
+        """The directory function is where the files are checked (RFC-035
+        section 6): never on construction, and once for every later call."""
+        asked: list[int] = []
+
+        def directory() -> Path:
+            asked.append(1)
+            return MODEL_DIRECTORY
+
+        adapter = ClipEmbeddingModel(
+            directory, translator=RecordingTranslator(), device=torch.device("cpu")
+        )
+        assert asked == []
+
+        adapter.encode_image(_image(jpeg_path))
+        adapter.encode_text("a lake")
+        assert asked == [1]
 
 
 class TestImageEncoding:

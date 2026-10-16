@@ -6,9 +6,11 @@ them deliberately:
 
     pytest -m slow
 
-First execution downloads roughly 600 MB of CLIP weights plus the Marian
-translation model, and CPU inference takes about half a second per image on
-the machine the bake-off was run on
+Nothing is downloaded (RFC-035): the models are loaded from `runtime\\models`,
+the way the app loads them, and without that tree every test here is skipped
+with the command that materializes it -- `python scripts/vendor_models.py`.
+CPU inference takes about half a second per image on the machine the
+bake-off was run on
 (`experiments/rfc-023-siglip-bakeoff/clip_small_dim_run_output.log`).
 
 These are the tests that would catch a transformers upgrade changing what
@@ -24,7 +26,11 @@ from pathlib import Path
 
 import pytest
 from PIL import Image as PILImage
-from tests.conftest import TEST_DEVICE_ID, make_test_device
+from tests.conftest import (
+    TEST_DEVICE_ID,
+    make_test_device,
+    materialized_embedding_model,
+)
 
 from app.application.use_cases.index_or_update_images import (
     IndexOrUpdateImagesUseCase,
@@ -58,8 +64,8 @@ pytestmark = pytest.mark.slow
 
 @pytest.fixture(scope="module")
 def clip() -> ClipEmbeddingModel:
-    """One adapter for the whole module -- loading the checkpoint is the cost."""
-    return ClipEmbeddingModel()
+    """The app's adapter, over `runtime\\models` -- loading is the cost."""
+    return materialized_embedding_model()
 
 
 def _image(path: Path) -> Image:
@@ -217,7 +223,7 @@ class TestHardCasesWithRealPixelDecoding:
             ),
             index_or_update_images_use_case=IndexOrUpdateImagesUseCase(
                 repository=repository,
-                embedding_model=ClipEmbeddingModel(),
+                embedding_model=materialized_embedding_model(),
                 content_hasher=Sha256ContentHasher(),
                 batch_size=request.param,
                 metadata_prefetch_size=512,

@@ -1,6 +1,6 @@
 """Tests for Portuguese query handling (RFC-023 section 8).
 
-Nothing here downloads a model. The Marian checkpoint is substituted with a
+Nothing here loads a model. The Marian checkpoint is substituted with a
 stub so the routing decision -- translate or don't -- can be asserted
 deterministically and offline; the real checkpoint is exercised only by the
 `slow`-marked tests in `test_clip_embedding_model_slow.py`.
@@ -8,6 +8,7 @@ deterministically and offline; the real checkpoint is exercised only by the
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,10 +16,13 @@ import torch
 from langdetect import DetectorFactory
 
 from app.infrastructure.ai.query_translator import (
-    TRANSLATION_MODEL,
     MarianQueryTranslator,
     QueryTranslator,
 )
+
+MODEL_DIRECTORY = Path("runtime", "models", "opus-mt-romance-en")
+"""Where the translator is handed its model from. Never read: both loads are
+stubs, and what is checked is what they were asked for."""
 
 
 class StubTokenizer:
@@ -60,21 +64,21 @@ class StubLoads:
         self.model = StubTranslationModel()
         self.tokenizer_loads = 0
         self.model_loads = 0
-        self.requested_names: list[str] = []
+        self.requested: list[tuple[Any, dict[str, Any]]] = []
 
 
 @pytest.fixture()
 def stub_marian(monkeypatch: pytest.MonkeyPatch) -> StubLoads:
     stubs = StubLoads()
 
-    def load_tokenizer(name: str, **kwargs: Any) -> StubTokenizer:
+    def load_tokenizer(source: Any, **kwargs: Any) -> StubTokenizer:
         stubs.tokenizer_loads += 1
-        stubs.requested_names.append(name)
+        stubs.requested.append((source, kwargs))
         return stubs.tokenizer
 
-    def load_model(name: str, **kwargs: Any) -> StubTranslationModel:
+    def load_model(source: Any, **kwargs: Any) -> StubTranslationModel:
         stubs.model_loads += 1
-        stubs.requested_names.append(name)
+        stubs.requested.append((source, kwargs))
         return stubs.model
 
     # Patched by dotted path: mypy's strict no-implicit-reexport forbids
@@ -91,7 +95,7 @@ def stub_marian(monkeypatch: pytest.MonkeyPatch) -> StubLoads:
 
 
 def _translator() -> MarianQueryTranslator:
-    return MarianQueryTranslator(device=torch.device("cpu"))
+    return MarianQueryTranslator(lambda: MODEL_DIRECTORY, device=torch.device("cpu"))
 
 
 def test_marian_translator_implements_the_translator_contract() -> None:
@@ -170,13 +174,41 @@ def test_constructing_the_translator_loads_nothing(stub_marian: StubLoads) -> No
     assert stub_marian.tokenizer_loads == 0
 
 
-def test_the_configured_checkpoint_is_the_one_the_rfc_selected(
+def test_the_model_and_the_tokenizer_come_from_the_directory_it_was_handed(
     stub_marian: StubLoads,
 ) -> None:
+    """RFC-035 section 5.1: a directory in place of the name, and the Hub out.
+
+    `local_files_only` is on both calls, so a file the directory lacks is
+    absent rather than looked for on the Hub. Which checkpoint this is, is
+    the lockfile's business (`test_model_runtime.py`).
+    """
     _translator().to_english("propriedade rural com um pequeno lago")
 
-    assert set(stub_marian.requested_names) == {TRANSLATION_MODEL}
-    assert TRANSLATION_MODEL == "Helsinki-NLP/opus-mt-ROMANCE-en"
+    assert stub_marian.requested == [
+        (MODEL_DIRECTORY, {"local_files_only": True}),
+        (MODEL_DIRECTORY, {"local_files_only": True}),
+    ]
+
+
+def test_the_directory_is_asked_for_on_the_first_load_and_not_before(
+    stub_marian: StubLoads,
+) -> None:
+    """The directory function is where the files are checked: never on
+    construction, never for English, and once however many queries follow."""
+    asked: list[int] = []
+
+    def directory() -> Path:
+        asked.append(1)
+        return MODEL_DIRECTORY
+
+    translator = MarianQueryTranslator(directory, device=torch.device("cpu"))
+    translator.to_english("rural property with a small lake")
+    assert asked == []
+
+    translator.to_english("propriedade rural com um pequeno lago")
+    translator.to_english("galpao industrial ao lado de uma fazenda")
+    assert asked == [1]
 
 
 def test_language_detection_seed_is_pinned() -> None:

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from app.infrastructure.config.layout import Layout, layout_at
-from app.infrastructure.config.settings import Settings
+from app.infrastructure.config.settings import RETIRED_KEYS, Settings
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +21,7 @@ def no_setting_in_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     the variables a developer's shell -- or `run -- pytest` -- may carry."""
     for name in Settings.model_fields:
         monkeypatch.delenv(name.upper(), raising=False)
-    for name in ("ENVIRONMENT", "INDEXING_ROOT_PATH"):
+    for name in RETIRED_KEYS:
         monkeypatch.delenv(name, raising=False)
 
 

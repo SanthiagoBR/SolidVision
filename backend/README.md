@@ -62,6 +62,7 @@ The tree is the same in both modes:
 <root>\
     backend\           app\, alembic\, alembic.ini
     runtime\postgres\  the embedded PostgreSQL runtime
+    runtime\models\    CLIP and the translator, from the lockfile (RFC-035)
     pyproject.toml     only in a checkout
     .env               only in a checkout
 ```
@@ -91,8 +92,8 @@ In Notepad, set **Save as type** to *All files* before saving it: with the
 default type, Notepad saves `solidvision.env.txt`, which the app does not read
 (it says so in the log).
 - A key that is not a setting, a retired key (`ENVIRONMENT`,
-  `INDEXING_ROOT_PATH`), or a `DATABASE_*` key in `solidvision.env` is ignored
-  and named in a warning in the log.
+  `INDEXING_ROOT_PATH`, `EMBEDDING_MODEL`), or a `DATABASE_*` key in
+  `solidvision.env` is ignored and named in a warning in the log.
 - A value that does not validate stops the process, with one line on stderr
   that names the file and the key, and no traceback.
 - Write paths without quotes, spaces included. Double quotes turn the `\f`,
@@ -113,6 +114,7 @@ default type, Notepad saves `solidvision.env.txt`, which the app does not read
     logs\              one file per program: uvicorn.log, job_runner.log, ...
     thumbnails\
     postgres\          the embedded cluster, its password and its logs
+    cache\             what the model libraries write; deletable (RFC-035)
 ```
 `THUMBNAIL_DIRECTORY`, `LOG_DIRECTORY` and `EMBEDDED_POSTGRES_DIRECTORY` move
 each of the three. The data directory itself is not configurable.
@@ -216,3 +218,57 @@ These start real servers in temporary directories and are deselected by
 default, like `slow`. Without the runtime they are skipped with the command
 above, not failed. The unit tests of the adapter need no runtime and run in
 the default suite.
+
+## The models, offline (RFC-035)
+
+CLIP (`laion/CLIP-ViT-B-32-laion2B-s34B-b79K`) and the Portuguese-to-English
+translator (`Helsinki-NLP/opus-mt-ROMANCE-en`) are loaded from a directory,
+never by name and never from the network, in both modes. Which models these
+are -- the repository, the commit, and the size and `sha256` of every file -- is
+`backend/app/infrastructure/ai/models.lock.json`, which is code: changing a
+model is a commit, with a migration and a reindexing plan, not a setting.
+
+### Materialize them, once per checkout
+```bash
+python scripts/vendor_models.py --from-cache   # from your Hugging Face cache
+python scripts/vendor_models.py                # or download, at the pinned commits
+```
+Either way every file is checked against the lockfile, and 881 MB land in
+`runtime/models`, outside git. `--from-cache` reads the snapshots a load by
+name left in `~\.cache\huggingface`, and refuses one whose hash is not the
+lockfile's. `--lock` rewrites the lockfile from those snapshots, checking each
+file against what the Hub declares; it is how the lockfile is changed, not
+something a checkout needs. `MODEL_RUNTIME_DIRECTORY` points a checkout at
+another tree -- several checkouts can share one -- and only an identical copy
+is accepted.
+
+### What the app checks
+The translator's weights exist on the Hub only as a pickle,
+`pytorch_model.bin`; `vendor_models.py` checks its hash, converts it to
+`model.safetensors` (the same tensors, the same bytes every time) and leaves no
+pickle in the tree, so the app never unpickles anything.
+
+Every process that loads a model checks, when it starts, that the tree is
+there and every file has its size; and before it loads a model, the `sha256`
+of that model's files. A file already hashed is
+vouched for afterwards by its size, date and NTFS file id, kept in
+`<data>\cache\models-verified.json`. A model that cannot be loaded is one line
+that names the file and what to do: the job runner and the CLI print it and
+exit with 1; the API starts anyway, and search answers 503 with it.
+
+The package `app.infrastructure.ai` sets `HF_HUB_OFFLINE=1`, `HF_HOME` and
+`TORCHINDUCTOR_CACHE_DIR` (both under `<data>\cache`) before anything imports
+`transformers`, overwriting whatever the environment had. Import nothing that
+imports `transformers` or `huggingface_hub` before it.
+
+`WARM_UP_MODELS` defaults to on installed and off in a checkout.
+
+### Their tests
+```bash
+pytest -m slow
+```
+The `slow` tests load the real models from `runtime/models`, and are skipped
+without it, with the command above. One of them compares every load with the
+vectors the load by name produced before RFC-035, kept in
+`tests/fixtures/rfc035_reference_embeddings.npz`: bit for bit on the machine
+that wrote it, within a tolerance elsewhere.

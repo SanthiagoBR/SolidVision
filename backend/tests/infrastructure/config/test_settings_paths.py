@@ -46,11 +46,13 @@ def relative_to_every_path_field() -> str:
 # --------------------------------------------------------------------------
 
 
-def test_the_path_settings_are_the_four_the_rfc_names() -> None:
+def test_the_path_settings_are_the_five_the_rfcs_name() -> None:
+    """RFC-034's four, and the model runtime of RFC-035 section 4.5."""
     assert PATH_FIELDS == [
         "embedded_postgres_directory",
         "embedded_postgres_runtime_directory",
         "log_directory",
+        "model_runtime_directory",
         "thumbnail_directory",
     ]
     assert sorted(PATH_DEFAULTS) == PATH_FIELDS
@@ -149,6 +151,7 @@ def test_the_defaults_are_the_layouts(
     assert loaded.embedded_postgres_runtime_directory == (
         where.root / "runtime" / "postgres"
     )
+    assert loaded.model_runtime_directory == where.root / "runtime" / "models"
 
 
 def test_a_checkout_and_an_installation_share_no_user_directory(

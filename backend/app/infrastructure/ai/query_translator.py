@@ -19,6 +19,7 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, PreTrainedModel
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from app.infrastructure.ai.device import resolve_device
+from app.infrastructure.ai.model_runtime import ModelDirectory, load_failed
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +31,9 @@ logger = get_logger(__name__)
 # Set at import time because `detect()` reads it lazily on first use.
 DetectorFactory.seed = 0
 
-TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-ROMANCE-en"
+# `TRANSLATION_MODEL` used to sit here, the name the checkpoint was loaded by.
+# Since RFC-035 the translator is the lockfile's `translator` entry, loaded
+# from its directory; the name is in `models.lock.json`.
 PORTUGUESE = "pt"
 MAX_TRANSLATION_TOKENS = 128
 
@@ -63,6 +66,13 @@ class MarianQueryTranslator(QueryTranslator):
     Decoding is greedy (`num_beams=1`, `do_sample=False`) so the same query
     always yields the same English string, and therefore the same embedding.
 
+    The weights are those of the pinned `main`, whose only copy on the Hub
+    is `pytorch_model.bin`, a pickle. `vendor_models.py` converts it to a
+    `model.safetensors` -- the same tensors, checked one by one, and 2.2 s
+    faster to load cold -- so this never unpickles anything (RFC-035 section
+    7.4). Not the `safetensors` of the Hub's `refs/pr/6`: that is a bot's
+    pull request, which can change or vanish.
+
     Known limitation, deliberately not solved here: `langdetect` needs a few
     words to work. Full-sentence queries classify correctly, but one- or
     two-word queries are unreliable -- `'fazenda'` is detected as Turkish and
@@ -73,10 +83,10 @@ class MarianQueryTranslator(QueryTranslator):
 
     def __init__(
         self,
-        model_name: str = TRANSLATION_MODEL,
+        model_directory: ModelDirectory,
         device: torch.device | None = None,
     ) -> None:
-        self._model_name = model_name
+        self._model_directory = model_directory
         self._device = device if device is not None else resolve_device()
         self._tokenizer: PreTrainedTokenizerBase | None = None
         self._model: PreTrainedModel | None = None
@@ -130,16 +140,27 @@ class MarianQueryTranslator(QueryTranslator):
         """Load the translation checkpoint once, on first Portuguese query.
 
         Lazy rather than eager so that an English-only deployment -- and the
-        entire fast test suite -- never pays for a second model download or
-        the memory it occupies (RFC-023 section 10).
+        entire fast test suite -- never pays for a second model load or the
+        memory it occupies (RFC-023 section 10). The directory is checked
+        first, and `local_files_only` is written on both calls, for the
+        reasons `ClipEmbeddingModel._ensure_loaded()` gives.
         """
         if self._tokenizer is None or self._model is None:
+            directory = self._model_directory()
             logger.info(
-                "Loading translation model %s onto %s", self._model_name, self._device
+                "Loading translation model from %s onto %s", directory, self._device
             )
-            model = AutoModelForSeq2SeqLM.from_pretrained(self._model_name)
-            model.eval()
-            self._model = model.to(self._device)
-            self._tokenizer = AutoTokenizer.from_pretrained(self._model_name)
+            try:
+                model = AutoModelForSeq2SeqLM.from_pretrained(
+                    directory, local_files_only=True
+                )
+                model.eval()
+                loaded = model.to(self._device)
+                tokenizer = AutoTokenizer.from_pretrained(
+                    directory, local_files_only=True
+                )
+            except Exception as error:
+                raise load_failed(directory) from error
+            self._model, self._tokenizer = loaded, tokenizer
 
         return self._tokenizer, self._model
