@@ -456,16 +456,18 @@ def main() -> None:
     calls `run()` directly; this function exists so the module keeps working
     as a script on its own.
 
-    A model that cannot be loaded is one line on stderr and exit code 1
-    (RFC-035 section 6.5), not a traceback.
+    A model that cannot be loaded is one line on stderr (RFC-035 section 6.5),
+    not a traceback, and exit code 78: running the command again will not
+    help (RFC-036 section 6.1).
     """
     from app.infrastructure.ai.model_runtime import ModelUnavailableError
+    from app.infrastructure.process.supervision import refuse_to_start
 
     args = _build_arg_parser().parse_args()
     try:
         run(args.root.resolve(), args.label)
     except ModelUnavailableError as error:
-        raise SystemExit(str(error)) from None
+        refuse_to_start(str(error))
 
 
 if __name__ == "__main__":

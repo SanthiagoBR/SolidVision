@@ -17,12 +17,14 @@ from pathlib import Path
 import pytest
 
 from app.infrastructure.config import settings as settings_module
+from app.infrastructure.config.constants import EXIT_CANNOT_START
 from app.infrastructure.config.layout import Layout
 from app.infrastructure.config.settings import (
     ConfigurationError,
     LoadedSettings,
     load_settings,
 )
+from app.infrastructure.process.supervision import CannotStart
 
 BACKEND = Path(__file__).resolve().parents[3]
 PASSWORD = "p4ssw0rd-that-must-not-leak"
@@ -250,24 +252,29 @@ def test_the_message_never_repeats_the_value(checkout: Layout) -> None:
 
 
 # --------------------------------------------------------------------------
-# The process: one line on stderr, a non-zero exit, no traceback
+# The process: one line on stderr, exit code 78, no traceback
 # --------------------------------------------------------------------------
 
 
 def test_the_singleton_turns_the_error_into_an_exit_with_its_message(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """78, and not 1: what tells the launcher of RFC-036 that restarting will
+    not help (section 6.1). The line is unchanged, and the exception keeps it,
+    for the launcher's own `failed` event."""
+
     def refuse(where: Layout) -> LoadedSettings:
         raise ConfigurationError("solidvision.env: BATCH_SIZE: not a number")
 
     monkeypatch.setattr(settings_module, "load_settings", refuse)
 
-    with pytest.raises(SystemExit) as stopped:
+    with pytest.raises(CannotStart) as stopped:
         settings_module._load_or_exit()
 
-    assert stopped.value.code == (
-        "SolidVision cannot start: solidvision.env: BATCH_SIZE: not a number"
-    )
+    line = "SolidVision cannot start: solidvision.env: BATCH_SIZE: not a number"
+    assert stopped.value.code == EXIT_CANNOT_START == 78
+    assert stopped.value.line == line
+    assert capsys.readouterr().err == line + "\n"
 
 
 def test_a_process_with_an_invalid_configuration_dies_in_one_line() -> None:
@@ -282,7 +289,7 @@ def test_a_process_with_an_invalid_configuration_dies_in_one_line() -> None:
         timeout=60,
     )
 
-    assert completed.returncode == 1
+    assert completed.returncode == 78
     assert "Traceback" not in completed.stderr
     (line,) = completed.stderr.strip().splitlines()
     assert line.startswith("SolidVision cannot start: environment variable: BATCH_SIZE")

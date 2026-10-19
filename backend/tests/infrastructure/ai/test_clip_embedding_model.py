@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import gc
 import math
+import threading
+import time
 import uuid
 import weakref
 import zlib
@@ -275,6 +277,40 @@ class TestContract:
         adapter.encode_image(_image(jpeg_path))
         adapter.encode_text("a lake")
         assert asked == [1]
+
+    def test_two_first_loads_at_once_load_the_checkpoint_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """RFC-036 section 5.3: the warm-up in its thread, and a search.
+
+        The warm-up used to block the port, so no request could find the
+        adapter unloaded (RFC-026 section 9.1). Beside an open port, a search
+        can arrive while the checkpoint is loading, and must wait for that
+        load rather than start a second one. The load is slowed down so that
+        the second caller is inside `_ensure_loaded` while the first is too.
+        """
+        stubs = StubLoads()
+        _install(monkeypatch, stubs)
+        loading = threading.Event()
+
+        def slow_model(source: Any, **kwargs: Any) -> StubClipModel:
+            loading.set()
+            time.sleep(0.3)
+            stubs.model_loads += 1
+            return stubs.model
+
+        monkeypatch.setattr(CLIP_MODEL_TARGET, slow_model)
+        adapter = _adapter()
+        first = threading.Thread(target=adapter.warm_up)
+        first.start()
+        assert loading.wait(5)
+        second = threading.Thread(target=adapter.warm_up)
+        second.start()
+        first.join(5)
+        second.join(5)
+
+        assert stubs.model_loads == 1
+        assert stubs.processor_loads == 1
 
 
 class TestImageEncoding:

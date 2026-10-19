@@ -93,8 +93,8 @@ class ModelUnavailableError(Exception):
     The model, the file, the problem and what to do (section 6.4), and never
     the content of any file: names, sizes and the prefix of a hash. Who shows
     it decides the rest (section 6.5): the job runner and the CLI print it and
-    exit with 1; the API answers 503 with it on the routes that need a model.
-    Restarting fixes none of the cases.
+    exit with 78, the code of RFC-036 section 6.1; the API answers 503 with it
+    on the routes that need a model. Restarting fixes none of the cases.
     """
 
 

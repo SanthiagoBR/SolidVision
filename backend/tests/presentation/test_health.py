@@ -1,3 +1,11 @@
+"""`/health`: the database decides the status, and `search` says the rest.
+
+RFC-008, and the two fields of RFC-036 section 5.2. With the warm-up off --
+pinned here, whatever the developer's `.env` says -- `search` is `on_demand`:
+the first search loads the models. The other three values are in
+`test_api_in_two_times.py`.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -6,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.infrastructure.config.settings import settings
 from app.infrastructure.persistence.session import get_db
 from app.presentation.api import app
 
@@ -20,12 +29,13 @@ class FakeSession:
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
+def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
     # A yield fixture is a generator function, so the annotation has to say
     # so -- `-> TestClient` described the value pytest hands the test, not
     # what the function returns. The `with` form matters and is why this
     # yields at all: it runs the app's lifespan, which is what the RFC-026
     # warm-up hangs off.
+    monkeypatch.setattr(settings, "warm_up_models", False)
     with TestClient(app) as test_client:
         yield test_client
 
@@ -46,6 +56,8 @@ def test_health_returns_200_when_database_is_available(client: TestClient) -> No
         "database": "connected",
         "version": "0.1.0",
         "environment": "development",
+        "search": "on_demand",
+        "search_detail": None,
     }
 
 
@@ -63,6 +75,8 @@ def test_health_returns_503_when_database_dependency_raises(client: TestClient) 
     assert response.json() == {
         "status": "unhealthy",
         "database": "disconnected",
+        "search": "on_demand",
+        "search_detail": None,
     }
 
 
@@ -79,6 +93,13 @@ def test_health_returns_expected_contract_for_healthy_response(
         app.dependency_overrides.clear()
 
     payload = response.json()
-    assert set(payload) == {"status", "database", "version", "environment"}
+    assert set(payload) == {
+        "status",
+        "database",
+        "version",
+        "environment",
+        "search",
+        "search_detail",
+    }
     assert payload["status"] == "healthy"
     assert payload["database"] == "connected"

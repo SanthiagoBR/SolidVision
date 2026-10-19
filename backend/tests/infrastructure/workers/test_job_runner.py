@@ -354,6 +354,37 @@ class TestAnInterruptedExecutor:
         assert finished is not None
         assert finished.attempts == 0
 
+    def test_ctrl_c_during_a_job_stops_the_executor_too(self, disk: Path) -> None:
+        """RFC-036 section 7.1: the interrupt is a request to stop the process.
+
+        Handing the job back and then claiming it again on the next turn of
+        the loop would leave it `running` under an executor that was asked to
+        stop -- and the launcher would end that executor at its deadline,
+        leaving the job to the reaper and one attempt the poorer. The sleep
+        between polls is where a second turn would show; it fails the test.
+        """
+        saves: list[int] = []
+
+        def interrupt_the_second_batch() -> None:
+            # The second, so the first batch has left a checkpoint behind.
+            saves.append(len(saves))
+            if len(saves) == 2:
+                raise KeyboardInterrupt
+
+        def a_second_turn(_: float) -> None:
+            pytest.fail("the executor kept polling after the interrupt")
+
+        world = World(disk, sleep=a_second_turn)
+        job = world.queue()
+        world.images.on_save_indexed_many = interrupt_the_second_batch
+
+        world.runner.run_forever()
+
+        stopped = world.reload(job)
+        assert stopped.status is JobStatus.PENDING
+        assert stopped.attempts == 0
+        assert stopped.last_processed_relative_path is not None
+
 
 class TestTheReaper:
     def test_a_silent_job_goes_back_to_the_queue_with_its_checkpoint(

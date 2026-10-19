@@ -52,6 +52,11 @@ from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
 from app.infrastructure.logging.logger import get_logger
+from app.infrastructure.process.supervision import (
+    SUPERVISED_FLAG,
+    refuse_to_start,
+    stop_on_stdin_eof,
+)
 from app.infrastructure.workers.indexing_worker import discovered_candidates
 from app.infrastructure.workers.job_progress_observer import JobProgressObserver
 
@@ -125,6 +130,14 @@ class JobRunner:
         load, and on a short stale timeout could be reaped before it had
         done anything at all (RFC-029 section 9.1).
         """
+        self._interrupted = False
+        """Set when an interrupt landed inside a job; the loop then ends.
+
+        `run_claimed()` catches the interrupt to hand the job back, so the
+        loop would otherwise go on and claim the same job again on its next
+        turn: an executor asked to stop would keep the job `running`, and the
+        launcher of RFC-036 would end it at its deadline (section 7.2).
+        """
 
     # ------------------------------------------------------------------
     # The loop
@@ -141,15 +154,17 @@ class JobRunner:
         self.warm_up_now()
         logger.info("Job executor started")
         try:
-            while True:
+            while not self._interrupted:
                 self.reap()
                 if not self.claim_and_run():
                     self._sleep(self._poll_interval)
         except KeyboardInterrupt:
             # Reaching here means the interrupt landed between jobs, so
             # there is nothing to hand back. An interrupt *during* a job
-            # is caught in `run_claimed()`, which returns it to the queue.
-            logger.info("Job executor stopped by the operator")
+            # is caught in `run_claimed()`, which returns it to the queue
+            # and ends the loop through `_interrupted`.
+            pass
+        logger.info("Job executor stopped by the operator")
 
     def warm_up_now(self) -> None:
         """Load the model now, without entering the polling loop.
@@ -247,6 +262,7 @@ class JobRunner:
             # attempt is consumed -- otherwise three ordinary restarts
             # would permanently fail a job that never went wrong.
             logger.info("Job %s interrupted; returning it to the queue", job.id)
+            self._interrupted = True
             return self._finish(job, lambda current: current.release(self._clock()))
         except Exception as error:
             # The message is taken here rather than inside the lambda:
@@ -439,6 +455,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "to keep polling."
         ),
     )
+    parser.add_argument(
+        SUPERVISED_FLAG,
+        action="store_true",
+        help=(
+            "Stop as Ctrl+C would when stdin reaches its end: a job in hand "
+            "goes back to the queue. How the launcher runs this program "
+            "(RFC-036 section 7.1)."
+        ),
+    )
     return parser
 
 
@@ -528,19 +553,32 @@ def main() -> None:
     function, so it holds however the executor is started.
 
     **Without its models, the executor refuses to start** (RFC-035 section
-    6.5): one line on stderr and exit code 1, like a `ConfigurationError`.
+    6.5): one line on stderr and exit code 78, like a `ConfigurationError`.
     It has nothing to do without CLIP, and staying up would claim jobs only
     to fail each one. Both models are checked for presence first, which is
     cheap; the load of CLIP then checks its hashes. Restarting fixes none
-    of it, which is what the launcher of RFC-036 needs to tell apart.
+    of it, and 78 is how the launcher of RFC-036 tells (section 6.1).
+
+    **Stopped before the loop, it leaves in silence, with 0** (RFC-036
+    section 7.1). With `--supervised` the stop can come while `torch` is
+    being imported or the model loaded, and there is no job in hand then:
+    nothing to hand back, and a stop that was asked for is not a failure.
     """
+    args = _build_arg_parser().parse_args()
+    try:
+        if args.supervised:
+            stop_on_stdin_eof()
+        _run(once=args.once)
+    except KeyboardInterrupt:
+        logger.info("Job executor stopped by the operator before it started polling")
+
+
+def _run(*, once: bool) -> None:
     from app.infrastructure.ai.model_runtime import (
         ModelUnavailableError,
         default_runtime,
     )
     from app.infrastructure.persistence.session import SessionLocal
-
-    args = _build_arg_parser().parse_args()
 
     job_session = SessionLocal()
     image_session = SessionLocal()
@@ -549,14 +587,14 @@ def main() -> None:
         # tree is refused in a second rather than after that import.
         default_runtime().check_presence()
         runner = build_runner(job_session, image_session)
-        if args.once:
+        if once:
             runner.warm_up_now()
             runner.reap()
             runner.claim_and_run()
         else:
             runner.run_forever()
     except ModelUnavailableError as error:
-        raise SystemExit(f"SolidVision cannot start: {error}") from None
+        refuse_to_start(f"SolidVision cannot start: {error}")
     finally:
         image_session.close()
         job_session.close()

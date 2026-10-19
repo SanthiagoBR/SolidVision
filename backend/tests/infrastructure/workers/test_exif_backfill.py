@@ -141,13 +141,20 @@ class TestTheModelIsNeverLoaded:
         because the subprocess would not be seeing model imports at all.
         `job_runner.py` is the thing that composes the pipeline, and
         therefore the thing that reaches for `get_embedding_model`.
+
+        Since RFC-036 section 5.3 the composition root imports the adapters
+        when the model is first asked for, not when it is imported: the
+        executor's imports reach the provider and stop there, and the
+        adapter's own module is what brings `torch` in.
         """
         runner = Path(exif_backfill.__file__).with_name("job_runner.py")
 
         loaded = _loaded_after_importing(_every_import_in(runner))
 
         assert "app.presentation.dependencies" in loaded
-        assert "torch" in loaded
+        assert "torch" not in loaded
+        adapter = ["app.infrastructure.ai.clip_embedding_model"]
+        assert "torch" in _loaded_after_importing(adapter)
 
     def test_the_command_it_replaces_is_gone(self) -> None:
         """One backfill, not two -- and no alias left behind (RFC-032 section 8.1)."""

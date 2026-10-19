@@ -124,17 +124,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """Dispatch, and turn a model that cannot be loaded into one line.
 
-    The line names the model, the file and what to do, and the exit code is
-    1 (RFC-035 section 6.5); a traceback would only bury it.
+    The line names the model, the file and what to do (RFC-035 section 6.5);
+    a traceback would only bury it. The exit code is 78, which says that
+    running the command again will not help (RFC-036 section 6.1).
     """
     from app.infrastructure.ai.model_runtime import ModelUnavailableError
+    from app.infrastructure.process.supervision import refuse_to_start
 
     args = _build_arg_parser().parse_args()
 
     try:
         _dispatch(args)
     except ModelUnavailableError as error:
-        raise SystemExit(str(error)) from None
+        refuse_to_start(str(error))
 
 
 def _dispatch(args: argparse.Namespace) -> None:

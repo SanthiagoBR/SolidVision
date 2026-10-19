@@ -195,7 +195,7 @@ def _search(
     Both models are checked for presence first, before `torch` is imported
     or the database is opened (RFC-035 section 6.1). A model that cannot be
     loaded, here or on the load, raises `ModelUnavailableError`, which
-    `app.cli.__main__` prints as one line with exit code 1.
+    `app.cli.__main__` prints as one line with exit code 78 (RFC-036 6.1).
     """
     from app.infrastructure.ai.model_runtime import default_runtime
 

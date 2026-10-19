@@ -20,7 +20,7 @@ O backend está implementado até o **RFC-035**. Cada mudança do projeto é des
 | IA e busca semântica (CLIP, pgvector, API de busca) | 022-026 | Pronto |
 | Acervo real: dispositivos, datas, jobs, arquivos, geolocalização | 027-032 | Pronto |
 | Sem Docker: PostgreSQL embarcado, configuração do usuário, modelos offline | 033-035 | Pronto |
-| Launcher e supervisão de processos | 036 | Pendente |
+| Launcher e supervisão de processos | 036 | Pronto |
 | Frontend | - | Não iniciado |
 
 Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](docs/rfcs/ROADMAP-standalone.md) e a [arquitetura](ARCHITECTURE.md).
@@ -103,6 +103,16 @@ python -m app.cli search-image foto.jpg                      # busca por imagem
 python -m uvicorn app.presentation.api:app                   # API REST
 ```
 Documentação interativa da API em `http://localhost:8000/docs`.
+
+### 5. Subir tudo com o launcher
+Um comando sobe o banco embarcado, aplica as migrations, sobe a API e o executor de jobs, supervisiona os três e para tudo em ordem ([RFC-036](docs/rfcs/rfc-036-launcher-e-supervisao-de-processos.md)):
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.launcher            # até o Ctrl+C
+python -m app.launcher status     # o que está de pé, e em que endereço
+python -m app.launcher stop       # para o launcher de pé, de outro terminal
+```
+A API atende só em `127.0.0.1`, numa porta que o launcher escolhe e informa no `status`. Sem Docker, use `DATABASE_SOURCE=embedded` no `.env`.
 
 ### Verificações de qualidade
 ```powershell

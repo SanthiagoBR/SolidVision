@@ -39,6 +39,8 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
+from app.infrastructure.process.supervision import refuse_to_start
+
 from .constants import SUPPORTED_IMAGE_EXTENSIONS
 from .layout import Environment, Layout, layout
 
@@ -547,6 +549,24 @@ class Settings(BaseSettings):
         "manager on this machine (loopback callers only)",
     )
 
+    api_port: int | None = Field(
+        default=None,
+        ge=1,
+        le=65535,
+        description="The port the launcher serves the API on; unset, it chooses one",
+    )
+    """Unset, the launcher of RFC-036 chooses the port (section 5.4).
+
+    The port of the last start that reached `ready` if it is still free, and
+    otherwise one the system gives; never a fixed 8000, which is one of the
+    ports development servers use most. Set, it is a promise to somebody -- a
+    script, the proxy of a frontend's development server -- and the launcher
+    uses exactly this port or refuses to start, with a line saying so, rather
+    than choosing another. The address is always `127.0.0.1`, and is not a
+    setting: serving the network is not something this API does (RFC-030
+    section 6).
+    """
+
     # The default of each of the five path settings comes from the layout,
     # through `PATH_DEFAULTS`, because it depends on the mode. What is written
     # on the field is the default for the layout of the running code; for any
@@ -865,15 +885,16 @@ def _warnings(where: Layout, file_keys: Sequence[str]) -> tuple[str, ...]:
 
 
 def _load_or_exit() -> LoadedSettings:
-    """The process's own settings, or one line on stderr and a non-zero exit.
+    """The process's own settings, or one line on stderr and exit code 78.
 
     No traceback (section 5.5): whoever reads this is a user or the launcher
-    of RFC-036, and the line already names the file and the key.
+    of RFC-036, and the line already names the file and the key. 78 is what
+    tells the launcher that restarting will not help (RFC-036 section 6.1).
     """
     try:
         return load_settings(layout)
     except ConfigurationError as error:
-        raise SystemExit(f"SolidVision cannot start: {error}") from None
+        refuse_to_start(f"SolidVision cannot start: {error}")
 
 
 settings, configuration_report = _load_or_exit()

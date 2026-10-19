@@ -95,7 +95,8 @@ default type, Notepad saves `solidvision.env.txt`, which the app does not read
   `INDEXING_ROOT_PATH`, `EMBEDDING_MODEL`), or a `DATABASE_*` key in
   `solidvision.env` is ignored and named in a warning in the log.
 - A value that does not validate stops the process, with one line on stderr
-  that names the file and the key, and no traceback.
+  that names the file and the key, no traceback, and exit code 78 -- the code
+  that tells the launcher restarting will not help (RFC-036).
 - Write paths without quotes, spaces included. Double quotes turn the `\f`,
   `\n`, `\r` and `\t` of a Windows path into control characters, and the path
   is refused. So are `%NAME%` (write `${NAME}`), `D:thumbs`, `\thumbs` and an
@@ -120,7 +121,8 @@ default type, Notepad saves `solidvision.env.txt`, which the app does not read
 each of the three. The data directory itself is not configurable.
 
 Each program writes its own log file, named after the module given to `-m`
-(`uvicorn.log`, `job_runner.log`, `embedded.log`, `pytest.log`), because two
+(`launcher.log`, `api.log`, `job_runner.log`, `uvicorn.log`, `embedded.log`,
+`pytest.log`), because two
 processes rotating one file lose records on Windows. `LOG_FILENAME` gives every
 process one fixed name instead; two processes that share a file do not rotate
 it while both are running.
@@ -142,9 +144,10 @@ One line in the `.env`:
 DATABASE_SOURCE=embedded
 ```
 The API, the job runner and the CLI then use the embedded cluster of
-`SolidVision-dev`, which has to be up (`... embedded start`, below). With
-`external`, the default in a checkout, nothing changes: `DATABASE_*` and the
-container.
+`SolidVision-dev`. `python -m app.launcher` (below) starts it, migrates it and
+stops it at the end; anything else run by hand needs it up (`... embedded
+start`). With `external`, the default in a checkout, nothing changes:
+`DATABASE_*` and the container, which the launcher never touches.
 
 ### Running the code as an installed app
 `scripts/stage_installation.py` copies the installed tree to a directory
@@ -153,12 +156,71 @@ outside the repository, without `pyproject.toml`, `.env` and the tests:
 python scripts/stage_installation.py C:\stage\SolidVision --read-only
 $env:PYTHONPATH = "C:\stage\SolidVision\backend"
 $env:LOCALAPPDATA = "C:\stage\profile"      # leave the real profile alone
-python -m app.infrastructure.database.embedded start
-python -m uvicorn app.presentation.api:app
+python -m app.launcher
 python scripts/stage_installation.py C:\stage\SolidVision --remove
 ```
 `--read-only` locks the tree as `C:\Program Files` is locked to an ordinary
 process. It is not the installer: the interpreter is the virtualenv's.
+
+## The launcher (RFC-036)
+
+One command starts the backend, watches it, and stops it in order -- the same
+in a checkout and installed:
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.launcher                 # until Ctrl+C
+python -m app.launcher status          # what is up, and where (another terminal)
+python -m app.launcher stop            # stop the one that is up, and wait
+```
+It starts the embedded cluster and applies the migrations (with
+`DATABASE_SOURCE=embedded`; with `external` it touches no database), then the
+API and the job runner at once, and says it is ready at the first `200` of
+`/health`. The API listens on `127.0.0.1` only, on the port of the last start
+if it is free and otherwise on one the system gives: the URL is in `status`,
+in the log, and in the `ready` event. `API_PORT` fixes the port, and then the
+launcher uses that one or refuses to start.
+
+**Stopping.** Ctrl+C (or `stop`) closes the stdin of both children: the job
+runner hands its job back to the queue, with its checkpoint and without using
+an attempt; the API finishes the requests in flight. The cluster stops last,
+if a launcher started it -- one somebody started with `embedded start` is left
+up. Whatever does not stop within its deadline (15 s for the API, 30 s for the
+job runner) is ended; a second Ctrl+C skips the deadlines. If the launcher
+itself is killed, the children stop on their own and the cluster stays up,
+for the next launcher to adopt (or for `stop` to stop). A stop in order leaves
+no process behind.
+
+**Supervising.** A child that exits is restarted, after 0, 2, 5, 15 or 30 s;
+five exits in ten minutes and it is given up. One that exits with 78 -- an
+invalid configuration, the models missing -- is never restarted: the job
+runner is then left out (indexing unavailable), and without the API the
+launcher stops with 78. A cluster whose postmaster died is started again; the
+API and the job runner reconnect by themselves. `embedded stop` while a
+launcher runs is taken for a crash, and undone within 2 s: stop with
+`python -m app.launcher stop`.
+
+**One per data root.** A second launcher prints where the first one is and
+exits with 0. A checkout (`SolidVision-dev`) and an installed app run side by
+side, each with its cluster and its port.
+
+**For a window.** `--supervised` makes the launcher stop when its stdin ends:
+a window starts it with stdin and stdout on pipes, reads one JSON event per
+line on stdout (`starting`, `phase`, `ready`, `already_running`, `child`,
+`address`, `stopping`, `stopped`, `failed`; see `app/launcher/events.py`),
+and closes stdin to stop it. stderr is for people: the launcher's own lines
+and the children's, each prefixed with its name. Whoever does not read stderr
+must send it to `NUL`. Exit codes: 0, 78 (cannot start, and retrying will not
+help), 1 (anything else, with the traceback in the log).
+
+**What it does not do:** `--reload`. To develop the API with reloading, run
+`python -m uvicorn app.presentation.api:app --reload` by hand, with the
+cluster up (`embedded start`), as before. The API alone, the way the launcher
+runs it, is `python -m app.presentation.api --port 8000` (log: `api.log`).
+
+The API answers in two times: its port opens before the models load, and the
+warm-up (on by default installed) runs in a thread. `/health` says how it is
+going in `search`: `loading`, `ready`, `unavailable` (with `search_detail`) or
+`on_demand`.
 
 ## Embedded PostgreSQL (RFC-033)
 
@@ -254,7 +316,7 @@ of that model's files. A file already hashed is
 vouched for afterwards by its size, date and NTFS file id, kept in
 `<data>\cache\models-verified.json`. A model that cannot be loaded is one line
 that names the file and what to do: the job runner and the CLI print it and
-exit with 1; the API starts anyway, and search answers 503 with it.
+exit with 78; the API starts anyway, and search answers 503 with it.
 
 The package `app.infrastructure.ai` sets `HF_HUB_OFFLINE=1`, `HF_HOME` and
 `TORCHINDUCTOR_CACHE_DIR` (both under `<data>\cache`) before anything imports

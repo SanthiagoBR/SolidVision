@@ -15,6 +15,7 @@ the lockfile, and so by the version of the code.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -73,6 +74,8 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         self._loaded_from: Path | None = None
         self._model: CLIPModel | None = None
         self._processor: ProcessorMixin | None = None
+        self._load_lock = threading.Lock()
+        """One load at a time; see `_ensure_loaded()`."""
 
     def encode_image(self, image: Image) -> EmbeddingVector:
         """Decode the image's pixels and return their CLIP embedding."""
@@ -193,30 +196,42 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         offline mode, so it holds even if the variable came too late (section
         5.1): an optional file the directory does not have is then simply
         absent, and never looked for on the Hub.
+
+        **Once, under a lock, with the check repeated inside it** (RFC-036
+        section 5.3). Two first requests that both find the model unloaded
+        -- the race of RFC-026 section 9.1, which a warm-up that blocked the
+        port used to keep away -- would otherwise both load the checkpoint.
+        Since the warm-up runs in a thread beside the open port, a search
+        that arrives during it waits for the load in progress instead of
+        starting a second one. Once loaded, the check outside the lock is
+        all a call pays.
         """
         if self._model is None or self._processor is None:
-            directory = self._model_directory()
-            logger.info("Loading CLIP model from %s onto %s", directory, self._device)
-            try:
-                model = CLIPModel.from_pretrained(directory, local_files_only=True)
-                # Three upstream typing gaps in transformers 5.15, not real
-                # type errors: `nn.Module.eval` is unannotated,
-                # `PreTrainedModel.to` is wrapped in a decorator whose
-                # signature mypy reads as taking the model itself, and
-                # `AutoProcessor.from_pretrained` is unannotated.
-                # `warn_unused_ignores` will flag each of these the moment a
-                # release types them properly.
-                model.eval()  # type: ignore[no-untyped-call]
-                loaded = model.to(self._device)  # type: ignore[arg-type]
-                processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
-                    directory, local_files_only=True
-                )
-            except Exception as error:
-                raise load_failed(directory) from error
-            self._loaded_from = directory
-            self._model, self._processor = loaded, processor
-
+            with self._load_lock:
+                if self._model is None or self._processor is None:
+                    self._model, self._processor = self._load()
         return self._model, self._processor
+
+    def _load(self) -> tuple[CLIPModel, ProcessorMixin]:
+        directory = self._model_directory()
+        logger.info("Loading CLIP model from %s onto %s", directory, self._device)
+        try:
+            model = CLIPModel.from_pretrained(directory, local_files_only=True)
+            # Three upstream typing gaps in transformers 5.15, not real type
+            # errors: `nn.Module.eval` is unannotated, `PreTrainedModel.to` is
+            # wrapped in a decorator whose signature mypy reads as taking the
+            # model itself, and `AutoProcessor.from_pretrained` is
+            # unannotated. `warn_unused_ignores` will flag each of these the
+            # moment a release types them properly.
+            model.eval()  # type: ignore[no-untyped-call]
+            loaded = model.to(self._device)  # type: ignore[arg-type]
+            processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
+                directory, local_files_only=True
+            )
+        except Exception as error:
+            raise load_failed(directory) from error
+        self._loaded_from = directory
+        return loaded, processor
 
     def _to_device(self, inputs: Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         return {key: value.to(self._device) for key, value in inputs.items()}
