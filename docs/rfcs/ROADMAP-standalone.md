@@ -118,7 +118,11 @@ Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.5](rfc-03
 
 ---
 
-## RFC-036 — Launcher e supervisão de processos 📋
+## RFC-036 — Launcher e supervisão de processos ✅
+
+Feito no [RFC-036](rfc-036-launcher-e-supervisao-de-processos.md) ✅, em 2026-10-18. `python -m app.launcher` sobe o cluster, as migrations, a API e o `job_runner`, declara pronto no primeiro 200 do `/health`, reinicia o que morre com espera crescente e limite, e para tudo em ordem, com o job devolvido à fila. O segundo ramo declarado no RFC entrou: na ordem do texto a subida a quente deu 6,39 s, acima dos 5 s, e a API passou a ser criada junto com o cluster ([§17](rfc-036-launcher-e-supervisao-de-processos.md#17-correções-feitas-durante-a-implementação)). A verificação do logoff, à mão, ficou por fazer.
+
+Sete itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2.6](rfc-036-launcher-e-supervisao-de-processos.md#26-sete-coisas-que-o-roadmap-presumiu)): sem `pg_isready`, porque o `start()` já confere o login; o `job_runner` não é o único a reiniciar, e uma saída 78 não se reinicia; o job é devolvido à fila, e não cancelado; o cluster órfão de um launcher morto é o resultado certo, adotado pelo seguinte; uma instância por raiz de dados, e não por usuário; o comando é o mesmo, mas num checkout o banco padrão continua sendo o Docker, que o launcher não toca; e a decisão em aberto se resolve num launcher só, com o pai que segura o stdin dele: um terminal ou uma janela.
 
 Um ponto de entrada único que sobe e derruba os três processos. O RFC-029 §6 separou o executor da API de propósito, e o launcher preserva essa separação.
 
@@ -131,10 +135,10 @@ Um ponto de entrada único que sobe e derruba os três processos. O RFC-029 §6 
 - Usar o mesmo comando no desenvolvimento e na instalação, para o dia a dia sair do Docker antes do frontend existir.
 
 **Critérios de pronto**
-- Numa máquina com o Docker desligado, um único comando deixa a API respondendo em `localhost`, em `TBM` s a quente.
-- Matar cada um dos três filhos, um de cada vez, resulta em recuperação. O tempo é medido.
-- Fechar o launcher não deixa nenhum processo para trás. Isso é verificado pela lista de processos, não pelo log.
-- Um job longo interrompido pelo encerramento retoma na próxima subida.
+- Numa máquina com o Docker desligado, um único comando deixa a API respondendo em `localhost`, em `TBM` s a quente. **4,46 s** (mediana de cinco, de 4,44 a 4,62 s), do comando ao `ready`, numa instalação simulada só para leitura; a frio, com o `initdb`, 35,0 s ([RFC-036 §16](rfc-036-launcher-e-supervisao-de-processos.md#16-validação)).
+- Matar cada um dos três filhos, um de cada vez, resulta em recuperação. O tempo é medido. **A API volta a responder em 4,6 s; o postmaster é percebido em 1,7 s, e o `/health` volta em 18,6 s, sem reiniciar a API nem o `job_runner`; o `job_runner` é substituído em 12,9 s**, e o job que ele segurava volta a `running` pelo reaper, 121 s depois, com uma tentativa a menos, o custo que o RFC declarou.
+- Fechar o launcher não deixa nenhum processo para trás. Isso é verificado pela lista de processos, não pelo log. **Nenhum processo do launcher, dos filhos ou do cluster** depois de cada parada da medição, a frio, a quente, com um job no meio e pelos três caminhos (`stop`, Ctrl+C, fim do stdin).
+- Um job longo interrompido pelo encerramento retoma na próxima subida. **Retoma**: parado três vezes no meio, por `stop`, por Ctrl+C e pelo fim do stdin, voltou a cada vez a `pending` com o checkpoint e `attempts` 0, e terminou com as 90 imagens do escopo.
 
 **Decisão em aberto, que o frontend herda:** o launcher roda como app de bandeja, como serviço do Windows ou como processo filho de uma janela (Tauri, Electron ou WebView2). Este RFC decide ou deixa a decisão explícita, porque é ela que define como o frontend vai ser aberto.
 

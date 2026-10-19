@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import inspect
+import threading
+import time
 from typing import Any
 
+import pytest
 from fastapi.params import Depends
 from sqlalchemy.orm import Session
 
+import app.presentation.dependencies as dependencies_module
 from app.application.use_cases.index_image import IndexImageUseCase
 from app.application.use_cases.search_images import SearchImagesUseCase
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.config.settings import settings
 from app.infrastructure.persistence.postgres_image_repository import (
     PostgresImageRepository,
@@ -75,7 +80,7 @@ def test_the_embedding_model_provider_takes_no_arguments() -> None:
     `IndexingWorker.main()` imports this provider and calls it as a plain
     zero-argument function. Giving it a `Depends(...)` default -- the
     natural instinct while converting the rest of the module -- would hand
-    the CLI an `lru_cache`d `Depends` object in place of a model, and it
+    the CLI a `Depends` object in place of a model, and it
     would fail at runtime far from the edit that caused it. Nothing is
     given up by the rule: a zero-argument provider is already a valid
     FastAPI dependency, which is how the use-case providers consume it.
@@ -91,15 +96,43 @@ def test_production_wiring_uses_the_real_clip_adapter() -> None:
     assert isinstance(model, EmbeddingModelPort)
 
 
-def test_the_embedding_model_provider_is_lazily_cached() -> None:
-    """Load-once semantics without paying anything at import time.
+def test_two_first_calls_at_once_build_one_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Load-once semantics, even for two callers that arrive together.
 
     RFC-016's eager module-level singleton is not usable here: this module
-    is imported transitively by most of the suite, so construction must be
-    deferred to first call. `lru_cache` is what provides both halves.
+    is imported transitively by most of the suite, so construction is
+    deferred to the first call. That call imports `torch` since RFC-036
+    section 5.3, and takes seconds, while the API already answers: the
+    warm-up thread and the first search can both be in it. The `lru_cache`
+    this used to be runs the function again for the second caller, which
+    would leave the process with two adapters loading the checkpoint twice.
     """
-    assert hasattr(get_embedding_model, "cache_info")
-    assert get_embedding_model.cache_info().maxsize == 1
+    built: list[EmbeddingModelPort] = []
+    release = threading.Event()
+
+    def slow_build() -> EmbeddingModelPort:
+        release.wait(5)
+        built.append(FakeEmbeddingModel())
+        return built[-1]
+
+    monkeypatch.setattr(dependencies_module, "_embedding_model", None)
+    monkeypatch.setattr(dependencies_module, "_build_embedding_model", slow_build)
+    got: list[EmbeddingModelPort] = []
+    callers = [
+        threading.Thread(target=lambda: got.append(get_embedding_model()))
+        for _ in range(2)
+    ]
+    for caller in callers:
+        caller.start()
+    time.sleep(0.2)
+    release.set()
+    for caller in callers:
+        caller.join(5)
+
+    assert len(built) == 1
+    assert got == [built[0], built[0]]
 
 
 def test_resolving_the_embedding_model_downloads_nothing() -> None:

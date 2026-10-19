@@ -4,12 +4,14 @@ The composition root: the one module allowed to know every concrete class
 at once. It imports SQLAlchemy and the CLIP adapter on purpose -- that is
 what composing Infrastructure means -- and it is deliberately exempt from
 the import boundary `tests/test_ai_layer_boundaries.py` enforces over
-`app/presentation/api/`, which covers the routers, not the wiring.
+`app/presentation/api/`, which covers the routers, not the wiring. The CLIP
+adapter is imported by `get_embedding_model()`, on its first call, so that
+importing the API imports no `torch` (RFC-036 section 5.3).
 """
 
 from __future__ import annotations
 
-from functools import lru_cache
+import threading
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -41,10 +43,7 @@ from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.services.file_revealer_port import FileRevealerPort
 from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 from app.domain.services.volume_catalog import VolumeCatalog
-from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
-from app.infrastructure.ai.device import resolve_device
 from app.infrastructure.ai.model_runtime import CLIP, TRANSLATOR, default_runtime
-from app.infrastructure.ai.query_translator import MarianQueryTranslator
 from app.infrastructure.config.settings import settings
 from app.infrastructure.filesystem.file_revealer import WindowsFileRevealer
 from app.infrastructure.filesystem.mounted_device_locator import MountedDeviceLocator
@@ -95,7 +94,10 @@ def get_image_repository(
     return PostgresImageRepository(session)
 
 
-@lru_cache(maxsize=1)
+_embedding_model: EmbeddingModelPort | None = None
+_embedding_model_lock = threading.Lock()
+
+
 def get_embedding_model() -> EmbeddingModelPort:
     """Return the process-wide CLIP adapter, built on first use.
 
@@ -114,11 +116,20 @@ def get_embedding_model() -> EmbeddingModelPort:
     `ClipEmbeddingModel()` at import time would be a landmine the day the
     constructor starts doing real work.
 
-    `lru_cache` gives the load-once/reuse-forever semantics RFC-023
-    section 10 requires while keeping construction itself free: the adapter
-    defers both the CLIP checkpoint and the translation model until an
-    actual `encode_*` call, so neither importing this module nor calling
-    this provider reads a model.
+    **The adapters' modules are imported here, on the first call, and not at
+    the top of this module** (RFC-036 section 5.3). They import `torch` and
+    `transformers`, 13 to 18 s of a hard disk (RFC-034 section 9), and the
+    API's port waits for everything its import graph imports. Nothing else
+    the API serves needs a model.
+
+    **Built once, under a lock**, which is the load-once/reuse-forever of
+    RFC-023 section 10. It used to be an `lru_cache`, which runs the function
+    again for a second caller that arrives before the first has returned --
+    harmless while building cost nothing, and a second adapter, loading the
+    checkpoint a second time, now that the first call imports `torch` while
+    the API already answers: the warm-up thread and the first search would
+    both build one. Construction itself stays free: the adapter defers both
+    models until an actual `encode_*` call.
 
     Each adapter is handed the directory of its model in the tree of
     `settings.model_runtime_directory`, as a function that checks the files
@@ -129,6 +140,19 @@ def get_embedding_model() -> EmbeddingModelPort:
     `app.infrastructure.ai.fake_embedding_model` and remains the test
     double for everything that must not load a real model.
     """
+    global _embedding_model
+    if _embedding_model is None:
+        with _embedding_model_lock:
+            if _embedding_model is None:
+                _embedding_model = _build_embedding_model()
+    return _embedding_model
+
+
+def _build_embedding_model() -> EmbeddingModelPort:
+    from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
+    from app.infrastructure.ai.device import resolve_device
+    from app.infrastructure.ai.query_translator import MarianQueryTranslator
+
     runtime = default_runtime()
     device = resolve_device()
     return ClipEmbeddingModel(
@@ -216,8 +240,8 @@ def get_device_locator() -> DeviceLocator:
 
     **Built per request, and it must not be cached.** The answer changes
     when the user pulls a cable and nothing notifies this process
-    (RFC-027 section 7), so an `lru_cache` here -- of the kind
-    `get_embedding_model` legitimately uses -- would hand a job a drive
+    (RFC-027 section 7), so a cache here -- of the kind
+    `get_embedding_model` legitimately keeps -- would hand a job a drive
     letter that now belongs to a different disk. The adapter is a thin
     shell over an enumeration, so constructing one costs nothing.
 
@@ -344,8 +368,8 @@ def get_volume_catalog() -> VolumeCatalog:
     **Built per request, and it must not be cached.** The rule is
     `get_device_locator`'s, inherited word for word: the answer changes
     when the user pulls a cable and nothing notifies this process
-    (RFC-027 section 7), so an `lru_cache` here -- of the kind
-    `get_embedding_model` legitimately uses -- would report a disk as
+    (RFC-027 section 7), so a cache here -- of the kind
+    `get_embedding_model` legitimately keeps -- would report a disk as
     connected minutes after it left. The adapter is a shell over an
     enumeration it has not yet performed, so constructing one costs a
     reference.

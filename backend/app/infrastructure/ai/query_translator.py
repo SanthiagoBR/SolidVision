@@ -11,6 +11,7 @@ Application code has to learn that the current model speaks one language.
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 
 import torch
@@ -90,6 +91,8 @@ class MarianQueryTranslator(QueryTranslator):
         self._device = device if device is not None else resolve_device()
         self._tokenizer: PreTrainedTokenizerBase | None = None
         self._model: PreTrainedModel | None = None
+        self._load_lock = threading.Lock()
+        """One load at a time, as `ClipEmbeddingModel` does (RFC-036 5.3)."""
 
     def to_english(self, text: str) -> str:
         """Translate `text` when it is Portuguese, otherwise return it unchanged."""
@@ -143,24 +146,28 @@ class MarianQueryTranslator(QueryTranslator):
         entire fast test suite -- never pays for a second model load or the
         memory it occupies (RFC-023 section 10). The directory is checked
         first, and `local_files_only` is written on both calls, for the
-        reasons `ClipEmbeddingModel._ensure_loaded()` gives.
+        reasons `ClipEmbeddingModel._ensure_loaded()` gives -- and the load
+        happens once, under a lock, for the reason it gives too: the first
+        Portuguese search can arrive while the warm-up is loading this.
         """
         if self._tokenizer is None or self._model is None:
-            directory = self._model_directory()
-            logger.info(
-                "Loading translation model from %s onto %s", directory, self._device
-            )
-            try:
-                model = AutoModelForSeq2SeqLM.from_pretrained(
-                    directory, local_files_only=True
-                )
-                model.eval()
-                loaded = model.to(self._device)
-                tokenizer = AutoTokenizer.from_pretrained(
-                    directory, local_files_only=True
-                )
-            except Exception as error:
-                raise load_failed(directory) from error
-            self._model, self._tokenizer = loaded, tokenizer
-
+            with self._load_lock:
+                if self._tokenizer is None or self._model is None:
+                    self._tokenizer, self._model = self._load()
         return self._tokenizer, self._model
+
+    def _load(self) -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
+        directory = self._model_directory()
+        logger.info(
+            "Loading translation model from %s onto %s", directory, self._device
+        )
+        try:
+            model = AutoModelForSeq2SeqLM.from_pretrained(
+                directory, local_files_only=True
+            )
+            model.eval()
+            loaded = model.to(self._device)
+            tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True)
+        except Exception as error:
+            raise load_failed(directory) from error
+        return tokenizer, loaded

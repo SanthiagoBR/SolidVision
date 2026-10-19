@@ -1,14 +1,16 @@
 """Where a model that cannot be loaded shows up, program by program (RFC-035 6.5).
 
     program                      what it does
-    job_runner                   refuses to start: one line on stderr, exit 1
+    job_runner                   refuses to start: one line on stderr, exit 78
     API                          starts; search answers 503 with the line;
-                                 /health keeps answering for the database
-    CLI (search, index)          one line on stderr, exit 1
+                                 /health keeps answering for the database,
+                                 and says `search: unavailable`
+    CLI (search, index)          one line on stderr, exit 78
 
 The three command-line programs run as real processes, because what is
 promised is what a user -- or the launcher of RFC-036 -- sees: an exit code
-and a line, and no traceback. They point `MODEL_RUNTIME_DIRECTORY` at an
+and a line, and no traceback. The code is 78, RFC-036's "restarting will not
+help" (section 6.1), where RFC-035 had 1. They point `MODEL_RUNTIME_DIRECTORY` at an
 empty directory, which a checkout reads from the environment, and their
 `LOCALAPPDATA` at a temporary one, so nothing reaches the developer's data.
 None of them gets as far as importing `torch`: the check of a start comes
@@ -43,6 +45,7 @@ from app.infrastructure.config.settings import settings
 from app.infrastructure.persistence.session import get_db
 from app.presentation.api import app
 from app.presentation.dependencies import get_embedding_model, get_image_repository
+from app.presentation.model_warm_up import model_warm_up
 from tests.application.fakes import FakeImageRepository
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -97,7 +100,7 @@ def test_the_job_runner_refuses_to_start_in_one_line(
         ["-m", "app.infrastructure.workers.job_runner", "--once"], nowhere, tmp_path
     )
 
-    assert completed.returncode == 1
+    assert completed.returncode == 78
     assert last_line(completed) == (
         f"SolidVision cannot start: The models are not in {nowhere}. {REMEDY}"
     )
@@ -112,7 +115,7 @@ def test_a_search_from_the_command_line_says_why_in_one_line(
         tmp_path,
     )
 
-    assert completed.returncode == 1
+    assert completed.returncode == 78
     assert last_line(completed) == f"The models are not in {nowhere}. {REMEDY}"
     assert completed.stdout == ""
 
@@ -128,7 +131,7 @@ def test_indexing_from_the_command_line_queues_nothing_and_says_why(
         tmp_path,
     )
 
-    assert completed.returncode == 1
+    assert completed.returncode == 78
     assert last_line(completed) == f"The models are not in {nowhere}. {REMEDY}"
 
 
@@ -170,6 +173,9 @@ def broken_api(
     app_logger.addHandler(caplog.handler)
     try:
         with TestClient(app) as client:
+            # The warm-up runs in a thread beside the open port (RFC-036
+            # section 5.3); waiting for it here keeps its records in setup.
+            assert model_warm_up.wait(CHILD_SECONDS)
             yield client
     finally:
         app_logger.removeHandler(caplog.handler)
@@ -191,11 +197,19 @@ def test_the_api_starts_and_logs_the_line_without_a_traceback(
     assert failure.exc_info is None
 
 
-def test_health_keeps_answering_for_the_database(broken_api: TestClient) -> None:
+def test_health_keeps_answering_for_the_database(
+    broken_api: TestClient, nowhere: Path
+) -> None:
+    """200, and what is missing (RFC-036 section 5.2): ready for the
+    launcher, and a search box the window draws as unavailable."""
     response = broken_api.get("/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
+    assert response.json()["search"] == "unavailable"
+    assert response.json()["search_detail"] == (
+        f"The models are not in {nowhere}. {REMEDY}"
+    )
 
 
 def test_search_answers_503_with_the_line(

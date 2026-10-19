@@ -10,7 +10,8 @@ suddenly needing a network.
 
 Nothing here loads a real model: the provider is patched with a recorder,
 so what is measured is whether startup reaches for the model at all and
-what it hands it.
+what it hands it. Since RFC-036 section 5.3 the warm-up runs in a thread
+beside the open port, so a test that looks at what it did waits for it.
 """
 
 from __future__ import annotations
@@ -28,6 +29,9 @@ from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.ai.query_translator import MarianQueryTranslator
 from app.infrastructure.config.settings import settings
 from app.presentation.api import _WARM_UP_QUERY, app
+from app.presentation.model_warm_up import model_warm_up
+
+WARM_UP_SECONDS = 30
 
 
 class RecordingEmbeddingModel(EmbeddingModelPort):
@@ -83,6 +87,7 @@ def test_startup_encodes_one_query_when_warm_up_is_enabled(
     with TestClient(app):
         pass
 
+    assert model_warm_up.wait(WARM_UP_SECONDS)
     assert recorder.encoded == [_WARM_UP_QUERY]
 
 
@@ -104,6 +109,8 @@ def test_a_failed_warm_up_does_not_stop_the_server(
     monkeypatch.setattr(dependencies_module, "get_embedding_model", explode)
 
     with TestClient(app) as client:
+        assert client.get("/openapi.json").status_code == 200
+        assert model_warm_up.wait(WARM_UP_SECONDS)
         assert client.get("/openapi.json").status_code == 200
 
 

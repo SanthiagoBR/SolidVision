@@ -383,8 +383,7 @@ def _how_to_run(staged: Staged) -> str:
         "(PowerShell):\n"
         f'    $env:PYTHONPATH = "{staged.backend}"\n'
         '    $env:LOCALAPPDATA = "<an empty directory>"\n'
-        "    python -m app.infrastructure.database.embedded start\n"
-        "    python -m uvicorn app.presentation.api:app"
+        "    python -m app.launcher"
     )
 
 

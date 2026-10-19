@@ -8,6 +8,8 @@ deterministically and offline; the real checkpoint is exercised only by the
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -209,6 +211,39 @@ def test_the_directory_is_asked_for_on_the_first_load_and_not_before(
     translator.to_english("propriedade rural com um pequeno lago")
     translator.to_english("galpao industrial ao lado de uma fazenda")
     assert asked == [1]
+
+
+def test_two_first_loads_at_once_load_the_checkpoint_once(
+    stub_marian: StubLoads, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RFC-036 section 5.3: the first Portuguese search can arrive while the
+    warm-up, in its thread, is loading this model; it waits for that load.
+    The load is slowed so that both callers are inside it at once."""
+    loading = threading.Event()
+
+    def slow_model(source: Any, **kwargs: Any) -> StubTranslationModel:
+        loading.set()
+        time.sleep(0.3)
+        stub_marian.model_loads += 1
+        return stub_marian.model
+
+    monkeypatch.setattr(
+        "app.infrastructure.ai.query_translator.AutoModelForSeq2SeqLM.from_pretrained",
+        slow_model,
+    )
+    translator = _translator()
+    query = "propriedade rural com um pequeno lago"
+    first = threading.Thread(target=translator.to_english, args=(query,))
+    first.start()
+    assert loading.wait(5)
+    second = threading.Thread(target=translator.to_english, args=(query,))
+    second.start()
+    first.join(5)
+    second.join(5)
+
+    assert stub_marian.model_loads == 1
+    assert stub_marian.tokenizer_loads == 1
+    assert stub_marian.model.generate_calls == 2
 
 
 def test_language_detection_seed_is_pinned() -> None:

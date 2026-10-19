@@ -389,7 +389,12 @@ def test_health_answers_503_and_not_500_when_the_cluster_is_absent(
         app.dependency_overrides.clear()
 
     assert response.status_code == 503
-    assert response.json() == {"status": "unhealthy", "database": "disconnected"}
+    assert response.json() == {
+        "status": "unhealthy",
+        "database": "disconnected",
+        "search": "on_demand",
+        "search_detail": None,
+    }
 
 
 def test_a_query_through_the_engine_fails_the_same_way(checkout: Layout) -> None:
