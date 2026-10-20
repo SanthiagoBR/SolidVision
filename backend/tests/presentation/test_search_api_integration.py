@@ -140,7 +140,7 @@ def client(
     """
     app.dependency_overrides[get_db] = lambda: empty_db_session
     app.dependency_overrides[get_embedding_model] = lambda: model
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1") as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -228,7 +228,7 @@ def test_every_request_returns_its_connection_to_the_pool(
     """
     app.dependency_overrides[get_embedding_model] = lambda: model
     try:
-        with TestClient(app) as test_client:
+        with TestClient(app, base_url="http://127.0.0.1") as test_client:
             baseline = checked_out_connections()
 
             for _ in range(5):

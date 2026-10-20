@@ -58,10 +58,11 @@ PATH_DEFAULTS: dict[str, Callable[[Layout], Path]] = {
     "embedded_postgres_directory": lambda where: where.postgres_directory,
     "embedded_postgres_runtime_directory": lambda where: where.postgres_runtime,
     "model_runtime_directory": lambda where: where.model_runtime,
+    "frontend_directory": lambda where: where.frontend_directory,
 }
 """Every path setting, and where its default comes from: the layout.
 
-The five are `Path`, and each leaves `Settings` absolute (section 6.3). A
+The six are `Path`, and each leaves `Settings` absolute (section 6.3). A
 test checks that no other field is a path, and that none of these is ever
 relative.
 """
@@ -567,7 +568,7 @@ class Settings(BaseSettings):
     section 6).
     """
 
-    # The default of each of the five path settings comes from the layout,
+    # The default of each of the six path settings comes from the layout,
     # through `PATH_DEFAULTS`, because it depends on the mode. What is written
     # on the field is the default for the layout of the running code; for any
     # other layout, `load_settings` supplies that layout's. Each path is
@@ -646,6 +647,19 @@ class Settings(BaseSettings):
     cluster and an installed app's are apart by default since RFC-034; the
     setting is for tests, for diagnosis, and for a system disk too small to
     hold the cluster.
+    """
+
+    frontend_directory: Path = Field(
+        default_factory=_layout_default("frontend_directory"),
+        description="Directory holding the interface's build, which the API serves",
+    )
+    """What the API serves at `/` and `/assets` (RFC-037 section 5.1).
+
+    The default is `frontend\\dist` under the layout's root: where `npm run
+    build` writes in a checkout. Without an `index.html` there, the API serves
+    only the API, and says where it looked in one line at its start -- `npm
+    run dev` serves the interface from Vite and needs none of this, and the
+    suite does not either.
     """
 
     log_level: str = Field(default="INFO", description="Logging level")

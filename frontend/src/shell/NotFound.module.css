@@ -1,0 +1,18 @@
+.notFound {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-14);
+  padding: var(--space-40) var(--space-32);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+}
+
+.link {
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+}

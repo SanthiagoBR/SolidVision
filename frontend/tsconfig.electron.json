@@ -1,0 +1,24 @@
+// The main process and the preload, compiled by tsc into dist-electron/ as
+// CommonJS, without Vite (RFC-037 section 4.1). "moduleDetection": "auto" is
+// what leaves preload.ts, which has no import, a plain script: the default under
+// node16 makes every file a module, and a sandboxed preload has no `exports`.
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "node16",
+    "moduleResolution": "node16",
+    "moduleDetection": "auto",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "rootDir": "electron",
+    "outDir": "dist-electron"
+  },
+  "include": ["electron/**/*.ts"],
+  "exclude": ["electron/**/*.test.ts"]
+}

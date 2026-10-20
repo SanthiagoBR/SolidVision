@@ -83,7 +83,7 @@ def disk(tmp_path: Path) -> Path:
 @pytest.fixture()
 def api(disk: Path) -> Iterator[tuple[TestClient, Api]]:
     world = Api(disk)
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         yield client, world
     app.dependency_overrides.clear()
 
@@ -156,7 +156,7 @@ class TestCreating:
         """
         world = Api(disk=None)
         try:
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://127.0.0.1") as client:
                 response = client.post(
                     "/api/v1/jobs", json={"device_id": str(world.device.id)}
                 )

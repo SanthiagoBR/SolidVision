@@ -119,7 +119,7 @@ def world(tmp_path: Path) -> Iterator[World]:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    with TestClient(app) as started:
+    with TestClient(app, base_url="http://127.0.0.1") as started:
         yield started
 
 

@@ -383,7 +383,7 @@ def test_health_answers_503_and_not_500_when_the_cluster_is_absent(
 
     app.dependency_overrides[get_db] = session_on_a_stopped_cluster
     try:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.get("/health")
     finally:
         app.dependency_overrides.clear()

@@ -6,7 +6,9 @@ not an IP address at all. So the "non-loopback is refused" case is the
 *default*, and passes without any effort -- while a test of the permitted
 path that forgets `client=("127.0.0.1", ...)` is refused by guard 2 and never
 exercises the route. The happy path is therefore written first, and every
-client below states its address.
+client below states its address. Its default host, `testserver`, is refused
+too, with a 400, since RFC-037 section 5.2: every client below also says
+`base_url="http://127.0.0.1"`.
 
 **Nothing here launches a process.** The revealer is the real
 `WindowsFileRevealer` with its launcher replaced by a recorder, so the
@@ -137,7 +139,7 @@ def disabled(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def client_from(address: tuple[str, int]) -> TestClient:
-    return TestClient(app, client=address)
+    return TestClient(app, client=address, base_url="http://127.0.0.1")
 
 
 class TestThePermittedPathActuallyPassesBothGuards:
@@ -218,7 +220,7 @@ class TestGuardTwoLoopback:
         self, world: World, enabled: None
     ) -> None:
         """`("testclient", 50000)` is not an address, and "unknown" is not "local"."""
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             assert client.post(world.url()).status_code == 403
         assert world.launcher.calls == []
 

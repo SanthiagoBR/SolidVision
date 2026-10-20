@@ -1,0 +1,2047 @@
+{
+  "components": {
+    "schemas": {
+      "ActiveJobSchema": {
+        "description": "The job currently holding a device, as a sidebar needs it.\n\nTwo fields, because two is what the sidebar draws: something is\nhappening, and whether it has started. A client that wants counters\npolls `GET /api/v1/jobs/{id}`, which is the route that publishes\nthem, rather than having them duplicated into every device list\n(RFC-031 section 4).",
+        "properties": {
+          "id": {
+            "description": "The job holding this device",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "description": "pending (queued) or running"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "ActiveJobSchema",
+        "type": "object"
+      },
+      "CapabilitiesSchema": {
+        "description": "What the client is allowed to assume about this server.",
+        "properties": {
+          "local_file_actions": {
+            "description": "Whether POST /api/v1/images/{id}/reveal exists on this installation. **Ask before drawing the button.** With the setting off that route answers 404 with the body of a route that does not exist, so discovering it by trying means a button that disappears after it is clicked (RFC-030 section 6).",
+            "title": "Local File Actions",
+            "type": "boolean"
+          },
+          "platform": {
+            "description": "The operating system this server runs on, as Python names it -- 'win32'. Only the Windows volume adapter and the Windows file revealer ship today (RFC-027 section 4.1).",
+            "title": "Platform",
+            "type": "string"
+          },
+          "version": {
+            "description": "The application version, from settings.project_version",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "local_file_actions",
+          "platform",
+          "version"
+        ],
+        "title": "CapabilitiesSchema",
+        "type": "object"
+      },
+      "CaptureSource": {
+        "description": "One link of the RFC-028 section 4 fallback chain, or the end of it.\n\nA `StrEnum` persisted into a plain `String` column rather than a native\nPostgreSQL `ENUM`. Adding a member -- `gps_derived`, `filename_parsed`,\nthe sources RFC-028 section 11 anticipates -- would then cost a\nmigration for no benefit a closed database type actually provides here.\n\n**There is no `mtime` member, and there must never be one.** RFC-028\nsection 4 is a deliberate reversal of the draft that ended the chain on\nthe filesystem timestamp: `mtime` is systematically wrong for a\ncollection whose life consists of being copied from disk to disk\n(RFC-028 section 2.1), and a member for it would make that wrong date\nlook like one more legitimate source.\n\n**The absence of a value is not a member either.** A row whose source\nis `NULL` was *never examined* -- it predates RFC-028, or it was\nscanned with extraction switched off -- while `UNKNOWN` means it *was*\nexamined and holds no date at all. The two must not collapse: a scan\nrereads the first kind and leaves the second alone, which is what keeps\nre-scanning an unchanged collection free of writes (RFC-028 section\n4.2).",
+        "enum": [
+          "exif_original",
+          "exif_digitized",
+          "unknown"
+        ],
+        "title": "CaptureSource",
+        "type": "string"
+      },
+      "CreateJobRequestSchema": {
+        "description": "What a client sends to ask for an indexing run.\n\n`scopes` are folders relative to the device's mount point, and an\nempty list means the whole device -- which is what zero scope rows\nalready mean in the schema (RFC-029 section 5.2).\n\nThey are plain strings rather than a validated type here on purpose.\nWhat makes a scope legal -- relative, no `..`, no UNC share, and a\nfolder that is actually on that disk -- is a domain rule plus a\nfilesystem question, and answering either in Presentation would put\nbusiness logic in the wrong layer and produce a 422 where a 400 with\na readable message belongs.",
+        "properties": {
+          "device_id": {
+            "description": "The device to index",
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Folders to index, relative to the device root, e.g. [\"2018\", \"2019/janeiro\"]. Omit or send an empty list to index the whole device. Overlapping folders are merged, and the response echoes back the folders that will actually be walked.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "device_id"
+        ],
+        "title": "CreateJobRequestSchema",
+        "type": "object"
+      },
+      "DeviceDetailSchema": {
+        "description": "One device, resolved against the moment the request arrived.",
+        "properties": {
+          "active_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActiveJobSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The pending or running job holding this disk, if any"
+          },
+          "connected": {
+            "description": "Whether the disk was mounted when this request was served. **Resolved per request and never stored** -- it is false from the instant a cable is pulled, and nothing would correct a stored copy. false is an answer, not an error: the system still knows every photo on this disk.",
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "filesystem_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name the volume reports for itself. Informative, frequently empty or 'Untitled', and never an identifier.",
+            "title": "Filesystem Label"
+          },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this disk was first registered",
+            "title": "First Seen At"
+          },
+          "id": {
+            "description": "Identifier of this device",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "indexed_images": {
+            "description": "How many images of this device are in the index. The numerator. **There is no percent_indexed field**, so that no client can show the ratio without having held the scan date (RFC-031 section 4.2).",
+            "title": "Indexed Images",
+            "type": "integer"
+          },
+          "label": {
+            "description": "The user's name for this disk -- 'HD2'",
+            "title": "Label",
+            "type": "string"
+          },
+          "last_scan_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the last scan counted the files on this disk. **Render this wherever you render a percentage**: the count below is the declared denominator and it ages.",
+            "title": "Last Scan At"
+          },
+          "last_scan_file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many supported files the last scan found. The denominator of '% indexed', and only meaningful beside last_scan_at.",
+            "title": "Last Scan File Count"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was last observed plugged in. History, not state -- it never answers 'is it connected now'.",
+            "title": "Last Seen At"
+          },
+          "mount_point": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the disk is attached right now -- 'F:/' -- or null when it is not. Absent from the database on purpose: a drive letter is a function of mount order.",
+            "title": "Mount Point"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The volume's capacity, if known",
+            "title": "Total Bytes"
+          },
+          "volume_identity": {
+            "description": "The platform-stable identity this device is derived from. Opaque: compare it for equality, never parse it.",
+            "title": "Volume Identity",
+            "type": "string"
+          },
+          "volume_kind": {
+            "description": "Which platform's identifier scheme the identity came from",
+            "title": "Volume Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "filesystem_label",
+          "volume_identity",
+          "volume_kind",
+          "connected",
+          "mount_point",
+          "total_bytes",
+          "first_seen_at",
+          "last_seen_at",
+          "last_scan_at",
+          "last_scan_file_count",
+          "indexed_images",
+          "active_job"
+        ],
+        "title": "DeviceDetailSchema",
+        "type": "object"
+      },
+      "DeviceListSchema": {
+        "description": "Every device the system knows, sorted by label.",
+        "properties": {
+          "devices": {
+            "description": "Known devices, connected and not, ordered by label",
+            "items": {
+              "$ref": "#/components/schemas/DeviceDetailSchema"
+            },
+            "title": "Devices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "devices"
+        ],
+        "title": "DeviceListSchema",
+        "type": "object"
+      },
+      "DeviceSchema": {
+        "description": "The disk an image is on, as the user named it, and whether it is here.",
+        "properties": {
+          "connected": {
+            "description": "Whether the disk was mounted when this response was built. Asked of the operating system per request and never stored, so it can change between two requests for the same image.",
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Stable identifier of the device",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "The user's name for the disk, e.g. HD3",
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "connected"
+        ],
+        "title": "DeviceSchema",
+        "type": "object"
+      },
+      "FolderListSchema": {
+        "description": "One level of one device's folder tree.\n\n`path` and `parent` are both canonical spellings and both\n`/`-separated, and `\"\"` means the device root in either of them. The\nroot's parent is the root, so a client walking upwards stops there\nrather than falling off.",
+        "properties": {
+          "device_id": {
+            "description": "The device these folders are on",
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "folders": {
+            "description": "The folders directly inside `path`, sorted by name. Files are not listed: what goes back in scopes[] is a folder. Not paginated -- a folder with thousands of subfolders returns all of them, a declared debt (RFC-031 section 8.3).",
+            "items": {
+              "$ref": "#/components/schemas/FolderSchema"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "parent": {
+            "description": "One level up; empty at the root, and the root's parent is itself",
+            "title": "Parent",
+            "type": "string"
+          },
+          "path": {
+            "description": "The folder that was listed, as the filesystem spells it. Empty means the device root.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "path",
+          "parent",
+          "folders"
+        ],
+        "title": "FolderListSchema",
+        "type": "object"
+      },
+      "FolderSchema": {
+        "description": "One folder inside a device, and what this system knows about it.",
+        "properties": {
+          "has_children": {
+            "description": "Whether this folder holds folders of its own -- draw an expand arrow only when true",
+            "title": "Has Children",
+            "type": "boolean"
+          },
+          "indexed_images": {
+            "description": "How many images anywhere under this folder are in the index. An exact count, and **not** a share of anything: there is no denominator per folder, because obtaining one would mean walking the subtree (RFC-031 section 2.3). Render '1,204 indexed', never a percentage.",
+            "title": "Indexed Images",
+            "type": "integer"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The job this state was read from, or null when no job explains it. For a cancelled or failed one, last_processed_relative_path is where the work stopped."
+          },
+          "name": {
+            "description": "The folder's own name, as the filesystem spells it",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "Device-relative path, '/'-separated. **This is the exact string to send in scopes[] on POST /api/v1/jobs** -- it is the filesystem's own spelling, not whatever spelling was asked for, because the job route compares path parts exactly.",
+            "title": "Path",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/FolderState",
+            "description": "indexing, queued, partial, indexed or never_indexed, derived from the device's job history. partial means some of it was walked and nothing claims all of it was -- read `job` for where it stopped."
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "has_children",
+          "indexed_images",
+          "state",
+          "job"
+        ],
+        "title": "FolderSchema",
+        "type": "object"
+      },
+      "FolderState": {
+        "description": "How much of a folder this system has indexed, as one word.\n\nA `StrEnum` so the member *is* the string on the wire, following\n`JobStatus`. Unlike `JobStatus` it is never written to a column --\nthere is no folder table and RFC-031 adds no migration -- so the\nchoice is only about the JSON.",
+        "enum": [
+          "indexing",
+          "queued",
+          "partial",
+          "indexed",
+          "never_indexed"
+        ],
+        "title": "FolderState",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImageSchema": {
+        "description": "One indexed image, where it is, and whether it can be reached right now.",
+        "properties": {
+          "absolute_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the file is on this machine right now, e.g. F:/fotos/2018/junho/DJI_0042.JPG. Null when the disk is not connected -- which is an answer, not an error: the file is on device.label. For display: it is not an identifier and no route accepts it.",
+            "title": "Absolute Path"
+          },
+          "capture_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where captured_at came from: exif_original (the camera clock at the shot), exif_digitized (when the image was digitised), or unknown (the file carries no date). Null if the file has not been examined yet."
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the photo was taken, in the camera's local time, with no time zone and no offset (e.g. 2018-07-14T15:32:05). Null when unknown.",
+            "title": "Captured At"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceSchema",
+            "description": "The disk the file is on"
+          },
+          "filename": {
+            "description": "Name of the file, without its extension",
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable identifier of the image",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the photo was taken, north-south, in decimal degrees (WGS 84; negative is south). This is where the drone was, not the ground it photographed, which for an oblique shot can be tens to hundreds of metres away. Null when unknown; latitude and longitude are always both present or both null.",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the photo was taken, east-west, in decimal degrees (negative is west). Null exactly when latitude is.",
+            "title": "Longitude"
+          },
+          "position_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PositionSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where latitude and longitude came from: exif_gps (the GPS block of the file's EXIF) or unknown (the file has no usable position). Null if the file has not been examined yet."
+          },
+          "relative_path": {
+            "description": "Where the file is within its disk, with forward slashes, e.g. fotos/2018/junho/DJI_0042.JPG. Always present, whether or not the disk is connected. For display: it is not an identifier and no route accepts it.",
+            "title": "Relative Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "captured_at",
+          "capture_source",
+          "latitude",
+          "longitude",
+          "position_source",
+          "device",
+          "relative_path",
+          "absolute_path"
+        ],
+        "title": "ImageSchema",
+        "type": "object"
+      },
+      "JobListSchema": {
+        "description": "A page of jobs, newest first.",
+        "properties": {
+          "jobs": {
+            "description": "Matching jobs, most recent first",
+            "items": {
+              "$ref": "#/components/schemas/JobSchema"
+            },
+            "title": "Jobs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "jobs"
+        ],
+        "title": "JobListSchema",
+        "type": "object"
+      },
+      "JobSchema": {
+        "description": "One indexing job, as a client polling it sees it.",
+        "properties": {
+          "attempts": {
+            "description": "How many times a worker was given this job and did not finish it -- a crashed executor, a reboot mid-run",
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "cancel_requested": {
+            "description": "Whether a stop has been asked for. A running job keeps working until the batch in flight finishes, so this can be true while status is still running.",
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the job was queued",
+            "title": "Created At"
+          },
+          "device_id": {
+            "description": "The device being indexed",
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "discovered_files": {
+            "description": "Supported files the scan has found so far. **A running count, not a total, until discovery_complete is true** -- render it as 'scanning N files' rather than as a percentage until then.",
+            "title": "Discovered Files",
+            "type": "integer"
+          },
+          "discovery_complete": {
+            "description": "Whether the scan has finished, which is what turns discovered_files into a denominator",
+            "title": "Discovery Complete",
+            "type": "boolean"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the job failed; null unless status is failed",
+            "title": "Error Message"
+          },
+          "failed_images": {
+            "description": "Files that could not be indexed",
+            "title": "Failed Images",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the job reached a final state; null until then",
+            "title": "Finished At"
+          },
+          "id": {
+            "description": "Identifier of this job",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_processed_relative_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The checkpoint: every file up to and including this one is durable. Relative to the device, never an absolute path.",
+            "title": "Last Processed Relative Path"
+          },
+          "processed_images": {
+            "description": "Images embedded or re-embedded",
+            "title": "Processed Images",
+            "type": "integer"
+          },
+          "scopes": {
+            "description": "The folders this job will actually walk, after overlapping requests were merged. An empty list means the whole device.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "skipped_images": {
+            "description": "Images the incremental check passed over because nothing changed. Large on a re-scan, and the reason a progress bar computed from processed_images alone looks stuck.",
+            "title": "Skipped Images",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a worker first picked the job up. Preserved across a resume, so it is when the work began rather than when it was last resumed.",
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus",
+            "description": "pending (queued), running, completed, failed, or cancelled. The last three are final."
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "status",
+          "scopes",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "discovered_files",
+          "discovery_complete",
+          "processed_images",
+          "skipped_images",
+          "failed_images",
+          "last_processed_relative_path",
+          "cancel_requested",
+          "attempts",
+          "error_message"
+        ],
+        "title": "JobSchema",
+        "type": "object"
+      },
+      "JobStatus": {
+        "description": "Where a job is in its life.\n\nA `StrEnum` so that the member *is* the string the database column\nholds. The column is `TEXT` rather than a PostgreSQL `ENUM` for the\nreason RFC-028 gave `capture_source`: adding a state later should not\ncost a migration.",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "MapCellSchema": {
+        "description": "One square of the grid: where its centre is, and how many photos are in it.",
+        "properties": {
+          "count": {
+            "description": "How many photos fall in the cell; never 0",
+            "title": "Count",
+            "type": "integer"
+          },
+          "latitude": {
+            "description": "Centre of the cell, decimal degrees: the photos' latitude rounded to precision_applied places",
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Centre of the cell, decimal degrees: the photos' longitude rounded to precision_applied places",
+            "title": "Longitude",
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "count"
+        ],
+        "title": "MapCellSchema",
+        "type": "object"
+      },
+      "MapResponseSchema": {
+        "description": "The body of a map request.\n\n`precision_applied` echoes the precision actually used, the way search\nechoes `limit` (RFC-026): when the requested grid would have had more\nthan `MAX_MAP_CELLS` squares, the grid was coarsened, and a client that\ncould not see that would mistake bigger squares for a sparser\ncollection.",
+        "properties": {
+          "cells": {
+            "description": "Every non-empty cell in the area, under the device and date filters, ordered by latitude then longitude. Only images with an embedding -- the ones a search could return -- are counted.",
+            "items": {
+              "$ref": "#/components/schemas/MapCellSchema"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "excluded_unknown_position": {
+            "description": "How many photos under the same device and date filters have no position, and so are on no map at all -- the same number a 'near here' search reports. Not restricted to the area: a photo with no coordinates is in no area.",
+            "title": "Excluded Unknown Position",
+            "type": "integer"
+          },
+          "precision_applied": {
+            "description": "Decimal places of a degree the cells were rounded to (3 is about 100 m). Lower than requested when the requested grid had too many cells, or than the finest grid offered.",
+            "title": "Precision Applied",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "precision_applied",
+          "cells",
+          "excluded_unknown_position"
+        ],
+        "title": "MapResponseSchema",
+        "type": "object"
+      },
+      "PositionSource": {
+        "description": "Where `latitude`/`longitude` were read from, or that nothing was.\n\nA `StrEnum` persisted into a plain `String` column rather than a native\nPostgreSQL `ENUM`. Two future members already have names and are\ndeliberately **not** members yet: `'manual'` -- the user marks the point\non the map -- and `'subject_estimated'` -- the photographed point\ncomputed from gimbal and altitude (RFC-032 sections 9 and 10). Each has\na writer to build first, and adding either must not cost a migration.\n\n**The absence of a value is not a member.** A row whose source is NULL\nwas *never examined* -- it predates RFC-032, or was scanned with\n`extract_gps` off -- while `UNKNOWN` means it *was* examined and holds\nno usable position. The two must not collapse: a scan writes only NULL\nrows, which is what keeps re-scanning an unchanged collection free of\nwrites, and files without GPS are numerous in exactly the collection\nthis RFC serves.\n\n**There is no XMP member.** RFC-032 section 2.3 measured 40 real DJI\nfiles carrying a `drone-dji` XMP packet and found no latitude or\nlongitude in any of them; a member for a source that was never seen to\nhold a position would be a fallback that never fires.",
+        "enum": [
+          "exif_gps",
+          "unknown"
+        ],
+        "title": "PositionSource",
+        "type": "string"
+      },
+      "RegisterDeviceRequestSchema": {
+        "description": "What a client sends to register a disk it saw in `GET /volumes`.\n\n**There is no path field, and there must never be one.** The identity\nis an opaque key the server minted; the server looks it up in an\nenumeration it just performed and uses *its own* mount point as the\nroot. A client never composes a location, and an identity a client\ninvented resolves to nothing at all -- which is the difference between\nthis and accepting `{\"path\": \"D:\\\\fotos\"}`, and the whole of RFC-031\nsection 5.1. `test_device_registration_takes_no_path.py` asserts the\nfield set here is exactly these three.\n\nBoth identity fields are plain `str` rather than `VolumeIdentity` and\n`VolumeKind`, and that is deliberate. Declaring `volume_kind:\nVolumeKind` would have FastAPI refuse an unknown value with a `422`\nbefore the use case ever runs, and the `400\nInvalidVolumeIdentityError` RFC-031 section 6 specifies would become\nunreachable. It is the argument `CreateJobRequestSchema` already\nmakes for `scopes`: what makes a value legal is a domain rule, and\nanswering it in Presentation produces a 422 where a 400 with a\nreadable message belongs.\n\nExtra fields are **ignored**, which is Pydantic's default and is left\nalone here. A client that smuggles in a `path` gets a successful\nregistration of the volume it named and no path is opened, which is\nwhat the guard test asserts. Only `RenameDeviceRequestSchema` forbids\nextras, and for a reason specific to it.",
+        "properties": {
+          "label": {
+            "default": "",
+            "description": "What to call this disk -- 'HD2'. Optional: omitted, the device keeps the name it has, or falls back to the volume's own filesystem label and then to the identity. Sent on a second registration, it is applied, exactly as PATCH would.",
+            "title": "Label",
+            "type": "string"
+          },
+          "volume_identity": {
+            "description": "The opaque identity from GET /api/v1/volumes, sent back unchanged. Never parsed, never composed into a path.",
+            "title": "Volume Identity",
+            "type": "string"
+          },
+          "volume_kind": {
+            "description": "Which platform's identifier scheme the identity came from, e.g. 'windows-volume-guid'. An unknown kind is a 400.",
+            "title": "Volume Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "volume_identity",
+          "volume_kind"
+        ],
+        "title": "RegisterDeviceRequestSchema",
+        "type": "object"
+      },
+      "RenameDeviceRequestSchema": {
+        "additionalProperties": false,
+        "description": "What a client sends to rename a disk. Only the label, and strictly.\n\n**`extra=\"forbid\"`, the only schema in the project that has it.** The\ndefault is `extra=\"ignore\"`, and the default is wrong here in a way\nthat is invisible: a client sending `last_scan_file_count` would get\na `200`, believe it had edited the declared denominator of the \"%\nindexed\" figure, and have been silently ignored. A refusal is the\nonly honest answer, because the belief the request encodes is false\n(RFC-031 section 7).\n\nIt is not being added to the other schemas of this RFC. This is the\nroute where a field a client might plausibly send is a field this\nsystem deliberately does not let anyone write, and that is what makes\nsilence dangerous here and unremarkable elsewhere.",
+        "properties": {
+          "label": {
+            "description": "The new name for this disk. The only editable field.",
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "RenameDeviceRequestSchema",
+        "type": "object"
+      },
+      "SearchResponseSchema": {
+        "description": "The body of a successful search.\n\n`query` echoes what the client sent, never what the model was asked.\nThe string CLIP actually encodes is the RFC-023 template wrapped\naround a possibly translated query -- for a Portuguese input it comes\nback as `a photo of . a rural property with a lake`, leading `\". \"`\nand all (RFC-025 section 11.5). Publishing that would make an\ninternal artifact of the translation path part of the contract, and\nwould change the response the day the template changes.\n\n`limit` echoes the value actually used, not the one requested, which\nis usually not sent at all: without it a caller receiving three\nresults cannot tell \"there were only three images\" from \"the default\nis smaller than I assumed\".",
+        "properties": {
+          "excluded_unknown_date": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed images the capture-date filter left out because their date is unknown, counted over the whole index under the other filters rather than over this page. Null when no date filter was sent.",
+            "title": "Excluded Unknown Date"
+          },
+          "excluded_unknown_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed images the near_lat/near_lon/radius_m circle left out because they have no position, counted over the whole index under the other filters rather than over this page. Null -- not 0 -- when no circle was sent: 0 would mean the circle hid nothing.",
+            "title": "Excluded Unknown Position"
+          },
+          "limit": {
+            "description": "The page size actually applied",
+            "title": "Limit",
+            "type": "integer"
+          },
+          "query": {
+            "description": "The query exactly as the client sent it",
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "description": "Matches, most similar first, in the repository's order",
+            "items": {
+              "$ref": "#/components/schemas/SearchResultSchema"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "limit",
+          "results",
+          "excluded_unknown_date",
+          "excluded_unknown_position"
+        ],
+        "title": "SearchResponseSchema",
+        "type": "object"
+      },
+      "SearchResultSchema": {
+        "description": "One ranked image, as a client sees it: the image, plus how well it matched.\n\n**The path is published now, and RFC-030 section 2 is why.** RFC-026\nkept it out with two arguments, recorded here rather than erased:\n\n> *\"Publishing it would leak the server's filesystem layout to every\n> caller, and would hand clients an identifier that changes whenever a\n> file moves.\"*\n\nThe first dissolved. In a local-first deployment the server's\nfilesystem *is* the user's, and a search that ends in a filename and a\nUUID has found a photo without telling anyone where it is -- the last\nstep of the product was missing. The second still holds, and it shapes\nwhat is published: `id` remains the only identifier, and the paths are\ndisplay. No route accepts a path back.\n\nThe shape is `ImageSchema` -- the body of `GET /images/{id}`, which\nthis docstring once promised \"RFC-027\" would add -- plus `similarity`,\nwhich exists only inside a query (RFC-025 section 4.1).\n\n**A hit on a disconnected disk is a full answer.** `device.connected`\nis false, `absolute_path` is null, and `device.label` and\n`relative_path` say \"HD3, fotos/2018/junho\" -- which, for someone with\ntwenty disks, is the expensive part of the question (RFC-030 section\n4.1).\n\n`captured_at` and `capture_source` are attributes of the photograph,\nidentical for every caller and every query, and the two things that\nmake a date-filtered result legible (RFC-028 section 12). `latitude`,\n`longitude` and `position_source` do the same for a circle (RFC-032).",
+        "properties": {
+          "absolute_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the file is on this machine right now, e.g. F:/fotos/2018/junho/DJI_0042.JPG. Null when the disk is not connected -- which is an answer, not an error: the file is on device.label. For display: it is not an identifier and no route accepts it.",
+            "title": "Absolute Path"
+          },
+          "capture_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where captured_at came from: exif_original (the camera clock at the shot), exif_digitized (when the image was digitised), or unknown (the file carries no date). Null if the file has not been examined yet."
+          },
+          "captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the photo was taken, in the camera's local time, with no time zone and no offset (e.g. 2018-07-14T15:32:05). Null when unknown.",
+            "title": "Captured At"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceSchema",
+            "description": "The disk the file is on"
+          },
+          "filename": {
+            "description": "Name of the file, without its extension",
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable identifier of the image",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the photo was taken, north-south, in decimal degrees (WGS 84; negative is south). This is where the drone was, not the ground it photographed, which for an oblique shot can be tens to hundreds of metres away. Null when unknown; latitude and longitude are always both present or both null.",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the photo was taken, east-west, in decimal degrees (negative is west). Null exactly when latitude is.",
+            "title": "Longitude"
+          },
+          "position_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PositionSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where latitude and longitude came from: exif_gps (the GPS block of the file's EXIF) or unknown (the file has no usable position). Null if the file has not been examined yet."
+          },
+          "relative_path": {
+            "description": "Where the file is within its disk, with forward slashes, e.g. fotos/2018/junho/DJI_0042.JPG. Always present, whether or not the disk is connected. For display: it is not an identifier and no route accepts it.",
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "similarity": {
+            "description": "Cosine similarity in [-1, 1]; 1 is identical direction",
+            "title": "Similarity",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "captured_at",
+          "capture_source",
+          "latitude",
+          "longitude",
+          "position_source",
+          "device",
+          "relative_path",
+          "absolute_path",
+          "similarity"
+        ],
+        "title": "SearchResultSchema",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VolumeListSchema": {
+        "description": "What is plugged into this machine, ordered by mount point.",
+        "properties": {
+          "volumes": {
+            "description": "Mounted volumes, registered or not. Volumes the platform refuses to name -- an empty optical drive, a locked BitLocker volume -- are skipped rather than reported as errors.",
+            "items": {
+              "$ref": "#/components/schemas/VolumeSchema"
+            },
+            "title": "Volumes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "volumes"
+        ],
+        "title": "VolumeListSchema",
+        "type": "object"
+      },
+      "VolumeSchema": {
+        "description": "One volume attached to this machine right now.",
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The device this volume already is, or null when this system has never seen it. Non-null is how an 'add a device' screen shows a disk as already added instead of letting a user register it twice to no effect (RFC-031 section 6.1).",
+            "title": "Device Id"
+          },
+          "filesystem_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name the volume reports for itself, if any",
+            "title": "Filesystem Label"
+          },
+          "mount_point": {
+            "description": "Where it is attached right now -- 'G:/'",
+            "title": "Mount Point",
+            "type": "string"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The volume's capacity, if known",
+            "title": "Total Bytes"
+          },
+          "volume_identity": {
+            "description": "The identity to send back to POST /api/v1/devices. Opaque: it is a key, not a location, and the server never accepts a path.",
+            "title": "Volume Identity",
+            "type": "string"
+          },
+          "volume_kind": {
+            "description": "Which platform's identifier scheme this identity came from",
+            "title": "Volume Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "volume_identity",
+          "volume_kind",
+          "mount_point",
+          "filesystem_label",
+          "total_bytes",
+          "device_id"
+        ],
+        "title": "VolumeSchema",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Semantic image search API for SolidVision",
+    "title": "SolidVision",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/capabilities": {
+      "get": {
+        "description": "Report the three things a client draws differently because of.\n\n`local_file_actions` mirrors `settings.allow_local_file_actions`\nexactly, including when it is `False` -- a `200` saying \"no\" is the\nwhole reason this route exists, and is why the configuration guard is\nnot on it.\n\n`platform` is `sys.platform`, read here rather than inferred from\nanything: only the Windows volume adapter and the Windows file\nrevealer ship, and a client is entitled to know which operating\nsystem answered (RFC-027 section 4.1).\n\n`version` is `settings.project_version` -- the package version, which\nis `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the\nsprint number, and the sprint number is not the version of anything\nthat ships. The setting is reported as it stands rather than the\nproject being renumbered to match an illustration.\n\nThe bar for a fourth field is *the UI draws something different\nbecause of it*. Without a criterion this becomes a configuration\ndump, which is the risk RFC-031 section 15 names.",
+        "operationId": "get_capabilities_api_v1_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The caller is not on this machine. The body carries no configuration at all."
+          }
+        },
+        "summary": "What this installation supports",
+        "tags": [
+          "capabilities"
+        ]
+      }
+    },
+    "/api/v1/devices": {
+      "get": {
+        "description": "Return every disk the system knows, connected or in a drawer.\n\n`connected` and `mount_point` describe **this instant** and are\nresolved per request from a single enumeration of the mounted\nvolumes, however many devices there are. That bound is the design\n(RFC-031 section 4.1): the obvious implementation asks the locator\nonce per device, which is right for a page of search hits and is N\nenumerations of the same filesystem here.\n\n`connected: false` is a normal answer, not a failure. The row exists,\nevery photo on that disk is still searchable, and its thumbnails are\nstill served (RFC-030 section 4.1) -- what the user is missing is the\nbytes.\n\nNo `percent_indexed`. The response carries `indexed_images`,\n`last_scan_file_count` and `last_scan_at` separately, so that nobody\ncan render the ratio without having the scan date in hand\n(ARCHITECTURE.md section 15, RFC-031 section 4.2).",
+        "operationId": "list_devices_api_v1_devices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceListSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List every known device, with connection resolved right now",
+        "tags": [
+          "devices"
+        ]
+      },
+      "post": {
+        "description": "Register the volume with this identity, or return the device it already is.\n\n**201 the first time, 200 the second, and the difference is\nload-bearing.** `DeviceId` is `uuid5` over the volume identity, so\nregistering a known disk lands on the existing row: nothing was\ncreated, and a client counting creations would be counting wrong. It\nis not a 409 either -- a conflict describes a request the current\nstate refuses, and this one is not refused, it is already satisfied\n(RFC-031 section 6.1). The use case reports which happened; this\nfunction only chooses the number.\n\nA `label` sent on a second registration **is** applied. `save()` is\nan upsert by design, and the alternative -- ignoring it in silence --\nwould leave a user renaming a disk with no effect.\n\n**Neither `response` nor `describer` is client input.** FastAPI\ninjects the first so the status can be lowered to 200 and resolves\nthe second as a dependency; nothing a client sends can reach either.\nThe signature test asserts the parameter list is exactly these four\nnames, so a path parameter added later has nowhere to hide.\n\nThe `describer` is composed here rather than inside the registration\nfor the reason the search route composes `SearchImagesUseCase` with\n`ResolveImageLocationUseCase`: resolving where a disk is mounted and\nhow much of it is indexed is not registering it, and the CLI path\nthrough `RegisterDeviceUseCase.register()` must stay free of both.\nIt is what makes this response say `connected: true` with a real\nmount point, rather than reporting a disk the server has this\ninstant found mounted as absent.\n\nAn identity nobody is holding is a 409 naming what to do about it --\nplug the disk in -- and **nothing is written**. An invented identity\nis not a location: it is looked up in a mapping the server produced\nseconds ago, and what is not in it does not exist. A path, by\ncontrast, *is* a location whether or not anyone meant it to be, which\nis the whole of RFC-031 section 5.1.",
+        "operationId": "register_device_api_v1_devices_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceRequestSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "This volume was already registered. Nothing was created; the label sent, if any, was applied."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDetailSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "The volume identity is empty or of an unknown kind"
+          },
+          "409": {
+            "description": "No volume with that identity is mounted right now"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register a mounted volume as a device, by identity",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}": {
+      "patch": {
+        "description": "Change the disk's label. Nothing else about a device is editable.\n\n**Works with the disk in a drawer**, and that is the whole point of\nthe rename requiring no bytes: a name is a fact about our table, and\nRFC-027 section 2.3 is explicit that an unplugged disk is a device\nthe system knows perfectly well. The response still *reports*\nwhether the disk is here, and reporting `false` is as successful an\noutcome as reporting `true`.\n\nA body carrying anything but `label` is a **422**, not a quietly\nignored field. `last_scan_file_count` is the plausible thing to send\nand the exact thing that must not be writable: it is the declared\ndenominator of \"% indexed\", so an editable one is an invented number\nwith the appearance of a measurement (RFC-031 section 7).\n\nThe response is the shape `GET /devices` returns, resolved the same\nway, so a client can drop it straight into the row it renamed rather\nthan re-reading the list to learn whether anything else about the\ndisk still holds.",
+        "operationId": "rename_device_api_v1_devices__device_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameDeviceRequestSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDetailSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No device has this id"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename a device",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}/folders": {
+      "get": {
+        "description": "Return the folders directly inside `path`, each with its indexing state.\n\n**One level per request.** Not a flat first level, which would turn\n\"index the wedding\" into \"index all of 2018\" -- five hours of\ninference to reach three hundred photos -- and not the whole tree,\nwhich costs the size of the disk every time the screen opens\n(RFC-031 section 8.1).\n\n**The paths that come back are the filesystem's spelling, not the\none that was asked for.** A request for `?path=FOTOS/2018` against a\nfolder called `Fotos/2018` answers `\"path\": \"Fotos/2018\"`, because\nthat is the string the client will send in `scopes[]` and `POST\n/jobs` compares path parts exactly.\n\n**Requires the disk to be plugged in: 409, naming it.** Unlike the\nrename above, this one needs bytes, and *which disk to plug in* is\nmore useful than being told a folder is not there.\n\nNo count of files on the disk and no percentage per folder. There is\nno denominator, and getting one means walking the subtree -- the read\nRFC-029 section 7.2 measured as dominant on a cold mechanical disk.\n`indexed_images` is exact and is what to render (RFC-031 section\n2.3).\n\nNot paginated. A folder with thousands of subfolders returns all of\nthem; the debt is declared in RFC-031 section 8.3 and measured before\nit is paid.",
+        "operationId": "list_device_folders_api_v1_devices__device_id__folders_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Folder to list, relative to the device root, e.g. '2018'. Omit, or send an empty string, for the root. A drive letter, a leading separator, a UNC share or any '..' is refused before anything is opened.",
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "description": "Folder to list, relative to the device root, e.g. '2018'. Omit, or send an empty string, for the root. A drive letter, a leading separator, a UNC share or any '..' is refused before anything is opened.",
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderListSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "The path escapes the device, or is not a folder on it"
+          },
+          "404": {
+            "description": "No device has this id"
+          },
+          "409": {
+            "description": "The device is not connected"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List one level of a device's folders, with each folder's state",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/api/v1/images/map": {
+      "get": {
+        "description": "Count the photos in a viewport, cell by cell (RFC-032 section 7).\n\n**Declared before `/{image_id}`, beside `/search`, and that order is the\npoint.** Declared after it, `/images/map` would be matched as\n`image_id=\"map\"` and refused with a 422 -- for a route that exists.\n`tests/presentation/test_map_api.py` asks for it and requires a 200.\n\n**The query text is ignored -- there is no `q` -- by design.** A map\nthat reflected the query could only aggregate the top K, and the top 100\nof a 100,000-image index says nothing about geography. The map shows\nwhere the photos the *filters* allow are; ranking is `/search`'s job.\nThe filters are search's own -- `device_id`, `captured_from`,\n`captured_to`, by the same parameters and the same rules -- and a circle\nis not one of them: the area is the viewport.\n\nAn area whose `min` exceeds its `max` is a 400 -- on longitude that is\neither swapped corners or a viewport across the 180th meridian, which\nthis endpoint does not support (RFC-032 section 11). A synchronous `def`,\nlike `/search`, because the grouping is a blocking database call.",
+        "operationId": "map_images_api_v1_images_map_get",
+        "parameters": [
+          {
+            "description": "South edge of the area, decimal degrees",
+            "in": "query",
+            "name": "min_lat",
+            "required": true,
+            "schema": {
+              "description": "South edge of the area, decimal degrees",
+              "title": "Min Lat",
+              "type": "number"
+            }
+          },
+          {
+            "description": "West edge of the area, decimal degrees",
+            "in": "query",
+            "name": "min_lon",
+            "required": true,
+            "schema": {
+              "description": "West edge of the area, decimal degrees",
+              "title": "Min Lon",
+              "type": "number"
+            }
+          },
+          {
+            "description": "North edge of the area, decimal degrees",
+            "in": "query",
+            "name": "max_lat",
+            "required": true,
+            "schema": {
+              "description": "North edge of the area, decimal degrees",
+              "title": "Max Lat",
+              "type": "number"
+            }
+          },
+          {
+            "description": "East edge of the area, decimal degrees",
+            "in": "query",
+            "name": "max_lon",
+            "required": true,
+            "schema": {
+              "description": "East edge of the area, decimal degrees",
+              "title": "Max Lon",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Decimal places of a degree to round positions to: 3 is about 100 m cells. Omitted means 3. The response says which precision was applied, which is coarser when the grid would have too many cells.",
+            "in": "query",
+            "name": "precision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Decimal places of a degree to round positions to: 3 is about 100 m cells. Omitted means 3. The response says which precision was applied, which is coarser when the grid would have too many cells.",
+              "title": "Precision"
+            }
+          },
+          {
+            "description": "Only photos on these devices; repeat for several",
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos on these devices; repeat for several",
+              "title": "Device Id"
+            }
+          },
+          {
+            "description": "Only photos taken at or after this camera-local time",
+            "in": "query",
+            "name": "captured_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken at or after this camera-local time",
+              "title": "Captured From"
+            }
+          },
+          {
+            "description": "Only photos taken strictly before this camera-local time",
+            "in": "query",
+            "name": "captured_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken strictly before this camera-local time",
+              "title": "Captured To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapResponseSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Where the photos are: counts per map cell inside an area",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/search": {
+      "get": {
+        "description": "Return the indexed images that best match `q`, most similar first.\n\nSynchronous `def`, not `async def`, and that is a decision rather than\na default: everything below this line blocks. Encoding the query is\n~90 ms of CPU for English and ~400 ms for Portuguese including\ntranslation (RFC-025 section 12), and the ranking is a blocking DBAPI\ncall. FastAPI runs a `def` endpoint in a threadpool and an `async def`\nendpoint on the event loop, so declaring this coroutine would stall\nevery concurrent request -- `/health` included -- for the length of a\nforward pass.\n\n`limit` carries no `ge`/`le` constraint on purpose. `MAX_SEARCH_LIMIT`\nalready states that policy once, in `search_images.py`, with a comment\nsaying it is application policy rather than a database bound. Copying\n`100` into this signature would create a second copy that drifts\nsilently: raising the constant to 200 would leave the endpoint\nrejecting 101 with a 422 while every use-case test still passed. The\ncost is that an out-of-range limit comes back as 400 instead of 422,\nwhich is the more accurate status anyway -- `limit=101` is a\nwell-formed request that policy refuses.\n\nThe default is resolved here rather than left to the use case so that\nthe response can echo the value actually applied. Nothing is\nduplicated by doing so: the resolved number is what gets passed to\n`execute()`, so what the client is told and what the search used\ncannot disagree.\n\nNeither the query text nor the embedding is logged (RFC-026 section\n16.1). Query length is enough to correlate a slow request with a long\nquery; the text is a user's search history, and this is a local-first\nproduct whose premise is that it stays theirs. The device count is\nlogged rather than the ids for the same reason -- how many disks a\nsearch was narrowed to is enough to explain a fast or an empty\nresponse.\n\n`device_id` repeats for several devices (`?device_id=A&device_id=B`)\nand is omitted for all of them. Omitted must mean *all*, never *none*:\nan absent parameter that produced an empty `IN ()` would turn every\nunfiltered search into zero results, so the empty case is carried as\nan empty `SearchFilters` that adds no clause at all.\n\nAn unknown device id is not rejected. The filter restricts a\ncandidate set rather than asserting that its members exist, so a\nsearch naming a disk the system has never seen correctly matches\nnothing (RFC-027 section 9). Whether the named disks are *connected*\nis not asked here either, and could not usefully be: search ranks what\nis indexed, and a hit on a disk in a drawer is the answer the product\nexists to give.\n\nSince RFC-030 every hit carries its device, its `relative_path`, and\nits `absolute_path` when the disk is plugged in. Resolving that is a\nsecond use case called after the search rather than a step inside it:\nwhere a file is has nothing to do with how well it matched, and\n`GET /images/{id}` needs the same answer with no search at all. The\noperating system is asked once per distinct disk on the page, not once\nper hit (RFC-030 section 4.2).\n\n`captured_from` / `captured_to` (RFC-028) are the two ends of a\nhalf-open range, `[from, to)`, and either may be sent alone. An\nomitted end becomes `datetime.min` or `datetime.max` *here*, so that\n`DateRange` stays a value with two required bounds instead of growing\na `None` every consumer below would have to handle. Omitting both is\nnot an unbounded range; it is no date filter at all, because\n`[min, max)` would silently drop every photo with an unknown date.\n\n**A bound with a zone or an offset is refused, never converted.**\nPydantic parses `2018-01-01T00:00:00Z`, `...-03:00`, and even a bare\nUnix timestamp into an aware `datetime`, and `DateRange` rejects it\nwith a `DomainError`, which the app-wide handler answers with 400 and\na message naming the zone. Converting would have to pick a zone to\nconvert *into*, and the capture date is camera-local precisely\nbecause no such zone exists (RFC-028 section 5). An inverted range\nis refused the same way. A value that is not a date at all is a 422\nfrom FastAPI, as for any malformed parameter.\n\n`excluded_unknown_date` is only computed when a range was sent. It is\na second query, and an unfiltered search must not pay for it.\n\n`near_lat` / `near_lon` / `radius_m` (RFC-032 section 6) are **all or\nnothing**: two of three is a malformed request and answers 400 naming\nwhat is missing. Completing an absent radius with a default would invent\nthe user's intention in exactly the quantity RFC-032 section 2.2 showed\nis critical. A coordinate off the planet, a radius that is not positive,\nor one below `settings.min_radius_m` is a 400 with the domain's message;\na value that is not a number is FastAPI's 422. Metres, never kilometres:\none unit across the whole stack. `excluded_unknown_position` follows the\nrule of its date twin -- computed only when a circle was sent.\n\nNeither the query nor the coordinates are logged: where a user searched\nnear is as private as what they searched for (RFC-026 section 16.1), so\nthe log says only that a circle was present.",
+        "operationId": "search_images_api_v1_images_search_get",
+        "parameters": [
+          {
+            "description": "Natural-language query, in any supported language",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Natural-language query, in any supported language",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results to return; omitted means the configured default",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum results to return; omitted means the configured default",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+              "title": "Device Id"
+            }
+          },
+          {
+            "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+            "in": "query",
+            "name": "captured_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+              "title": "Captured From"
+            }
+          },
+          {
+            "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+            "in": "query",
+            "name": "captured_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+              "title": "Captured To"
+            }
+          },
+          {
+            "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+            "in": "query",
+            "name": "near_lat",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+              "title": "Near Lat"
+            }
+          },
+          {
+            "description": "Longitude of the centre of the circle, decimal degrees.",
+            "in": "query",
+            "name": "near_lon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Longitude of the centre of the circle, decimal degrees.",
+              "title": "Near Lon"
+            }
+          },
+          {
+            "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+            "in": "query",
+            "name": "radius_m",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+              "title": "Radius M"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponseSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search indexed images by natural-language query",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/{image_id}": {
+      "get": {
+        "description": "Return one image: its device, its paths, and whether the disk is here.\n\n**200 when the disk is unplugged** (RFC-030 section 4.2). The row\nexists and this describes the row; `device.connected: false` with\n`device.label` is the answer \"it is on HD3\", not an error.\n\nDeclared after `/search` and `/map`, and that order is load-bearing:\nroutes match in declaration order, and `/{image_id}` would otherwise\ncapture either and refuse it as a malformed UUID.",
+        "operationId": "get_image_api_v1_images__image_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No indexed image has this id"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Describe one indexed image, and where it is right now",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/{image_id}/reveal": {
+      "post": {
+        "description": "Ask Explorer to show the file, and answer once that has been launched.\n\n**The request carries an id and nothing else** -- no body, no path, no\nheader the handler reads (RFC-030 section 5.1). The server finds the\nrow, resolves where its disk is mounted now, and builds the path\nitself, so there is no client string in which to smuggle `..` or a\nUNC share.\n\n**`POST`, because this has a side effect in the physical world**\n(RFC-030 section 5.2). A `GET` could be prefetched by anything that\nfollows links, and a page of ten results would open ten windows.\n\nThe two guards are dependencies on the decorator, which FastAPI\nresolves before `use_case`: a refused request never opens a database\nsession or enumerates a volume. See `local_file_actions.py`.\n\n204 means the process was launched. Explorer's exit status means\nnothing, so nothing here can say that a window actually opened.",
+        "operationId": "reveal_image_api_v1_images__image_id__reveal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The caller is not on this machine"
+          },
+          "404": {
+            "description": "No such image -- or local file actions are switched off, in which case the route answers as if it did not exist"
+          },
+          "409": {
+            "description": "The image's disk is not connected"
+          },
+          "410": {
+            "description": "The disk is connected and the file is not on it"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open the file manager on this machine with the image selected",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/{image_id}/thumbnail": {
+      "get": {
+        "description": "Serve the thumbnail, or `304` when the client's copy is still right.\n\n**Served whether or not the photo's disk is plugged in.** Thumbnails live\nin the application's own cache, on a disk that is always there, and\nthat is the only way a user can *see* a photo whose disk is in a drawer\n(RFC-030 section 4.1).\n\n**Not a `StaticFiles` mount.** A mount would serve by file name, with\nits own validators, and could not answer 404 for an id that has no\nthumbnail row or check `If-None-Match` against the photo's content hash\nbefore touching the disk.\n\n**`ETag` is the photo's content hash, and `Cache-Control` is\n`no-cache` -- not `max-age=31536000`, which RFC-030 section 7.2 as\nproposed paired with it.** That pairing reintroduces the bug the\nsection was correcting. A response with a year of freshness is served\nfrom the browser's cache without asking the server at all (RFC 9111\nsection 4.2), so the `ETag` would never be sent back and a photo\noverwritten in place -- same path, same id -- would keep its old\nthumbnail for a year, which is exactly the failure `immutable` had.\n`no-cache` stores the thumbnail and revalidates it on every use; a\ncurrent copy costs a `304` with no body and no file read -- measured\nat 6.6 ms median in-process against PostgreSQL, against 8.6 ms for\nsending the 45 KB file (`experiments/rfc-030-file-access/\nmeasure_reveal_and_revalidation.log`). Most of that is the metadata\nread, so revalidation saves bytes more than time on a local API, and\na page of fifty thumbnails pays it fifty times. That is the declared\nprice of never showing a stale picture. `private` keeps a shared\ncache between the user and their own machine, should there ever be\none, from keeping their photos.\n\n**A row with no content hash gets `no-store`.** Rows indexed before\nRFC-024 have nothing to validate against, and a cache entry that can\nnever be revalidated is one that silently always misses.\n\n`If-None-Match` is parsed here because it is HTTP, and matched in the\nuse case because \"is my copy current\" is not. Weak tags compare\nweakly, as RFC 9110 section 13.1.2 requires for this header, and `*`\nis not honoured -- no browser sends it on a `GET`.",
+        "operationId": "get_thumbnail_api_v1_images__image_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "if-none-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {}
+            },
+            "description": "The thumbnail"
+          },
+          "304": {
+            "description": "The client's cached copy is current"
+          },
+          "404": {
+            "description": "No such image, or it has no thumbnail yet -- show a placeholder rather than an error"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The image's thumbnail, from the application's cache",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "description": "Return the history a UI shows beside a disk.\n\nBoth filters are optional, and an omitted one means *all*, never\n*none* -- the trap the search route's `device_id` had to avoid, where\nan absent parameter turned into an empty `IN ()` and every unfiltered\nrequest returned nothing.\n\nAn unknown device id is not rejected. The filter narrows a set rather\nthan asserting that its members exist, so a list for a disk the system\nhas never seen correctly comes back empty (the same reasoning RFC-027\nsection 9 applies to search filters).\n\n`job_status` is named `status` on the wire. The parameter cannot be\ncalled `status` in this signature because that is FastAPI's status\nmodule, imported above and used in every decorator here.",
+        "operationId": "list_jobs_api_v1_jobs_get",
+        "parameters": [
+          {
+            "description": "Only jobs for this device; omit for all devices",
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only jobs for this device; omit for all devices",
+              "title": "Device Id"
+            }
+          },
+          {
+            "description": "Only jobs in this state; omit for all states",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only jobs in this state; omit for all states",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobListSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List indexing jobs, newest first",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "post": {
+        "description": "Queue a job and answer immediately with what was queued.\n\n**202, not 201.** 201 asserts that the resource the client asked for\nexists and is ready. What exists is the *intention* to index; the\nresult does not exist yet and will take minutes or hours. 202\ndescribes that, and the difference is observable by the client that\nhas to decide whether to poll (RFC-029 section 7.1).\n\nSynchronous `def`, not `async def`, following RFC-026 section 9:\neverything below this line is a blocking DBAPI call, and an `async\ndef` would run it on the event loop and stall every concurrent\nrequest -- `/health` included -- for its duration. The work itself is\nsomebody else's process, so what blocks here is one `INSERT`.\n\nThe response echoes the **normalised** scopes, which may not be the\nones that were sent: `2018` and `2018/junho` are one folder to walk,\nand a client that asked for both should be able to see that it got\none. `[]` means the whole device.\n\nNo `try/except`. A device that does not exist, a disk in a drawer, a\nfolder that is not there and a disk that is already busy are all\ndomain errors, and `error_handlers.py` turns each into 404, 409, 400\nand 409 without this function knowing any of those numbers.",
+        "operationId": "create_job_api_v1_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJobRequestSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Queue an indexing run for a device, or for folders on it",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "description": "Return the job, or 404 when the id names nothing.\n\nPolling, not WebSocket or SSE (RFC-029 section 7.2). The client is a\nlocal UI asking for a number that moves every few seconds; a\npersistent channel would add connection management, reconnection and\nan asynchronous path through the API in order to save requests that\ncost almost nothing on localhost. It is future work if a measurement\never shows the cost.\n\nA missing job is 404 rather than an empty 200, because \"queued, not\nstarted\" and \"that id was never a job\" are the two things a polling\nclient most needs to tell apart.",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one indexing job's progress",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "Cancel a queued job outright, or ask a running one to wind up.\n\n**202, because cancelling a running job is also a request rather than\nan outcome.** The worker owns every transition out of `running`: it\nreads the flag between batches, finishes the batch in flight -- up to\n`settings.batch_size` images of already-paid-for inference that\naborting would throw away for nothing -- writes its checkpoint, and\nleaves. So the response can say the stop was recorded, and a client\nwatching `status` sees `running` with `cancel_requested` true until it\nactually stops.\n\nA queued job has nobody to ask and is cancelled immediately, which the\nsame response shape reports.\n\nCancelling a job that has already finished is a 409, not a quiet\nsuccess: the caller is acting on a wrong belief about the system and a\n202 would confirm it (RFC-029 section 8). Whether a cancellation is\nlegal is `IndexingJob`'s decision, not this route's.",
+        "operationId": "cancel_job_api_v1_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask an indexing job to stop",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/volumes": {
+      "get": {
+        "description": "Answer *what is plugged in, and what of it do we already know?*\n\nThe question that precedes registering a disk, and the reason the\nregistration below never needs a path: this hands the client an\nopaque identity for each volume, and the client hands one back.\n\n**Deliberately the expensive route of the five.** Each volume costs\nan extra platform call for its label and capacity, and reading a\ncapacity can spin up an external disk that had parked its heads. That\nis why `VolumeCatalog` has two methods and why `GET /devices` above\nuses the cheap one -- folding the detail into the enumeration would\nput this cost in front of every search in the product (RFC-031\nsection 4.1).\n\nVolumes the platform refuses to describe are skipped, not reported as\nerrors: an empty optical drive is no reason to stop listing the disks\nthat answered (RFC-027 section 7).",
+        "operationId": "list_volumes_api_v1_volumes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolumeListSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List the volumes attached to this machine right now",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Return the application health status based on database connectivity.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Check"
+      }
+    }
+  }
+}

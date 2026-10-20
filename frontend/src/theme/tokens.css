@@ -1,0 +1,59 @@
+/*
+ * The tokens of the Figma file jtztdSy3VPU9BzDWXHdJtQ (RFC-037 section 8).
+ *
+ * The file defines no variables -- `get_variable_defs` on the home screen,
+ * node 44:458, returned none on 2026-10-20 -- so these are the values of that
+ * screen's design context, with the names given here. Nothing else in the
+ * interface writes a colour, a size or a radius by hand.
+ */
+
+:root {
+  /* Colour */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f6f5f9; /* the search bar, the notice */
+  --color-surface-pill: #eceaf1; /* the selected pill */
+  --color-border: #e4e2ea;
+  --color-text: #14121a;
+  --color-text-notice: rgba(20, 18, 26, 0.75);
+  --color-text-secondary: rgba(20, 18, 26, 0.6);
+  --color-text-tertiary: rgba(20, 18, 26, 0.55);
+  --color-text-icon: rgba(20, 18, 26, 0.45);
+  --color-text-placeholder: rgba(20, 18, 26, 0.42);
+  --color-inverse: #14121a;
+  --color-on-inverse: #ffffff;
+
+  /* Type: Inter, regular, medium and semibold, at one line height */
+  --font-sans: "Inter Variable", Inter, "Segoe UI", system-ui, sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height: 1.45;
+  --font-size-small: 12px; /* pills, the summary line, buttons */
+  --font-size-label: 13px; /* the example queries, the notice */
+  --font-size-body: 14px;
+  --font-size-input: 18px;
+  --font-size-icon: 20px;
+  --font-size-title: 22px;
+
+  /* Radius */
+  --radius-pill: 8px;
+  --radius-notice: 10px;
+  --radius-field: 12px;
+
+  /* Space */
+  --space-6: 6px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-28: 28px;
+  --space-32: 32px;
+  --space-40: 40px;
+
+  /* Size */
+  --size-field: 56px; /* the search bar */
+  --size-header: 56px;
+  --size-sidebar: 240px;
+}

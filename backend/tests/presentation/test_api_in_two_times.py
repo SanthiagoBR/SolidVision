@@ -19,6 +19,7 @@ import threading
 import time
 from collections.abc import Generator, Iterator
 from pathlib import Path
+from typing import IO
 
 import pytest
 from fastapi.testclient import TestClient
@@ -81,7 +82,7 @@ def test_with_the_warm_up_off_search_is_on_demand(
 ) -> None:
     monkeypatch.setattr(settings, "warm_up_models", False)
 
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         assert search_of(client) == {"search": "on_demand", "search_detail": None}
 
 
@@ -99,7 +100,7 @@ def test_while_the_warm_up_runs_search_is_loading_and_health_answers(
     monkeypatch.setattr(settings, "warm_up_models", True)
     monkeypatch.setattr(api_module, "_warm_up_models", slow_warm_up)
 
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         try:
             assert search_of(client) == {"search": "loading", "search_detail": None}
         finally:
@@ -119,7 +120,7 @@ def test_a_warm_up_that_could_not_load_says_why(
     monkeypatch.setattr(settings, "warm_up_models", True)
     monkeypatch.setattr(api_module, "_warm_up_models", refused)
 
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         assert model_warm_up.wait(WARM_UP_SECONDS)
         assert search_of(client) == {"search": "unavailable", "search_detail": line}
 
@@ -211,7 +212,11 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def _start_api(port: int, tmp_path: Path) -> subprocess.Popen[bytes]:
+def _start_api(
+    port: int, tmp_path: Path, output: IO[bytes] | None = None
+) -> subprocess.Popen[bytes]:
+    """The program as the launcher starts it. `output`, when given, receives
+    both of its streams, as the launcher's readers would."""
     return subprocess.Popen(
         [
             sys.executable,
@@ -224,8 +229,8 @@ def _start_api(port: int, tmp_path: Path) -> subprocess.Popen[bytes]:
             "--supervised",
         ],
         stdin=subprocess.PIPE,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=output if output is not None else subprocess.DEVNULL,
+        stderr=output if output is not None else subprocess.DEVNULL,
         env={
             **os.environ,
             "PYTHONPATH": str(BACKEND),
@@ -254,8 +259,12 @@ def _answer(port: int) -> int | None:
 def test_the_api_program_serves_its_port_and_stops_at_the_end_of_stdin(
     tmp_path: Path,
 ) -> None:
+    """And writes no line per request (RFC-037 section 5.3): the launcher
+    passes what the API writes to its stderr, and the window to its log."""
     port = _free_port()
-    process = _start_api(port, tmp_path)
+    output_path = tmp_path / "api-output.txt"
+    output = output_path.open("wb")
+    process = _start_api(port, tmp_path, output)
     try:
         deadline = time.monotonic() + PROCESS_SECONDS
         while (status := _answer(port)) is None:
@@ -270,9 +279,13 @@ def test_the_api_program_serves_its_port_and_stops_at_the_end_of_stdin(
     finally:
         if process.poll() is None:
             process.kill()
+        output.close()
 
     assert code == 0
     assert _answer(port) is None
+    written = output_path.read_text(encoding="utf-8", errors="replace")
+    assert "Uvicorn running on" in written, "the output was captured"
+    assert '"GET /openapi.json' not in written
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows processes")
@@ -293,3 +306,31 @@ def test_the_api_program_says_3_when_its_port_is_taken(tmp_path: Path) -> None:
                 process.kill()
 
     assert code == 3
+
+
+def test_the_program_builds_its_server_without_an_access_log(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RFC-037 section 5.3. `python -m uvicorn app.presentation.api:app`, the
+    run by hand, keeps uvicorn's default and its access log."""
+    import uvicorn
+
+    import app.presentation.api.__main__ as program
+
+    configs: list[dict[str, object]] = []
+
+    class Server:
+        def __init__(self, config: dict[str, object]) -> None:
+            configs.append(config)
+
+        def run(self) -> None:
+            return None
+
+    def config(*arguments: object, **options: object) -> dict[str, object]:
+        return options
+
+    monkeypatch.setattr(uvicorn, "Config", config)
+    monkeypatch.setattr(uvicorn, "Server", Server)
+
+    assert program.main(["--port", "51234"]) == 0
+    assert [options["access_log"] for options in configs] == [False]

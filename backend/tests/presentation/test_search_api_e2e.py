@@ -91,7 +91,7 @@ def client(
         PostgresDeviceRepository(indexed_corpus.session)
     )
     app.dependency_overrides[get_embedding_model] = lambda: embedding_model
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1") as test_client:
         yield test_client
     app.dependency_overrides.clear()
 

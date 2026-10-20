@@ -19,6 +19,12 @@ taken before uvicorn could bind it -- the launcher's cue to try another
 The log is `api.log`, by the rule of RFC-034 section 8.2. `python -m uvicorn
 app.presentation.api:app` still works, writes `uvicorn.log`, and is what to run
 for `--reload` (section 9).
+
+**No access log** (RFC-037 section 5.3). uvicorn writes a line per request to
+stdout, the launcher passes it to its stderr, and the window writes that to its
+log: with the interface served here, every thumbnail, every file of the
+interface and every `/health` of the polling. The run by hand above keeps it,
+for whoever is developing the API.
 """
 
 from __future__ import annotations
@@ -70,6 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             host=LOOPBACK,
             port=arguments.port,
             timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
+            access_log=False,
         )
     )
     try:

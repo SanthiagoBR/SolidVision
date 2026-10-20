@@ -1,0 +1,50 @@
+{
+  "name": "solidvision",
+  "productName": "SolidVision",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The SolidVision window: an Electron shell over the launcher, and the interface the API serves (RFC-037)",
+  "license": "CC0-1.0",
+  "main": "dist-electron/main.js",
+  "engines": {
+    "node": "^24.0.0"
+  },
+  "scripts": {
+    "dev": "npm run build:electron && node scripts/dev.mjs",
+    "dev:web": "vite",
+    "build": "npm run build:electron && tsc -p tsconfig.json && vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "start": "node scripts/start.mjs",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "api:types": "npm run build:electron && node scripts/api-types.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@tanstack/react-query": "5.104.3",
+    "openapi-fetch": "0.17.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router": "8.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "44.9.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

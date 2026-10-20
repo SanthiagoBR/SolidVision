@@ -11,6 +11,7 @@ The tree is the same in both modes (section 4.1)::
         backend\\           app\\, alembic\\, alembic.ini
         runtime\\postgres\\  RFC-033
         runtime\\models\\    RFC-035
+        frontend\\dist\\     RFC-037: the interface the API serves
         pyproject.toml     only in a checkout
         .env               only in a checkout
 
@@ -99,6 +100,16 @@ class Layout:
         Per machine and read-only when installed, beside `runtime\\postgres`.
         """
         return self.root / "runtime" / "models"
+
+    @property
+    def frontend_directory(self) -> Path:
+        """The interface's build, which the API serves (RFC-037 section 5.1).
+
+        `frontend\\dist`, where `npm run build` writes in a checkout. Installed,
+        it is wherever RFC-041 puts it beside the code -- outside the Electron
+        archive, because the reader is Python.
+        """
+        return self.root / "frontend" / "dist"
 
     @property
     def log_directory(self) -> Path:
