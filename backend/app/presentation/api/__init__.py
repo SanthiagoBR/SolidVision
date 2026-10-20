@@ -13,7 +13,9 @@ from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
 from app.presentation.api.v1 import api_v1_router
 from app.presentation.error_handlers import register_error_handlers
+from app.presentation.frontend import serve_frontend
 from app.presentation.model_warm_up import SearchReadiness, SearchState, model_warm_up
+from app.presentation.request_guards import LoopbackRequestGuard
 from app.presentation.routes import health_router
 
 logger = get_logger(__name__)
@@ -125,5 +127,10 @@ logger.info("FastAPI application initialized")
 register_error_handlers(app)
 app.include_router(health_router)
 app.include_router(api_v1_router)
+# In front of everything, `/health` and the interface included (RFC-037 5.2).
+app.add_middleware(LoopbackRequestGuard)
+# After the routers, and outside their routing: a mount at `/assets`, and the
+# 404 of a screen of the interface turned into `index.html` (section 5.1).
+serve_frontend(app, settings.frontend_directory)
 
 __all__ = ["app"]

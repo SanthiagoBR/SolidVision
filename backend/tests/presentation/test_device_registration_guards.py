@@ -180,7 +180,7 @@ class TestNoPathEverEntersTheRoute:
             )
 
     def test_a_path_smuggled_into_the_body_is_ignored(self, world: World) -> None:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(
                 URL, json=body(path="C:\\Windows\\System32", root="D:\\fotos")
             )
@@ -201,7 +201,7 @@ class TestNoPathEverEntersTheRoute:
         does not exist -- so the failure mode is a 409 and an untouched
         database rather than a read of somebody's `C:` drive.
         """
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(URL, json=body(volume_identity=UNKNOWN_IDENTITY))
 
         assert response.status_code == 409
@@ -210,7 +210,7 @@ class TestNoPathEverEntersTheRoute:
 
 class TestRegistrationOutcomes:
     def test_a_first_registration_is_a_201(self, world: World) -> None:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(URL, json=body())
 
         assert response.status_code == 201
@@ -224,7 +224,7 @@ class TestRegistrationOutcomes:
         self, world: World
     ) -> None:
         """RFC-031 section 6.1: all three claims in one request pair."""
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             first = client.post(URL, json=body())
             second = client.post(URL, json=body(label="HD3 — aéreas"))
 
@@ -247,14 +247,14 @@ class TestRegistrationOutcomes:
         this with a 422 before the use case ran, and
         `InvalidVolumeIdentityError` would never be raised at all.
         """
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(URL, json=body(volume_kind="btrfs-uuid"))
 
         assert response.status_code == 400
         assert world.devices.save_calls == []
 
     def test_an_empty_identity_is_a_400(self, world: World) -> None:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(URL, json=body(volume_identity="   "))
 
         assert response.status_code == 400
@@ -262,14 +262,14 @@ class TestRegistrationOutcomes:
 
     def test_a_missing_identity_is_a_422(self, world: World) -> None:
         """The distinction `error_handlers.py` draws: malformed, not refused."""
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(URL, json={"volume_kind": "windows-volume-guid"})
 
         assert response.status_code == 422
         assert world.devices.save_calls == []
 
     def test_a_label_is_optional(self, world: World) -> None:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             response = client.post(
                 URL,
                 json={
@@ -308,7 +308,7 @@ class TestTheResponseNeverCarriesAPercentage:
 
 
 def test_an_unknown_device_id_shape_is_refused_before_anything_happens() -> None:
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         response = client.patch(
             f"/api/v1/devices/{uuid.uuid4()}x", json={"label": "nope"}
         )

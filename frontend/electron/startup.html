@@ -1,0 +1,199 @@
+<!doctype html>
+<!--
+  The window's own page (RFC-037 section 6.3): the start, "Reconectando…",
+  "Encerrando…" and the errors. No React, and nothing remote: the screen comes
+  from the main process through the bridge, and is written with textContent.
+  The colours are the values of src/theme/tokens.css: this page is a local
+  file, outside the build.
+-->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>SolidVision</title>
+    <style>
+      :root {
+        --color-surface: #ffffff;
+        --color-surface-muted: #f6f5f9;
+        --color-surface-pill: #eceaf1;
+        --color-border: #e4e2ea;
+        --color-text: #14121a;
+        --color-text-secondary: rgba(20, 18, 26, 0.6);
+        --color-inverse: #14121a;
+        --color-on-inverse: #ffffff;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-family: "Inter Variable", Inter, "Segoe UI", system-ui, sans-serif;
+        line-height: 1.45;
+      }
+      main {
+        box-sizing: border-box;
+        width: min(640px, 100vw);
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        text-align: center;
+      }
+      .mark {
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .text,
+      .detail {
+        margin: 0;
+        font-size: 14px;
+        color: var(--color-text-secondary);
+      }
+      .bar {
+        position: relative;
+        width: 160px;
+        height: 3px;
+        border-radius: 3px;
+        overflow: hidden;
+        background: var(--color-surface-pill);
+      }
+      .bar::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        background: var(--color-text);
+        opacity: 0.35;
+        animation: slide 1.4s ease-in-out infinite;
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(-100%);
+        }
+        to {
+          transform: translateX(250%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bar::after {
+          animation: none;
+        }
+      }
+      .title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      pre {
+        box-sizing: border-box;
+        width: 100%;
+        max-height: 240px;
+        margin: 0;
+        overflow: auto;
+        padding: 12px 16px;
+        border: 1px solid var(--color-border);
+        border-radius: 10px;
+        background: var(--color-surface-muted);
+        font:
+          12px/1.45 Consolas,
+          "Cascadia Mono",
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        text-align: left;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        padding: 6px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: var(--color-inverse);
+        background: var(--color-inverse);
+        color: var(--color-on-inverse);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="screen" aria-live="polite">
+      <div class="mark">SolidVision</div>
+      <div class="bar"></div>
+      <p class="text">Abrindo o SolidVision…</p>
+    </main>
+    <script>
+      "use strict";
+
+      const bridge = window.solidvision;
+      const root = document.getElementById("screen");
+      const LABELS = { "open-logs": "Abrir a pasta de logs", reopen: "Abrir de novo" };
+
+      function element(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) {
+          node.className = className;
+        }
+        if (text !== undefined) {
+          node.textContent = text;
+        }
+        return node;
+      }
+
+      function render(screen) {
+        if (!screen || typeof screen !== "object") {
+          return;
+        }
+        const children = [element("div", "mark", "SolidVision")];
+        if (screen.kind === "progress") {
+          children.push(element("div", "bar"), element("p", "text", screen.text));
+        } else if (screen.kind === "error") {
+          children.push(
+            element("h1", "title", screen.title),
+            element("p", "detail", screen.detail),
+          );
+          if (Array.isArray(screen.lines) && screen.lines.length > 0) {
+            children.push(element("pre", "", screen.lines.join("\n")));
+          }
+          const actions = element("div", "actions");
+          screen.actions.forEach((name, index) => {
+            const button = element(
+              "button",
+              index === 0 ? "primary" : "",
+              LABELS[name],
+            );
+            button.type = "button";
+            button.addEventListener("click", () =>
+              name === "reopen" ? bridge.reopen() : bridge.openLogsFolder(),
+            );
+            actions.append(button);
+          });
+          children.push(actions);
+        }
+        root.replaceChildren(...children);
+      }
+
+      if (bridge) {
+        bridge.onScreen(render);
+        bridge.screen().then(render);
+      }
+    </script>
+  </body>
+</html>

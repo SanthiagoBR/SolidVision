@@ -381,6 +381,7 @@ def test_the_report_says_where_the_configuration_came_from(
             loaded.embedded_postgres_runtime_directory
         ),
         "model_runtime_directory": loaded.model_runtime_directory,
+        "frontend_directory": loaded.frontend_directory,
     }
     assert "mode installed" in text
     assert f"file {installation.config_file} (read)" in text

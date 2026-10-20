@@ -99,6 +99,16 @@ Segue o [roadmap sem Docker](ROADMAP-standalone.md).
 >
 > **E o que o RFC-036 mediu e não esperava** ([§17](rfc-036-launcher-e-supervisao-de-processos.md)). O canal de parada que o piloto mediu, uma thread lendo o stdin até o fim, travava o próprio filho: com uma leitura pendente no pipe, o Windows segurou a carga das DLLs do `torch`, e o `job_runner` ficou 13 minutos sem chegar ao laço. A thread agora pergunta ao pipe se ele acabou, sem ler. E o `run_forever` do RFC-029 pegava de volta, na volta seguinte do laço, o job que um Ctrl+C acabara de devolver à fila: um Ctrl+C nunca parava o executor no meio de um job.
 
+## Frontend *(em andamento)*
+
+Segue o [roadmap do frontend](ROADMAP-frontend.md): um RFC curto por etapa, do 037 ao 041.
+
+| # | RFC | Entrega | Status |
+|---|---|---|---|
+| 037 | [Fundação e Casca do Frontend](rfc-037-fundacao-e-casca-do-frontend.md) | `frontend/` com Electron 44, Vite, React 19 e TypeScript, e os tipos gerados do OpenAPI, com a deriva conferida pelo `pytest` e pelo `npm test`. A API serve a interface na mesma origem, com o fallback no tratamento do 404, confere o `Host` e o `Origin`, e não grava nada num `/health` 200. A casca: uma instância só, o launcher com os três handles em pipe, uma tela de subida por fase, um destino para cada evento, *"Reconectando…"* e o fechamento que espera o `stopped`. A tela inicial do Figma com os números da API. A quente, a janela em 767 ms e a tela inicial em 6,42 s; do fechar ao `stopped`, 1,68 s, sem nada para trás | ✅ |
+
+> **O que o RFC-037 mediu e não esperava** ([§16](rfc-037-fundacao-e-casca-do-frontend.md)). Uma janela aberta atrás de outra não pinta: o Chromium a trata como oculta, e a medição precisou de um switch para medir o que um usuário vê. E fechar a janela nos primeiros segundos, com o `job_runner` ainda carregando o modelo, levou até 24 s: o pedido de parada do RFC-036 só é atendido quando a importação em andamento volta, e uma delas terminou num `RecursionError`. Fica registrado para quem mexer no `job_runner`.
+
 ---
 
 ## Como ler estes documentos

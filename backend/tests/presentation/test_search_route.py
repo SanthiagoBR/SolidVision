@@ -138,7 +138,7 @@ def locator() -> FakeDeviceLocator:
 
 @pytest.fixture
 def client(locator: FakeDeviceLocator) -> Iterator[TestClient]:
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1") as test_client:
         yield test_client
     app.dependency_overrides.clear()
 

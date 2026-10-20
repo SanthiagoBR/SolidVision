@@ -138,7 +138,7 @@ def client(world: World) -> Iterator[TestClient]:
     app.dependency_overrides[get_thumbnail_use_case] = lambda: GetThumbnailUseCase(
         world.images, world.store
     )
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1") as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -394,7 +394,7 @@ class TestAgainstPostgres:
     @pytest.fixture
     def db_client(self, db_session: Session) -> Iterator[TestClient]:
         app.dependency_overrides[get_db] = lambda: db_session
-        with TestClient(app) as test_client:
+        with TestClient(app, base_url="http://127.0.0.1") as test_client:
             yield test_client
         app.dependency_overrides.clear()
 

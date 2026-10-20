@@ -71,7 +71,7 @@ def client(repository: FakeImageRepository) -> Iterator[TestClient]:
     app.dependency_overrides[get_aggregate_positions_use_case] = lambda: (
         AggregatePositionsUseCase(repository=repository, max_cells=1000)
     )
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url="http://127.0.0.1") as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
@@ -170,7 +170,7 @@ class TestTheCeiling:
             AggregatePositionsUseCase(repository=repository, max_cells=5)
         )
         try:
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://127.0.0.1") as client:
                 body = client.get(MAP_URL, params={**AREA, "precision": 3}).json()
         finally:
             app.dependency_overrides.clear()

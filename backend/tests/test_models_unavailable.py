@@ -172,7 +172,7 @@ def broken_api(
     app_logger = logging.getLogger("app")
     app_logger.addHandler(caplog.handler)
     try:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             # The warm-up runs in a thread beside the open port (RFC-036
             # section 5.3); waiting for it here keeps its records in setup.
             assert model_warm_up.wait(CHILD_SECONDS)

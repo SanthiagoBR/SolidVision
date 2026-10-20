@@ -12,7 +12,7 @@ O **SolidVision** é uma plataforma de busca semântica desenvolvida para resolv
 
 ## Estado atual
 
-O backend está implementado até o **RFC-035**. Cada mudança do projeto é descrita em um RFC numerado, escrito antes da implementação e atualizado com as medições depois dela.
+O backend está implementado até o **RFC-036**, e o frontend começou no **RFC-037**: uma janela que sobe o backend e abre a tela inicial com os números do acervo. Cada mudança do projeto é descrita em um RFC numerado, escrito antes da implementação e atualizado com as medições depois dela.
 
 | Etapa | RFCs | Situação |
 |---|---|---|
@@ -21,9 +21,10 @@ O backend está implementado até o **RFC-035**. Cada mudança do projeto é des
 | Acervo real: dispositivos, datas, jobs, arquivos, geolocalização | 027-032 | Pronto |
 | Sem Docker: PostgreSQL embarcado, configuração do usuário, modelos offline | 033-035 | Pronto |
 | Launcher e supervisão de processos | 036 | Pronto |
-| Frontend | - | Não iniciado |
+| Frontend: a janela, a casca e a tela inicial | 037 | Pronto |
+| Frontend: busca, dispositivos e indexação, mapa, instalador | 038-041 | Em andamento ([roadmap](docs/rfcs/ROADMAP-frontend.md)) |
 
-Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](docs/rfcs/ROADMAP-standalone.md) e a [arquitetura](ARCHITECTURE.md).
+Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](docs/rfcs/ROADMAP-standalone.md), [roadmap do frontend](docs/rfcs/ROADMAP-frontend.md) e a [arquitetura](ARCHITECTURE.md).
 
 ---
 
@@ -44,6 +45,7 @@ Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](do
 *   **IA:** CLIP LAION ViT-B/32 (embeddings de 512 dimensões), escolhido em uma comparação de quatro modelos (RFC-023).
 *   **Banco de dados:** PostgreSQL 16 com a extensão pgvector, via Docker ou embarcado.
 *   **Backend:** Python 3.12 com FastAPI, SQLAlchemy e Alembic.
+*   **Frontend:** Electron, com React e TypeScript (Vite) e TanStack Query; tipos gerados do OpenAPI da API.
 *   **Engenharia:** Clean Architecture em quatro camadas, princípios SOLID, TDD, Ruff, Black e `mypy --strict`.
 
 ---
@@ -114,13 +116,27 @@ python -m app.launcher stop       # para o launcher de pé, de outro terminal
 ```
 A API atende só em `127.0.0.1`, numa porta que o launcher escolhe e informa no `status`. Sem Docker, use `DATABASE_SOURCE=embedded` no `.env`.
 
+### 6. A janela
+A interface é um app Electron que sobe o launcher, mostra as fases da subida e abre a tela inicial quando a API está pronta ([RFC-037](docs/rfcs/rfc-037-fundacao-e-casca-do-frontend.md)). A própria API serve a interface, na mesma origem. Requer o **Node 24 LTS** (`frontend/.node-version`); o Node 20 não roda o Vite, o Vitest e o React Router atuais. A primeira abertura baixa o binário do Electron (cerca de 370 MB), uma vez por máquina.
+```powershell
+cd frontend
+npm install
+npm run build      # a interface em dist/, que a API serve, e a casca em dist-electron/
+npm start          # a janela: sobe o launcher e abre a tela inicial
+```
+Sem Docker, use `DATABASE_SOURCE=embedded` no `.env`. Fechar a janela para o launcher e tudo o que ele subiu; abrir de novo com a janela aberta só a traz para a frente. A janela registra a própria subida e o que o launcher escreve em `%LOCALAPPDATA%\SolidVision-dev\logs\shell.log`.
+
+Para trabalhar na interface, `npm run dev` abre a janela sobre o Vite, com recarga ao salvar, e sobe um launcher na porta 8000, para onde o Vite encaminha `/api`. `npm run api:types` regenera os tipos depois de uma mudança na API.
+
 ### Verificações de qualidade
 ```powershell
 ruff check backend
 black --check backend
 mypy backend
 pytest
+cd frontend; npm test; npm run lint; npm run typecheck; npm run format:check
 ```
+O `pytest` confere que o `frontend/src/api/openapi.json` é o que a API produz, e o `npm test` confere que os tipos são os que esse arquivo gera: quem muda uma rota roda `npm run api:types`.
 Com `WARM_UP_MODELS=true` no `.env` (o padrão do `.env.example`), um teste que confere que resolver o modelo não baixa nada falha. Rode com `WARM_UP_MODELS=false` para a suíte inteira passar.
 
 ---

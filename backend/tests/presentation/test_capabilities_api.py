@@ -7,7 +7,9 @@ loopback.** Starlette's test client reports its peer as
 that forgets `client=("127.0.0.1", ...)` is refused by the guard and
 exercises nothing. The happy path is therefore written first and every
 client below states its address. The same warning is at the top of
-`test_reveal_guards.py`, which is where it was learned.
+`test_reveal_guards.py`, which is where it was learned. Its default host,
+`testserver`, is refused too, with a 400, since RFC-037 section 5.2: every
+client below also says `base_url="http://127.0.0.1"`.
 
 The property this file exists to hold is the **asymmetry**: this route
 carries `require_loopback_client` and deliberately *not*
@@ -50,7 +52,7 @@ def disabled(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def client_from(address: tuple[str, int]) -> TestClient:
-    return TestClient(app, client=address)
+    return TestClient(app, client=address, base_url="http://127.0.0.1")
 
 
 class TestTheLocalClientGetsAnAnswer:
@@ -131,7 +133,7 @@ class TestEverybodyElseLearnsNothing:
 
     def test_the_default_test_client_is_refused_too(self, enabled: None) -> None:
         """`("testclient", 50000)` is not an address, and "unknown" is not "local"."""
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://127.0.0.1") as client:
             assert client.get(URL).status_code == 403
 
 

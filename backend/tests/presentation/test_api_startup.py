@@ -73,7 +73,7 @@ def test_startup_loads_no_model_by_default(
     """
     monkeypatch.setattr(settings, "warm_up_models", False)
 
-    with TestClient(app):
+    with TestClient(app, base_url="http://127.0.0.1"):
         pass
 
     assert recorder.encoded == []
@@ -84,7 +84,7 @@ def test_startup_encodes_one_query_when_warm_up_is_enabled(
 ) -> None:
     monkeypatch.setattr(settings, "warm_up_models", True)
 
-    with TestClient(app):
+    with TestClient(app, base_url="http://127.0.0.1"):
         pass
 
     assert model_warm_up.wait(WARM_UP_SECONDS)
@@ -108,7 +108,7 @@ def test_a_failed_warm_up_does_not_stop_the_server(
     monkeypatch.setattr(settings, "warm_up_models", True)
     monkeypatch.setattr(dependencies_module, "get_embedding_model", explode)
 
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://127.0.0.1") as client:
         assert client.get("/openapi.json").status_code == 200
         assert model_warm_up.wait(WARM_UP_SECONDS)
         assert client.get("/openapi.json").status_code == 200
