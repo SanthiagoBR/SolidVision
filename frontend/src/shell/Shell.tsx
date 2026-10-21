@@ -6,6 +6,7 @@
  * the percentage beside the scan date (RFC-031 section 12), are RFC-039's.
  */
 
+import { useEffect } from "react";
 import { Outlet } from "react-router";
 
 import type { Device } from "../api/client";
@@ -13,6 +14,7 @@ import { useDevices } from "../api/queries";
 import styles from "./Shell.module.css";
 
 export function Shell() {
+  usePreventFileNavigation();
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
@@ -63,4 +65,22 @@ function DeviceRow({ device }: { device: Device }) {
       <span className={styles.deviceState}>{state}</span>
     </li>
   );
+}
+
+/**
+ * A file dropped anywhere but the search bar does nothing (RFC-038 section
+ * 5.5). Chromium's default is to open it in the window itself; the
+ * `will-navigate` of RFC-037 refuses a navigation off the origin, and
+ * cancelling here keeps it from being tried at all.
+ */
+function usePreventFileNavigation(): void {
+  useEffect(() => {
+    const cancel = (event: DragEvent) => event.preventDefault();
+    document.addEventListener("dragover", cancel);
+    document.addEventListener("drop", cancel);
+    return () => {
+      document.removeEventListener("dragover", cancel);
+      document.removeEventListener("drop", cancel);
+    };
+  }, []);
 }

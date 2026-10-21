@@ -49,7 +49,7 @@ O router `collections.py` é um placeholder vazio, e não uma funcionalidade. Ap
 
 ### O que o Figma tem, e o que falta nele
 
-**Tem.** A tela inicial da v2 (`44:458`): a barra de busca, as pílulas *"Dispositivos · todos (4)"* e *"Filtros"*, três consultas de exemplo, a linha com o número de dispositivos, de fotos indexadas e a última indexação, e o aviso *"HD4 está registrado mas nunca foi indexado"*, com o botão *"Escolher pastas"*. Na `Page 1`, as três telas originais: o shell (cabeçalho e barra lateral com quatro cartões de dispositivo), a grade de resultados (4 × 3 miniaturas) e a tela de pastas do HD. Essas três telas são anteriores às correções do [RFC-031 §12](rfc-031-dispositivos-e-pastas-pela-api.md#12-o-que-muda-no-mockup), que continuam valendo: nenhuma porcentagem por pasta, *"1.204 indexadas"*, *"Parcial — parou em `…/IMG_2201.JPG`"*, a porcentagem do dispositivo sempre com a data do scan ao lado, e nenhum score nos cartões.
+**Tem.** A tela inicial da v2 (`44:458`): a barra de busca, as pílulas *"Dispositivos · todos (4)"* e *"Filtros"*, três consultas de exemplo, a linha com o número de dispositivos, de fotos indexadas e a última indexação, e o aviso *"HD4 está registrado mas nunca foi indexado"*, com o botão *"Escolher pastas"*. Na `Page 1`, as três telas originais: o shell (cabeçalho e barra lateral com quatro cartões de dispositivo), a grade de resultados (4 × 3 miniaturas) e a tela de pastas do HD. Essas três telas são anteriores às correções do [RFC-031 §12](rfc-031-dispositivos-e-pastas-pela-api.md#12-o-que-muda-no-mockup), que continuam valendo: nenhuma porcentagem por pasta, *"1.204 indexadas"*, *"Parcial — parou em `…/IMG_2201.JPG`"*, a porcentagem do dispositivo sempre com a data do scan ao lado, e nenhum score nos cartões. *(O RFC-038 §2.10 desfez este último, por decisão do produto: o cartão mostra o cosseno como número, nunca como porcentagem.)*
 
 **Não encontrado.** O MCP lista só a `Page 1`. A página *"v2 — telas corrigidas"* não apareceu, e o `44:458` só foi alcançado pelo id. As outras telas da v2 (o shell, os resultados e as pastas) precisam do link do nó.
 
@@ -128,8 +128,10 @@ Liga a janela ao launcher e põe a tela inicial do Figma de pé com dados reais.
 
 ## Etapa 1 — Busca (RFC-038) · qui 22 e sex 23
 
+**Status: implementada** ([RFC-038](rfc-038-busca.md), medição em [§13](rfc-038-busca.md#13-validação)). Os três critérios cumpridos, a quente, e a ordem da grade igual à da resposta em todas as buscas. Do que a implementação achou e não esperava ([§14](rfc-038-busca.md#14-correções-feitas-durante-a-implementação)): no PostgreSQL 16 embarcado o índice HNSW nunca serve a busca, que é sempre uma varredura exata, e o custo disso num acervo grande fica para o benchmark de escala; e as fotos de DJI são MPO para o Pillow, o que a primeira versão do upload recusava.
+
 **Escopo**
-- A barra de busca e a grade de resultados. Cada cartão tem a miniatura, o rótulo do dispositivo, o nome do arquivo e o estado desconectado, e nenhum score. A grade tem estados de vazio, sem resultados e modelo carregando.
+- A barra de busca e a grade de resultados. Cada cartão tem a miniatura, o rótulo do dispositivo, o nome do arquivo e o estado desconectado, e nenhum score. A grade tem estados de vazio, sem resultados e modelo carregando. *Nota do RFC-038 (§2.10): o score entrou, por decisão do produto, como o cosseno com três casas e nunca como porcentagem.*
 - A busca não pagina: são até 100 resultados (`MAX_SEARCH_LIMIT`). *"Mostrar mais"* repete a busca com um `limit` maior.
 - A pílula *"Dispositivos"*: uma seleção múltipla, enviada como `device_id` repetido.
 - *"Filtros"*:
@@ -145,9 +147,9 @@ Liga a janela ao launcher e põe a tela inicial do Figma de pé com dados reais.
   - Na interface, o usuário solta uma foto na barra de busca.
 
 **Critérios de pronto**
-- A interface não reordena os resultados: a ordem da grade é a da resposta, e um teste confere isso.
-- Da tecla Enter à grade pintada com miniaturas, com uma consulta em português: `TBM`. No backend, a busca em PT leva 348 ms (RFC-035).
-- Com 100 resultados, o tempo até a última miniatura aparecer: `TBM`. Cada revalidação custa cerca de 6,6 ms (RFC-030), e o Chromium abre seis conexões por host.
+- A interface não reordena os resultados: a ordem da grade é a da resposta, e um teste confere isso. **Medido:** os ids da grade iguais aos da API, na ordem dela, nas 21 buscas da medição.
+- Da tecla Enter à grade pintada com miniaturas, com uma consulta em português: `TBM`. No backend, a busca em PT leva 348 ms (RFC-035). **Medido: 544 ms**, mediana de cinco, até a 40ª miniatura; a resposta em 429 ms.
+- Com 100 resultados, o tempo até a última miniatura aparecer: `TBM`. Cada revalidação custa cerca de 6,6 ms (RFC-030), e o Chromium abre seis conexões por host. **Medido: 425 ms** do clique em *"Mostrar mais"* à centésima, com o cache cheio; 868 ms com ele vazio. E da foto escolhida à grade, 507 ms.
 
 **Riscos**
 - **As datas não têm fuso.** `captured_from` e `captured_to` são horários locais da câmera, e a API recusa um valor com `Z` ou offset (400). O `Date.toISOString()` do JavaScript acrescenta `Z`. A interface monta a data como `AAAA-MM-DD`, e um teste confere isso.

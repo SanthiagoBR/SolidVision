@@ -1,4 +1,4 @@
-"""Response shapes for `GET /api/v1/images/search` (RFC-026 section 5.2, RFC-030).
+"""Response shapes of the searches (RFC-026 section 5.2, RFC-030, RFC-038).
 
 The only place in the codebase allowed to decide what a search result
 looks like on the wire, and the decisions it makes are mostly about what
@@ -8,6 +8,8 @@ to leave out.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TypedDict
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -83,16 +85,52 @@ class SearchResultSchema(ImageSchema):
         return cls(similarity=hit.similarity, **image_fields(located))
 
 
-class SearchResponseSchema(BaseModel):
-    """The body of a successful search.
+class RankedFields(TypedDict):
+    """The keyword arguments every ranked response shares, typed for `**`."""
 
-    `query` echoes what the client sent, never what the model was asked.
-    The string CLIP actually encodes is the RFC-023 template wrapped
-    around a possibly translated query -- for a Portuguese input it comes
-    back as `a photo of . a rural property with a lake`, leading `". "`
-    and all (RFC-025 section 11.5). Publishing that would make an
-    internal artifact of the translation path part of the contract, and
-    would change the response the day the template changes.
+    limit: int
+    results: list[SearchResultSchema]
+    excluded_unknown_date: int | None
+    excluded_unknown_position: int | None
+
+
+def ranked_fields(
+    limit: int,
+    hits: Sequence[SearchHit],
+    locations: Sequence[LocatedImage],
+    excluded_unknown_date: int | None = None,
+    excluded_unknown_position: int | None = None,
+) -> RankedFields:
+    """Wrap a ranking without reordering, filtering, or truncating it.
+
+    The order is the repository's, which is PostgreSQL's, which is the
+    one the vector index produced. Re-sorting here by `similarity`
+    would at best reproduce it and at worst disagree with it about
+    ties, which the repository breaks by id on purpose.
+
+    `locations` is `ResolveImageLocationUseCase`'s answer for the same
+    hits, in the same order -- it keeps order by contract, so the two
+    are paired positionally and `strict=True` refuses a length mismatch
+    rather than dropping the tail of the ranking.
+    """
+    return {
+        "limit": limit,
+        "results": [
+            SearchResultSchema.from_hit(hit, located)
+            for hit, located in zip(hits, locations, strict=True)
+        ],
+        "excluded_unknown_date": excluded_unknown_date,
+        "excluded_unknown_position": excluded_unknown_position,
+    }
+
+
+class RankedImagesSchema(BaseModel):
+    """A ranking of the index, whatever the query was (RFC-038 section 4.1).
+
+    The body of `POST /images/search/by-image` as it stands, and the base of
+    the other two: the search by text adds the `query` it echoes, and
+    *"Parecidas com esta"* the id of the photo it started from. One shape
+    and one set of rules for the three, so a client reads them the same way.
 
     `limit` echoes the value actually used, not the one requested, which
     is usually not sent at all: without it a caller receiving three
@@ -100,7 +138,6 @@ class SearchResponseSchema(BaseModel):
     is smaller than I assumed".
     """
 
-    query: str = Field(description="The query exactly as the client sent it")
     limit: int = Field(description="The page size actually applied")
     results: list[SearchResultSchema] = Field(
         description="Matches, most similar first, in the repository's order"
@@ -123,6 +160,40 @@ class SearchResponseSchema(BaseModel):
     )
 
     @classmethod
+    def from_ranking(
+        cls,
+        limit: int,
+        hits: Sequence[SearchHit],
+        locations: Sequence[LocatedImage],
+        excluded_unknown_date: int | None = None,
+        excluded_unknown_position: int | None = None,
+    ) -> RankedImagesSchema:
+        """The response of a search with no text to echo: a picture's."""
+        return RankedImagesSchema(
+            **ranked_fields(
+                limit, hits, locations, excluded_unknown_date, excluded_unknown_position
+            )
+        )
+
+
+class SearchResponseSchema(RankedImagesSchema):
+    """The body of a successful search by text.
+
+    `query` echoes what the client sent, never what the model was asked.
+    The string CLIP actually encodes is the RFC-023 template wrapped
+    around a possibly translated query -- for a Portuguese input it comes
+    back as `a photo of . a rural property with a lake`, leading `". "`
+    and all (RFC-025 section 11.5). Publishing that would make an
+    internal artifact of the translation path part of the contract, and
+    would change the response the day the template changes.
+
+    Since RFC-038 the rest is `RankedImagesSchema`'s, field for field: the
+    response did not change, only where its fields are declared.
+    """
+
+    query: str = Field(description="The query exactly as the client sent it")
+
+    @classmethod
     def from_hits(
         cls,
         query: str,
@@ -132,25 +203,40 @@ class SearchResponseSchema(BaseModel):
         excluded_unknown_date: int | None = None,
         excluded_unknown_position: int | None = None,
     ) -> SearchResponseSchema:
-        """Wrap a ranking without reordering, filtering, or truncating it.
-
-        The order is the repository's, which is PostgreSQL's, which is the
-        one the vector index produced. Re-sorting here by `similarity`
-        would at best reproduce it and at worst disagree with it about
-        ties, which the repository breaks by id on purpose.
-
-        `locations` is `ResolveImageLocationUseCase`'s answer for the same
-        hits, in the same order -- it keeps order by contract, so the two
-        are paired positionally and `strict=True` refuses a length mismatch
-        rather than dropping the tail of the ranking.
-        """
+        """Wrap a ranking without reordering it; see `ranked_fields()`."""
         return cls(
             query=query,
-            limit=limit,
-            results=[
-                SearchResultSchema.from_hit(hit, located)
-                for hit, located in zip(hits, locations, strict=True)
-            ],
-            excluded_unknown_date=excluded_unknown_date,
-            excluded_unknown_position=excluded_unknown_position,
+            **ranked_fields(
+                limit, hits, locations, excluded_unknown_date, excluded_unknown_position
+            ),
+        )
+
+
+class SimilarImagesResponseSchema(RankedImagesSchema):
+    """The body of *"Parecidas com esta"*: `GET /images/{id}/similar` (RFC-038).
+
+    `image_id` is the photo the ranking started from, which is never among the
+    `results`: it would come first with a similarity of 1. A copy of it -- the
+    same bytes under another id -- is, and comes near the top.
+    """
+
+    image_id: UUID = Field(
+        description="The photo whose stored embedding was the query; not in results"
+    )
+
+    @classmethod
+    def from_source(
+        cls,
+        image_id: UUID,
+        limit: int,
+        hits: Sequence[SearchHit],
+        locations: Sequence[LocatedImage],
+        excluded_unknown_date: int | None = None,
+        excluded_unknown_position: int | None = None,
+    ) -> SimilarImagesResponseSchema:
+        return cls(
+            image_id=image_id,
+            **ranked_fields(
+                limit, hits, locations, excluded_unknown_date, excluded_unknown_position
+            ),
         )

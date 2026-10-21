@@ -227,6 +227,29 @@ def test_the_file_still_decides_the_warm_up_in_both_modes(
     assert load_settings(where).settings.warm_up_models is (written == "true")
 
 
+def test_local_file_actions_are_on_installed_and_off_in_a_checkout(
+    checkout: Layout, installation: Layout
+) -> None:
+    """RFC-038 section 2.3, on `warm_up_models`' precedent: installed nobody
+    writes the user's file, and a `False` would hide "Mostrar no Explorer" for
+    ever. In a checkout, nothing in the suite may open a window."""
+    assert load_settings(installation).settings.allow_local_file_actions is True
+    assert load_settings(checkout).settings.allow_local_file_actions is False
+
+
+@pytest.mark.parametrize("mode", ["checkout", "installation"])
+@pytest.mark.parametrize("written", ["true", "false"])
+def test_the_file_still_decides_the_local_file_actions_in_both_modes(
+    mode: str, written: str, request: pytest.FixtureRequest
+) -> None:
+    where: Layout = request.getfixturevalue(mode)
+    write(where, f"ALLOW_LOCAL_FILE_ACTIONS={written}\n")
+
+    loaded = load_settings(where).settings
+
+    assert loaded.allow_local_file_actions is (written == "true")
+
+
 def test_installed_the_source_is_always_embedded(installation: Layout) -> None:
     write(installation, "DATABASE_SOURCE=external\n")
 

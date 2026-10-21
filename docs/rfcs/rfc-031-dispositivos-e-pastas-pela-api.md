@@ -655,6 +655,13 @@ O resto do mockup v2 sobrevive sem mudança, incluindo a decisão que ele já ti
 acertado sem saber: **o usuário escolhe pastas numa lista e nunca digita um
 caminho**, que é a propriedade de §5.1 desenhada antes de ser especificada.
 
+> **Nota do RFC-038 (2026-10-20).** O [roadmap do frontend](ROADMAP-frontend.md)
+> somou a estas correções *"nenhum score nos cartões"*, e o desenho da grade
+> trocou o número por três pontos. O [RFC-038 §2.10](rfc-038-busca.md#210-o-score-no-cartão-desfaz-uma-decisão-do-roadmap)
+> desfez esse ponto, por decisão do produto: o cartão mostra a similaridade como
+> número, o cosseno com três casas (*"0,312"*), e nunca como porcentagem, que
+> daria a um cosseno não calibrado a aparência de uma probabilidade.
+
 ## 13. Arquivos
 
 A tabela abaixo é a **entregue**, com as três linhas que o rascunho

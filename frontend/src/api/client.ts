@@ -14,13 +14,36 @@ export const api = createClient<paths>({ baseUrl: "" });
 export type Device = components["schemas"]["DeviceDetailSchema"];
 export type Job = components["schemas"]["JobSchema"];
 
-/** A response that is not a 2xx, with the API's `detail` when it sent one. */
+export type Capabilities = components["schemas"]["CapabilitiesSchema"];
+export type ImageDetail = components["schemas"]["ImageSchema"];
+export type SearchResult = components["schemas"]["SearchResultSchema"];
+
+/** A response that is not a 2xx, with the API's `detail` when it sent one.
+ * Status 0 is no response at all: the request never reached an answer. */
 export class ApiError extends Error {
   readonly status: number;
+  readonly detail: string | null;
 
   constructor(status: number, detail: unknown) {
     super(typeof detail === "string" ? detail : `A API respondeu ${status}`);
     this.status = status;
+    this.detail = typeof detail === "string" ? detail : null;
+  }
+}
+
+/** A request that got no response -- the API restarting, say -- as an
+ * `ApiError` of status 0; an abort stays an abort. */
+export async function answered<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(0, null);
   }
 }
 

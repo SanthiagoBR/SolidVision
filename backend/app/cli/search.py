@@ -15,10 +15,10 @@ printed with where it was taken.
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
+from app.application.use_cases.search_images import query_image as query_image
 from app.domain.entities.image import Image
 from app.domain.exceptions import (
     EmptySearchQueryError,
@@ -26,10 +26,7 @@ from app.domain.exceptions import (
     InvalidPositionError,
     InvalidSearchLimitError,
 )
-from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.geo_circle import GeoCircle
-from app.domain.value_objects.image_id import ImageId
-from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.position import Position
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
@@ -133,25 +130,6 @@ def run(
 ) -> None:
     """Search the index for `query` and print the ranked results."""
     _search(query, limit, search_filters(near, radius_m))
-
-
-def query_image(path: Path) -> Image:
-    """Wrap a file on disk as the transient `Image` an image query needs.
-
-    The embedding adapter reads pixels from an `Image`'s `absolute_path`,
-    and an `Image` needs an id and a device. This one is never persisted:
-    its device is the nil UUID -- no device -- and its id is derived from
-    the path only so that two runs over the same file build the same value.
-    """
-    resolved = path.resolve()
-    return Image(
-        id=ImageId(uuid.uuid5(uuid.NAMESPACE_URL, f"query-image:{resolved}")),
-        device_id=DeviceId(uuid.UUID(int=0)),
-        relative_path=ImagePath(resolved.name),
-        filename=resolved.stem,
-        extension=resolved.suffix.lower().lstrip("."),
-        absolute_path=ImagePath(resolved),
-    )
 
 
 def run_image(

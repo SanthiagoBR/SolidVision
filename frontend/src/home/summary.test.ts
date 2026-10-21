@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  devicePillText,
   devicesText,
   formatCount,
   lastIndexedText,
@@ -113,11 +112,6 @@ describe("the words", () => {
       "última indexação 31/12/2025 às 08:05",
     );
     expect(lastIndexedText(null, now)).toBe("nenhuma indexação ainda");
-  });
-
-  it("puts the count in the pill once it is known", () => {
-    expect(devicePillText(4)).toBe("Dispositivos · todos (4)");
-    expect(devicePillText(null)).toBe("Dispositivos · todos");
   });
 
   it("names one device in the notice, and how many more", () => {

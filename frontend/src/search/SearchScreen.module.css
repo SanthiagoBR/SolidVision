@@ -1,0 +1,81 @@
+/* Node 43:401, "02 · Busca — resultados": the bar and the pills at the top,
+   the amber notice, the grid, and the footnote. */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-height: 100%;
+  padding: var(--space-28) var(--space-32) var(--space-40);
+}
+
+.state {
+  margin: 0;
+  padding: var(--space-24) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  text-align: center;
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-surface-muted);
+  color: var(--color-text-notice);
+  font-size: var(--font-size-label);
+}
+
+.notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-12) var(--space-10) var(--space-16);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-warning-surface);
+}
+
+.noticeText {
+  flex: 1;
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-label);
+}
+
+.noticeAction {
+  flex: none;
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.more {
+  align-self: center;
+  padding: var(--space-8) var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.footnote {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+  text-align: center;
+}

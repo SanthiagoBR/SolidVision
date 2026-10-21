@@ -474,6 +474,9 @@ class InMemoryImageRepository(ImageRepository):
         """The images a search could return: those with an embedding."""
         return [image for image in self._images if image.id.value in self._embeddings]
 
+    def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
+        return self._embeddings.get(image_id.value)
+
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         """Return the stored change signals plus the image's capture source.
 

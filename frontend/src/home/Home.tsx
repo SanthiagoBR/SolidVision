@@ -1,20 +1,22 @@
 /**
  * The home screen, node 44:458 of the Figma, with real numbers (RFC-037 7).
  *
- * The search bar, the pills and the example queries are drawn here and wired
- * by RFC-038: until then they are disabled, rather than taking a query they
- * would not run. The notice's "Escolher pastas" arrives with the folders
- * screen, in RFC-039.
+ * Since RFC-038 the search bar, the pills and the example queries are wired:
+ * Enter, an example or a dropped photo opens `/busca`, with the filters chosen
+ * here. The notice's "Escolher pastas" arrives with the folders screen, in
+ * RFC-039.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router";
 
-import { useCompletedJobs, useDevices, useHealth } from "../api/queries";
+import { useCompletedJobs, useDevices } from "../api/queries";
+import { useSearchActions } from "../search/actions";
+import { readFilters, type SearchUrl } from "../search/params";
+import { SearchControls } from "../search/SearchControls";
 import { bridge } from "../shell/bridge";
 import styles from "./Home.module.css";
-import { searchStatusText } from "./search-status";
 import {
-  devicePillText,
   devicesText,
   lastIndexedText,
   neverIndexedText,
@@ -30,47 +32,34 @@ export const EXAMPLE_QUERIES = [
 ] as const;
 
 export function Home() {
+  const [params] = useSearchParams();
+  const url: SearchUrl = useMemo(
+    () => ({ query: null, filters: readFilters(params), photo: null }),
+    [params],
+  );
+  const actions = useSearchActions(url);
   const devices = useDevices();
   const jobs = useCompletedJobs();
-  const health = useHealth();
   const summary =
     devices.data !== undefined && jobs.data !== undefined
       ? summarize(devices.data, jobs.data)
       : null;
   useReportHome(summary);
-  const status = searchStatusText(health.data);
   const notice = summary === null ? null : neverIndexedText(summary.neverIndexed);
 
   return (
     <div className={styles.home}>
-      <label className={styles.searchbar}>
-        <span className={styles.searchIcon} aria-hidden="true">
-          ⌕
-        </span>
-        <input
-          className={styles.searchInput}
-          type="search"
-          placeholder="Descreva a foto que você procura…"
-          aria-label="Descreva a foto que você procura"
-          disabled
-        />
-        {status !== null && (
-          <span className={styles.searchStatus} role="status">
-            {status}
-          </span>
-        )}
-      </label>
-
-      <div className={styles.filters}>
-        <button type="button" className={styles.pillSelected} disabled>
-          {devicePillText(summary?.devices ?? null)}
-          <span aria-hidden="true">▾</span>
-        </button>
-        <button type="button" className={styles.pill} disabled>
-          Filtros
-          <span aria-hidden="true">▾</span>
-        </button>
-      </div>
+      <SearchControls
+        text=""
+        filters={url.filters}
+        photo={null}
+        onText={actions.text}
+        onPhoto={(file) => {
+          actions.photo(file);
+        }}
+        onClearPhoto={actions.home}
+        onFilters={actions.filters}
+      />
 
       <section className={styles.hero}>
         <div className={styles.emptyState}>
@@ -78,12 +67,17 @@ export function Home() {
             Busque por descrição, não por nome de arquivo
           </h1>
           <p className={styles.lede}>
-            Escreva o que aparece na foto. A busca cobre os dispositivos indexados,
-            mesmo os que estão desconectados agora.
+            Escreva o que aparece na foto, ou solte uma foto na barra. A busca cobre os
+            dispositivos indexados, mesmo os que estão desconectados agora.
           </p>
           <div className={styles.examples}>
             {EXAMPLE_QUERIES.map((query) => (
-              <button key={query} type="button" className={styles.example} disabled>
+              <button
+                key={query}
+                type="button"
+                className={styles.example}
+                onClick={() => actions.text(query)}
+              >
                 {query}
               </button>
             ))}

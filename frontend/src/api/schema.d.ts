@@ -11,7 +11,7 @@ export interface paths {
         };
         /**
          * What this installation supports
-         * @description Report the three things a client draws differently because of.
+         * @description Report the five things a client draws differently because of.
          *
          *     `local_file_actions` mirrors `settings.allow_local_file_actions`
          *     exactly, including when it is `False` -- a `200` saying "no" is the
@@ -29,7 +29,14 @@ export interface paths {
          *     that ships. The setting is reported as it stands rather than the
          *     project being renumbered to match an illustration.
          *
-         *     The bar for a fourth field is *the UI draws something different
+         *     `max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),
+         *     and each passes the bar: the size *"Mostrar mais"* asks for, and the
+         *     smallest radius of the list. Both are policy the API already enforces
+         *     -- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the
+         *     user's file -- and a copy of either in the interface is the copy RFC-026
+         *     section 8.2 refused to put in the route's signature: it would drift.
+         *
+         *     The bar for a sixth field is *the UI draws something different
          *     because of it*. Without a criterion this becomes a configuration
          *     dump, which is the risk RFC-031 section 15 names.
          */
@@ -350,6 +357,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/search/by-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search indexed images by an example picture
+         * @description Rank the index against a picture the user dropped (RFC-038 section 4.2).
+         *
+         *     `execute_similar_to()`, as the CLI's `--image` runs it, over the same
+         *     transient `Image` (`query_image()`): the picture's own CLIP embedding is
+         *     the query. It needs the image encoder, and not the translator.
+         *
+         *     **The bytes are the body, and no path comes in** (RFC-030 section 5.1).
+         *     `query_image_file` refuses a wrong type (415), more than 50 MB (413) and
+         *     a picture Pillow cannot decode (400), in that order and before the use
+         *     case is composed -- so a refused upload never imports `torch` -- and
+         *     deletes its temporary file however the request ends.
+         *
+         *     **Declared beside `/search`, before `/{image_id}`**, by the rule of this
+         *     file. A `POST` of two segments could only collide with
+         *     `/{image_id}/reveal`, and `by-image` is not `reveal`; it is here for the
+         *     reading. `test_search_by_image_api.py` asks for it and requires a 200.
+         *
+         *     The filters are `/search`'s, by the same parameters. Nothing of the
+         *     picture is logged but its size and type, and of the filters only which
+         *     are present (RFC-026 section 16.1). The response is `/search`'s without a
+         *     `query`: the picture is not indexed, so there is nothing to take out.
+         */
+        post: operations["search_by_image_api_v1_images_search_by_image_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{image_id}": {
         parameters: {
             query?: never;
@@ -409,6 +456,42 @@ export interface paths {
          *     nothing, so nothing here can say that a window actually opened.
          */
         post: operations["reveal_image_api_v1_images__image_id__reveal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{image_id}/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The indexed images that look most like this one
+         * @description *"Parecidas com esta"*: rank the index against a photo it holds (RFC-038).
+         *
+         *     **The stored embedding, and no model** (section 4.1). The vector indexing
+         *     paid for is read back and ranked with the same `search_similar()` as a
+         *     text query, so this answers with the photo's disk in a drawer, with
+         *     search `loading` or `unavailable`, and without decoding a pixel. The use
+         *     case's provider does not depend on `get_embedding_model()`, which would
+         *     import `torch` for a route that never encodes anything.
+         *
+         *     The photo itself is not in the results -- it would come first, with a
+         *     similarity of 1 -- and its copies are, near the top: the same bytes on
+         *     another disk answer *"where else is this photo"*. The filters are
+         *     `/search`'s, by the same parameters and rules.
+         *
+         *     404 for an id that names no row, 409 for a row without an embedding: the
+         *     second request succeeds once the photo is indexed. Nothing of the filters
+         *     is logged but which are present.
+         */
+        get: operations["similar_images_api_v1_images__image_id__similar_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -691,6 +774,16 @@ export interface components {
              * @description Whether POST /api/v1/images/{id}/reveal exists on this installation. **Ask before drawing the button.** With the setting off that route answers 404 with the body of a route that does not exist, so discovering it by trying means a button that disappears after it is clicked (RFC-030 section 6).
              */
             local_file_actions: boolean;
+            /**
+             * Max Search Limit
+             * @description The largest limit a search accepts: what 'show more' asks for. A larger one is refused with 400, never clamped (RFC-038 section 4.4).
+             */
+            max_search_limit: number;
+            /**
+             * Min Radius M
+             * @description The smallest radius, in metres, a 'near here' search accepts: the first of the radii to offer. Photo positions are where the drone was, not the ground it photographed (RFC-032 section 6).
+             */
+            min_radius_m: number;
             /**
              * Platform
              * @description The operating system this server runs on, as Python names it -- 'win32'. Only the Windows volume adapter and the Windows file revealer ship today (RFC-027 section 4.1).
@@ -1171,6 +1264,42 @@ export interface components {
          */
         PositionSource: "exif_gps" | "unknown";
         /**
+         * RankedImagesSchema
+         * @description A ranking of the index, whatever the query was (RFC-038 section 4.1).
+         *
+         *     The body of `POST /images/search/by-image` as it stands, and the base of
+         *     the other two: the search by text adds the `query` it echoes, and
+         *     *"Parecidas com esta"* the id of the photo it started from. One shape
+         *     and one set of rules for the three, so a client reads them the same way.
+         *
+         *     `limit` echoes the value actually used, not the one requested, which
+         *     is usually not sent at all: without it a caller receiving three
+         *     results cannot tell "there were only three images" from "the default
+         *     is smaller than I assumed".
+         */
+        RankedImagesSchema: {
+            /**
+             * Excluded Unknown Date
+             * @description How many indexed images the capture-date filter left out because their date is unknown, counted over the whole index under the other filters rather than over this page. Null when no date filter was sent.
+             */
+            excluded_unknown_date: number | null;
+            /**
+             * Excluded Unknown Position
+             * @description How many indexed images the near_lat/near_lon/radius_m circle left out because they have no position, counted over the whole index under the other filters rather than over this page. Null -- not 0 -- when no circle was sent: 0 would mean the circle hid nothing.
+             */
+            excluded_unknown_position: number | null;
+            /**
+             * Limit
+             * @description The page size actually applied
+             */
+            limit: number;
+            /**
+             * Results
+             * @description Matches, most similar first, in the repository's order
+             */
+            results: components["schemas"]["SearchResultSchema"][];
+        };
+        /**
          * RegisterDeviceRequestSchema
          * @description What a client sends to register a disk it saw in `GET /volumes`.
          *
@@ -1243,7 +1372,7 @@ export interface components {
         };
         /**
          * SearchResponseSchema
-         * @description The body of a successful search.
+         * @description The body of a successful search by text.
          *
          *     `query` echoes what the client sent, never what the model was asked.
          *     The string CLIP actually encodes is the RFC-023 template wrapped
@@ -1253,10 +1382,8 @@ export interface components {
          *     internal artifact of the translation path part of the contract, and
          *     would change the response the day the template changes.
          *
-         *     `limit` echoes the value actually used, not the one requested, which
-         *     is usually not sent at all: without it a caller receiving three
-         *     results cannot tell "there were only three images" from "the default
-         *     is smaller than I assumed".
+         *     Since RFC-038 the rest is `RankedImagesSchema`'s, field for field: the
+         *     response did not change, only where its fields are declared.
          */
         SearchResponseSchema: {
             /**
@@ -1366,6 +1493,42 @@ export interface components {
              * @description Cosine similarity in [-1, 1]; 1 is identical direction
              */
             similarity: number;
+        };
+        /**
+         * SimilarImagesResponseSchema
+         * @description The body of *"Parecidas com esta"*: `GET /images/{id}/similar` (RFC-038).
+         *
+         *     `image_id` is the photo the ranking started from, which is never among the
+         *     `results`: it would come first with a similarity of 1. A copy of it -- the
+         *     same bytes under another id -- is, and comes near the top.
+         */
+        SimilarImagesResponseSchema: {
+            /**
+             * Excluded Unknown Date
+             * @description How many indexed images the capture-date filter left out because their date is unknown, counted over the whole index under the other filters rather than over this page. Null when no date filter was sent.
+             */
+            excluded_unknown_date: number | null;
+            /**
+             * Excluded Unknown Position
+             * @description How many indexed images the near_lat/near_lon/radius_m circle left out because they have no position, counted over the whole index under the other filters rather than over this page. Null -- not 0 -- when no circle was sent: 0 would mean the circle hid nothing.
+             */
+            excluded_unknown_position: number | null;
+            /**
+             * Image Id
+             * Format: uuid
+             * @description The photo whose stored embedding was the query; not in results
+             */
+            image_id: string;
+            /**
+             * Limit
+             * @description The page size actually applied
+             */
+            limit: number;
+            /**
+             * Results
+             * @description Matches, most similar first, in the repository's order
+             */
+            results: components["schemas"]["SearchResultSchema"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -1726,6 +1889,84 @@ export interface operations {
             };
         };
     };
+    search_by_image_api_v1_images_search_by_image_post: {
+        parameters: {
+            query?: {
+                /** @description Maximum results to return; omitted means the configured default */
+                limit?: number | null;
+                /** @description Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device */
+                device_id?: string[] | null;
+                /** @description Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included. */
+                captured_from?: string | null;
+                /** @description Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset. */
+                captured_to?: string | null;
+                /** @description Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all. */
+                near_lat?: number | null;
+                /** @description Longitude of the centre of the circle, decimal degrees. */
+                near_lon?: number | null;
+                /** @description Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle. */
+                radius_m?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The picture's bytes, as the body. Up to 50 MB; the type must match the file. */
+        requestBody: {
+            content: {
+                "image/jpeg": Blob;
+                "image/png": Blob;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankedImagesSchema"];
+                };
+            };
+            /** @description The picture cannot be decoded, or a filter is refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The picture is larger than 50 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not image/jpeg or image/png, or not what it says */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The model cannot be loaded; the detail says why */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_image_api_v1_images__image_id__get: {
         parameters: {
             query?: never;
@@ -1805,6 +2046,66 @@ export interface operations {
             };
             /** @description The disk is connected and the file is not on it */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    similar_images_api_v1_images__image_id__similar_get: {
+        parameters: {
+            query?: {
+                /** @description Maximum results to return; omitted means the configured default */
+                limit?: number | null;
+                /** @description Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device */
+                device_id?: string[] | null;
+                /** @description Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included. */
+                captured_from?: string | null;
+                /** @description Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset. */
+                captured_to?: string | null;
+                /** @description Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all. */
+                near_lat?: number | null;
+                /** @description Longitude of the centre of the circle, decimal degrees. */
+                near_lon?: number | null;
+                /** @description Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle. */
+                radius_m?: number | null;
+            };
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimilarImagesResponseSchema"];
+                };
+            };
+            /** @description No indexed image has this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The image is known and has no embedding yet */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

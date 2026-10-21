@@ -4,7 +4,17 @@ import * as path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { logDirectory, rotate, ShellLog, timestamp } from "./log";
+import {
+  consoleLine,
+  describeSearch,
+  failedLoadLine,
+  logDirectory,
+  redactUrl,
+  redactUrls,
+  rotate,
+  ShellLog,
+  timestamp,
+} from "./log";
 
 let work: string;
 
@@ -88,4 +98,69 @@ describe("ShellLog", () => {
 
 it("writes the time as the backend's formatter does, with the milliseconds", () => {
   expect(timestamp(new Date(2026, 9, 20, 9, 5, 7, 42))).toBe("2026-10-20 09:05:07.042");
+});
+
+describe("no query string reaches shell.log (RFC-038 section 2.7)", () => {
+  const search =
+    "http://127.0.0.1:52011/busca?q=telhado%20azul&perto=-26.32141,-48.81631&raio=1000";
+
+  it("cuts a URL at its query string or its fragment", () => {
+    expect(redactUrl(search)).toBe("http://127.0.0.1:52011/busca?…");
+    expect(redactUrl("http://127.0.0.1:52011/busca#q=x")).toBe(
+      "http://127.0.0.1:52011/busca#…",
+    );
+    expect(redactUrl("http://127.0.0.1:52011/")).toBe("http://127.0.0.1:52011/");
+    expect(redactUrl("")).toBe("");
+  });
+
+  it("cuts every URL inside a text", () => {
+    const text = `GET ${search} 503 (Service Unavailable); see ${search}`;
+
+    expect(redactUrls(text)).toBe(
+      "GET http://127.0.0.1:52011/busca?… 503 (Service Unavailable); see " +
+        "http://127.0.0.1:52011/busca?…",
+    );
+  });
+
+  it("the line of did-fail-load goes through it", () => {
+    const line = failedLoadLine("ERR_CONNECTION_REFUSED", -102, search);
+
+    expect(line).toBe(
+      "The page did not load: ERR_CONNECTION_REFUSED (-102) at " +
+        "http://127.0.0.1:52011/busca?…",
+    );
+    expect(line).not.toContain("telhado");
+    expect(line).not.toContain("-26.32141");
+  });
+
+  it("the line of console-message goes through it, sourceId and message", () => {
+    const api = "http://127.0.0.1:52011/api/v1/images/search?q=telhado+azul&limit=40";
+    const line = consoleLine("error", `Failed to load resource: ${api}`, api, 0);
+
+    expect(line).not.toContain("telhado");
+    expect(line).toContain("/api/v1/images/search?…");
+  });
+});
+
+describe("the mark of a search", () => {
+  it("carries the kind and the counts, and nothing else", () => {
+    const detail = describeSearch({
+      kind: "text",
+      limit: 40,
+      results: 40,
+      responseMs: 412.4,
+      paintedMs: 530.6,
+      q: "telhado azul",
+    });
+
+    expect(detail).toBe("kind=text limit=40 results=40 response=412 painted=531");
+    expect(detail).not.toContain("telhado");
+  });
+
+  it("does not trust what it is sent", () => {
+    expect(describeSearch({ kind: "telhado azul", limit: "x" })).toBe(
+      "kind=? limit=? results=? response=? painted=?",
+    );
+    expect(describeSearch(null)).toBe("");
+  });
 });

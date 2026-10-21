@@ -114,6 +114,7 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "IllegalJobTransitionError",
         "ImageAlreadyExistsError",
         "ImageNotFoundError",
+        "ImageNotIndexedError",
         "InvalidBoundingBoxError",
         "InvalidCaptureDateError",
         "InvalidDateRangeError",
@@ -130,6 +131,7 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "JobNotFoundError",
         "NotFoundError",
         "ThumbnailNotFoundError",
+        "UnreadableQueryImageError",
         "UnsupportedImageExtensionError",
     }
     assert set(domain_exceptions.__all__) == expected

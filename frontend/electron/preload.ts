@@ -4,7 +4,8 @@
  * To the interface, two things: `onLauncherEvent`, which passes on the
  * launcher's `child` and `address` events, and `openLogsFolder`. And
  * `reportHome`, the mark of the home screen painted with its numbers, which
- * section 6.5 has the page give. The interface works without any of it, as in
+ * section 6.5 has the page give, and `reportSearch`, one per search (RFC-038
+ * section 5.6). The interface works without any of it, as in
  * `npm run dev:web`. To the start page, `screen`, `onScreen` and `reopen`.
  *
  * A sandboxed preload is a plain script with a `require` of a few modules. No
@@ -31,6 +32,7 @@
       subscribe("launcher-event", callback),
     openLogsFolder: () => ipcRenderer.send("open-logs-folder"),
     reportHome: (report: unknown) => ipcRenderer.send("home-ready", report),
+    reportSearch: (report: unknown) => ipcRenderer.send("search-done", report),
     screen: (): Promise<unknown> => ipcRenderer.invoke("screen"),
     onScreen: (callback: (screen: unknown) => void) => subscribe("screen", callback),
     reopen: () => ipcRenderer.send("reopen"),

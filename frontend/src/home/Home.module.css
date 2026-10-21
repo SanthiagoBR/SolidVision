@@ -1,91 +1,13 @@
 /* Node 44:458: the values are the design context's, through the tokens. The
    absolute positions of the frame became a column: the bar and the pills at
-   the top, and the rest centred below them. */
+   the top -- in search/SearchControls since RFC-038 -- and the rest centred
+   below them. */
 
 .home {
   display: flex;
   flex-direction: column;
   min-height: 100%;
   padding: var(--space-28) var(--space-32) var(--space-40);
-}
-
-.searchbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-12);
-  height: var(--size-field);
-  padding: 0 var(--space-20);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-field);
-  background: var(--color-surface-muted);
-}
-
-.searchIcon {
-  color: var(--color-text-icon);
-  font-size: var(--font-size-icon);
-}
-
-.searchInput {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font-size: var(--font-size-input);
-}
-
-.searchInput::placeholder {
-  color: var(--color-text-placeholder);
-  opacity: 1;
-}
-
-.searchInput:disabled {
-  cursor: default;
-}
-
-.searchStatus {
-  flex: none;
-  max-width: 45%;
-  overflow: hidden;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-small);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.filters {
-  display: flex;
-  align-items: center;
-  gap: var(--space-10);
-  margin-top: var(--space-14);
-}
-
-.pill,
-.pillSelected,
-.example {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--space-10);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-text);
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-medium);
-  white-space: nowrap;
-}
-
-.pillSelected {
-  border-color: var(--color-surface-pill);
-  background: var(--color-surface-pill);
-}
-
-.pill:disabled,
-.pillSelected:disabled,
-.example:disabled {
-  cursor: default;
 }
 
 .hero {
@@ -124,8 +46,18 @@
 }
 
 .example {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-regular);
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .stats {

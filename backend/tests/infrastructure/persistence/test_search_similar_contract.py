@@ -719,3 +719,31 @@ class TestUnknownCaptureDateCount:
 
         assert repository.search_similar(one_hot(0), limit=2, filters=in_2018()) == []
         assert repository.count_unknown_capture_date(in_2018()) == 7
+
+
+class TestGetEmbedding:
+    """`get_embedding()` (RFC-038 section 4.1): the vector `/similar` ranks with.
+
+    In this file because the three implementations are parametrized here, and
+    the read is `search_similar()`'s other half: the only way a stored vector
+    comes back out.
+    """
+
+    def test_returns_the_vector_that_was_stored(
+        self, repository: ImageRepository
+    ) -> None:
+        stored = EmbeddingVector([0.5] + [0.25] * (EMBEDDING_DIMENSION - 1))
+        image = index_image(repository, stored)
+
+        assert repository.get_embedding(image.id) == stored
+
+    def test_none_when_there_is_no_row(self, repository: ImageRepository) -> None:
+        assert repository.get_embedding(ImageId(uuid.uuid4())) is None
+
+    def test_none_when_the_row_has_no_embedding(
+        self, repository: ImageRepository
+    ) -> None:
+        image = store_without_embedding(repository)
+
+        assert repository.exists(image.id)
+        assert repository.get_embedding(image.id) is None

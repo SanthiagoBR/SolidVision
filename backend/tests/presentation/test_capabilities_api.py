@@ -26,6 +26,7 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from app.application.use_cases.search_images import MAX_SEARCH_LIMIT
 from app.infrastructure.config.settings import Settings, settings
 from app.presentation.api import app
 from app.presentation.api.v1.routers import capabilities as capabilities_router
@@ -65,7 +66,25 @@ class TestTheLocalClientGetsAnAnswer:
             "local_file_actions": True,
             "platform": sys.platform,
             "version": settings.project_version,
+            "max_search_limit": MAX_SEARCH_LIMIT,
+            "min_radius_m": settings.min_radius_m,
         }
+
+    def test_the_search_limits_are_the_policy_the_api_enforces(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """RFC-038 section 2.4: the interface reads them instead of copying them.
+
+        `min_radius_m` is the user's to change, and the answer follows the
+        setting rather than a 300 written down twice.
+        """
+        monkeypatch.setattr(settings, "min_radius_m", 450.0)
+
+        with client_from(LOOPBACK) as client:
+            body = client.get(URL).json()
+
+        assert body["min_radius_m"] == 450.0
+        assert body["max_search_limit"] == 100
 
     def test_loopback_with_the_setting_off_is_a_200_saying_false(
         self, disabled: None
@@ -174,14 +193,19 @@ class TestTheGuardsOnTheRoute:
         assert dependant.cookie_params == []
         assert dependant.body_params == []
 
-    def test_it_publishes_exactly_three_fields(self) -> None:
-        """The bar for a fourth is "the UI draws differently because of it"."""
+    def test_it_publishes_exactly_five_fields(self) -> None:
+        """The bar for a sixth is "the UI draws differently because of it".
+
+        Three since RFC-031; RFC-038 added the two the search draws from.
+        """
         schema = app.openapi()["components"]["schemas"]["CapabilitiesSchema"]
 
         assert set(schema["properties"]) == {
             "local_file_actions",
             "platform",
             "version",
+            "max_search_limit",
+            "min_radius_m",
         }
 
 

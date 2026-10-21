@@ -1,0 +1,153 @@
+/* Node 43:401: cards of 261 px in a 1440 frame, the thumbnail 160 px high,
+   18 px apart. Here `auto-fill` of 240 px at least: the window is 960 px wide
+   at the smallest (main.ts). */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--size-card-min), 1fr));
+  gap: var(--space-18);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: opacity 120ms ease-out;
+}
+
+.faded {
+  opacity: 0.45;
+}
+
+.card {
+  min-width: 0;
+}
+
+.open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.open:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: var(--space-4);
+  border-radius: var(--radius-card);
+}
+
+.thumbnail {
+  position: relative;
+  display: block;
+  height: var(--size-thumbnail);
+  margin-bottom: var(--space-6);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.noThumbnail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-12);
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+  text-align: center;
+  word-break: break-all;
+}
+
+.device,
+.deviceAway,
+.similarity {
+  position: absolute;
+  top: var(--space-8);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  max-width: calc(100% - 2 * var(--space-8));
+  padding: var(--space-2) var(--space-8);
+  overflow: hidden;
+  border-radius: var(--radius-tag);
+  background: var(--color-surface-overlay);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device,
+.deviceAway {
+  left: var(--space-8);
+  max-width: calc(70% - var(--space-8));
+}
+
+.device {
+  color: var(--color-text);
+}
+
+.deviceAway {
+  color: var(--color-text-tertiary);
+}
+
+.similarity {
+  right: var(--space-8);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dotConnected,
+.dotAway {
+  flex: none;
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border: 1.5px solid var(--color-text);
+  border-radius: 50%;
+}
+
+.dotConnected {
+  background: var(--color-text);
+}
+
+.dotAway {
+  border-color: var(--color-text-icon);
+}
+
+.name,
+.nameAway,
+.folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name,
+.nameAway {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+}
+
+.name {
+  color: var(--color-text);
+}
+
+.nameAway {
+  color: var(--color-text-tertiary);
+}
+
+.folder {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}

@@ -1,6 +1,10 @@
 """Image-specific domain exceptions."""
 
-from app.domain.exceptions.domain_error import DomainError, NotFoundError
+from app.domain.exceptions.domain_error import (
+    ConflictError,
+    DomainError,
+    NotFoundError,
+)
 
 
 class ImageNotFoundError(NotFoundError):
@@ -16,6 +20,20 @@ class ImageNotFoundError(NotFoundError):
     """
 
     def __init__(self, message: str = "Image not found.") -> None:
+        super().__init__(message)
+
+
+class ImageNotIndexedError(ConflictError):
+    """Raised when an image is known but has no embedding to compare (RFC-038).
+
+    *"Parecidas com esta"* ranks the index against the photo's stored vector,
+    and a row written without one -- by `IndexImageUseCase`, or before its
+    file was ever read -- has none. A conflict, not a 400: the identical
+    request succeeds once the photo is indexed, which is the doctrine of
+    `error_handlers.py`. And not a 404, because the photo exists.
+    """
+
+    def __init__(self, message: str = "This image has not been indexed yet.") -> None:
         super().__init__(message)
 
 

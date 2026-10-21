@@ -40,6 +40,7 @@ from app.domain.exceptions import (
     GoneError,
     IllegalJobTransitionError,
     ImageNotFoundError,
+    ImageNotIndexedError,
     InvalidDateRangeError,
     InvalidJobScopeError,
     JobNotFoundError,
@@ -81,6 +82,7 @@ INTRODUCED_WITH_A_STATUS: dict[type[DomainError], int] = {
     IllegalJobTransitionError: 409,
     FileGoneError: 410,
     ThumbnailNotFoundError: 404,
+    ImageNotIndexedError: 409,
 }
 """Errors that were born under a status-bearing base, so never answered 400.
 

@@ -103,6 +103,7 @@ class FakeImageRepository(ImageRepository):
         single grouped read from a loop over one folder.
         """
 
+        self.get_embedding_calls: list[ImageId] = []
         self.update_thumbnail_path_calls: list[tuple[ImageId, str]] = []
         self.update_thumbnail_path_many_calls: list[dict[ImageId, str]] = []
         self.search_similar_calls: list[
@@ -197,6 +198,10 @@ class FakeImageRepository(ImageRepository):
             ),
             limit,
         )
+
+    def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
+        self.get_embedding_calls.append(image_id)
+        return self._embeddings.get(image_id.value)
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
         if self.on_save_indexed_many is not None:

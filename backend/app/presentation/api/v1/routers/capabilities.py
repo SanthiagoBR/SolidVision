@@ -27,6 +27,7 @@ import sys
 
 from fastapi import APIRouter, Depends, status
 
+from app.application.use_cases.search_images import MAX_SEARCH_LIMIT
 from app.infrastructure.config.settings import settings
 from app.presentation.local_file_actions import require_loopback_client
 from app.presentation.schemas.capabilities_schema import CapabilitiesSchema
@@ -50,7 +51,7 @@ router = APIRouter(tags=["capabilities"])
     },
 )
 def get_capabilities() -> CapabilitiesSchema:
-    """Report the three things a client draws differently because of.
+    """Report the five things a client draws differently because of.
 
     `local_file_actions` mirrors `settings.allow_local_file_actions`
     exactly, including when it is `False` -- a `200` saying "no" is the
@@ -68,7 +69,14 @@ def get_capabilities() -> CapabilitiesSchema:
     that ships. The setting is reported as it stands rather than the
     project being renumbered to match an illustration.
 
-    The bar for a fourth field is *the UI draws something different
+    `max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),
+    and each passes the bar: the size *"Mostrar mais"* asks for, and the
+    smallest radius of the list. Both are policy the API already enforces
+    -- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the
+    user's file -- and a copy of either in the interface is the copy RFC-026
+    section 8.2 refused to put in the route's signature: it would drift.
+
+    The bar for a sixth field is *the UI draws something different
     because of it*. Without a criterion this becomes a configuration
     dump, which is the risk RFC-031 section 15 names.
     """
@@ -76,4 +84,6 @@ def get_capabilities() -> CapabilitiesSchema:
         local_file_actions=settings.allow_local_file_actions,
         platform=sys.platform,
         version=settings.project_version,
+        max_search_limit=MAX_SEARCH_LIMIT,
+        min_radius_m=settings.min_radius_m,
     )

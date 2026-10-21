@@ -22,6 +22,7 @@ nobody can forget to. RFC-030 added a third base the same way:
     job id names nothing               JobNotFoundError                 404
     device id names nothing            DeviceNotFoundError              404
     image id names nothing             ImageNotFoundError               404
+    image known, never indexed         ImageNotIndexedError             409
     image has no thumbnail to serve    ThumbnailNotFoundError           404
     device already has an active job   DeviceBusyError                  409
     cancelling a finished job          IllegalJobTransitionError        409

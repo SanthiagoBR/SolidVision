@@ -41,7 +41,14 @@ import {
   type ShellState,
 } from "./events";
 import { LauncherProcess } from "./launcher";
-import { logDirectory, ShellLog } from "./log";
+import {
+  consoleLine,
+  describeSearch,
+  failedLoadLine,
+  logDirectory,
+  redactUrl,
+  ShellLog,
+} from "./log";
 import { resolvePython } from "./python";
 
 /** The launcher's own deadlines (RFC-036 sections 7.2 and 16): 30 s for the job
@@ -319,35 +326,42 @@ function main(): void {
     contents.on("will-navigate", (event, target) => {
       if (!isOurPage(target)) {
         event.preventDefault();
-        log.warning(`A navigation to ${target} was blocked`);
+        log.warning(`A navigation to ${redactUrl(target)} was blocked`);
       }
     });
     contents.on("did-navigate", (_event, url, code) => {
       if (!onStartPage && code === 404 && isOurPage(url)) {
-        log.warning(`The page answered 404 at ${url}: the API serves no interface`);
+        log.warning(
+          `The page answered 404 at ${redactUrl(url)}: the API serves no interface`,
+        );
         feed({ kind: "no-interface" });
       }
     });
     contents.on("did-finish-load", () => {
       if (!onStartPage) {
-        log.mark("page", since(), pageUrl ?? "");
+        log.mark("page", since(), redactUrl(pageUrl ?? ""));
       }
     });
     contents.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
       if (!isMainFrame || code === ERR_ABORTED || onStartPage) {
         return;
       }
-      log.warning(`The page did not load: ${description} (${code}) at ${url}`);
+      log.warning(failedLoadLine(description, code, url));
       feed({ kind: "load-failed" });
     });
     // What the page says when something fails -- a request refused, an
     // exception -- in the log a user can send, rather than in a console no one
-    // opens.
+    // opens. Every URL in it without its query string: the search is there
+    // (RFC-038 section 2.7).
     contents.on("console-message", (details) => {
       if (details.level === "warning" || details.level === "error") {
         log.warning(
-          `The page's console, ${details.level}: ${details.message} ` +
-            `(${details.sourceId}:${details.lineNumber})`,
+          consoleLine(
+            details.level,
+            details.message,
+            details.sourceId,
+            details.lineNumber,
+          ),
         );
       }
     });
@@ -393,6 +407,12 @@ function main(): void {
     if (fromOurWindow(event) && !homeMarked) {
       homeMarked = true;
       log.mark("home", since(), describeHome(report));
+    }
+  });
+  // One per search, unlike the home's: the numbers of RFC-038 section 8.
+  ipcMain.on("search-done", (event, report: unknown) => {
+    if (fromOurWindow(event)) {
+      log.mark("search", since(), describeSearch(report));
     }
   });
 

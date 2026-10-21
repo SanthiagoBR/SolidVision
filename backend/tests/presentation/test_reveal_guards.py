@@ -42,7 +42,8 @@ from app.domain.entities.image import Image
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_record import IndexingRecord
-from app.infrastructure.config.settings import Settings, settings
+from app.infrastructure.config.layout import Environment, layout
+from app.infrastructure.config.settings import MODE_DEFAULTS, Settings, settings
 from app.infrastructure.filesystem.file_revealer import WindowsFileRevealer
 from app.infrastructure.filesystem.image_identity import compute_image_id
 from app.presentation.api import app
@@ -167,9 +168,16 @@ class TestThePermittedPathActuallyPassesBothGuards:
 
 
 class TestGuardOneTheSetting:
-    def test_it_defaults_to_off(self) -> None:
-        """The precedent of `warm_up_models`: nothing acts unless asked to."""
-        assert Settings.model_fields["allow_local_file_actions"].default is False
+    def test_it_defaults_to_off_in_a_checkout(self) -> None:
+        """Nothing in the suite may open a window unless a test asks for it.
+
+        RFC-038 section 2.3 made the default the mode's -- on installed, where
+        nobody writes the user's file -- following `warm_up_models`; the two
+        modes are held by `test_settings_sources.py`. This suite runs in a
+        checkout; the default is read without the `.env` that may override it.
+        """
+        assert layout.environment is Environment.DEVELOPMENT
+        assert MODE_DEFAULTS["allow_local_file_actions"](layout) is False
 
     def test_off_is_a_404_even_from_loopback_and_launches_nothing(
         self, world: World, disabled: None

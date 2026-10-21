@@ -102,11 +102,6 @@ export function lastIndexedText(finished: Date | null, now: Date = new Date()): 
   return `última indexação ${day} às ${TIME.format(finished)}`;
 }
 
-/** The pill: `Dispositivos · todos (4)`, without the count until it is known. */
-export function devicePillText(count: number | null): string {
-  return count === null ? "Dispositivos · todos" : `Dispositivos · todos (${count})`;
-}
-
 /** One device named, and "e mais N" when there are others. */
 export function neverIndexedText(labels: readonly string[]): string | null {
   const [first, ...others] = labels;

@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 
 import { Home } from "./home/Home";
+import { SearchScreen } from "./search/SearchScreen";
 import { NotFound } from "./shell/NotFound";
 import { Shell } from "./shell/Shell";
 
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
     element: <Shell />,
     children: [
       { index: true, element: <Home /> },
+      { path: "busca", element: <SearchScreen /> },
       { path: "*", element: <NotFound /> },
     ],
   },

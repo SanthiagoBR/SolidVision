@@ -185,6 +185,27 @@ class ImageRepository(ABC):
         """
 
     @abstractmethod
+    def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
+        """Return the stored embedding of one image, or `None` (RFC-038 4.1).
+
+        The read behind *"Parecidas com esta"*: the vector that indexing
+        already paid for, handed back so it can be ranked against the rest
+        with `search_similar()`. Reopening the file instead would need its
+        disk plugged in -- the case the product exists for is the disk in a
+        drawer -- and a forward pass of CLIP to produce this same vector.
+
+        `None` both when there is no row and when the row has no embedding.
+        Telling those apart is the caller's, with `exists()`: they are two
+        different answers to a user (404 and 409), and folding the second
+        into this signature would make every caller that only wants a
+        vector handle a third case.
+
+        One row, one column. `search_similar()` keeps the column out of its
+        `SELECT` on purpose, and this method is the only place a vector
+        comes back out of the repository.
+        """
+
+    @abstractmethod
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         """Return the persisted filesystem metadata for an image, if any.
 

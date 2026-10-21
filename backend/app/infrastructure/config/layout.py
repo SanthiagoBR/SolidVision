@@ -133,6 +133,18 @@ class Layout:
         """
         return self.data_directory / "cache"
 
+    @property
+    def query_image_directory(self) -> Path:
+        """Where a picture sent as a search query waits for the model (RFC-038).
+
+        `cache\\query-images`: each file lives for one request and is deleted
+        however it ends, and the API empties the folder when it starts, for
+        what a process that died left behind. Not `%TEMP%`, for the reason
+        the model runtime's writes are not there: the app keeps what it writes
+        in its own data root (RFC-035 section 5.4).
+        """
+        return self.cache_directory / "query-images"
+
 
 def layout_at(root: Path, profile: Path) -> Layout:
     """The layout of the code under `root`, for a user whose profile is `profile`.
