@@ -1,0 +1,527 @@
+/* The folders screen (RFC-039 section 5.6): node 14:51 of the Figma -- the
+   drive's name and its share at the top, the folders below -- with the
+   corrections of RFC-031 section 12, in the tokens of RFC-037. The panel of
+   the job, the states and the confirmation are not in the Figma.
+
+   The screen fills the content's height: the list scrolls inside it, which is
+   what the windowing measures, and the action bar stays at the bottom. */
+
+.screen {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-14);
+  min-height: 520px;
+  padding: var(--space-24) var(--space-32) var(--space-16);
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-40) var(--space-32);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.gone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-14);
+  padding: var(--space-40) var(--space-32);
+}
+
+.goneText {
+  margin: 0;
+  font-size: var(--font-size-input);
+  font-weight: var(--font-weight-semibold);
+}
+
+.link {
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The header */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+  margin: 0;
+}
+
+.title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleField {
+  width: min(320px, 100%);
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-input);
+  font-weight: var(--font-weight-semibold);
+}
+
+.titleField[aria-invalid="true"] {
+  border-color: var(--color-warning-border);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6) var(--space-16);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.metaPart {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.dotConnected,
+.dotDisconnected {
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border-radius: 50%;
+  border: 1.5px solid var(--color-connected);
+}
+
+.dotConnected {
+  background: var(--color-connected);
+}
+
+.dotDisconnected {
+  border-color: var(--color-text-icon);
+}
+
+.headerActions,
+.withReason {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.reason {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+.primary,
+.secondary {
+  padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primary {
+  border-color: var(--color-inverse);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-icon);
+  cursor: default;
+}
+
+.textButton {
+  padding: var(--space-4) var(--space-6);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.textButton:disabled {
+  color: var(--color-text-icon);
+  text-decoration: none;
+  cursor: default;
+}
+
+.message {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-label);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The panel of the job (section 5.7) */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-surface-muted);
+}
+
+.panelAttention {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-surface);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+}
+
+.panelLine {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.panelNote {
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+}
+
+.diagnostic {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: var(--font-size-small);
+}
+
+.panelActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+  margin-top: var(--space-4);
+}
+
+.bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--color-border);
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--color-text);
+}
+
+/* The listing gives no sign until it ends (section 2.2): a bar that moves,
+   and no number. */
+.barIndeterminate .barFill {
+  width: 30%;
+  animation: listing 1.6s ease-in-out infinite;
+}
+
+@keyframes listing {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barIndeterminate .barFill {
+    width: 100%;
+    opacity: 0.35;
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* The trail, the states, the filter */
+
+.trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--font-size-label);
+}
+
+.trailPart {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.trailLink {
+  color: var(--color-text-secondary);
+}
+
+.trailSeparator {
+  color: var(--color-text-icon);
+}
+
+.trailHere {
+  font-weight: var(--font-weight-semibold);
+}
+
+.state {
+  margin: 0;
+  padding: var(--space-24) 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+  text-align: center;
+}
+
+.stateBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.filterField {
+  width: min(320px, 100%);
+  padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-label);
+}
+
+.filterCount {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The list: rows of a fixed height, only the visible ones in the DOM */
+
+.scroller {
+  flex: 1;
+  min-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+}
+
+.rows {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  position: absolute;
+  right: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 9em minmax(0, 24em);
+  align-items: center;
+  gap: var(--space-12);
+  padding: 0 var(--space-14);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-label);
+}
+
+.check {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--color-inverse);
+}
+
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.folderLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.folderLink:hover .folderName {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.folderName {
+  overflow: hidden;
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrow {
+  color: var(--color-text-icon);
+  font-size: var(--font-size-body);
+}
+
+.included {
+  flex: none;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-tag);
+  background: var(--color-surface-pill);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.folderState,
+.folderStateActive {
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folderStateActive {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The action bar, held at the bottom */
+
+.actionBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-16);
+  padding: var(--space-10) var(--space-14);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-surface-muted);
+}
+
+.selected {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+}
+
+.actionMessage {
+  color: var(--color-warning-text);
+  font-size: var(--font-size-label);
+}
+
+.actionButtons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The confirmation of the whole disk */
+
+.scrim {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 18vh var(--space-24) var(--space-24);
+  background: var(--color-scrim);
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  width: min(480px, 100%);
+  padding: var(--space-20) var(--space-24);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.confirmTitle {
+  margin: 0;
+  font-size: var(--font-size-input);
+  font-weight: var(--font-weight-semibold);
+}
+
+.confirmText {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-10);
+  margin-top: var(--space-8);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

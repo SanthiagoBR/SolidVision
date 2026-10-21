@@ -357,6 +357,14 @@ class JobRunner:
                     f"{device.label!r}."
                 )
 
+        if not job.scopes:
+            # The listing of the whole disk is its denominator (RFC-039
+            # section 4.1). A job of some folders records nothing: two
+            # folders are not the disk.
+            observer.relay_listing_to(
+                lambda file_count: self._record_scan(device, mount, file_count)
+            )
+
         provider = FilesystemImageProvider(
             mount,
             self._supported_extensions,
@@ -369,6 +377,37 @@ class JobRunner:
         )
         return self._indexer.execute(
             self._candidates(provider, device, mount), observer
+        )
+
+    def _record_scan(self, device: Device, started_on: Path, file_count: int) -> None:
+        """Write the size of the whole disk's listing, if the disk is still there.
+
+        Called from inside the scan, when the listing of the root ends and
+        before the first file is read. **The mount point is compared
+        first**, for the reason `_completion_of()` gives: a listing over a
+        volume that vanished can simply stop, without an error, and its
+        count would be a confident wrong denominator. A disk that is not
+        mounted where the job began -- gone, or back under another letter
+        -- is not the disk that was listed, and nothing is written.
+
+        `record_scan()` writes the two columns and not the row: the copy
+        of the device held here is from the start of the job, and a
+        rename since then must stay (RFC-039 section 4.1). What it raises
+        is the observer's to swallow, with a WARNING; the job goes on.
+        """
+        mounted = self._locator.mount_point(device)
+        if mounted != started_on:
+            logger.warning(
+                "The scan of device %s is not recorded: it was listed at %s, and "
+                "the disk is now %s",
+                device.id,
+                started_on,
+                f"at {mounted}" if mounted is not None else "not connected",
+            )
+            return
+        self._devices.record_scan(device.id, file_count, self._clock())
+        logger.info(
+            "Device %s: the listing found %d supported files", device.id, file_count
         )
 
     def _candidates(

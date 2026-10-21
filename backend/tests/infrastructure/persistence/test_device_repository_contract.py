@@ -247,6 +247,75 @@ def test_a_device_that_has_never_been_scanned_has_no_denominator(
     assert stored.last_scan_file_count is None
 
 
+def test_record_scan_writes_the_two_scan_fields_and_nothing_else(
+    repository: DeviceRepository,
+) -> None:
+    """The denominator and its date, over the row as it stands (RFC-039 4.1).
+
+    Every other field is compared, and they must be what the last `save()`
+    left: the job of the whole disk writes with a copy of the device from
+    the start of the run, and a rename since then has to stay.
+    """
+    seen = datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
+    scanned = datetime.datetime(2026, 10, 26, 9, 30, tzinfo=datetime.UTC)
+    saved = device(
+        volume(14),
+        label="HD2",
+        filesystem_label="Seagate Backup",
+        total_bytes=2_000_398_934_016,
+        first_seen_at=seen,
+        last_seen_at=seen,
+    )
+    repository.save(saved)
+
+    repository.record_scan(saved.id, 48_210, scanned)
+
+    stored = repository.get(saved.id)
+    assert stored is not None
+    assert stored.last_scan_file_count == 48_210
+    assert stored.last_scan_at == scanned
+    assert (
+        stored.label,
+        stored.filesystem_label,
+        stored.total_bytes,
+        stored.first_seen_at,
+        stored.last_seen_at,
+        stored.volume_identity,
+    ) == ("HD2", "Seagate Backup", 2_000_398_934_016, seen, seen, saved.volume_identity)
+
+
+def test_record_scan_replaces_an_earlier_scan(repository: DeviceRepository) -> None:
+    saved = device(
+        volume(15),
+        last_scan_at=datetime.datetime(2026, 3, 12, tzinfo=datetime.UTC),
+        last_scan_file_count=40_000,
+    )
+    repository.save(saved)
+    later = datetime.datetime(2026, 10, 26, tzinfo=datetime.UTC)
+
+    repository.record_scan(saved.id, 0, later)
+
+    stored = repository.get(saved.id)
+    assert stored is not None
+    assert stored.last_scan_file_count == 0
+    assert stored.last_scan_at == later
+
+
+def test_record_scan_of_an_unknown_id_writes_nothing(
+    repository: DeviceRepository,
+) -> None:
+    """A device deleted while its job ran: the scan has nowhere to go."""
+    repository.save(device(volume(16)))
+    unknown = DeviceId(uuid.uuid4())
+
+    repository.record_scan(
+        unknown, 12, datetime.datetime(2026, 10, 26, tzinfo=datetime.UTC)
+    )
+
+    assert repository.get(unknown) is None
+    assert len(repository.list()) == 1
+
+
 def test_first_seen_at_is_not_overwritten_by_a_later_save(
     repository: DeviceRepository,
 ) -> None:

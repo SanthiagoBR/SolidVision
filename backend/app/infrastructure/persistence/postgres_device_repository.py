@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.domain.entities.device import Device
@@ -64,6 +64,34 @@ class PostgresDeviceRepository(DeviceRepository):
         )
         model.last_scan_at = device.last_scan_at
         model.last_scan_file_count = device.last_scan_file_count
+
+    def record_scan(
+        self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
+    ) -> None:
+        """One `UPDATE` of the two scan columns, keyed on the id.
+
+        Not the `save()` above, which copies every field of a `Device` the
+        caller built: the executor's copy is from the start of the job,
+        and would put back a label renamed since (RFC-039 section 4.1). A
+        row that is not there matches nothing, and nothing is written.
+
+        The session's own copy of the row, if it holds one, is brought up
+        to date by the statement (SQLAlchemy's default synchronization):
+        the executor's sessions do not expire on commit
+        (`session.py`), and a `get()` after this would otherwise answer
+        from the copy it loaded before. The rollback on failure is
+        `save()`'s, for the same shared session.
+        """
+        try:
+            self._session.execute(
+                update(DeviceModel)
+                .where(DeviceModel.id == device_id.value)
+                .values(last_scan_file_count=file_count, last_scan_at=scanned_at)
+            )
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
 
     def get(self, device_id: DeviceId) -> Device | None:
         model = self._session.get(DeviceModel, device_id.value)

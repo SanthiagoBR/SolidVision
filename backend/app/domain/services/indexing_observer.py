@@ -54,6 +54,33 @@ class IndexingObserver(ABC):
         ahead would mean reading the disk twice.
         """
 
+    def listed(self, file_count: int) -> None:
+        """Report how many supported files the listing of the whole root holds.
+
+        Called once, by a scan of a whole root -- no scopes -- as soon as
+        the listing is done and before the first file comes out
+        (RFC-039 section 4.1). It is not `discovered()`: that one counts
+        what the scan has *yielded so far*, and only knows the total at
+        the very end of the run, while this one is the size of the
+        listing the scan already holds in memory, known before any file
+        is read. On a resume it includes the files the checkpoint skips,
+        because the listing is always of the whole tree.
+
+        The count is taken without a `stat`: an entry is counted by its
+        extension, outside the excluded directories, so a folder named
+        `x.jpg` counts as a file. That is the price of opening nothing.
+
+        A scan of some folders never calls it: the files of two folders
+        are not the size of the disk.
+
+        **Not abstract, and empty here**, so that the null observer and
+        every test double written before RFC-039 keep working unchanged.
+        It is the denominator of the "% indexed" figure (RFC-027 section
+        8), and only the observer that writes a device row has a use for
+        it.
+        """
+        return None
+
     @abstractmethod
     def window_decided(
         self, progress: IndexingProgress, durable_through: ImagePath | None

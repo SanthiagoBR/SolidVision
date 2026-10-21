@@ -2,6 +2,7 @@ import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-
 import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 
+import { FolderScreen } from "./devices/FolderScreen";
 import { Home } from "./home/Home";
 import { SearchScreen } from "./search/SearchScreen";
 import { NotFound } from "./shell/NotFound";
@@ -34,6 +35,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
       { path: "busca", element: <SearchScreen /> },
+      // One device's folders; `?pasta=` is the level (RFC-039 section 5.1).
+      { path: "dispositivos/:id", element: <FolderScreen /> },
       { path: "*", element: <NotFound /> },
     ],
   },

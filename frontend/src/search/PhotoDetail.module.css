@@ -82,6 +82,13 @@
   word-break: break-all;
 }
 
+.deviceLink {
+  align-self: flex-start;
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
 .source {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-small);

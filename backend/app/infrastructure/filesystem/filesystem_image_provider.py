@@ -175,13 +175,19 @@ class FilesystemImageProvider:
         measurement asks for it (RFC-028 section 11): it would move the
         read out of the scan and into whichever consumer happened to call
         it first, which is how a cost stops being visible.
+
+        A scan of the whole root -- no scopes -- also tells the observer
+        how many supported files its listing holds, once, before the
+        first file comes out (`IndexingObserver.listed()`, RFC-039 section
+        4.1). A scan of some folders never does.
         """
         yielded = 0
         examined = 0
+        whole_root = not self._scopes
         for scope_root in self._scope_roots():
             if not scope_root.exists():
                 continue
-            for discovered in self._discover_under(scope_root):
+            for discovered in self._discover_under(scope_root, report=whole_root):
                 examined += 1
                 if discovered is not None:
                     yielded += 1
@@ -204,7 +210,9 @@ class FilesystemImageProvider:
             key=discovery_sort_key,
         )
 
-    def _discover_under(self, scope_root: Path) -> Iterator[DiscoveredImageFile | None]:
+    def _discover_under(
+        self, scope_root: Path, report: bool = False
+    ) -> Iterator[DiscoveredImageFile | None]:
         """Walk one directory in path order, skipping anything already done.
 
         Yields `None` for a supported file the resume skipped, so that the
@@ -221,8 +229,17 @@ class FilesystemImageProvider:
         RFC-029 section 9.1's timeout comes from a measured distribution
         that includes the first window rather than from the length of a
         batch.
+
+        With `report`, the listing is counted as soon as it exists, and
+        the count goes to `IndexingObserver.listed()` before the first
+        file is yielded: that is when the denominator of "% indexed" is
+        known, and the scan is the one the job already does (RFC-039
+        section 4.1).
         """
-        for path in sorted(scope_root.rglob("*"), key=discovery_sort_key):
+        listing = sorted(scope_root.rglob("*"), key=discovery_sort_key)
+        if report:
+            self._observer.listed(self._count_supported(listing))
+        for path in listing:
             if not path.is_file():
                 continue
             if self._is_excluded(path):
@@ -250,6 +267,26 @@ class FilesystemImageProvider:
                 capture_date=facts.capture_date,
                 position=facts.position,
             )
+
+    def _count_supported(self, listing: list[Path]) -> int:
+        """How many entries of a listing a scan would treat as photographs.
+
+        By the extension, outside the excluded directories -- the two
+        tests the walk applies -- and **without** the third, `is_file()`,
+        which is a `stat` per entry: on a cold disk, the read this count
+        exists to avoid. A folder named `x.jpg` therefore counts, and the
+        percentage it feeds is off by one for it (RFC-039 section 4.1).
+
+        Every entry is counted, the ones before a checkpoint too: the
+        denominator is the size of the disk, and a resume lists the whole
+        tree again.
+        """
+        return sum(
+            1
+            for path in listing
+            if path.suffix.lower() in self._supported_extensions
+            and not self._is_excluded(path)
+        )
 
     def _is_excluded(self, path: Path) -> bool:
         """Whether `path` lies inside one of the excluded directories.

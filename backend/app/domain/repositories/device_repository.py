@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 from abc import ABC, abstractmethod
 
 from app.domain.entities.device import Device
@@ -39,6 +40,29 @@ class DeviceRepository(ABC):
         twice updates one row rather than creating a second. An
         implementation must therefore key on `id` and let the `UNIQUE`
         constraint on the identity stay a backstop, not the mechanism.
+        """
+
+    @abstractmethod
+    def record_scan(
+        self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
+    ) -> None:
+        """Write the result of a scan of the whole disk, and nothing else.
+
+        `last_scan_file_count` and `last_scan_at` -- the denominator of the
+        "% indexed" figure and its date (RFC-027 section 8) -- written by
+        the job of the whole disk when its listing ends (RFC-039 section
+        4.1).
+
+        **Two columns, and not a `save()`.** `save()` rewrites the whole
+        row from a copy, and the copy the executor holds is from the start
+        of the job: a rename made since -- the label is editable with the
+        disk in use (RFC-031 section 7) -- would be undone by a scan that
+        finished after it. This writes the two fields the scan owns, over
+        whatever the row says now.
+
+        An unknown id writes nothing and is not an error: a device can be
+        deleted while its job runs, and a scan of a disk nobody knows any
+        more has nowhere to go.
         """
 
     @abstractmethod

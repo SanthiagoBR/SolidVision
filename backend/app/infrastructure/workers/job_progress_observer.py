@@ -16,6 +16,11 @@ callback fires per file, so that one is rate-limited by time.
 last write read back. That works because the write happens at every batch
 and every window, which is exactly where RFC-029 section 8 says the flag
 should be observed, so the answer is never more than one batch old.
+
+And one relay that writes nothing here: the size of the listing of a whole
+disk, which `listed()` hands to whatever function the runner gave it --
+the runner knows the device and where it was mounted, and this object
+knows neither (RFC-039 section 4.1).
 """
 
 from __future__ import annotations
@@ -54,6 +59,7 @@ class JobProgressObserver(IndexingObserver):
         self._pipeline = IndexingProgress()
         self._checkpoint: ImagePath | None = None
         self._last_write = 0.0
+        self._on_listed: Callable[[int], None] | None = None
 
         self.cancelled = False
         """Whether the route asked this job to stop."""
@@ -84,6 +90,39 @@ class JobProgressObserver(IndexingObserver):
         self._scan_complete = complete
         if complete or self._heartbeat_is_due():
             self._write()
+
+    def relay_listing_to(self, record: Callable[[int], None]) -> None:
+        """Send the size of the whole disk's listing to `record`.
+
+        Given by the runner once it has resolved the device and its mount
+        point, which is after this object exists: the runner builds the
+        observer first so that every way out of a run can read `lost`.
+        Only a job without scopes is given one, and only such a job's scan
+        calls `listed()`.
+        """
+        self._on_listed = record
+
+    def listed(self, file_count: int) -> None:
+        """Pass the denominator on, and swallow whatever goes wrong with it.
+
+        **Never raises**, for the reason `_write()` gives: this runs
+        inside the discovery generator, and an exception there would close
+        it and truncate the scan in silence. A disk whose percentage
+        could not be recorded is a disk without a percentage; a job cut
+        short by it would be a job that calls itself complete with half
+        the disk unread.
+        """
+        record = self._on_listed
+        if record is None:
+            return
+        try:
+            record(file_count)
+        except Exception:
+            logger.warning(
+                "Could not record the scan of job %s's device; the run continues",
+                self._job_id,
+                exc_info=True,
+            )
 
     def window_decided(
         self, progress: IndexingProgress, durable_through: ImagePath | None

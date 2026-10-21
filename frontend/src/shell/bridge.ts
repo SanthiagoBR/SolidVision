@@ -33,12 +33,36 @@ export interface SearchReport {
   readonly paintedMs: number;
 }
 
+/** The job runner as the window last heard of it (RFC-039 section 5.8):
+ * `running`, `restarting` or `unavailable`, with the line it left. */
+export interface IndexingStatus {
+  readonly state: string;
+  readonly detail: string | null;
+}
+
+/** One listing of a device's folders, painted: the mark of RFC-039 section
+ * 5.9. The count and the times, and never the path. */
+export interface FoldersReport {
+  readonly folders: number;
+  /** From the gesture to the response. */
+  readonly responseMs: number;
+  /** From the gesture to the frame after the list was drawn. */
+  readonly paintedMs: number;
+}
+
 export interface Bridge {
   onLauncherEvent(callback: (event: LauncherEventMessage) => void): () => void;
   openLogsFolder(): void;
   reportHome(report: HomeReport): void;
   /** Optional: a window of RFC-037 has no such channel. */
   reportSearch?(report: SearchReport): void;
+  /** A volume arrived or left (RFC-039 section 5.9). Optional, as the two
+   * below: a window of RFC-038 has none of them. */
+  onDevicesChanged?(callback: () => void): () => void;
+  /** The job runner's last state; `null` from a window that does not own the
+   * launcher, which hears nothing of it. */
+  indexing?(): Promise<IndexingStatus | null>;
+  reportFolders?(report: FoldersReport): void;
 }
 
 declare global {

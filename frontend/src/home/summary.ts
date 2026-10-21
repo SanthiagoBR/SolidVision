@@ -7,7 +7,9 @@
  *     last indexing                 the greatest `finished_at` of
  *                                   GET /jobs?status=completed
  *     the notice                    the devices with `indexed_images` 0 and no
- *                                   `active_job`
+ *                                   `active_job`, with their ids: "Escolher
+ *                                   pastas" opens the folders of the first
+ *                                   (RFC-039 section 5.11)
  *
  * **The greatest `finished_at`, and not the first of the list.** The list comes
  * newest first by `created_at` (`postgres_indexing_job_repository.py`), and a
@@ -18,16 +20,24 @@
 
 import type { Device, Job } from "../api/client";
 
-export type DeviceCounts = Pick<Device, "label" | "indexed_images" | "active_job">;
+export type DeviceCounts = Pick<
+  Device,
+  "id" | "label" | "indexed_images" | "active_job"
+>;
 export type FinishedJob = Pick<Job, "finished_at">;
+
+export interface NeverIndexed {
+  readonly id: string;
+  readonly label: string;
+}
 
 export interface HomeSummary {
   readonly devices: number;
   readonly indexedImages: number;
   readonly lastIndexedAt: Date | null;
-  /** The labels of the devices registered and never indexed, in the API's
-   * order, which is by label. */
-  readonly neverIndexed: readonly string[];
+  /** The devices registered and never indexed, in the API's order, which is
+   * by label. */
+  readonly neverIndexed: readonly NeverIndexed[];
 }
 
 export function summarize(
@@ -40,7 +50,7 @@ export function summarize(
     lastIndexedAt: latestFinished(completed),
     neverIndexed: devices
       .filter((device) => device.indexed_images === 0 && device.active_job === null)
-      .map((device) => device.label),
+      .map((device) => ({ id: device.id, label: device.label })),
   };
 }
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from dataclasses import replace
 
@@ -44,6 +45,22 @@ class InMemoryDeviceRepository(DeviceRepository):
         if existing is not None:
             device = replace(device, first_seen_at=existing.first_seen_at)
         self._devices[device.id.value] = device
+
+    def record_scan(
+        self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
+    ) -> None:
+        """Replace the two scan fields of the stored device, and keep the rest.
+
+        From the device as it is stored *now*, not from a copy the caller
+        holds, matching the `UPDATE` of `PostgresDeviceRepository`: a
+        label renamed after the job started stays renamed.
+        """
+        existing = self._devices.get(device_id.value)
+        if existing is None:
+            return
+        self._devices[device_id.value] = replace(
+            existing, last_scan_at=scanned_at, last_scan_file_count=file_count
+        )
 
     def get(self, device_id: DeviceId) -> Device | None:
         return self._devices.get(device_id.value)

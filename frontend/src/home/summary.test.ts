@@ -22,7 +22,7 @@ function device(
   indexed: number,
   job: DeviceCounts["active_job"] = null,
 ): DeviceCounts {
-  return { label, indexed_images: indexed, active_job: job };
+  return { id: `id-${label}`, label, indexed_images: indexed, active_job: job };
 }
 
 const finished = (at: string | null): FinishedJob => ({ finished_at: at });
@@ -73,7 +73,13 @@ describe("summarize", () => {
       [],
     );
 
-    expect(summary.neverIndexed).toEqual(["HD4", "HD5"]);
+    expect(summary.neverIndexed.map((never) => never.label)).toEqual(["HD4", "HD5"]);
+  });
+
+  it("keeps the id of each, for Escolher pastas (RFC-039 section 5.11)", () => {
+    const summary = summarize([device("HD1", 1_204), device("HD4", 0)], []);
+
+    expect(summary.neverIndexed).toEqual([{ id: "id-HD4", label: "HD4" }]);
   });
 
   it("of nothing is nothing", () => {

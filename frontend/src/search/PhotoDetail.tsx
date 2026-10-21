@@ -19,13 +19,23 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useState } from "react";
+import { Link } from "react-router";
 
 import { ApiError, type ImageDetail } from "../api/client";
+import { devicePath } from "../devices/folders";
+import { startFoldersGesture } from "../devices/timing";
 import { revealImage, thumbnailUrl, useCapabilities, useImage } from "./api";
 import { formatCapturedAt } from "./dates";
 import { errorMessage, NOT_IN_INDEX } from "./messages";
 import type { Point } from "./params";
-import { copyablePath, copyLabel, displayPath, fileName, parentFolder } from "./paths";
+import {
+  copyablePath,
+  copyLabel,
+  displayPath,
+  fileName,
+  folderOf,
+  parentFolder,
+} from "./paths";
 import styles from "./PhotoDetail.module.css";
 
 const CAPTURE_SOURCE: Record<string, string> = {
@@ -162,6 +172,18 @@ function Body({
           <span className={styles.source}>
             {image.device.connected ? "conectado" : "desconectado"}
           </span>
+          {/* The way to the folders screen, at the photo's folder (RFC-039
+              section 5.11). With the disk away, that screen says to plug it
+              in; with the folder gone, its 400. */}
+          <Link
+            className={styles.deviceLink}
+            to={devicePath(image.device.id, folderOf(image.relative_path))}
+            onClick={() =>
+              startFoldersGesture(image.device.id, folderOf(image.relative_path))
+            }
+          >
+            Ver no {image.device.label}
+          </Link>
         </dd>
         <dt>Caminho</dt>
         <dd className={styles.path}>{displayPath(image)}</dd>
