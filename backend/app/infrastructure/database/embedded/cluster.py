@@ -70,6 +70,7 @@ from .postmaster_pid import (
     PostmasterPid,
     read_postmaster_pid,
 )
+from .postmaster_signal import FAST, IMMEDIATE, send
 from .runtime import PostgresRuntime, RuntimeManifest
 from .windows_processes import ProcessInfo, ProcessTable, WindowsProcesses
 
@@ -392,6 +393,7 @@ class EmbeddedPostgres:
         ports: PortProber | None = None,
         login_check: Callable[[ClusterConnection], None] = verify_login,
         timeouts: ClusterTimeouts | None = None,
+        signal: Callable[[int, int], bool] = send,
     ) -> None:
         if sys.platform != "win32":
             raise EmbeddedPostgresError(
@@ -405,6 +407,7 @@ class EmbeddedPostgres:
         self._ports = ports if ports is not None else PortProber()
         self._login_check = login_check
         self._timeouts = timeouts if timeouts is not None else ClusterTimeouts()
+        self._signal = signal
 
     # -- the contract (section 4.2) ---------------------------------------
 
@@ -589,6 +592,55 @@ class EmbeddedPostgres:
                 f"{files.data}. The adapter does not kill the postmaster. "
                 f"pg_ctl said:\n{_tail(self._read_text(files.pg_ctl_log))}"
             )
+
+    def stop_by_signal(self, timeout: float) -> StopOutcome:
+        """`stop()` without starting a process: for a session that is ending.
+
+        RFC-036 section 7.5. During a logoff `pg_ctl` cannot start, so the
+        postmaster is sent the signal `pg_ctl` would have sent, through its
+        signal pipe: `fast`, and `immediate` if the server is still there
+        `timeout` later. Each waits for the processes to be gone, not for
+        `postmaster.pid` -- the next start finds no server either way. Up to
+        `timeout` for the lock too: at a logoff, nobody else should hold it,
+        and the session will not wait 15 minutes. The same refusals and the
+        same error as `stop()`.
+        """
+        manifest = self._runtime.manifest()
+        files = self._home.for_commands(self._home.files(manifest.major))
+        if not files.data.exists():
+            return StopOutcome.NOT_RUNNING
+        with self._home.transition_lock(files, timeout):
+            state = self._observe(files, manifest, leftover_initdb=False)
+            self._refuse_foreign(files, state)
+            running = (Observation.READY, Observation.STARTING, Observation.STOPPING)
+            if state.observation not in running:
+                return StopOutcome.NOT_RUNNING
+            assert state.pid_file is not None
+            postmaster = state.pid_file.pid
+            # Listed before the signal: a process on its way out may no longer
+            # say what it runs, and would pass for gone (measured).
+            server = sorted({postmaster, *self._server_processes(postmaster)})
+            if self._signal(postmaster, FAST) and self._gone(server, timeout):
+                logger.info("Embedded cluster stopped (fast, by its signal pipe)")
+                return StopOutcome.FAST
+            logger.warning("Fast shutdown by the signal pipe failed; trying immediate")
+            if self._signal(postmaster, IMMEDIATE) and self._gone(server, timeout):
+                return StopOutcome.IMMEDIATE
+            raise StopFailedError(
+                f"Neither a fast nor an immediate shutdown, sent through the "
+                f"signal pipe of PID {postmaster}, stopped the cluster in "
+                f"{files.data} within {timeout:.0f} s each. The adapter does not "
+                "kill the postmaster."
+            )
+
+    def _gone(self, server: list[int], timeout: float) -> bool:
+        """Whether every process in `server` exited within `timeout`."""
+        deadline = time.monotonic() + timeout
+        while any(self._processes.is_alive(pid) for pid in server):
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(POLL_SECONDS / 10)
+        return True
 
     def _server_processes(self, postmaster: int) -> list[int]:
         """The postmaster and its children that exist right now, by identity.
