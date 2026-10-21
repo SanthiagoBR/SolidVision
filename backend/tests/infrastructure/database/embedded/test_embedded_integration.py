@@ -58,6 +58,11 @@ from app.infrastructure.database.embedded.errors import (
     RuntimeInvalidError,
 )
 from app.infrastructure.database.embedded.postmaster_pid import read_postmaster_pid
+from app.infrastructure.database.embedded.postmaster_signal import (
+    FAST,
+    IMMEDIATE,
+    send,
+)
 from app.infrastructure.database.embedded.runtime import PostgresRuntime
 from app.infrastructure.database.embedded.windows_processes import WindowsProcesses
 from app.infrastructure.persistence.engine import build_engine
@@ -470,6 +475,67 @@ def test_a_killed_postmaster_is_recovered_and_no_commit_is_lost(
             200,
             199,
         )
+
+
+class NoCommands:
+    """`PostgresCommands` that a stop must not touch: at a logoff, `pg_ctl`
+    cannot start (RFC-036 section 7.5)."""
+
+    def __getattr__(self, name: str) -> Any:
+        raise AssertionError(f"the stop ran pg_ctl ({name})")
+
+
+def test_a_stop_through_the_signal_pipe_is_a_clean_fast_shutdown(
+    cluster: EmbeddedPostgres,
+    runtime: PostgresRuntime,
+    home_root: Path,
+    files: ClusterFiles,
+) -> None:
+    cluster.start()
+    postmaster = read_postmaster_pid(files.postmaster_pid)
+    assert postmaster is not None
+    processes = WindowsProcesses()
+    children = [
+        process.pid
+        for process in processes.snapshot()
+        if process.parent_pid == postmaster.pid
+    ]
+    without_pg_ctl = EmbeddedPostgres(
+        runtime,
+        ClusterHome(home_root),
+        commands=NoCommands(),  # type: ignore[arg-type]
+    )
+
+    assert without_pg_ctl.stop_by_signal(10.0) is StopOutcome.FAST
+
+    assert not any(processes.is_alive(pid) for pid in [postmaster.pid, *children])
+    assert not files.postmaster_pid.exists()
+    assert without_pg_ctl.stop_by_signal(10.0) is StopOutcome.NOT_RUNNING
+    assert cluster.start().recovered is False, "a fast shutdown needs no recovery"
+
+
+def test_a_postmaster_that_ignores_the_fast_signal_gets_the_immediate_one(
+    cluster: EmbeddedPostgres, runtime: PostgresRuntime, home_root: Path
+) -> None:
+    """The fallback of `stop()`, by the pipe: the first signal is lost here."""
+    cluster.start()
+    sent: list[int] = []
+
+    def lose_the_first(pid: int, signal: int) -> bool:
+        sent.append(signal)
+        return len(sent) > 1 and send(pid, signal)
+
+    signalled = EmbeddedPostgres(
+        runtime,
+        ClusterHome(home_root),
+        commands=NoCommands(),  # type: ignore[arg-type]
+        signal=lose_the_first,
+    )
+
+    assert signalled.stop_by_signal(10.0) is StopOutcome.IMMEDIATE
+
+    assert sent == [FAST, IMMEDIATE]
+    assert cluster.start().recovered is True
 
 
 def test_an_immediate_shutdown_is_recovered_on_the_next_start(
