@@ -197,7 +197,7 @@ def _run(
     from app.infrastructure.logging.logger import get_logger
 
     from .children import ChildProcess, Program, StderrEcho, child_command
-    from .session_end import SessionEndWindow
+    from .session_end import SessionEndWindow, end_before_the_children
     from .supervisor import ApiPorts, Supervisor
 
     logger = get_logger("launcher")
@@ -246,6 +246,7 @@ def _run(
         requests.end_session()
         supervisor.finished.wait(SESSION_STOP_SECONDS)
 
+    end_before_the_children()
     window = SessionEndWindow(stop_for_the_session)
     window.start()
     try:

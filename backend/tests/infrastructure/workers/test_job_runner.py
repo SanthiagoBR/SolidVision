@@ -16,7 +16,8 @@ simulated.
 from __future__ import annotations
 
 import datetime
-from collections.abc import Callable
+import signal
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -38,12 +39,17 @@ from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.persistence.in_memory_indexing_job_repository import (
     InMemoryIndexingJobRepository,
 )
+from app.infrastructure.process.interrupts import deferring, install
 from app.infrastructure.workers.job_runner import JobRunner
 
 START = datetime.datetime(2026, 9, 15, 12, 0, tzinfo=datetime.UTC)
 SUPPORTED = (".jpg", ".png")
 STALE_TIMEOUT = 120.0
 MAX_ATTEMPTS = 3
+
+
+def _unchanged[T](repository: T) -> T:
+    return repository
 
 
 class MovableClock:
@@ -68,6 +74,7 @@ class World:
         jobs: InMemoryIndexingJobRepository | None = None,
         events: list[str] | None = None,
         sleep: Callable[[float], None] = lambda _: None,
+        deferring_repositories: bool = False,
     ) -> None:
         self.clock = MovableClock()
         self.events = events if events is not None else []
@@ -77,12 +84,14 @@ class World:
         self.locator = FakeDeviceLocator({self.device.id: disk})
         self.images = FakeImageRepository()
         self.warmed: list[str] = []
+        # As `build_runner()` composes them, when asked (RFC-036 section 7.5).
+        wrap = deferring if deferring_repositories else _unchanged
         self.runner = JobRunner(
-            jobs=self.jobs,
-            devices=self.devices,
+            jobs=wrap(self.jobs),
+            devices=wrap(self.devices),
             locator=self.locator,
             indexer=IndexOrUpdateImagesUseCase(
-                repository=self.images,
+                repository=wrap(self.images),
                 embedding_model=FakeEmbeddingModel(),
                 content_hasher=StubContentHasher(),
                 batch_size=4,
@@ -384,6 +393,56 @@ class TestAnInterruptedExecutor:
         assert stopped.status is JobStatus.PENDING
         assert stopped.attempts == 0
         assert stopped.last_processed_relative_path is not None
+
+
+class TestAStopDuringADatabaseCall:
+    """RFC-036 section 7.5: the job runner's handler, and the repositories
+    `build_runner()` hands it. The stop is the real SIGINT, and it arrives
+    while a bulk write is in flight."""
+
+    @pytest.fixture(autouse=True)
+    def handler(self) -> Iterator[None]:
+        previous = signal.getsignal(signal.SIGINT)
+        install()
+        try:
+            yield
+        finally:
+            signal.signal(signal.SIGINT, previous)
+
+    @staticmethod
+    def the_stop_arrives() -> None:
+        signal.raise_signal(signal.SIGINT)
+
+    def test_the_write_finishes_and_then_the_job_goes_back(self, disk: Path) -> None:
+        """Nothing was cut in psycopg or SQLAlchemy, so the connection the
+        `release()` uses is the one already open: no new server process."""
+        world = World(disk, deferring_repositories=True)
+        claimed = world.jobs.claim(world.queue().id, world.clock())
+        assert claimed is not None
+        world.images.on_save_indexed_many = self.the_stop_arrives
+
+        finished = world.runner.run_claimed(claimed)
+
+        assert len(world.images.save_indexed_many_calls) == 1
+        assert finished is not None
+        assert finished.status is JobStatus.PENDING
+        assert finished.attempts == 0
+
+    def test_without_the_wrapping_the_same_stop_cuts_the_write(
+        self, disk: Path
+    ) -> None:
+        """The control: in a real repository, this is the query psycopg
+        cancels with a new connection, or the connection SQLAlchemy drops."""
+        world = World(disk)
+        claimed = world.jobs.claim(world.queue().id, world.clock())
+        assert claimed is not None
+        world.images.on_save_indexed_many = self.the_stop_arrives
+
+        finished = world.runner.run_claimed(claimed)
+
+        assert world.images.save_indexed_many_calls == []
+        assert finished is not None
+        assert finished.status is JobStatus.PENDING
 
 
 class TestTheReaper:

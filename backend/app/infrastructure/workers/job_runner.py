@@ -52,6 +52,7 @@ from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
 from app.infrastructure.logging.logger import get_logger
+from app.infrastructure.process.interrupts import deferred, deferring, install
 from app.infrastructure.process.supervision import (
     SUPERVISED_FLAG,
     refuse_to_start,
@@ -484,6 +485,13 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
     Both are here rather than defaulted inside `JobRunner` because the
     directory is configuration, and this is where configuration becomes
     arguments.
+
+    **Every repository is `deferring()`** (RFC-036 section 7.5): in a process
+    that installed the handler, an interrupt waits for the database call in
+    flight, so that the `release()` it leads to finds its connection whole
+    and opens none -- at a logoff, a new connection is a new server process
+    that cannot start, and takes the cluster down with it. Without the
+    handler (the CLI), the wrapping changes nothing.
     """
     from app.application.use_cases.thumbnail_writer import ThumbnailWriter
     from app.infrastructure.config.settings import settings
@@ -512,11 +520,11 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
     from app.presentation.dependencies import get_embedding_model
 
     return JobRunner(
-        jobs=PostgresIndexingJobRepository(job_session),
-        devices=PostgresDeviceRepository(job_session),
+        jobs=deferring(PostgresIndexingJobRepository(job_session)),
+        devices=deferring(PostgresDeviceRepository(job_session)),
         locator=MountedDeviceLocator(WindowsVolumeIdentityProvider()),
         indexer=IndexOrUpdateImagesUseCase(
-            repository=PostgresImageRepository(image_session),
+            repository=deferring(PostgresImageRepository(image_session)),
             embedding_model=get_embedding_model(),
             content_hasher=Sha256ContentHasher(),
             batch_size=settings.batch_size,
@@ -563,8 +571,13 @@ def main() -> None:
     section 7.1). With `--supervised` the stop can come while `torch` is
     being imported or the model loaded, and there is no job in hand then:
     nothing to hand back, and a stop that was asked for is not a failure.
+
+    **An interrupt waits for the database call in flight** (section 7.5):
+    `install()` before anything can raise one, and `build_runner()` hands
+    the runner repositories that defer it.
     """
     args = _build_arg_parser().parse_args()
+    install()
     try:
         if args.supervised:
             stop_on_stdin_eof()
@@ -596,8 +609,10 @@ def _run(*, once: bool) -> None:
     except ModelUnavailableError as error:
         refuse_to_start(f"SolidVision cannot start: {error}")
     finally:
-        image_session.close()
-        job_session.close()
+        # A rollback each, on the connections the repositories used.
+        with deferred():
+            image_session.close()
+            job_session.close()
 
 
 if __name__ == "__main__":

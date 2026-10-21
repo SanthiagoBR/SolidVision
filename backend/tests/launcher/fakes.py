@@ -12,7 +12,9 @@ recorded with the moment it was emitted.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Sequence
+import logging
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -36,6 +38,34 @@ LIMIT_SECONDS = 100_000.0
 """A supervisor that has not ended by this moment of the fake clock never will."""
 
 EPSILON = 1e-9
+
+
+class _Lines(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__(logging.INFO)
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(record.getMessage())
+
+
+@contextmanager
+def log_lines(name: str) -> Iterator[list[str]]:
+    """What one logger of the launcher says, from INFO up.
+
+    A handler of its own on that logger, and not `caplog`: the `app` logger
+    stops propagation once it is configured, and before that the same record
+    would reach the capture twice."""
+    logger = logging.getLogger(name)
+    handler = _Lines()
+    level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    try:
+        yield handler.lines
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(level)
 
 
 class FakeClock:
@@ -132,6 +162,10 @@ class FakeChild:
     def terminate(self) -> None:
         self.terminated_at = self._clock.now
         self._exit(1)
+
+    def die(self, code: int) -> None:
+        """Ended from outside, by nobody the launcher knows: a logoff, say."""
+        self._exit(code)
 
     def drain(self, timeout: float = 2.0) -> bool:
         return True
@@ -235,6 +269,7 @@ class FakeCluster:
         """No cluster yet: the next `start()` creates it."""
         self.pid = 4242
         self.calls: list[tuple[float, str]] = []
+        self.signal_timeouts: list[float] = []
         self.status_calls = 0
         self.status_override: ClusterStatus | None = None
         self.start_failures: list[Exception] = []
@@ -287,6 +322,13 @@ class FakeCluster:
 
     def stop(self) -> StopOutcome:
         self.calls.append((self._clock.now, "stop"))
+        was_running = self.running
+        self.running = False
+        return StopOutcome.FAST if was_running else StopOutcome.NOT_RUNNING
+
+    def stop_by_signal(self, timeout: float) -> StopOutcome:
+        self.calls.append((self._clock.now, "stop_by_signal"))
+        self.signal_timeouts.append(timeout)
         was_running = self.running
         self.running = False
         return StopOutcome.FAST if was_running else StopOutcome.NOT_RUNNING

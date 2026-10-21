@@ -23,10 +23,22 @@ says receives no broadcast messages.
                              then withdraws the reason
     WM_ENDSESSION, not       withdraws the reason: somebody cancelled
 
-**A hypothesis until a real logoff checks it** (section 16, by hand): that the
-launcher receives `WM_ENDSESSION` before Windows ends its children, and that
-the stop fits the system's patience. If it does not, the cost is the first
-paragraph's, and the next session's reaper recovers the job.
+**The window is not enough: the launcher must also come first.** Two real
+logoffs on 2026-10-19 disagreed. In the first, the children were alive when
+the stop began, and stopped in 0.3 s; in the second, the children and the
+postmaster were already dead -- within one tick of the supervisor -- and the
+job went to the reaper with an attempt spent. Windows ends the processes of a
+session from the highest shutdown level down, and every process starts at the
+same one, 0x280, where the order is not defined. `end_before_the_children()`
+puts the launcher above it, so that its `WM_ENDSESSION` comes, and is waited
+for, while the others still live: so it did in the six logoffs that followed
+(section 16, by hand). If it ever does not, the cost is the first paragraph's,
+and the next session's reaper recovers the job.
+
+**And the stop it runs creates no process**, because none starts during a
+logoff (`0xC000026B`): the job runner defers an interrupt that lands in a
+database call (`app.infrastructure.process.interrupts`), and the cluster is
+stopped through its signal pipe (section 17.1).
 """
 
 from __future__ import annotations
@@ -50,6 +62,14 @@ REASON = "SolidVision está devolvendo a indexação à fila"
 """What the shutdown screen shows while the stop runs (section 7.5)."""
 
 READY_SECONDS = 10.0
+
+DEFAULT_SHUTDOWN_LEVEL = 0x280
+"""Where every process starts, according to `SetProcessShutdownParameters`:
+the children, the postmaster, and whatever else the session runs."""
+
+SHUTDOWN_LEVEL = 0x300
+"""Where the launcher asks to be ended: the start of the applications' first
+range (0x300-0x3FF), above the default."""
 
 LRESULT = wintypes.LPARAM
 WNDPROC = ctypes.WINFUNCTYPE(
@@ -165,6 +185,9 @@ class SessionEndWindow:
     def _handle(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
         user32 = _user32()
         if message == WM_QUERYENDSESSION:
+            # The moment Windows began with this process: beside the deaths of
+            # the children in the log, it says who went first.
+            logger.info("Windows asked whether the session may end")
             user32.ShutdownBlockReasonCreate(hwnd, REASON)
             return 1
         if message == WM_ENDSESSION:
@@ -181,6 +204,36 @@ class SessionEndWindow:
             user32.PostQuitMessage(0)
             return 0
         return int(user32.DefWindowProcW(hwnd, message, wparam, lparam))
+
+
+def end_before_the_children() -> bool:
+    """Ask Windows to end this process before the rest of the session.
+
+    `SetProcessShutdownParameters`: the system ends processes from the highest
+    level down. Not inherited -- a child created afterwards is at the default
+    (tested) -- so the children and the postmaster stay below the launcher.
+    `False`, with a line in the log, if Windows refused.
+    """
+    kernel32 = _kernel32()
+    if not kernel32.SetProcessShutdownParameters(SHUTDOWN_LEVEL, 0):
+        logger.warning(
+            "The launcher could not ask to be ended before its children "
+            "(Windows error %s); at a logoff, they may be ended first",
+            ctypes.get_last_error(),
+        )
+        return False
+    return True
+
+
+def shutdown_level() -> int:
+    """This process's shutdown level, as Windows has it."""
+    level = wintypes.DWORD()
+    flags = wintypes.DWORD()
+    if not _kernel32().GetProcessShutdownParameters(
+        ctypes.byref(level), ctypes.byref(flags)
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return level.value
 
 
 def _user32() -> Any:
@@ -244,4 +297,11 @@ def _kernel32() -> Any:
     kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
     kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+    kernel32.SetProcessShutdownParameters.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    kernel32.SetProcessShutdownParameters.restype = wintypes.BOOL
+    kernel32.GetProcessShutdownParameters.argtypes = [
+        wintypes.LPDWORD,
+        wintypes.LPDWORD,
+    ]
+    kernel32.GetProcessShutdownParameters.restype = wintypes.BOOL
     return kernel32
