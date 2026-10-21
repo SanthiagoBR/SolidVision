@@ -26,8 +26,12 @@ What the supervision does when something exits (6.1, 6.2)::
 
 The stop (7.2): `stopping`; stdin closed on both children at once; each
 waited for up to its deadline, then `TerminateProcess`; the cluster last, and
-only when a launcher started it (7.3); `stopped`. A second request during the
-stop skips the deadlines.
+only when a launcher started it (7.3) -- or when the session is ending, which
+would end it anyway (7.5), and then through the postmaster's signal pipe,
+because no process starts during a logoff; `stopped`. A second request during
+the stop skips the deadlines. Every child's exit code goes to the log, and one
+already dead when the stop begins is said to be: at a logoff, that is how the
+log tells who Windows ended first, and whether the `release()` failed.
 
 **Requests to stop are honoured at safe points, never in the middle of a
 call.** They arrive as counts, polled every tick: a Ctrl+C or the end of stdin
@@ -113,6 +117,11 @@ class Timings:
     session_job_runner_stop: float = 10.0
     """The deadlines at the end of the session (section 7.5), shorter, because
     the system's patience is."""
+    session_cluster_stop: float = 6.0
+    """At the end of the session, each wait of the stop by the signal pipe: the
+    lock, the fast shutdown, the immediate one. With the job runner's 10 s,
+    inside the 30 s the window gives the whole stop. The fast shutdowns in the
+    server's logs took 0.1 to 2.6 s."""
     restart_delays: tuple[float, ...] = (0.0, 2.0, 5.0, 15.0, 30.0)
     """The wait before each restart in a row (section 6.1)."""
     restart_window: float = 600.0
@@ -155,6 +164,8 @@ class Cluster(Protocol):
     def status(self) -> ClusterReport: ...
 
     def stop(self) -> StopOutcome: ...
+
+    def stop_by_signal(self, timeout: float) -> StopOutcome: ...
 
 
 class Prober(Protocol):
@@ -675,13 +686,21 @@ class Supervisor:
         return None
 
     @staticmethod
-    def _log_exit(name: str, code: int, pid: int, lines: tuple[str, ...]) -> None:
+    def _log_exit(
+        name: str,
+        code: int,
+        pid: int,
+        lines: tuple[str, ...],
+        *,
+        before_the_stop: bool = False,
+    ) -> None:
         """The launcher's log gets the last lines of whoever died, and only those."""
         logger.warning(
-            "%s (PID %s) exited with %s; its last %d lines follow",
+            "%s (PID %s) exited with %s%s; its last %d lines follow",
             name,
             pid,
-            code,
+            exit_code(code),
+            " before the stop asked it to" if before_the_stop else "",
             len(lines),
         )
         for line in lines:
@@ -863,11 +882,28 @@ class Supervisor:
         only the database, and so the database is stopped after them -- the
         `release()` of a job is a write.
         """
-        stopping = [s for s in (self._api, self._job_runner) if s.child is not None]
-        for supervised in stopping:
+        stopping: list[_Supervised] = []
+        for supervised in (self._api, self._job_runner):
+            child = supervised.child
+            if child is None:
+                continue
             supervised.restart_at = None
-            assert supervised.child is not None
-            supervised.child.request_stop()
+            code = child.poll()
+            if code is not None:
+                # Dead since the last tick: "stopped in 0.0 s" would credit the
+                # stop with an exit it never caused (section 7.5).
+                child.drain()
+                supervised.child = None
+                self._log_exit(
+                    supervised.program.name,
+                    code,
+                    child.pid,
+                    child.last_lines(),
+                    before_the_stop=True,
+                )
+                continue
+            child.request_stop()
+            stopping.append(supervised)
         started_at = self._clock.monotonic()
         asked = self._requests.count()
         while stopping:
@@ -876,14 +912,18 @@ class Supervisor:
             for supervised in list(stopping):
                 child = supervised.child
                 assert child is not None
-                if child.poll() is not None:
+                code = child.poll()
+                if code is not None:
                     child.drain()
                     supervised.child = None
                     stopping.remove(supervised)
+                    # The code says whether it stopped or broke on the way:
+                    # a `release()` that failed leaves with a traceback and 1.
                     logger.info(
-                        "%s stopped in %.1f s",
+                        "%s stopped in %.1f s, with %s",
                         supervised.program.name,
                         now - started_at,
+                        exit_code(code),
                     )
                     continue
                 if skip or now - started_at >= self._deadline(supervised):
@@ -925,15 +965,38 @@ class Supervisor:
         child.terminate()
 
     def _stop_cluster(self) -> bool:
-        """Stop the cluster if a launcher started it; whether it was left up."""
-        if self._cluster is None or self._arrival is not ClusterArrival.STARTED:
+        """Stop the cluster if a launcher started it; whether it was left up.
+
+        An adopted one too when the session is ending: Windows ends it a moment
+        later regardless, and an ordered stop spares the next start a crash
+        recovery (section 7.5). It is still not this launcher's, and a stop
+        that fails leaves no ownership behind.
+        """
+        if self._cluster is None:
             return False
+        owned = self._arrival is ClusterArrival.STARTED
+        ending_anyway = (
+            self._arrival is ClusterArrival.ADOPTED and self._requests.session_ending()
+        )
+        if not (owned or ending_anyway):
+            return False
+        if ending_anyway:
+            logger.info(
+                "The end of the session ends the cluster this launcher adopted; "
+                "stopping it in order first"
+            )
         started_at = time.monotonic()
         try:
-            outcome = self._cluster.stop()
+            if self._requests.session_ending():
+                # `pg_ctl` is a process, and none starts during a logoff.
+                outcome = self._cluster.stop_by_signal(
+                    self._timings.session_cluster_stop
+                )
+            else:
+                outcome = self._cluster.stop()
         except EmbeddedPostgresError as error:
             logger.error("The database could not be stopped: %s", error)
-            return True
+            return owned
         logger.info(
             "Database: %s in %.1f s", outcome.value, time.monotonic() - started_at
         )
@@ -958,6 +1021,14 @@ class Supervisor:
                 last_ready_port=self._last_ready_port,
             )
         )
+
+
+def exit_code(code: int) -> str:
+    """An exit code as the log says it; an NTSTATUS in hex too, which is how
+    one is looked up -- 3221225786 is `0xC000013A`, a console's Ctrl+C."""
+    if 0 <= code <= 255:
+        return str(code)
+    return f"{code} (0x{code & 0xFFFFFFFF:08X})"
 
 
 def _url(port: int) -> str:

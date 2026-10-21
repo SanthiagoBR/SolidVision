@@ -8,19 +8,29 @@ the supervision of section 6, the stop of section 7, and who stops the cluster.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
-from tests.launcher.fakes import Behavior, FakePorts, Harness
+from tests.launcher.fakes import Behavior, FakePorts, Harness, log_lines
 
 from app.infrastructure.database.embedded.cluster import ClusterStatus
 from app.infrastructure.database.embedded.errors import (
     ClusterRefusedError,
     StartupFailedError,
 )
+from app.launcher.__main__ import SESSION_STOP_SECONDS
 from app.launcher.events import Event
 from app.launcher.instance import ClusterArrival, InstanceRecord, LauncherState
-from app.launcher.supervisor import ApiPorts, PortRefusedError, RestartPolicy, Timings
+from app.launcher.supervisor import (
+    ApiPorts,
+    PortRefusedError,
+    RestartPolicy,
+    Timings,
+    exit_code,
+)
 
 TICK = 0.1
+CONSOLE_CTRL_C = 0xC000013A
 CANNOT_START = 78
 SKEW = 2 * TICK + 0.01
 """How far a moment of the fake clock may sit from the one computed by hand:
@@ -29,6 +39,12 @@ the supervisor looks at the world once per tick."""
 
 def near(expected: float) -> object:
     return pytest.approx(expected, abs=SKEW)
+
+
+@pytest.fixture()
+def launcher_log() -> Iterator[list[str]]:
+    with log_lines("app.app.launcher.supervisor") as lines:
+        yield lines
 
 
 # --------------------------------------------------------------------------
@@ -578,6 +594,45 @@ class TestTheStop:
         assert runner.terminated_at == near(5.0 + Timings().session_job_runner_stop)
         assert harness.events.of(Event.STOPPING) == [{"reason": "session_end"}]
 
+    def test_a_child_dead_before_the_stop_is_said_to_be(
+        self, launcher_log: list[str]
+    ) -> None:
+        """A logoff that ends the job runner first: within the tick in which
+        the stop is asked, before the supervisor looks at the children."""
+        harness = Harness()
+
+        def logoff() -> None:
+            harness.job_runner()[-1].die(CONSOLE_CTRL_C)
+            harness.requests.end_session()
+
+        harness.clock.at(5.0, logoff)
+
+        assert harness.run() == 0
+
+        (runner,) = harness.job_runner()
+        assert runner.stop_requested_at is None
+        assert runner.terminated_at is None
+        (line,) = [entry for entry in launcher_log if entry.startswith("job_runner")]
+        assert "exited with 3221225786 (0xC000013A) before the stop asked" in line
+        assert "api stopped in 0.3 s, with 0" in launcher_log
+
+    def test_a_child_that_stops_says_with_what(self, launcher_log: list[str]) -> None:
+        """A `release()` that failed leaves with 1 and a traceback on stderr,
+        which the log of the launcher does not hold."""
+        harness = Harness()
+        harness.spawner.script("job_runner", Behavior(stops_after=0.5))
+        harness.stop_at(5.0)
+
+        harness.run()
+
+        assert "job_runner stopped in 0.5 s, with 0" in launcher_log
+
+    def test_an_exit_code_is_written_in_hex_when_it_is_an_ntstatus(self) -> None:
+        assert exit_code(0) == "0"
+        assert exit_code(78) == "78"
+        assert exit_code(CONSOLE_CTRL_C) == "3221225786 (0xC000013A)"
+        assert exit_code(-1) == "-1 (0xFFFFFFFF)"
+
     def test_a_child_waiting_to_restart_is_not_started_by_the_stop(self) -> None:
         harness = Harness()
         harness.spawner.script(
@@ -622,6 +677,53 @@ class TestWhoStopsTheCluster:
             record.cluster is ClusterArrival.ADOPTED
             for record in harness.states.written
         )
+
+    def test_an_adopted_cluster_is_stopped_at_the_end_of_the_session(self) -> None:
+        """Windows would end it a moment later; in order, the next start needs
+        no crash recovery (section 7.5)."""
+        harness = Harness(cluster_running=True)
+        harness.clock.at(5.0, harness.requests.end_session)
+
+        harness.run()
+
+        assert harness.cluster is not None
+        (stopped_at,) = harness.cluster.asked("stop_by_signal")
+        (runner,) = harness.job_runner()
+        assert runner.exited_at is not None and stopped_at >= runner.exited_at
+        assert not harness.cluster.running
+        assert harness.states.last.cluster is None
+
+    def test_at_the_end_of_the_session_the_cluster_is_stopped_by_its_signal(
+        self,
+    ) -> None:
+        """No `pg_ctl`: a process started during a logoff dies at birth."""
+        harness = Harness()
+        harness.clock.at(5.0, harness.requests.end_session)
+
+        harness.run()
+
+        assert harness.cluster is not None
+        assert harness.cluster.asked("stop") == []
+        assert len(harness.cluster.asked("stop_by_signal")) == 1
+        assert harness.cluster.signal_timeouts == [Timings().session_cluster_stop]
+
+    def test_an_ordinary_stop_still_uses_pg_ctl(self) -> None:
+        harness = Harness()
+        harness.stop_at(5.0)
+
+        harness.run()
+
+        assert harness.cluster is not None
+        assert harness.cluster.asked("stop_by_signal") == []
+        assert len(harness.cluster.asked("stop")) == 1
+
+    def test_the_session_stop_fits_in_the_windows_wait(self) -> None:
+        """The window waits 30 s for the whole stop (section 7.5): the job
+        runner's deadline, then up to three waits of the cluster's."""
+        timings = Timings()
+        worst = timings.session_job_runner_stop + 3 * timings.session_cluster_stop
+
+        assert worst < SESSION_STOP_SECONDS
 
     def test_the_cluster_of_a_launcher_that_died_is_inherited(self) -> None:
         dead = InstanceRecord(
