@@ -37,63 +37,11 @@
   font-weight: var(--font-weight-medium);
 }
 
-.sidebarNote {
-  margin: 0;
-  padding: 0 var(--space-10);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-label);
-}
-
-.devices {
+/* A column, so that a screen can take the height left under the banner of
+   the job runner: the folders screen scrolls its list inside it (RFC-039). */
+.content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.device {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-10);
-  padding: var(--space-6) var(--space-10);
-  border-radius: var(--radius-pill);
-}
-
-.deviceLabel {
-  overflow: hidden;
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.deviceState {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-small);
-}
-
-/* Plugged in or not is the strongest signal of the row (RFC-031): a filled
-   dot, or an empty one. */
-.dotConnected,
-.dotDisconnected {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1.5px solid var(--color-text);
-}
-
-.dotConnected {
-  background: var(--color-text);
-}
-
-.dotDisconnected {
-  border-color: var(--color-text-icon);
-}
-
-.content {
   grid-area: content;
   min-height: 0;
   overflow-y: auto;

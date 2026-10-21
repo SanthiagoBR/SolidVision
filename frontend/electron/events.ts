@@ -21,6 +21,12 @@
  *     stopping, stopped         "Encerrando…", and the window quits
  *     an exit, before ready     the error, with the last lines of stderr
  *     an exit, after            "O SolidVision parou", and "Abrir de novo"
+ *
+ * **And the state of the job runner, kept** (RFC-039 section 5.9): the
+ * `indexing` of `ready`, and each `child` named `job_runner`, with its
+ * `detail`. A page asks for it when it opens, because the events that set it
+ * may have come before the page existed -- a runner that refused to start
+ * before `ready` -- or before a reload. A new launcher clears it.
  */
 
 /** The launcher's protocol this window speaks (RFC-036 section 4.4). */
@@ -193,6 +199,16 @@ function exitedWith(code: number | null): string {
 // ---------------------------------------------------------------------------
 // The state machine
 
+/** The job runner as the launcher last described it: `running`, `restarting`
+ * or `unavailable`, with the last line it left when it exited (RFC-036
+ * section 4.4). */
+export interface Indexing {
+  readonly state: string;
+  readonly detail: string | null;
+}
+
+export const JOB_RUNNER = "job_runner";
+
 export type Stage =
   /** A launcher of this window was started, and has not said where the API is. */
   | "launching"
@@ -225,6 +241,9 @@ export interface ShellState {
   readonly closing: boolean;
   /** The `detail` of a `stopping` the launcher began on its own, for a failure. */
   readonly failure: string | null;
+  /** The job runner, as the launcher of this window last said; `null` before
+   * it said anything, and for a launcher this window does not own. */
+  readonly indexing: Indexing | null;
 }
 
 export interface ShellOptions {
@@ -291,6 +310,7 @@ export const INITIAL: ShellState = {
   reconnectingSince: null,
   closing: false,
   failure: null,
+  indexing: null,
 };
 
 export function step(
@@ -301,7 +321,11 @@ export function step(
 ): Step {
   switch (input.kind) {
     case "launched":
-      return { state: { ...state, running: true, answer: "nothing" }, actions: [] };
+      // A new launcher: what the last one said of its job runner is over.
+      return {
+        state: { ...state, running: true, answer: "nothing", indexing: null },
+        actions: [],
+      };
     case "event":
       return onEvent(state, input.event, now, options);
     case "exited":
@@ -367,7 +391,15 @@ function onEvent(
       return show(next, progress(text));
     }
     case "ready":
-      return open({ ...state, owner: true, url: event.url }, options);
+      return open(
+        {
+          ...state,
+          owner: true,
+          url: event.url,
+          indexing: readyIndexing(state, event),
+        },
+        options,
+      );
     case "already_running": {
       const answered: ShellState = {
         ...state,
@@ -402,6 +434,10 @@ function onEvent(
       return end(state, error(NOT_OPENED, event.detail, ["open-logs"]));
     case "child": {
       const forward: Action = { kind: "forward", event };
+      if (event.name === JOB_RUNNER) {
+        const indexing: Indexing = { state: event.state, detail: event.detail ?? null };
+        return { state: { ...state, indexing }, actions: [forward] };
+      }
       if (event.name !== "api") {
         return { state, actions: [forward] };
       }
@@ -527,6 +563,29 @@ function onProbe(
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * The job runner after `ready`: its `indexing`, without a line.
+ *
+ * Except when it repeats what a `child` already said, with the line: a runner
+ * that refused to start -- models missing, exit 78 -- may say so in a `child`
+ * before the API is ready, and `ready` then says `unavailable` again, with no
+ * `detail`. The line is what the banner shows (RFC-039 section 5.8), and it is
+ * kept.
+ */
+function readyIndexing(
+  state: ShellState,
+  event: Extract<LauncherEvent, { event: "ready" }>,
+): Indexing | null {
+  if (typeof event.indexing !== "string") {
+    return state.indexing;
+  }
+  const detail =
+    state.indexing !== null && state.indexing.state === event.indexing
+      ? state.indexing.detail
+      : null;
+  return { state: event.indexing, detail };
+}
 
 /** The URL the page loads: the API's, or Vite's in `npm run dev`. */
 export function pageUrl(state: ShellState, options: ShellOptions): string | null {

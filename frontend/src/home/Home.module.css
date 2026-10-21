@@ -89,3 +89,18 @@
   font-size: var(--font-size-label);
   text-align: left;
 }
+
+/* "Escolher pastas", at the right of the notice, as node 44:458 places it
+   (RFC-039 section 5.11). RFC-037 did not record the button's values; it
+   takes the style of the interface's primary buttons. */
+.noticeAction {
+  flex: none;
+  padding: var(--space-6) var(--space-12);
+  border-radius: var(--radius-pill);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}

@@ -3,14 +3,16 @@
  *
  * Since RFC-038 the search bar, the pills and the example queries are wired:
  * Enter, an example or a dropped photo opens `/busca`, with the filters chosen
- * here. The notice's "Escolher pastas" arrives with the folders screen, in
- * RFC-039.
+ * here. Since RFC-039 (section 5.11) the notice has "Escolher pastas", which
+ * opens the folders of the first device never indexed.
  */
 
 import { useEffect, useMemo, useRef } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import { useCompletedJobs, useDevices } from "../api/queries";
+import { devicePath } from "../devices/folders";
+import { startFoldersGesture } from "../devices/timing";
 import { useSearchActions } from "../search/actions";
 import { readFilters, type SearchUrl } from "../search/params";
 import { SearchControls } from "../search/SearchControls";
@@ -45,7 +47,11 @@ export function Home() {
       ? summarize(devices.data, jobs.data)
       : null;
   useReportHome(summary);
-  const notice = summary === null ? null : neverIndexedText(summary.neverIndexed);
+  const notice =
+    summary === null
+      ? null
+      : neverIndexedText(summary.neverIndexed.map((never) => never.label));
+  const first = summary?.neverIndexed[0] ?? null;
 
   return (
     <div className={styles.home}>
@@ -89,6 +95,15 @@ export function Home() {
         {notice !== null && (
           <div className={styles.notice}>
             <p className={styles.noticeText}>{notice}</p>
+            {first !== null && (
+              <Link
+                className={styles.noticeAction}
+                to={devicePath(first.id)}
+                onClick={() => startFoldersGesture(first.id, "")}
+              >
+                Escolher pastas
+              </Link>
+            )}
           </div>
         )}
       </section>

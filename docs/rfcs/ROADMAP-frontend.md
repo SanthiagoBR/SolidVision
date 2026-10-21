@@ -159,6 +159,10 @@ Liga a janela ao launcher e põe a tela inicial do Figma de pé com dados reais.
 
 ## Etapa 2 — Dispositivos e indexação (RFC-039) · seg 26 e ter 27
 
+**Status: implementada** ([RFC-039](rfc-039-dispositivos-e-indexacao.md), medição em [§13](rfc-039-dispositivos-e-indexacao.md#13-validação)), **com os dois critérios do HD externo pendentes**: não havia um disco à mão no dia da medição, o risco que o RFC já registrava. O fluxo do primeiro critério foi ensaiado no `C:`, pela interface, do começo ao fim, e o terceiro foi cumprido. Do que a implementação achou e não esperava ([§14](rfc-039-dispositivos-e-indexacao.md#14-correções-feitas-durante-a-implementação)): o `ready` do launcher repete o estado do `job_runner` sem a linha que um `child` anterior trouxe, e a casca a guarda; e o link da tela de pastas da v2 não chegou, e a tela saiu do mockup original, na oitava e última chamada ao Figma do roadmap.
+
+Quatro itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2](rfc-039-dispositivos-e-indexacao.md#2-o-que-o-estado-atual-muda-no-roadmap)). Nenhum código grava `last_scan_file_count`, e a porcentagem do cartão nunca apareceria: o job do disco inteiro passa a gravá-lo ao terminar de listar a raiz, sem migration. A descoberta só termina junto com o job, e a porcentagem *"depois de `discovery_complete`"* apareceria só nos últimos 512 arquivos: o painel mostra os contadores, e a barra existe só no disco inteiro, vinda do dispositivo. A página não recebe o `child` de um `job_runner` que caiu antes dela, nem o recupera depois de uma recarga: a casca guarda o estado, e a página pergunta. E o motivo do RFC-031 §10 para o polling, *"um processo que não tem janela"*, acabou: a conexão chega pelo `WM_DEVICECHANGE` da janela, e o polling do `/devices` vira uma rede de 10 s.
+
 **Escopo**
 - A barra lateral, com os cartões de dispositivo do Figma. Cada cartão mostra:
   - O rótulo.
@@ -183,9 +187,9 @@ Liga a janela ao launcher e põe a tela inicial do Figma de pé com dados reais.
 - Quando o launcher manda um `child` com `job_runner` `unavailable`, a interface mostra uma faixa: *"A indexação está indisponível"*, com a linha que veio no evento.
 
 **Critérios de pronto**
-- Pela interface, sem terminal: registrar um HD externo de verdade, escolher duas pastas, indexar, cancelar e indexar de novo.
-- Desplugar o HD com a tela de pastas aberta: a interface mostra o disco desconectado em até `TBM` s, sem erro genérico.
-- Uma pasta com 5 000 subpastas (947 ms e 689 KB no RFC-031 §8.3) não trava a interface.
+- Pela interface, sem terminal: registrar um HD externo de verdade, escolher duas pastas, indexar, cancelar e indexar de novo. **Pendente: sem HD externo.** Ensaiado no `C:`, pela interface: o disco registrado pelo diálogo, duas pastas, cancelado com 16 fotos e o checkpoint, e indexado de novo, com 74 indexadas e 16 que já estavam; nenhum corpo de requisição com um caminho que não veio da API.
+- Desplugar o HD com a tela de pastas aberta: a interface mostra o disco desconectado em até `TBM` s, sem erro genérico. **Pendente: sem HD externo.** O polling de 10 s, que é o teto sem a mensagem de volume, foi conferido.
+- Uma pasta com 5 000 subpastas (947 ms e 689 KB no RFC-031 §8.3) não trava a interface. **Medido: 861 ms**, mediana de cinco, do clique à lista desenhada; a resposta em 839 ms, e nenhuma tarefa longa da página.
 
 ---
 

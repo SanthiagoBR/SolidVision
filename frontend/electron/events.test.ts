@@ -305,6 +305,111 @@ describe("child", () => {
   });
 });
 
+describe("the job runner, kept for the page (RFC-039 section 5.9)", () => {
+  const readyWith = (indexing: string): Input =>
+    event({ event: "ready", url: URL, search: "loading", indexing });
+  const runner = (state: string, detail: string | null = null): Input =>
+    event({ event: "child", name: "job_runner", state, detail });
+
+  it("is nothing before the launcher said anything", () => {
+    expect(INITIAL.indexing).toBeNull();
+    expect(run([launched, starting()]).state.indexing).toBeNull();
+  });
+
+  it("is the indexing of ready, without a line", () => {
+    const { state } = run([launched, starting(), readyWith("running")]);
+
+    expect(state.indexing).toEqual({ state: "running", detail: null });
+  });
+
+  it("follows each child named job_runner, with its line", () => {
+    const { state } = run([
+      launched,
+      starting(),
+      readyWith("running"),
+      runner("restarting", "Traceback: the last line"),
+      runner("running"),
+      runner("unavailable", "SolidVision cannot start: the models are not in X"),
+    ]);
+
+    expect(state.indexing).toEqual({
+      state: "unavailable",
+      detail: "SolidVision cannot start: the models are not in X",
+    });
+  });
+
+  it("keeps the line of a runner that refused to start before ready", () => {
+    // Exit 78, the models missing: the child comes first, and ready repeats
+    // the state without the line (RFC-035 section 6.5).
+    const line = "SolidVision cannot start: The models are not in C:\\vazio";
+    const { state } = run([
+      launched,
+      starting(),
+      runner("unavailable", line),
+      readyWith("unavailable"),
+    ]);
+
+    expect(state.indexing).toEqual({ state: "unavailable", detail: line });
+  });
+
+  it("drops an old line when ready says something else", () => {
+    const { state } = run([
+      launched,
+      starting(),
+      runner("restarting", "an old line"),
+      readyWith("running"),
+    ]);
+
+    expect(state.indexing).toEqual({ state: "running", detail: null });
+  });
+
+  it("ignores the other children", () => {
+    const { state } = run([
+      launched,
+      starting(),
+      readyWith("running"),
+      event({ event: "child", name: "api", state: "restarting", detail: "x" }),
+      event({ event: "child", name: "database", state: "unavailable", detail: "y" }),
+    ]);
+
+    expect(state.indexing).toEqual({ state: "running", detail: null });
+  });
+
+  it("is cleared by a new launcher", () => {
+    const before = run([launched, starting(), runner("unavailable", "the line")]);
+
+    expect(run([launched], undefined, before.state).state.indexing).toBeNull();
+  });
+
+  it("is nothing for a window that does not own the launcher", () => {
+    const { state } = run([
+      launched,
+      event({
+        event: "already_running",
+        protocol: 1,
+        pid: 4120,
+        url: URL,
+        state: "ready",
+      }),
+    ]);
+
+    expect(state.owner).toBe(false);
+    expect(state.indexing).toBeNull();
+  });
+
+  it("is still passed on to an open page, as every child is", () => {
+    const unavailable: LauncherEvent = {
+      event: "child",
+      name: "job_runner",
+      state: "unavailable",
+      detail: "the line",
+    };
+    const { last } = run([launched, starting(), ready(), event(unavailable)]);
+
+    expect(last).toEqual([{ kind: "forward", event: unavailable }]);
+  });
+});
+
 describe("address", () => {
   it("opens the page at the new url", () => {
     const moved: LauncherEvent = { event: "address", url: "http://127.0.0.1:52000" };

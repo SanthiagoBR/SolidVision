@@ -12,6 +12,11 @@
  * What each event does is `events.ts`. This file carries the actions out: the
  * pages, the bridge, the timers, the launcher, the close of section 6.4, and
  * the marks of section 10 in `shell.log`.
+ *
+ * Since RFC-039 (section 5.9) it also listens to the window's volume messages,
+ * which become one `devices-changed` for the page (`volumes.ts`); answers the
+ * page's `indexing`, the job runner's last state, which `events.ts` keeps; and
+ * writes a `folders` mark per listing of a device's folders.
  */
 
 import {
@@ -43,6 +48,7 @@ import {
 import { LauncherProcess } from "./launcher";
 import {
   consoleLine,
+  describeFolders,
   describeSearch,
   failedLoadLine,
   logDirectory,
@@ -50,6 +56,7 @@ import {
   ShellLog,
 } from "./log";
 import { resolvePython } from "./python";
+import { VolumeMessages, volumeChangesLine, WM_DEVICECHANGE } from "./volumes";
 
 /** The launcher's own deadlines (RFC-036 sections 7.2 and 16): 30 s for the job
  * runner, beside the API's 15 s, and the cluster's `stop()`, measured from 0.8
@@ -102,6 +109,18 @@ function main(): void {
   let quitting = false;
   let readyMarked = false;
   let homeMarked = false;
+
+  // A volume arriving or leaving: one devices-changed per burst, to the page
+  // that is open, which asks GET /devices (RFC-039 section 2.4).
+  const volumes = new VolumeMessages(
+    (callback, afterMs) => setTimeout(callback, afterMs),
+    (changes) => {
+      log.info(volumeChangesLine(changes));
+      if (window !== null && !onStartPage) {
+        window.webContents.send("devices-changed", changes);
+      }
+    },
+  );
 
   function feed(input: Input): void {
     const result = step(state, input, performance.now(), options);
@@ -314,6 +333,13 @@ function main(): void {
       created.show();
       log.mark("window", since());
     });
+    if (process.platform === "win32") {
+      // Sent to every top-level window, with no registration: the window
+      // that RFC-031 section 10 did not have (RFC-039 section 2.4).
+      created.hookWindowMessage(WM_DEVICECHANGE, (wParam) => {
+        volumes.receive(wParam);
+      });
+    }
     created.on("close", (event) => {
       if (quitting) {
         return;
@@ -415,6 +441,17 @@ function main(): void {
       log.mark("search", since(), describeSearch(report));
     }
   });
+  // One per listing of a device's folders: the numbers of RFC-039 section 8.
+  ipcMain.on("folders-done", (event, report: unknown) => {
+    if (fromOurWindow(event)) {
+      log.mark("folders", since(), describeFolders(report));
+    }
+  });
+  // The job runner's last state, which the page asks for when it opens: the
+  // events that set it may have come before the page did (RFC-039 2.3).
+  ipcMain.handle("indexing", (event) =>
+    fromOurWindow(event) && state.owner ? state.indexing : null,
+  );
 
   // -- closing (section 6.4) -------------------------------------------------
 

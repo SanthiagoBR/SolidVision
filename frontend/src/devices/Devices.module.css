@@ -1,0 +1,363 @@
+/* The sidebar's cards, the dialog of adding a disk and the banner of the job
+   runner (RFC-039 sections 5.2, 5.4 and 5.8). The cards follow node 14:51 --
+   a card per disk, the label, a thin bar and the percentage under it -- in the
+   tokens of RFC-037; the dialog and the banner are not in the Figma. */
+
+.note {
+  margin: 0 0 var(--space-12);
+  padding: 0 var(--space-10);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0 0 var(--space-12);
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.card:hover {
+  border-color: var(--color-text-icon);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.cardOpen {
+  border-color: var(--color-text);
+  background: var(--color-surface-pill);
+}
+
+.cardHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.cardLabel {
+  overflow: hidden;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMount {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
+.cardLine,
+.cardShare,
+.cardJob {
+  overflow: hidden;
+  padding-left: calc(var(--size-dot) + var(--space-8));
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardShare {
+  color: var(--color-text-tertiary);
+}
+
+.cardJob {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.bar {
+  display: block;
+  height: var(--size-bar);
+  margin: var(--space-4) 0 var(--space-2) calc(var(--size-dot) + var(--space-8));
+  overflow: hidden;
+  border-radius: var(--size-bar);
+  background: var(--color-border);
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--size-bar);
+  background: var(--color-text);
+}
+
+/* Plugged in or not is the strongest signal of the card (RFC-031): a green
+   dot, or an empty grey one. */
+.dotConnected,
+.dotDisconnected {
+  width: var(--size-dot);
+  height: var(--size-dot);
+  border-radius: 50%;
+  border: 1.5px solid var(--color-connected);
+}
+
+.dotConnected {
+  background: var(--color-connected);
+}
+
+.dotDisconnected {
+  border-color: var(--color-text-icon);
+}
+
+.add {
+  width: 100%;
+  padding: var(--space-8) var(--space-10);
+  border: 1px dashed var(--color-text-icon);
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.add:hover {
+  border-color: var(--color-text);
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------------------ */
+/* The banner of the job runner (section 5.8) */
+
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-16);
+  margin: var(--space-16) var(--space-32) 0;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-warning-surface);
+}
+
+.bannerBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.bannerText {
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-label);
+}
+
+.diagnostic {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-warning-text);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: var(--font-size-small);
+  opacity: 0.85;
+}
+
+.bannerAction {
+  flex: none;
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------------ */
+/* The dialog of adding a disk (section 5.4) */
+
+.scrim {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--space-24) var(--space-24);
+  background: var(--color-scrim);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+  width: min(var(--size-dialog), 100%);
+  max-height: 100%;
+  padding: var(--space-20) var(--space-24) var(--space-24);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: var(--font-size-input);
+  font-weight: var(--font-weight-semibold);
+}
+
+.close {
+  padding: 0 var(--space-6);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-title);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dialogLede,
+.dialogNote {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.dialogNote {
+  padding: var(--space-16) 0;
+  text-align: center;
+}
+
+.volumes {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.volume {
+  display: grid;
+  grid-template-columns: 3.5em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4) var(--space-12);
+  padding: var(--space-12) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.volumeMount {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.volumeFacts {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volumeKnown {
+  grid-column: 2;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+.volume > .secondary {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.volumeForm {
+  display: flex;
+  grid-column: 2 / span 2;
+  gap: var(--space-8);
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-label);
+}
+
+.field[aria-invalid="true"] {
+  border-color: var(--color-warning-border);
+}
+
+.problem {
+  grid-column: 2 / span 2;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+}
+
+.rowMessage {
+  grid-column: 2 / span 2;
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.primary,
+.secondary {
+  padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primary {
+  border-color: var(--color-inverse);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text-icon);
+  cursor: default;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

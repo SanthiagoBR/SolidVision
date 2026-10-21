@@ -13,6 +13,11 @@ export const api = createClient<paths>({ baseUrl: "" });
 
 export type Device = components["schemas"]["DeviceDetailSchema"];
 export type Job = components["schemas"]["JobSchema"];
+export type JobStatus = components["schemas"]["JobStatus"];
+export type Volume = components["schemas"]["VolumeSchema"];
+export type FolderList = components["schemas"]["FolderListSchema"];
+export type Folder = components["schemas"]["FolderSchema"];
+export type FolderState = components["schemas"]["FolderState"];
 
 export type Capabilities = components["schemas"]["CapabilitiesSchema"];
 export type ImageDetail = components["schemas"]["ImageSchema"];

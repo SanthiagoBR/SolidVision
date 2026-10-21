@@ -118,6 +118,22 @@ export function describeSearch(report: unknown): string {
   );
 }
 
+/** `folders=5000 response=947 painted=1210`: one listing of a device's
+ * folders, painted (RFC-039 section 5.9). The counts and the times, never the
+ * path, which is the user's. */
+export function describeFolders(report: unknown): string {
+  if (typeof report !== "object" || report === null) {
+    return "";
+  }
+  const fields = report as Record<string, unknown>;
+  const number = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? Math.round(value) : "?";
+  return (
+    `folders=${number(fields.folders)} response=${number(fields.responseMs)} ` +
+    `painted=${number(fields.paintedMs)}`
+  );
+}
+
 /** The clock time of a line, as the backend's formatter writes it, with the
  * milliseconds. */
 export function timestamp(date: Date = new Date()): string {

@@ -31,6 +31,10 @@
   --color-surface-overlay: rgba(255, 255, 255, 0.9); /* labels over a photo */
   --color-scrim: rgba(20, 18, 26, 0.32); /* behind the detail */
   --color-focus: #4b45c6;
+  /* RFC-039. The dot of a disk plugged in is green (section 5.2). Node 14:51
+     colours the drive's icon by how much is indexed, and none of its colours
+     is a variable: this one is chosen, and only the dot uses it. */
+  --color-connected: #1f8a4c;
 
   /* Type: Inter, regular, medium and semibold, at one line height */
   --font-sans: "Inter Variable", Inter, "Segoe UI", system-ui, sans-serif;
@@ -79,4 +83,6 @@
   --size-popover: 300px;
   --size-preview: 36px; /* the dropped photo in the bar */
   --size-dot: 8px;
+  --size-dialog: 600px; /* adding a disk (RFC-039) */
+  --size-bar: 4px; /* the thin bar of a card, as node 14:51 draws it */
 }

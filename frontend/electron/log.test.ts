@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   consoleLine,
+  describeFolders,
   describeSearch,
   failedLoadLine,
   logDirectory,
@@ -162,5 +163,26 @@ describe("the mark of a search", () => {
       "kind=? limit=? results=? response=? painted=?",
     );
     expect(describeSearch(null)).toBe("");
+  });
+});
+
+describe("the mark of a listing of folders (RFC-039 section 5.9)", () => {
+  it("carries the count and the times, and never the path", () => {
+    const detail = describeFolders({
+      folders: 5000,
+      responseMs: 947.2,
+      paintedMs: 1210.7,
+      path: "Fotos/casamento da Ana",
+    });
+
+    expect(detail).toBe("folders=5000 response=947 painted=1211");
+    expect(detail).not.toContain("casamento");
+  });
+
+  it("does not trust what it is sent", () => {
+    expect(describeFolders({ folders: "muitas" })).toBe(
+      "folders=? response=? painted=?",
+    );
+    expect(describeFolders(undefined)).toBe("");
   });
 });

@@ -628,6 +628,17 @@ justamente a resposta que a UI precisa.
 | Paginação de pastas | §8.3 |
 | A interface | É o RFC-032. Este RFC é a precondição dela |
 
+> **Nota do RFC-039 (2026-10-21).** Duas linhas desta tabela mudaram com a
+> interface. **O denominador passou a ser escrito**, sem o rescan e sem
+> migration: o job do disco inteiro grava `last_scan_file_count` e
+> `last_scan_at` assim que termina de listar a raiz, por um `UPDATE` das duas
+> colunas ([RFC-039 §4.1](rfc-039-dispositivos-e-indexacao.md#41-o-scan-do-disco-inteiro-grava-o-denominador));
+> o rescan sob demanda continua fora. **E o motivo para não ouvir o
+> `WM_DEVICECHANGE` acabou**, porque agora há uma janela: a casca do Electron
+> recebe a mensagem de volume e a página pergunta ao `GET /devices` na hora, com
+> o polling de 10 s como rede ([RFC-039 §2.4](rfc-039-dispositivos-e-indexacao.md#24-o-motivo-do-rfc-031-10-para-não-ouvir-o-wm_devicechange-acabou)).
+> A API não mudou por nenhuma das duas.
+
 ## 11. Alternativas rejeitadas
 
 | alternativa | por que não |

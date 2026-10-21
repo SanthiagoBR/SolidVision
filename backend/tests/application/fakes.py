@@ -475,11 +475,18 @@ class FakeDeviceRepository(DeviceRepository):
         for device in devices or []:
             self._delegate.save(device)
         self.save_calls: list[Device] = []
+        self.record_scan_calls: list[tuple[DeviceId, int, datetime.datetime]] = []
         self.get_by_volume_identity_calls: list[VolumeIdentity] = []
 
     def save(self, device: Device) -> None:
         self.save_calls.append(device)
         self._delegate.save(device)
+
+    def record_scan(
+        self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
+    ) -> None:
+        self.record_scan_calls.append((device_id, file_count, scanned_at))
+        self._delegate.record_scan(device_id, file_count, scanned_at)
 
     def get(self, device_id: DeviceId) -> Device | None:
         return self._delegate.get(device_id)
