@@ -34,7 +34,10 @@ from app.application.use_cases.resolve_image_location import (
     ResolveImageLocationUseCase,
 )
 from app.application.use_cases.reveal_image import RevealImageUseCase
-from app.application.use_cases.search_images import SearchImagesUseCase
+from app.application.use_cases.search_images import (
+    FindSimilarImagesUseCase,
+    SearchImagesUseCase,
+)
 from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.repositories.indexing_job_repository import IndexingJobRepository
@@ -202,6 +205,25 @@ def get_search_images_use_case(
     return SearchImagesUseCase(
         repository=repository,
         embedding_model=embedding_model,
+        default_limit=settings.top_k_results,
+        min_radius_m=settings.min_radius_m,
+    )
+
+
+def get_find_similar_images_use_case(
+    repository: ImageRepository = Depends(get_image_repository),
+) -> FindSimilarImagesUseCase:
+    """Return the use case behind `GET /api/v1/images/{id}/similar` (RFC-038).
+
+    **No embedding model**, as the map's provider below: the photo's vector
+    is the stored one, and depending on `get_embedding_model()` would import
+    `torch` -- 13 to 18 s of a hard disk -- for a route that never encodes
+    anything, and would make it wait for, or fail with, a model it does not
+    use. `test_similar_api.py` swaps that provider for one that fails if
+    called. The page size and the radius floor arrive as for search.
+    """
+    return FindSimilarImagesUseCase(
+        repository=repository,
         default_limit=settings.top_k_results,
         min_radius_m=settings.min_radius_m,
     )
@@ -484,6 +506,7 @@ __all__ = [
     "get_device_repository",
     "get_embedding_model",
     "get_file_revealer",
+    "get_find_similar_images_use_case",
     "get_image_details_use_case",
     "get_image_repository",
     "get_index_image_use_case",

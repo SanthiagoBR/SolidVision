@@ -1,0 +1,303 @@
+/* The bar and the pills of node 44:458, moved here from the home screen by
+   RFC-038 and wired; the popovers and the chips are not in the Figma and are
+   built from the same tokens. */
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  height: var(--size-field);
+  padding: 0 var(--space-12) 0 var(--space-20);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+  background: var(--color-surface-muted);
+}
+
+.dragging {
+  border-style: dashed;
+  border-color: var(--color-text-icon);
+}
+
+.icon {
+  color: var(--color-text-icon);
+  font-size: var(--font-size-icon);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: var(--font-size-input);
+}
+
+.input::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
+.input:disabled {
+  cursor: default;
+}
+
+.dropPrompt {
+  flex: 1;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-input);
+}
+
+.photo {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.preview {
+  flex: none;
+  width: var(--size-preview);
+  height: var(--size-preview);
+  border-radius: var(--radius-tag);
+  object-fit: cover;
+}
+
+.photoName {
+  overflow: hidden;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clear,
+.chipRemove {
+  padding: 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--font-size-input);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.status {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.byPhoto {
+  flex: none;
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.byPhoto:disabled {
+  color: var(--color-text-icon);
+  cursor: default;
+}
+
+.picker {
+  display: none;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.anchor {
+  position: relative;
+}
+
+.pill,
+.pillSelected {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pillSelected {
+  border-color: var(--color-surface-pill);
+  background: var(--color-surface-pill);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-4) var(--space-10);
+  border-radius: var(--radius-pill);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.chipRemove {
+  color: var(--color-on-inverse-muted);
+  font-size: var(--font-size-body);
+}
+
+.summary {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
+.popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--space-6));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  width: var(--size-popover);
+  padding: var(--space-14) var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-surface);
+  box-shadow: 0 var(--space-8) var(--space-24) var(--color-scrim);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.section + .section {
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-border);
+}
+
+.sectionTitle {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dates {
+  display: flex;
+  gap: var(--space-10);
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.field input,
+.field select {
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-tag);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+.check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
+
+.checkLabel {
+  overflow: hidden;
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkState {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.apply {
+  padding: var(--space-6) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  text-decoration: underline;
+  cursor: pointer;
+}

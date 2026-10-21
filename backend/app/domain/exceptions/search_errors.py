@@ -46,3 +46,16 @@ class EmbeddingDimensionMismatchError(DomainError):
         self, message: str = "Embedding dimension does not match the index."
     ) -> None:
         super().__init__(message)
+
+
+class UnreadableQueryImageError(DomainError):
+    """Raised when a picture sent as a query cannot be decoded (RFC-038 4.2).
+
+    Bytes that are not an image, a JPEG cut short, a format other than the one
+    declared, or more pixels than the decoder agrees to open. Refused before
+    the model sees it: the adapter lets its decoding errors through on
+    purpose, and one reaching it would be a 500 for what is the caller's file.
+    """
+
+    def __init__(self, message: str = "The query image cannot be read.") -> None:
+        super().__init__(message)

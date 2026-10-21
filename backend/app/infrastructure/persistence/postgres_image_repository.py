@@ -55,6 +55,13 @@ from app.infrastructure.database.models.image_model import (
     ImageModel,
 )
 
+PGVECTOR_DEFAULT_EF_SEARCH = 40
+"""`hnsw.ef_search` when nobody sets it: the most rows one HNSW scan returns.
+
+From pgvector's README: *"Results are limited by the size of the dynamic
+candidate list (`hnsw.ef_search`), which is 40 by default"* (RFC-038 2.2).
+"""
+
 
 class PostgresImageRepository(ImageRepository):
     """Repository implementation backed by PostgreSQL via SQLAlchemy."""
@@ -299,10 +306,31 @@ class PostgresImageRepository(ImageRepository):
         guaranteed to be the true top-K. Measured, not theorized: with a
         deliberately bloated index the shipped query returned 1 of 3 live
         rows (RFC-025 section 7.3). At the sizes the planner answers with
-        a sequential scan the ranking is exact. Tuning `ef_search` is out
-        of scope here and belongs with the scale benchmark.
+        a sequential scan the ranking is exact.
+
+        **Above 40 the candidate list is the `limit`** (RFC-038 section
+        4.3): `ef_search` caps what one scan can return at all, so a
+        `limit=100` with no filter would come back with 40 and no error,
+        and a short page is how a caller learns there is nothing more.
+        `set_config(..., true)` lasts until the end of the transaction,
+        which is the request's -- `SET LOCAL` takes no parameter. **Up to
+        40 nothing is sent**, and the query is the one RFC-025 to 032
+        measured (RFC-032 section 6.1, rule 4). It is the floor that lets
+        the `limit` be met, not a recall setting: a filtered search can
+        still come back short, by RFC-028 section 8.1's mechanism.
+
+        **Which plan answers depends on the server's major version**
+        (`test_search_ef_search.py`). The tie-break on `id` is a second
+        sort key the HNSW index cannot provide; PostgreSQL 17 serves the
+        first from the index and sorts the ties incrementally, and 16 --
+        the embedded runtime -- cannot, and scans the table. There the
+        ranking is exact and the 40 never happens.
         """
         self._require_indexed_dimension(embedding)
+        if limit > PGVECTOR_DEFAULT_EF_SEARCH:
+            self._session.execute(
+                select(func.set_config("hnsw.ef_search", str(limit), True))
+            )
         statement = self.search_statement(embedding, limit, filters)
 
         return [
@@ -550,6 +578,14 @@ class PostgresImageRepository(ImageRepository):
                 f"Query embedding has {len(embedding.values)} dimensions, but "
                 f"the images.embedding column holds {EMBEDDING_DIMENSION}."
             )
+
+    def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
+        """`SELECT embedding` of one row: about 2 KB, and nothing else."""
+        statement = select(ImageModel.embedding).where(ImageModel.id == image_id.value)
+        values = self._session.execute(statement).scalar_one_or_none()
+        if values is None:
+            return None
+        return EmbeddingVector(values)
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
         model = self._session.get(ImageModel, image_id.value)

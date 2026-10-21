@@ -69,10 +69,13 @@ relative.
 
 MODE_DEFAULTS: dict[str, Callable[[Layout], Any]] = {
     "warm_up_models": lambda where: where.environment is Environment.INSTALLED,
+    "allow_local_file_actions": lambda where: where.environment
+    is Environment.INSTALLED,
 }
 """The settings whose default depends on the mode rather than on a path.
 
-`warm_up_models` is on installed and off in a checkout (RFC-035 section 8).
+`warm_up_models` is on installed and off in a checkout (RFC-035 section 8), and
+`allow_local_file_actions` follows it (RFC-038 section 2.3).
 """
 
 
@@ -532,20 +535,26 @@ class Settings(BaseSettings):
         "instead of on the first request",
     )
 
-    # RFC-030 section 6, guard 1. It defaults to `False` on the precedent
-    # `warm_up_models` set: the safe default is the one that cannot act on
-    # a machine that never asked. Here the action is opening windows on the
-    # user's desktop, so an API started without this setting answers 404
-    # for `/reveal` -- the route behaves as if it did not exist, rather
-    # than existing and refusing.
+    # RFC-030 section 6, guard 1. With it off, `/reveal` answers 404 -- the
+    # route behaves as if it did not exist, rather than existing and refusing.
+    #
+    # The default comes from the mode since RFC-038 (section 2.3): on
+    # installed, off in a checkout. RFC-030 chose `False` everywhere on the
+    # precedent `warm_up_models` set then -- the safe default is the one that
+    # cannot act on a machine that never asked -- and that precedent moved
+    # (RFC-035 section 8): installed, nobody writes the user's file, and a
+    # `False` would mean an "open in Explorer" button that never appears. In
+    # a checkout it stays off, so nothing in the suite opens a window; the
+    # `.env` or the environment turns it on. The file decides in both modes.
     #
     # It is *one* of two guards, and it does not replace the other: however
-    # this is set, `/reveal` refuses any caller that is not on loopback.
-    # This one is the operator's intention; that one is a fact about who is
+    # this is set, `/reveal` refuses any caller that is not on loopback, and
+    # the `Host` and `Origin` checks of RFC-037 stand in front of both. This
+    # one is the operator's intention; that one is a fact about who is
     # calling. The file path in search results is deliberately not behind
     # this setting -- showing where a photo is is the product's main job.
     allow_local_file_actions: bool = Field(
-        default=False,
+        default_factory=_mode_default("allow_local_file_actions"),
         description="Allow POST /api/v1/images/{id}/reveal to open the file "
         "manager on this machine (loopback callers only)",
     )

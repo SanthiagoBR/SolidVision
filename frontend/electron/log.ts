@@ -59,6 +59,65 @@ export function rotate(file: string, limit: number = ROTATE_BYTES): boolean {
   return true;
 }
 
+/**
+ * A URL as it may go into `shell.log`: without its query string or fragment
+ * (RFC-038 section 2.7).
+ *
+ * The search lives in the URL of the screen -- `/busca?q=…`, `perto=lat,lon`
+ * -- and RFC-026 section 16.1 decided the text of a query goes to no log. So
+ * everything from the first `?` or `#` is cut, of every URL this file writes:
+ * one function, so that no line can forget it.
+ */
+export function redactUrl(url: string): string {
+  const cut = url.search(/[?#]/);
+  return cut < 0 ? url : `${url.slice(0, cut)}${url[cut]}…`;
+}
+
+const URL_IN_TEXT = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>()]+/gi;
+
+/** Every URL inside a text -- a console message, an error -- redacted. */
+export function redactUrls(text: string): string {
+  return text.replace(URL_IN_TEXT, (url) => redactUrl(url));
+}
+
+/** The line of a page that did not load: the URL redacted. */
+export function failedLoadLine(description: string, code: number, url: string): string {
+  return `The page did not load: ${description} (${code}) at ${redactUrl(url)}`;
+}
+
+/** The line of a warning or an error of the page's console: the message and
+ * its source redacted -- a failed request names its URL, query and all. */
+export function consoleLine(
+  level: string,
+  message: string,
+  sourceId: string,
+  lineNumber: number,
+): string {
+  return (
+    `The page's console, ${level}: ${redactUrls(message)} ` +
+    `(${redactUrl(sourceId)}:${lineNumber})`
+  );
+}
+
+/** `kind=text limit=40 results=40 response=412 painted=530`: the kind and the
+ * counts, never the query. */
+export function describeSearch(report: unknown): string {
+  if (typeof report !== "object" || report === null) {
+    return "";
+  }
+  const fields = report as Record<string, unknown>;
+  const kind =
+    fields.kind === "text" || fields.kind === "similar" || fields.kind === "image"
+      ? fields.kind
+      : "?";
+  const number = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? Math.round(value) : "?";
+  return (
+    `kind=${kind} limit=${number(fields.limit)} results=${number(fields.results)} ` +
+    `response=${number(fields.responseMs)} painted=${number(fields.paintedMs)}`
+  );
+}
+
 /** The clock time of a line, as the backend's formatter writes it, with the
  * milliseconds. */
 export function timestamp(date: Date = new Date()): string {

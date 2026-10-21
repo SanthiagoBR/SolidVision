@@ -15,6 +15,10 @@ from app.presentation.api.v1 import api_v1_router
 from app.presentation.error_handlers import register_error_handlers
 from app.presentation.frontend import serve_frontend
 from app.presentation.model_warm_up import SearchReadiness, SearchState, model_warm_up
+from app.presentation.query_image_upload import (
+    empty_query_image_directory,
+    get_query_image_directory,
+)
 from app.presentation.request_guards import LoopbackRequestGuard
 from app.presentation.routes import health_router
 
@@ -107,7 +111,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     and hashing 924 MB of checkpoints behind a plain `pytest`, in a test file
     that has nothing to do with search, for a route that never touches the
     model.
+
+    Before that, `cache\\query-images` is emptied of what a process that died
+    left there (RFC-038 section 4.2). The folder comes through
+    `app.dependency_overrides`, so that it is the one the upload route writes
+    to, in a test as in the app.
     """
+    directory = app.dependency_overrides.get(
+        get_query_image_directory, get_query_image_directory
+    )()
+    removed = empty_query_image_directory(directory)
+    if removed:
+        logger.info("Deleted %d query images a previous run left behind", removed)
     if settings.warm_up_models:
         model_warm_up.start(_warm_up_models)
     else:

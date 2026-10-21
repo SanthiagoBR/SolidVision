@@ -23,6 +23,7 @@ from app.domain.exceptions.file_access_errors import (
 from app.domain.exceptions.image_errors import (
     ImageAlreadyExistsError,
     ImageNotFoundError,
+    ImageNotIndexedError,
     InvalidImageIdentifierError,
     InvalidImagePathError,
     UnsupportedImageExtensionError,
@@ -43,6 +44,7 @@ from app.domain.exceptions.search_errors import (
     EmbeddingDimensionMismatchError,
     EmptySearchQueryError,
     InvalidSearchLimitError,
+    UnreadableQueryImageError,
 )
 
 
@@ -66,6 +68,7 @@ __all__ = [
     "IllegalJobTransitionError",
     "ImageAlreadyExistsError",
     "ImageNotFoundError",
+    "ImageNotIndexedError",
     "InvalidBoundingBoxError",
     "InvalidCaptureDateError",
     "InvalidDateRangeError",
@@ -82,5 +85,6 @@ __all__ = [
     "JobNotFoundError",
     "NotFoundError",
     "ThumbnailNotFoundError",
+    "UnreadableQueryImageError",
     "UnsupportedImageExtensionError",
 ]

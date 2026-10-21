@@ -1,7 +1,7 @@
 """What this installation can do, as a UI needs to know it (RFC-031 section 9).
 
-Three fields, and the bar for a fourth is stated rather than left to
-taste: *the UI draws something different because of it*. A capabilities
+Five fields since RFC-038, and the bar for a sixth is stated rather than left
+to taste: *the UI draws something different because of it*. A capabilities
 route that drifts into being a configuration dump is the failure RFC-031
 section 15 names, and the guard against it is the criterion, not the
 count.
@@ -33,4 +33,17 @@ class CapabilitiesSchema(BaseModel):
     )
     version: str = Field(
         description="The application version, from settings.project_version"
+    )
+    max_search_limit: int = Field(
+        description=(
+            "The largest limit a search accepts: what 'show more' asks for. A "
+            "larger one is refused with 400, never clamped (RFC-038 section 4.4)."
+        )
+    )
+    min_radius_m: float = Field(
+        description=(
+            "The smallest radius, in metres, a 'near here' search accepts: the "
+            "first of the radii to offer. Photo positions are where the drone "
+            "was, not the ground it photographed (RFC-032 section 6)."
+        )
     )

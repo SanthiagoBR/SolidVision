@@ -159,6 +159,8 @@ def test_the_tree_is_the_same_in_both_modes(
     assert where.log_directory == where.data_directory / "logs"
     assert where.thumbnail_directory == where.data_directory / "thumbnails"
     assert where.postgres_directory == where.data_directory / "postgres"
+    assert where.query_image_directory == where.cache_directory / "query-images"
+    assert where.cache_directory == where.data_directory / "cache"
 
 
 def test_building_a_layout_creates_nothing(tmp_path: Path, profile: Path) -> None:

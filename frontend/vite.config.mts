@@ -9,12 +9,14 @@ const api = `http://127.0.0.1:${apiPort}`;
 
 // The page talks to its own origin and nothing else. In the build only: Vite's
 // development server injects an inline script for the refresh of the page.
-// The map's tiles will widen `img-src` (RFC-040).
-const CONTENT_SECURITY_POLICY = [
+// `blob:` is the dropped photo's preview, `URL.createObjectURL(file)`, which
+// exists only inside this origin (RFC-038 section 2.6). The map's tiles will
+// widen `img-src` (RFC-040).
+export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",
@@ -54,6 +56,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "electron/**/*.test.ts", "scripts/**/*.test.mjs"],
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "electron/**/*.test.ts",
+      "scripts/**/*.test.mjs",
+    ],
   },
 });

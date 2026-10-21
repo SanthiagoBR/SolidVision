@@ -30,6 +30,16 @@
             "title": "Local File Actions",
             "type": "boolean"
           },
+          "max_search_limit": {
+            "description": "The largest limit a search accepts: what 'show more' asks for. A larger one is refused with 400, never clamped (RFC-038 section 4.4).",
+            "title": "Max Search Limit",
+            "type": "integer"
+          },
+          "min_radius_m": {
+            "description": "The smallest radius, in metres, a 'near here' search accepts: the first of the radii to offer. Photo positions are where the drone was, not the ground it photographed (RFC-032 section 6).",
+            "title": "Min Radius M",
+            "type": "number"
+          },
           "platform": {
             "description": "The operating system this server runs on, as Python names it -- 'win32'. Only the Windows volume adapter and the Windows file revealer ship today (RFC-027 section 4.1).",
             "title": "Platform",
@@ -44,7 +54,9 @@
         "required": [
           "local_file_actions",
           "platform",
-          "version"
+          "version",
+          "max_search_limit",
+          "min_radius_m"
         ],
         "title": "CapabilitiesSchema",
         "type": "object"
@@ -746,6 +758,56 @@
         "title": "PositionSource",
         "type": "string"
       },
+      "RankedImagesSchema": {
+        "description": "A ranking of the index, whatever the query was (RFC-038 section 4.1).\n\nThe body of `POST /images/search/by-image` as it stands, and the base of\nthe other two: the search by text adds the `query` it echoes, and\n*\"Parecidas com esta\"* the id of the photo it started from. One shape\nand one set of rules for the three, so a client reads them the same way.\n\n`limit` echoes the value actually used, not the one requested, which\nis usually not sent at all: without it a caller receiving three\nresults cannot tell \"there were only three images\" from \"the default\nis smaller than I assumed\".",
+        "properties": {
+          "excluded_unknown_date": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed images the capture-date filter left out because their date is unknown, counted over the whole index under the other filters rather than over this page. Null when no date filter was sent.",
+            "title": "Excluded Unknown Date"
+          },
+          "excluded_unknown_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed images the near_lat/near_lon/radius_m circle left out because they have no position, counted over the whole index under the other filters rather than over this page. Null -- not 0 -- when no circle was sent: 0 would mean the circle hid nothing.",
+            "title": "Excluded Unknown Position"
+          },
+          "limit": {
+            "description": "The page size actually applied",
+            "title": "Limit",
+            "type": "integer"
+          },
+          "results": {
+            "description": "Matches, most similar first, in the repository's order",
+            "items": {
+              "$ref": "#/components/schemas/SearchResultSchema"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "limit",
+          "results",
+          "excluded_unknown_date",
+          "excluded_unknown_position"
+        ],
+        "title": "RankedImagesSchema",
+        "type": "object"
+      },
       "RegisterDeviceRequestSchema": {
         "description": "What a client sends to register a disk it saw in `GET /volumes`.\n\n**There is no path field, and there must never be one.** The identity\nis an opaque key the server minted; the server looks it up in an\nenumeration it just performed and uses *its own* mount point as the\nroot. A client never composes a location, and an identity a client\ninvented resolves to nothing at all -- which is the difference between\nthis and accepting `{\"path\": \"D:\\\\fotos\"}`, and the whole of RFC-031\nsection 5.1. `test_device_registration_takes_no_path.py` asserts the\nfield set here is exactly these three.\n\nBoth identity fields are plain `str` rather than `VolumeIdentity` and\n`VolumeKind`, and that is deliberate. Declaring `volume_kind:\nVolumeKind` would have FastAPI refuse an unknown value with a `422`\nbefore the use case ever runs, and the `400\nInvalidVolumeIdentityError` RFC-031 section 6 specifies would become\nunreachable. It is the argument `CreateJobRequestSchema` already\nmakes for `scopes`: what makes a value legal is a domain rule, and\nanswering it in Presentation produces a 422 where a 400 with a\nreadable message belongs.\n\nExtra fields are **ignored**, which is Pydantic's default and is left\nalone here. A client that smuggles in a `path` gets a successful\nregistration of the volume it named and no path is opened, which is\nwhat the guard test asserts. Only `RenameDeviceRequestSchema` forbids\nextras, and for a reason specific to it.",
         "properties": {
@@ -791,7 +853,7 @@
         "type": "object"
       },
       "SearchResponseSchema": {
-        "description": "The body of a successful search.\n\n`query` echoes what the client sent, never what the model was asked.\nThe string CLIP actually encodes is the RFC-023 template wrapped\naround a possibly translated query -- for a Portuguese input it comes\nback as `a photo of . a rural property with a lake`, leading `\". \"`\nand all (RFC-025 section 11.5). Publishing that would make an\ninternal artifact of the translation path part of the contract, and\nwould change the response the day the template changes.\n\n`limit` echoes the value actually used, not the one requested, which\nis usually not sent at all: without it a caller receiving three\nresults cannot tell \"there were only three images\" from \"the default\nis smaller than I assumed\".",
+        "description": "The body of a successful search by text.\n\n`query` echoes what the client sent, never what the model was asked.\nThe string CLIP actually encodes is the RFC-023 template wrapped\naround a possibly translated query -- for a Portuguese input it comes\nback as `a photo of . a rural property with a lake`, leading `\". \"`\nand all (RFC-025 section 11.5). Publishing that would make an\ninternal artifact of the translation path part of the contract, and\nwould change the response the day the template changes.\n\nSince RFC-038 the rest is `RankedImagesSchema`'s, field for field: the\nresponse did not change, only where its fields are declared.",
         "properties": {
           "excluded_unknown_date": {
             "anyOf": [
@@ -837,11 +899,11 @@
           }
         },
         "required": [
-          "query",
           "limit",
           "results",
           "excluded_unknown_date",
-          "excluded_unknown_position"
+          "excluded_unknown_position",
+          "query"
         ],
         "title": "SearchResponseSchema",
         "type": "object"
@@ -960,6 +1022,63 @@
           "similarity"
         ],
         "title": "SearchResultSchema",
+        "type": "object"
+      },
+      "SimilarImagesResponseSchema": {
+        "description": "The body of *\"Parecidas com esta\"*: `GET /images/{id}/similar` (RFC-038).\n\n`image_id` is the photo the ranking started from, which is never among the\n`results`: it would come first with a similarity of 1. A copy of it -- the\nsame bytes under another id -- is, and comes near the top.",
+        "properties": {
+          "excluded_unknown_date": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed images the capture-date filter left out because their date is unknown, counted over the whole index under the other filters rather than over this page. Null when no date filter was sent.",
+            "title": "Excluded Unknown Date"
+          },
+          "excluded_unknown_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed images the near_lat/near_lon/radius_m circle left out because they have no position, counted over the whole index under the other filters rather than over this page. Null -- not 0 -- when no circle was sent: 0 would mean the circle hid nothing.",
+            "title": "Excluded Unknown Position"
+          },
+          "image_id": {
+            "description": "The photo whose stored embedding was the query; not in results",
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "limit": {
+            "description": "The page size actually applied",
+            "title": "Limit",
+            "type": "integer"
+          },
+          "results": {
+            "description": "Matches, most similar first, in the repository's order",
+            "items": {
+              "$ref": "#/components/schemas/SearchResultSchema"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "limit",
+          "results",
+          "excluded_unknown_date",
+          "excluded_unknown_position",
+          "image_id"
+        ],
+        "title": "SimilarImagesResponseSchema",
         "type": "object"
       },
       "ValidationError": {
@@ -1097,7 +1216,7 @@
   "paths": {
     "/api/v1/capabilities": {
       "get": {
-        "description": "Report the three things a client draws differently because of.\n\n`local_file_actions` mirrors `settings.allow_local_file_actions`\nexactly, including when it is `False` -- a `200` saying \"no\" is the\nwhole reason this route exists, and is why the configuration guard is\nnot on it.\n\n`platform` is `sys.platform`, read here rather than inferred from\nanything: only the Windows volume adapter and the Windows file\nrevealer ship, and a client is entitled to know which operating\nsystem answered (RFC-027 section 4.1).\n\n`version` is `settings.project_version` -- the package version, which\nis `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the\nsprint number, and the sprint number is not the version of anything\nthat ships. The setting is reported as it stands rather than the\nproject being renumbered to match an illustration.\n\nThe bar for a fourth field is *the UI draws something different\nbecause of it*. Without a criterion this becomes a configuration\ndump, which is the risk RFC-031 section 15 names.",
+        "description": "Report the five things a client draws differently because of.\n\n`local_file_actions` mirrors `settings.allow_local_file_actions`\nexactly, including when it is `False` -- a `200` saying \"no\" is the\nwhole reason this route exists, and is why the configuration guard is\nnot on it.\n\n`platform` is `sys.platform`, read here rather than inferred from\nanything: only the Windows volume adapter and the Windows file\nrevealer ship, and a client is entitled to know which operating\nsystem answered (RFC-027 section 4.1).\n\n`version` is `settings.project_version` -- the package version, which\nis `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the\nsprint number, and the sprint number is not the version of anything\nthat ships. The setting is reported as it stands rather than the\nproject being renumbered to match an illustration.\n\n`max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),\nand each passes the bar: the size *\"Mostrar mais\"* asks for, and the\nsmallest radius of the list. Both are policy the API already enforces\n-- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the\nuser's file -- and a copy of either in the interface is the copy RFC-026\nsection 8.2 refused to put in the route's signature: it would drift.\n\nThe bar for a sixth field is *the UI draws something different\nbecause of it*. Without a criterion this becomes a configuration\ndump, which is the risk RFC-031 section 15 names.",
         "operationId": "get_capabilities_api_v1_capabilities_get",
         "responses": {
           "200": {
@@ -1647,6 +1766,202 @@
         ]
       }
     },
+    "/api/v1/images/search/by-image": {
+      "post": {
+        "description": "Rank the index against a picture the user dropped (RFC-038 section 4.2).\n\n`execute_similar_to()`, as the CLI's `--image` runs it, over the same\ntransient `Image` (`query_image()`): the picture's own CLIP embedding is\nthe query. It needs the image encoder, and not the translator.\n\n**The bytes are the body, and no path comes in** (RFC-030 section 5.1).\n`query_image_file` refuses a wrong type (415), more than 50 MB (413) and\na picture Pillow cannot decode (400), in that order and before the use\ncase is composed -- so a refused upload never imports `torch` -- and\ndeletes its temporary file however the request ends.\n\n**Declared beside `/search`, before `/{image_id}`**, by the rule of this\nfile. A `POST` of two segments could only collide with\n`/{image_id}/reveal`, and `by-image` is not `reveal`; it is here for the\nreading. `test_search_by_image_api.py` asks for it and requires a 200.\n\nThe filters are `/search`'s, by the same parameters. Nothing of the\npicture is logged but its size and type, and of the filters only which\nare present (RFC-026 section 16.1). The response is `/search`'s without a\n`query`: the picture is not indexed, so there is nothing to take out.",
+        "operationId": "search_by_image_api_v1_images_search_by_image_post",
+        "parameters": [
+          {
+            "description": "Maximum results to return; omitted means the configured default",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum results to return; omitted means the configured default",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+              "title": "Device Id"
+            }
+          },
+          {
+            "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+            "in": "query",
+            "name": "captured_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+              "title": "Captured From"
+            }
+          },
+          {
+            "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+            "in": "query",
+            "name": "captured_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+              "title": "Captured To"
+            }
+          },
+          {
+            "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+            "in": "query",
+            "name": "near_lat",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+              "title": "Near Lat"
+            }
+          },
+          {
+            "description": "Longitude of the centre of the circle, decimal degrees.",
+            "in": "query",
+            "name": "near_lon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Longitude of the centre of the circle, decimal degrees.",
+              "title": "Near Lon"
+            }
+          },
+          {
+            "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+            "in": "query",
+            "name": "radius_m",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+              "title": "Radius M"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "description": "The picture's bytes, as the body. Up to 50 MB; the type must match the file.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RankedImagesSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "The picture cannot be decoded, or a filter is refused"
+          },
+          "413": {
+            "description": "The picture is larger than 50 MB"
+          },
+          "415": {
+            "description": "Not image/jpeg or image/png, or not what it says"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "The model cannot be loaded; the detail says why"
+          }
+        },
+        "summary": "Search indexed images by an example picture",
+        "tags": [
+          "images"
+        ]
+      }
+    },
     "/api/v1/images/{image_id}": {
       "get": {
         "description": "Return one image: its device, its paths, and whether the disk is here.\n\n**200 when the disk is unplugged** (RFC-030 section 4.2). The row\nexists and this describes the row; `device.connected: false` with\n`device.label` is the answer \"it is on HD3\", not an error.\n\nDeclared after `/search` and `/map`, and that order is load-bearing:\nroutes match in declaration order, and `/{image_id}` would otherwise\ncapture either and refuse it as a malformed UUID.",
@@ -1738,6 +2053,188 @@
           }
         },
         "summary": "Open the file manager on this machine with the image selected",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/{image_id}/similar": {
+      "get": {
+        "description": "*\"Parecidas com esta\"*: rank the index against a photo it holds (RFC-038).\n\n**The stored embedding, and no model** (section 4.1). The vector indexing\npaid for is read back and ranked with the same `search_similar()` as a\ntext query, so this answers with the photo's disk in a drawer, with\nsearch `loading` or `unavailable`, and without decoding a pixel. The use\ncase's provider does not depend on `get_embedding_model()`, which would\nimport `torch` for a route that never encodes anything.\n\nThe photo itself is not in the results -- it would come first, with a\nsimilarity of 1 -- and its copies are, near the top: the same bytes on\nanother disk answer *\"where else is this photo\"*. The filters are\n`/search`'s, by the same parameters and rules.\n\n404 for an id that names no row, 409 for a row without an embedding: the\nsecond request succeeds once the photo is indexed. Nothing of the filters\nis logged but which are present.",
+        "operationId": "similar_images_api_v1_images__image_id__similar_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results to return; omitted means the configured default",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum results to return; omitted means the configured default",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+              "title": "Device Id"
+            }
+          },
+          {
+            "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+            "in": "query",
+            "name": "captured_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+              "title": "Captured From"
+            }
+          },
+          {
+            "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+            "in": "query",
+            "name": "captured_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+              "title": "Captured To"
+            }
+          },
+          {
+            "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+            "in": "query",
+            "name": "near_lat",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+              "title": "Near Lat"
+            }
+          },
+          {
+            "description": "Longitude of the centre of the circle, decimal degrees.",
+            "in": "query",
+            "name": "near_lon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Longitude of the centre of the circle, decimal degrees.",
+              "title": "Near Lon"
+            }
+          },
+          {
+            "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+            "in": "query",
+            "name": "radius_m",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+              "title": "Radius M"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimilarImagesResponseSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No indexed image has this id"
+          },
+          "409": {
+            "description": "The image is known and has no embedding yet"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The indexed images that look most like this one",
         "tags": [
           "images"
         ]

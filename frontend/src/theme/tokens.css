@@ -21,6 +21,16 @@
   --color-text-placeholder: rgba(20, 18, 26, 0.42);
   --color-inverse: #14121a;
   --color-on-inverse: #ffffff;
+  --color-on-inverse-muted: rgba(255, 255, 255, 0.7);
+  /* RFC-038. The amber notice of node 43:401 is drawn there without
+     variables, and the RFC did not record its values: these are chosen, in
+     the same family, and nothing else uses them. */
+  --color-warning-surface: #fdf4df;
+  --color-warning-border: #f0d9a2;
+  --color-warning-text: #6b4a05;
+  --color-surface-overlay: rgba(255, 255, 255, 0.9); /* labels over a photo */
+  --color-scrim: rgba(20, 18, 26, 0.32); /* behind the detail */
+  --color-focus: #4b45c6;
 
   /* Type: Inter, regular, medium and semibold, at one line height */
   --font-sans: "Inter Variable", Inter, "Segoe UI", system-ui, sans-serif;
@@ -36,16 +46,23 @@
   --font-size-title: 22px;
 
   /* Radius */
+  --radius-tag: 6px;
   --radius-pill: 8px;
   --radius-notice: 10px;
+  --radius-card: 10px;
   --radius-field: 12px;
+  --radius-panel: 14px;
 
   /* Space */
+  --space-2: 2px;
+  --space-4: 4px;
   --space-6: 6px;
+  --space-8: 8px;
   --space-10: 10px;
   --space-12: 12px;
   --space-14: 14px;
   --space-16: 16px;
+  --space-18: 18px; /* between the cards of node 43:401 */
   --space-20: 20px;
   --space-24: 24px;
   --space-28: 28px;
@@ -56,4 +73,10 @@
   --size-field: 56px; /* the search bar */
   --size-header: 56px;
   --size-sidebar: 240px;
+  --size-card-min: 240px; /* node 43:401 has 261 in a 1440 frame */
+  --size-thumbnail: 160px;
+  --size-panel: 440px; /* the detail */
+  --size-popover: 300px;
+  --size-preview: 36px; /* the dropped photo in the bar */
+  --size-dot: 8px;
 }

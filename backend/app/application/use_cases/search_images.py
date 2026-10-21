@@ -10,24 +10,41 @@ or, with a picture as the query (`execute_similar_to()`):
 
     query image -> EmbeddingModelPort.encode_image() -> the same two steps
 
+or, with a photo that is already indexed (`FindSimilarImagesUseCase`, RFC-038):
+
+    image id -> ImageRepository.get_embedding() -> the same ranking, no model
+
 Language detection, translation, and the prompt template live inside the
 embedding adapter; cosine distance, ordering, and top-K live inside the
 repository. What is left here is the part that belongs to neither: deciding
 what counts as a usable request, and handing the resulting vector to the
 place that can rank against it.
+
+**The request policy is functions of this module, and both use cases call
+them** (RFC-038 section 4.1): the page size, the radius floor and the two
+counts of excluded photos are one policy, and two copies of it would be two
+answers to the same question.
 """
 
 from __future__ import annotations
 
+import uuid
+from pathlib import Path
+
 from app.domain.entities.image import Image
 from app.domain.exceptions import (
     EmptySearchQueryError,
+    ImageNotFoundError,
+    ImageNotIndexedError,
     InvalidGeoCircleError,
     InvalidSearchLimitError,
 )
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.embedding_model_port import EmbeddingModelPort
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.geo_circle import GeoCircle
+from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
@@ -66,9 +83,8 @@ class SearchImagesUseCase:
         default_limit: int,
         min_radius_m: float = 0.0,
     ) -> None:
-        self._validate_limit(default_limit)
-        if min_radius_m < 0:
-            raise ValueError(f"min_radius_m must not be negative, got {min_radius_m}")
+        validate_limit(default_limit)
+        validate_min_radius(min_radius_m)
         self._repository = repository
         self._embedding_model = embedding_model
         self._default_limit = default_limit
@@ -113,7 +129,9 @@ class SearchImagesUseCase:
                 "Search query cannot be empty or only whitespace."
             )
 
-        effective_limit = self._validated_request(limit, filters)
+        effective_limit = validated_request(
+            limit, filters, self._default_limit, self._min_radius_m
+        )
         embedding = self._embedding_model.encode_text(query)
         return self._repository.search_similar(embedding, effective_limit, filters)
 
@@ -133,25 +151,19 @@ class SearchImagesUseCase:
         as the image does.
 
         `image` need not be indexed; it only has to be readable at its
-        `absolute_path`, which is where the embedding adapter opens it. The
-        same request policy as `execute()` applies -- page size, and the
-        radius floor of a circle -- and the order is the repository's,
-        untouched. If `image` *is* indexed, it comes back first, with a
-        similarity of ~1: an honest answer, not one this layer hides.
+        `absolute_path`, which is where the embedding adapter opens it --
+        `query_image()` builds one for a file that is not. The same request
+        policy as `execute()` applies -- page size, and the radius floor of
+        a circle -- and the order is the repository's, untouched. If `image`
+        *is* indexed, it comes back first, with a similarity of ~1: an
+        honest answer, not one this layer hides. For a photo the index
+        already holds, `FindSimilarImagesUseCase` is the cheaper door.
         """
-        effective_limit = self._validated_request(limit, filters)
+        effective_limit = validated_request(
+            limit, filters, self._default_limit, self._min_radius_m
+        )
         embedding = self._embedding_model.encode_image(image)
         return self._repository.search_similar(embedding, effective_limit, filters)
-
-    def _validated_request(
-        self, limit: int | None, filters: SearchFilters | None
-    ) -> int:
-        """The page size to use, after the checks every kind of query shares."""
-        effective_limit = self._default_limit if limit is None else limit
-        self._validate_limit(effective_limit)
-        if filters is not None and filters.taken_within is not None:
-            self._validate_radius(filters.taken_within)
-        return effective_limit
 
     def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
         """How many searchable images a date range left out for having no date.
@@ -174,9 +186,7 @@ class SearchImagesUseCase:
         the neighbourhood an approximate index explored -- and the page
         `execute()` returns stays exactly what it was.
         """
-        if filters is None or filters.captured_between is None:
-            return None
-        return self._repository.count_unknown_capture_date(filters)
+        return count_hidden_by_unknown_date(self._repository, filters)
 
     def count_hidden_by_unknown_position(
         self, filters: SearchFilters | None
@@ -197,39 +207,181 @@ class SearchImagesUseCase:
         question for the map with no circle (RFC-032 section 7) and must not
         short-circuit there.
         """
-        if filters is None or filters.taken_within is None:
-            return None
-        return self._repository.count_unknown_position(filters)
+        return count_hidden_by_unknown_position(self._repository, filters)
 
-    def _validate_radius(self, circle: GeoCircle) -> None:
-        """Refuse a circle smaller than what the aircraft's offset can hide.
 
-        The message explains the offset rather than just quoting a number,
-        because the person reading it chose the radius on a map and needs
-        to know why a precise-looking one is the wrong one.
+class FindSimilarImagesUseCase:
+    """Rank the index against a photo it already holds (RFC-038 section 4.1).
+
+    *"Parecidas com esta"*, from the detail of a photo. **No model**: the
+    photo's vector is the one indexing stored, read back with
+    `get_embedding()` and handed to the same `search_similar()` a text query
+    uses. So it works with the photo's disk in a drawer -- which is the case
+    the product exists for -- with search `loading` or `unavailable`, and
+    without decoding anything. `execute_similar_to()` reopens the file
+    instead, and needs the disk, the decoder and a forward pass of CLIP to
+    produce this same vector; it stays for the file that is *not* indexed.
+
+    `default_limit` and `min_radius_m` arrive as for `SearchImagesUseCase`,
+    from the composition root, and the request policy is the same functions.
+    """
+
+    def __init__(
+        self,
+        repository: ImageRepository,
+        default_limit: int,
+        min_radius_m: float = 0.0,
+    ) -> None:
+        validate_limit(default_limit)
+        validate_min_radius(min_radius_m)
+        self._repository = repository
+        self._default_limit = default_limit
+        self._min_radius_m = min_radius_m
+
+    def execute(
+        self,
+        image_id: ImageId,
+        limit: int | None = None,
+        filters: SearchFilters | None = None,
+    ) -> list[SearchHit]:
+        """The images most like `image_id`, most similar first, without it.
+
+        The request is checked first, as `SearchImagesUseCase.execute()`
+        checks it before encoding: an unusable page or circle costs no read.
+
+        **The photo itself is taken out, and its copies stay.** It would come
+        back first, with a similarity of 1, and take one of the page's places
+        with the photo the user was just looking at. A copy -- the same bytes
+        on another disk or in another folder -- has the same vector and
+        another id, comes back near the top, and answers *"where else is this
+        photo"*. One more row is asked for, so a page with the source removed
+        is still full; the order is the repository's, untouched.
+
+        No vector is `ImageNotFoundError` without a row (404), and
+        `ImageNotIndexedError` with one (409): the second request succeeds
+        once the photo is indexed.
         """
-        if circle.radius_m < self._min_radius_m:
-            raise InvalidGeoCircleError(
-                f"A search radius of {circle.radius_m:g} m is below the minimum "
-                f"of {self._min_radius_m:g} m. Photo coordinates record where the "
-                "drone was, not the ground it photographed, which for an oblique "
-                "shot can be tens to hundreds of metres away -- a smaller circle "
-                "would hide the very photo you are looking for."
+        effective_limit = validated_request(
+            limit, filters, self._default_limit, self._min_radius_m
+        )
+        embedding = self._repository.get_embedding(image_id)
+        if embedding is None:
+            if not self._repository.exists(image_id):
+                raise ImageNotFoundError(f"No indexed image has the id {image_id}.")
+            raise ImageNotIndexedError(
+                f"The image {image_id} has no embedding yet: index its folder "
+                "to compare it with others."
             )
+        hits = self._repository.search_similar(embedding, effective_limit + 1, filters)
+        return [hit for hit in hits if hit.image.id != image_id][:effective_limit]
 
-    @staticmethod
-    def _validate_limit(limit: int) -> None:
-        """Reject an unusable page size, at construction and at call time.
+    def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
+        """`SearchImagesUseCase.count_hidden_by_unknown_date()`, the same function."""
+        return count_hidden_by_unknown_date(self._repository, filters)
 
-        Applied to the injected default as well as to the per-call value,
-        so a misconfigured `top_k_results` fails when the use case is
-        wired rather than on whichever search first omits `limit`.
-        """
-        if limit <= 0:
-            raise InvalidSearchLimitError(
-                f"Search limit must be at least 1, got {limit}."
-            )
-        if limit > MAX_SEARCH_LIMIT:
-            raise InvalidSearchLimitError(
-                f"Search limit must be at most {MAX_SEARCH_LIMIT}, got {limit}."
-            )
+    def count_hidden_by_unknown_position(
+        self, filters: SearchFilters | None
+    ) -> int | None:
+        """`SearchImagesUseCase.count_hidden_by_unknown_position()`, likewise."""
+        return count_hidden_by_unknown_position(self._repository, filters)
+
+
+def query_image(path: Path) -> Image:
+    """Wrap a file on disk as the transient `Image` an image query needs.
+
+    The embedding adapter reads pixels from an `Image`'s `absolute_path`,
+    and an `Image` needs an id and a device. This one is never persisted:
+    its device is the nil UUID -- no device -- and its id is derived from
+    the path only so that two runs over the same file build the same value.
+
+    Here since RFC-038, out of `app.cli.search`: the CLI's `--image` and the
+    API's `POST /images/search/by-image` build the same value, and a second
+    copy would be a second idea of what a query picture is.
+    """
+    resolved = path.resolve()
+    return Image(
+        id=ImageId(uuid.uuid5(uuid.NAMESPACE_URL, f"query-image:{resolved}")),
+        device_id=DeviceId(uuid.UUID(int=0)),
+        relative_path=ImagePath(resolved.name),
+        filename=resolved.stem,
+        extension=resolved.suffix.lower().lstrip("."),
+        absolute_path=ImagePath(resolved),
+    )
+
+
+def validated_request(
+    limit: int | None,
+    filters: SearchFilters | None,
+    default_limit: int,
+    min_radius_m: float,
+) -> int:
+    """The page size to use, after the checks every kind of query shares."""
+    effective_limit = default_limit if limit is None else limit
+    validate_limit(effective_limit)
+    if filters is not None and filters.taken_within is not None:
+        validate_radius(filters.taken_within, min_radius_m)
+    return effective_limit
+
+
+def validate_limit(limit: int) -> None:
+    """Reject an unusable page size, at construction and at call time.
+
+    Applied to the injected default as well as to the per-call value,
+    so a misconfigured `top_k_results` fails when the use case is
+    wired rather than on whichever search first omits `limit`.
+    """
+    if limit <= 0:
+        raise InvalidSearchLimitError(f"Search limit must be at least 1, got {limit}.")
+    if limit > MAX_SEARCH_LIMIT:
+        raise InvalidSearchLimitError(
+            f"Search limit must be at most {MAX_SEARCH_LIMIT}, got {limit}."
+        )
+
+
+def validate_min_radius(min_radius_m: float) -> None:
+    """A floor below zero is a wiring mistake, refused when the use case is built."""
+    if min_radius_m < 0:
+        raise ValueError(f"min_radius_m must not be negative, got {min_radius_m}")
+
+
+def validate_radius(circle: GeoCircle, min_radius_m: float) -> None:
+    """Refuse a circle smaller than what the aircraft's offset can hide.
+
+    The message explains the offset rather than just quoting a number,
+    because the person reading it chose the radius on a map and needs
+    to know why a precise-looking one is the wrong one.
+    """
+    if circle.radius_m < min_radius_m:
+        raise InvalidGeoCircleError(
+            f"A search radius of {circle.radius_m:g} m is below the minimum "
+            f"of {min_radius_m:g} m. Photo coordinates record where the "
+            "drone was, not the ground it photographed, which for an oblique "
+            "shot can be tens to hundreds of metres away -- a smaller circle "
+            "would hide the very photo you are looking for."
+        )
+
+
+def count_hidden_by_unknown_date(
+    repository: ImageRepository, filters: SearchFilters | None
+) -> int | None:
+    """How many searchable images a date range left out for having no date.
+
+    `None`, and no query, without a date range; see
+    `SearchImagesUseCase.count_hidden_by_unknown_date()`.
+    """
+    if filters is None or filters.captured_between is None:
+        return None
+    return repository.count_unknown_capture_date(filters)
+
+
+def count_hidden_by_unknown_position(
+    repository: ImageRepository, filters: SearchFilters | None
+) -> int | None:
+    """How many searchable images a circle left out for having no position.
+
+    `None`, and no query, without a circle; see
+    `SearchImagesUseCase.count_hidden_by_unknown_position()`.
+    """
+    if filters is None or filters.taken_within is None:
+        return None
+    return repository.count_unknown_position(filters)

@@ -25,12 +25,20 @@ this file is load-bearing**: FastAPI matches routes in the order they are
 declared, so every literal path -- `/search`, `/map` -- must come before
 `/{image_id}`, or it is read as an image id and refused with a 422 for a
 route that exists.
+
+RFC-038 added the two searches by picture: `GET /{image_id}/similar`, from
+a photo the index holds, with its stored vector and no model; and
+`POST /search/by-image`, with the picture's bytes as the body -- still no
+path anywhere. The `limit` and the six filters are one dependency,
+`search_parameters()`, which the three searches share.
 """
 
 from __future__ import annotations
 
 import datetime
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
@@ -46,7 +54,11 @@ from app.application.use_cases.resolve_image_location import (
     ResolveImageLocationUseCase,
 )
 from app.application.use_cases.reveal_image import RevealImageUseCase
-from app.application.use_cases.search_images import SearchImagesUseCase
+from app.application.use_cases.search_images import (
+    FindSimilarImagesUseCase,
+    SearchImagesUseCase,
+    query_image,
+)
 from app.domain.exceptions import InvalidGeoCircleError
 from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.device_id import DeviceId
@@ -58,6 +70,7 @@ from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
 from app.presentation.dependencies import (
     get_aggregate_positions_use_case,
+    get_find_similar_images_use_case,
     get_image_details_use_case,
     get_resolve_image_location_use_case,
     get_reveal_image_use_case,
@@ -68,22 +81,28 @@ from app.presentation.local_file_actions import (
     require_local_file_actions_enabled,
     require_loopback_client,
 )
+from app.presentation.query_image_upload import REQUEST_BODY, query_image_file
 from app.presentation.schemas.image_schema import ImageSchema
 from app.presentation.schemas.map_schema import MapResponseSchema
-from app.presentation.schemas.search_schema import SearchResponseSchema
+from app.presentation.schemas.search_schema import (
+    RankedImagesSchema,
+    SearchResponseSchema,
+    SimilarImagesResponseSchema,
+)
 
 router = APIRouter(prefix="/images", tags=["images"])
 logger = get_logger(__name__)
 
 
-@router.get(
-    "/search",
-    status_code=status.HTTP_200_OK,
-    response_model=SearchResponseSchema,
-    summary="Search indexed images by natural-language query",
-)
-def search_images(
-    q: str = Query(description="Natural-language query, in any supported language"),
+@dataclass(frozen=True)
+class SearchRequest:
+    """The page size and the filters of a search, whatever its query is."""
+
+    limit: int
+    filters: SearchFilters
+
+
+def search_parameters(
     limit: int | None = Query(
         default=None,
         description="Maximum results to return; omitted means the configured default",
@@ -131,6 +150,37 @@ def search_images(
             "match, however large the circle."
         ),
     ),
+) -> SearchRequest:
+    """The `limit` and the six filters of every search, declared once (RFC-038 4.5).
+
+    `/search`, `/{image_id}/similar` and `/search/by-image` take the same
+    parameters with the same rules, and three copies of seven declarations
+    would be three chances for one of them to drift -- in a description, in
+    a default, or in the all-or-nothing of the circle. The rules themselves
+    are written on `search_images()`, which is where RFC-026 to 032 put them.
+
+    The default page size is resolved here, so that each response can echo
+    the value actually used.
+    """
+    return SearchRequest(
+        limit=settings.top_k_results if limit is None else limit,
+        filters=SearchFilters(
+            device_ids=frozenset(DeviceId(value) for value in device_id or ()),
+            captured_between=_capture_range(captured_from, captured_to),
+            taken_within=_search_circle(near_lat, near_lon, radius_m),
+        ),
+    )
+
+
+@router.get(
+    "/search",
+    status_code=status.HTTP_200_OK,
+    response_model=SearchResponseSchema,
+    summary="Search indexed images by natural-language query",
+)
+def search_images(
+    q: str = Query(description="Natural-language query, in any supported language"),
+    search: SearchRequest = Depends(search_parameters),
     use_case: SearchImagesUseCase = Depends(get_search_images_use_case),
     locations: ResolveImageLocationUseCase = Depends(
         get_resolve_image_location_use_case
@@ -228,12 +278,8 @@ def search_images(
     near is as private as what they searched for (RFC-026 section 16.1), so
     the log says only that a circle was present.
     """
-    effective_limit = settings.top_k_results if limit is None else limit
-    filters = SearchFilters(
-        device_ids=frozenset(DeviceId(value) for value in device_id or ()),
-        captured_between=_capture_range(captured_from, captured_to),
-        taken_within=_search_circle(near_lat, near_lon, radius_m),
-    )
+    effective_limit = search.limit
+    filters = search.filters
     logger.info(
         "search requested: query_length=%d, limit=%d, devices=%d, date_range=%s, "
         "circle=%s",
@@ -264,6 +310,81 @@ def search_images(
     return SearchResponseSchema.from_hits(
         query=q,
         limit=effective_limit,
+        hits=hits,
+        locations=located,
+        excluded_unknown_date=excluded_unknown_date,
+        excluded_unknown_position=excluded_unknown_position,
+    )
+
+
+@router.post(
+    "/search/by-image",
+    status_code=status.HTTP_200_OK,
+    response_model=RankedImagesSchema,
+    summary="Search indexed images by an example picture",
+    openapi_extra={"requestBody": REQUEST_BODY},
+    responses={
+        400: {"description": "The picture cannot be decoded, or a filter is refused"},
+        413: {"description": "The picture is larger than 50 MB"},
+        415: {"description": "Not image/jpeg or image/png, or not what it says"},
+        503: {"description": "The model cannot be loaded; the detail says why"},
+    },
+)
+def search_by_image(
+    picture: Path = Depends(query_image_file),
+    search: SearchRequest = Depends(search_parameters),
+    use_case: SearchImagesUseCase = Depends(get_search_images_use_case),
+    locations: ResolveImageLocationUseCase = Depends(
+        get_resolve_image_location_use_case
+    ),
+) -> RankedImagesSchema:
+    """Rank the index against a picture the user dropped (RFC-038 section 4.2).
+
+    `execute_similar_to()`, as the CLI's `--image` runs it, over the same
+    transient `Image` (`query_image()`): the picture's own CLIP embedding is
+    the query. It needs the image encoder, and not the translator.
+
+    **The bytes are the body, and no path comes in** (RFC-030 section 5.1).
+    `query_image_file` refuses a wrong type (415), more than 50 MB (413) and
+    a picture Pillow cannot decode (400), in that order and before the use
+    case is composed -- so a refused upload never imports `torch` -- and
+    deletes its temporary file however the request ends.
+
+    **Declared beside `/search`, before `/{image_id}`**, by the rule of this
+    file. A `POST` of two segments could only collide with
+    `/{image_id}/reveal`, and `by-image` is not `reveal`; it is here for the
+    reading. `test_search_by_image_api.py` asks for it and requires a 200.
+
+    The filters are `/search`'s, by the same parameters. Nothing of the
+    picture is logged but its size and type, and of the filters only which
+    are present (RFC-026 section 16.1). The response is `/search`'s without a
+    `query`: the picture is not indexed, so there is nothing to take out.
+    """
+    filters = search.filters
+    logger.info(
+        "image search requested: bytes=%d, type=%s, limit=%d, devices=%d, "
+        "date_range=%s, circle=%s",
+        picture.stat().st_size,
+        picture.suffix.lstrip("."),
+        search.limit,
+        len(filters.device_ids),
+        filters.captured_between is not None,
+        filters.taken_within is not None,
+    )
+    started_at = time.perf_counter()
+    hits = use_case.execute_similar_to(query_image(picture), search.limit, filters)
+    excluded_unknown_date = use_case.count_hidden_by_unknown_date(filters)
+    excluded_unknown_position = use_case.count_hidden_by_unknown_position(filters)
+    searched_at = time.perf_counter()
+    located = locations.execute([hit.image for hit in hits])
+    logger.info(
+        "image search completed: results=%d, elapsed_ms=%.0f, locate_ms=%.1f",
+        len(hits),
+        (searched_at - started_at) * 1000,
+        (time.perf_counter() - searched_at) * 1000,
+    )
+    return RankedImagesSchema.from_ranking(
+        limit=search.limit,
         hits=hits,
         locations=located,
         excluded_unknown_date=excluded_unknown_date,
@@ -441,6 +562,72 @@ def get_thumbnail(
     if isinstance(result, ThumbnailUnchanged):
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return FileResponse(result.path, headers=headers)
+
+
+@router.get(
+    "/{image_id}/similar",
+    status_code=status.HTTP_200_OK,
+    response_model=SimilarImagesResponseSchema,
+    summary="The indexed images that look most like this one",
+    responses={
+        404: {"description": "No indexed image has this id"},
+        409: {"description": "The image is known and has no embedding yet"},
+    },
+)
+def similar_images(
+    image_id: UUID,
+    search: SearchRequest = Depends(search_parameters),
+    use_case: FindSimilarImagesUseCase = Depends(get_find_similar_images_use_case),
+    locations: ResolveImageLocationUseCase = Depends(
+        get_resolve_image_location_use_case
+    ),
+) -> SimilarImagesResponseSchema:
+    """*"Parecidas com esta"*: rank the index against a photo it holds (RFC-038).
+
+    **The stored embedding, and no model** (section 4.1). The vector indexing
+    paid for is read back and ranked with the same `search_similar()` as a
+    text query, so this answers with the photo's disk in a drawer, with
+    search `loading` or `unavailable`, and without decoding a pixel. The use
+    case's provider does not depend on `get_embedding_model()`, which would
+    import `torch` for a route that never encodes anything.
+
+    The photo itself is not in the results -- it would come first, with a
+    similarity of 1 -- and its copies are, near the top: the same bytes on
+    another disk answer *"where else is this photo"*. The filters are
+    `/search`'s, by the same parameters and rules.
+
+    404 for an id that names no row, 409 for a row without an embedding: the
+    second request succeeds once the photo is indexed. Nothing of the filters
+    is logged but which are present.
+    """
+    filters = search.filters
+    logger.info(
+        "similar requested: limit=%d, devices=%d, date_range=%s, circle=%s",
+        search.limit,
+        len(filters.device_ids),
+        filters.captured_between is not None,
+        filters.taken_within is not None,
+    )
+    started_at = time.perf_counter()
+    hits = use_case.execute(ImageId(image_id), search.limit, filters)
+    excluded_unknown_date = use_case.count_hidden_by_unknown_date(filters)
+    excluded_unknown_position = use_case.count_hidden_by_unknown_position(filters)
+    searched_at = time.perf_counter()
+    located = locations.execute([hit.image for hit in hits])
+    logger.info(
+        "similar completed: results=%d, elapsed_ms=%.0f, locate_ms=%.1f",
+        len(hits),
+        (searched_at - started_at) * 1000,
+        (time.perf_counter() - searched_at) * 1000,
+    )
+    return SimilarImagesResponseSchema.from_source(
+        image_id=image_id,
+        limit=search.limit,
+        hits=hits,
+        locations=located,
+        excluded_unknown_date=excluded_unknown_date,
+        excluded_unknown_position=excluded_unknown_position,
+    )
 
 
 @router.post(

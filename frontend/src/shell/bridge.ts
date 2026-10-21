@@ -21,10 +21,24 @@ export interface HomeReport {
   readonly lastIndexedAt: string | null;
 }
 
+/** One search, painted: the mark of RFC-038 section 5.6. The kind and the
+ * counts, and never the query. */
+export interface SearchReport {
+  readonly kind: "text" | "similar" | "image";
+  readonly limit: number;
+  readonly results: number;
+  /** From the gesture to the response. */
+  readonly responseMs: number;
+  /** From the gesture to the frame after the last thumbnail. */
+  readonly paintedMs: number;
+}
+
 export interface Bridge {
   onLauncherEvent(callback: (event: LauncherEventMessage) => void): () => void;
   openLogsFolder(): void;
   reportHome(report: HomeReport): void;
+  /** Optional: a window of RFC-037 has no such channel. */
+  reportSearch?(report: SearchReport): void;
 }
 
 declare global {

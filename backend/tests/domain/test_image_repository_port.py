@@ -58,6 +58,7 @@ def test_image_repository_is_abstract() -> None:
         "save_indexed",
         "save_indexed_many",
         "search_similar",
+        "get_embedding",
         "get_index_metadata",
         "get_index_metadata_many",
         "update_index_metadata",
