@@ -23,6 +23,8 @@ export type Capabilities = components["schemas"]["CapabilitiesSchema"];
 export type ImageDetail = components["schemas"]["ImageSchema"];
 export type SearchResult = components["schemas"]["SearchResultSchema"];
 
+export type MapResponse = components["schemas"]["MapResponseSchema"];
+
 /** A response that is not a 2xx, with the API's `detail` when it sent one.
  * Status 0 is no response at all: the request never reached an answer. */
 export class ApiError extends Error {

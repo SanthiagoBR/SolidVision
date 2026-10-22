@@ -7,8 +7,9 @@
  * section 6.5 has the page give, and `reportSearch`, one per search (RFC-038
  * section 5.6). Since RFC-039 (section 5.9): `onDevicesChanged`, a volume
  * arrived or left; `indexing`, the job runner's last state; and
- * `reportFolders`, one per listing of folders. The interface works without any
- * of it, as in `npm run dev:web`. To the start page, `screen`, `onScreen` and
+ * `reportFolders`, one per listing of folders. Since RFC-040 (section 5.6),
+ * `reportMap`, one per drawing of the map. The interface works without any of
+ * it, as in `npm run dev:web`. To the start page, `screen`, `onScreen` and
  * `reopen`.
  *
  * A sandboxed preload is a plain script with a `require` of a few modules. No
@@ -40,6 +41,7 @@
       subscribe("devices-changed", callback),
     indexing: (): Promise<unknown> => ipcRenderer.invoke("indexing"),
     reportFolders: (report: unknown) => ipcRenderer.send("folders-done", report),
+    reportMap: (report: unknown) => ipcRenderer.send("map-done", report),
     screen: (): Promise<unknown> => ipcRenderer.invoke("screen"),
     onScreen: (callback: (screen: unknown) => void) => subscribe("screen", callback),
     reopen: () => ipcRenderer.send("reopen"),

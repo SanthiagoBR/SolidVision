@@ -24,6 +24,11 @@
  *                              volume message while it is      wake a disk that parked
  *                              open, and on "Procurar de       its heads. Never by
  *                              novo"                           time
+ *     /images/map              when the map opens, when the    what changes the cells
+ *                              visible area leaves the last    is an indexing (RFC-040
+ *                              box or the precision changes,   section 5.3). Neither on
+ *                              when a filter changes, and      the focus nor by time
+ *                              when a job ends
  *
  * All of them choices. The 30 s of `/devices` before RFC-039 became 10 s: the
  * route cost about 87 ms with 100 000 photos, almost all of it a `GROUP BY`
@@ -32,6 +37,7 @@
  */
 
 import {
+  keepPreviousData,
   type QueryClient,
   queryOptions,
   useQuery,
@@ -41,6 +47,7 @@ import { useEffect } from "react";
 
 import { devicesInvalidations, jobInvalidations } from "../devices/sync";
 import { isActive } from "../devices/panel";
+import { apiMapQuery, type MapRequest } from "../map/box";
 import { bridge } from "../shell/bridge";
 import {
   answered,
@@ -50,6 +57,7 @@ import {
   type Device,
   type FolderList,
   type Job,
+  type MapResponse,
   type Volume,
 } from "./client";
 import { fetchHealth } from "./health";
@@ -235,6 +243,58 @@ export function volumesQuery() {
 
 export function useVolumes() {
   return useQuery(volumesQuery());
+}
+
+// ---------------------------------------------------------------------------
+// The map
+
+/** One answer of the map, the precision it was asked at -- the legend says when
+ * the route coarsened it -- and when it arrived: the mark of RFC-040 section
+ * 5.6 ends at the frame after its cells are drawn. */
+export interface MapCells extends MapResponse {
+  readonly precisionRequested: number;
+  readonly receivedAt: number;
+}
+
+/**
+ * The cells of one request. A new request cancels the one before in the page,
+ * by the `signal`; on the server the one before runs to its end, because a
+ * `def` route is not interrupted (RFC-038 section 5.2). The cells of before
+ * stay until the new ones arrive. Asked again only when a job ends: the
+ * invalidation of `sync.ts`.
+ */
+export function mapQuery(request: MapRequest | null) {
+  return queryOptions({
+    queryKey: keys.mapArea(request),
+    enabled: request !== null,
+    queryFn: async ({ signal }): Promise<MapCells> => {
+      if (request === null) {
+        throw new Error("No area to ask for yet");
+      }
+      const body = bodyOf(
+        await answered(
+          api.GET("/api/v1/images/map", {
+            params: { query: apiMapQuery(request) },
+            signal,
+          }),
+        ),
+      );
+      return {
+        ...body,
+        precisionRequested: request.precision,
+        receivedAt: performance.now(),
+      };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: retryNoAnswer,
+  });
+}
+
+export function useMapCells(request: MapRequest | null) {
+  return useQuery(mapQuery(request));
 }
 
 // ---------------------------------------------------------------------------

@@ -730,6 +730,18 @@
             "title": "Cells",
             "type": "array"
           },
+          "excluded_unknown_date": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many photos under the same device filter have no capture date, and so were left off the map by the date range -- the same number a search with that range reports. Null when no date range was sent. Not restricted to the area, as excluded_unknown_position is not; a photo with neither a date nor a position is counted here only.",
+            "title": "Excluded Unknown Date"
+          },
           "excluded_unknown_position": {
             "description": "How many photos under the same device and date filters have no position, and so are on no map at all -- the same number a 'near here' search reports. Not restricted to the area: a photo with no coordinates is in no area.",
             "title": "Excluded Unknown Position",
@@ -744,7 +756,8 @@
         "required": [
           "precision_applied",
           "cells",
-          "excluded_unknown_position"
+          "excluded_unknown_position",
+          "excluded_unknown_date"
         ],
         "title": "MapResponseSchema",
         "type": "object"

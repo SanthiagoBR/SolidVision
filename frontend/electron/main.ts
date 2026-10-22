@@ -17,6 +17,11 @@
  * which become one `devices-changed` for the page (`volumes.ts`); answers the
  * page's `indexing`, the job runner's last state, which `events.ts` keeps; and
  * writes a `folders` mark per listing of a device's folders.
+ *
+ * Since RFC-040 (section 5.6): the requests to the OpenStreetMap's tile host
+ * carry the window's own User-Agent (`tiles.ts`); the attribution's link, and
+ * only it, opens in the default browser (`links.ts`); and a `map` mark is
+ * written per drawing of the map.
  */
 
 import {
@@ -46,9 +51,11 @@ import {
   type ShellState,
 } from "./events";
 import { LauncherProcess } from "./launcher";
+import { opensInBrowser } from "./links";
 import {
   consoleLine,
   describeFolders,
+  describeMap,
   describeSearch,
   failedLoadLine,
   logDirectory,
@@ -56,6 +63,7 @@ import {
   ShellLog,
 } from "./log";
 import { resolvePython } from "./python";
+import { TILE_URL_PATTERNS, withTileUserAgent } from "./tiles";
 import { VolumeMessages, volumeChangesLine, WM_DEVICECHANGE } from "./volumes";
 
 /** The launcher's own deadlines (RFC-036 sections 7.2 and 16): 30 s for the job
@@ -348,10 +356,24 @@ function main(): void {
       void requestClose();
     });
     const contents = created.webContents;
-    contents.setWindowOpenHandler(() => ({ action: "deny" }));
+    // A new window is never opened. The map's attribution goes to the default
+    // browser, and only it (RFC-040 section 5.6).
+    contents.setWindowOpenHandler(({ url }) => {
+      if (opensInBrowser(url)) {
+        openInBrowser(url);
+      } else {
+        log.warning(`A new window for ${redactUrl(url)} was denied`);
+      }
+      return { action: "deny" };
+    });
     contents.on("will-navigate", (event, target) => {
-      if (!isOurPage(target)) {
-        event.preventDefault();
+      if (isOurPage(target)) {
+        return;
+      }
+      event.preventDefault();
+      if (opensInBrowser(target)) {
+        openInBrowser(target);
+      } else {
         log.warning(`A navigation to ${redactUrl(target)} was blocked`);
       }
     });
@@ -411,6 +433,13 @@ function main(): void {
     return created;
   }
 
+  function openInBrowser(url: string): void {
+    log.info(`Opening ${redactUrl(url)} in the default browser`);
+    shell.openExternal(url).catch((error: unknown) => {
+      log.warning(`The default browser did not open: ${String(error)}`);
+    });
+  }
+
   // -- the bridge -----------------------------------------------------------
 
   function fromOurWindow(event: IpcMainEvent | IpcMainInvokeEvent): boolean {
@@ -445,6 +474,12 @@ function main(): void {
   ipcMain.on("folders-done", (event, report: unknown) => {
     if (fromOurWindow(event)) {
       log.mark("folders", since(), describeFolders(report));
+    }
+  });
+  // One per drawing of the map: the numbers of RFC-040 section 8.
+  ipcMain.on("map-done", (event, report: unknown) => {
+    if (fromOurWindow(event)) {
+      log.mark("map", since(), describeMap(report));
     }
   });
   // The job runner's last state, which the page asks for when it opens: the
@@ -537,6 +572,20 @@ function main(): void {
     session.defaultSession.setPermissionRequestHandler(
       (_contents, permission, callback) =>
         callback(permission === "clipboard-sanitized-write"),
+    );
+    // The tile usage policy asks for a User-Agent that names the app: the
+    // window's own, to the tile host only (RFC-040 section 5.6).
+    const version = app.getVersion();
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      { urls: TILE_URL_PATTERNS },
+      (details, callback) =>
+        callback({
+          requestHeaders: withTileUserAgent(
+            details.url,
+            details.requestHeaders,
+            version,
+          ),
+        }),
     );
     window = createWindow();
   });

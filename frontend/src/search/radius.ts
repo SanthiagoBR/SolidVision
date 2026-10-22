@@ -8,9 +8,13 @@
  * was meant; here the radius is written on the filter, and what the request
  * carries is what the screen shows. 1 km is a choice, against the aircraft-to-
  * ground offset RFC-032 measured: p95 of 274 m, a maximum of 358 m.
+ *
+ * **10 km since RFC-040** (section 2.4): a cell of the map asks for the
+ * smallest radius of this list that covers it, and a cell of ~11 km, a state's
+ * zoom, would otherwise ask for 25 km -- a circle of 18 times its area.
  */
 
-export const STANDARD_RADII_M = [300, 1_000, 5_000, 25_000, 100_000] as const;
+export const STANDARD_RADII_M = [300, 1_000, 5_000, 10_000, 25_000, 100_000] as const;
 export const PREFERRED_RADIUS_M = 1_000;
 
 /** The radii to offer: the floor first, then the standard ones above it. */
@@ -40,4 +44,20 @@ export function formatRadius(radiusM: number): string {
     return `${NUMBER.format(radiusM)} m`;
   }
   return `${NUMBER.format(radiusM / 1_000)} km`;
+}
+
+/**
+ * The words of an active circle: `Até 1 km de DJI_0042.JPG`, when a photo gave
+ * the centre, and `Até 10 km do ponto do mapa` when a cell of the map did
+ * (RFC-040 section 2.4). `photoName` is `null` for a circle with no photo.
+ */
+export function nearFilterText(radiusM: number, photoName: string | null): string {
+  return photoName === null
+    ? `Até ${formatRadius(radiusM)} do ponto do mapa`
+    : `Até ${formatRadius(radiusM)} de ${photoName}`;
+}
+
+/** The title of the "Perto de" section, by the same rule. */
+export function nearTitleText(photoName: string | null): string {
+  return photoName === null ? "Perto do ponto do mapa" : `Perto de ${photoName}`;
 }

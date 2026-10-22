@@ -10,13 +10,15 @@ const api = `http://127.0.0.1:${apiPort}`;
 // The page talks to its own origin and nothing else. In the build only: Vite's
 // development server injects an inline script for the refresh of the page.
 // `blob:` is the dropped photo's preview, `URL.createObjectURL(file)`, which
-// exists only inside this origin (RFC-038 section 2.6). The map's tiles will
-// widen `img-src` (RFC-040).
+// exists only inside this origin (RFC-038 section 2.6). The map's tiles are
+// `<img>` from the OpenStreetMap's host, and nothing else leaves the origin:
+// `connect-src` stays as it was (RFC-040 section 2.8).
+export const TILE_HOST = "https://tile.openstreetmap.org";
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self' data: blob:",
+  `img-src 'self' data: blob: ${TILE_HOST}`,
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

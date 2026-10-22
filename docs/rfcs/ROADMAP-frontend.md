@@ -195,6 +195,10 @@ Quatro itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2](rfc-039
 
 ## Etapa 3 — Mapa (RFC-040) · qua 28
 
+**Status: implementada** ([RFC-040](rfc-040-mapa.md), medição em [§13](rfc-040-mapa.md#13-validação)), **com o critério sem rede simulado**: por escolha de quem acompanhou a medição, a rede da máquina ficou ligada, e só a janela do critério deixou de resolver o host dos tiles. Implementada em 22/10, quatro dias úteis antes do calendário. Do que a implementação achou e não esperava ([§14](rfc-040-mapa.md#14-correções-feitas-durante-a-implementação)): o Brasil inteiro com 100 000 fotos custa ~0,5 s no PostgreSQL 16 embarcado e ~1 s na janela, e até 2,2 s numa janela que acabou de abrir, com os modelos da busca carregando; e o User-Agent dos tiles só pôde ser conferido no log de rede do Chromium, depois de dois defeitos do script de medição.
+
+Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2](rfc-040-mapa.md#2-o-que-o-estado-atual-muda-no-roadmap)). Uma célula não tem texto, e a `/search` exige o `q`: a célula abre a busca que o mapa carrega na URL, com o círculo, ou a tela inicial com ele. O clique abre um balão antes de buscar, para não roubar o duplo clique. O raio é o menor da lista que cobre a célula, e a lista ganhou 10 km. O filtro de datas escondia fotos sem dizer quantas, e a resposta do mapa ganhou `excluded_unknown_date`. E a política dos tiles pediu um User-Agent próprio, a atribuição à vista e nada guardado para uso sem rede.
+
 **Escopo**
 - Uma tela de mapa com `GET /images/map`: as células da área visível, na precisão que a resposta diz ter aplicado (`precision_applied`).
 - Os filtros de dispositivo e de data, os mesmos da busca.
@@ -203,8 +207,8 @@ Quatro itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2](rfc-039
 - O fundo segue a D4.
 
 **Critérios de pronto**
-- Com a rede desligada, o mapa abre e mostra as células sobre o contorno dos estados.
-- Com o Brasil inteiro visível, o tempo até as células aparecerem: `TBM`.
+- Com a rede desligada, o mapa abre e mostra as células sobre o contorno dos estados. **Cumprido, simulado:** numa janela que não resolvia o host dos tiles, as células da resposta sobre o contorno, terra sob um ponto de cada uma das 27 unidades, a camada pausada com a faixa, e nenhum caminho de tile no `shell.log`.
+- Com o Brasil inteiro visível, o tempo até as células aparecerem: `TBM`. **Medido: 370 ms**, mediana de cinco, do clique em *"Mapa"* às células desenhadas, com o dataset e as 40 fotos de DJI; **1 057 ms com 100 000 fotos**, com os modelos da busca carregados, e 2 237 ms enquanto eles carregam; e um passo de zoom do 6 para o 7, com as 100 000, em 260 ms.
 
 ---
 

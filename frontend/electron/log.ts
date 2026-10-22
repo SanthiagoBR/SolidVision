@@ -61,14 +61,30 @@ export function rotate(file: string, limit: number = ROTATE_BYTES): boolean {
 
 /**
  * A URL as it may go into `shell.log`: without its query string or fragment
- * (RFC-038 section 2.7).
+ * (RFC-038 section 2.7), and, from another host, without its path (RFC-040
+ * section 2.7).
  *
  * The search lives in the URL of the screen -- `/busca?q=…`, `perto=lat,lon`
  * -- and RFC-026 section 16.1 decided the text of a query goes to no log. So
  * everything from the first `?` or `#` is cut, of every URL this file writes:
  * one function, so that no line can forget it.
+ *
+ * **A map tile carries the place in its path**: `/12/1492/2358.png` is a
+ * square of ~9 km, and the area one looks at is the map's query. So an `http`
+ * or `https` URL of a host that is neither `127.0.0.1` nor `localhost` keeps
+ * its scheme and host only -- `https://tile.openstreetmap.org/…` --, and the
+ * origin's own keep their path, as before. A `file:` URL is the start page's.
  */
 export function redactUrl(url: string): string {
+  const outside = /^(https?:\/\/)(?:[^/?#@]*@)?([^/?#]*)/i.exec(url);
+  if (outside !== null) {
+    const [authority, scheme = "", hostAndPort = ""] = outside;
+    const host = hostAndPort.replace(/:\d*$/, "").toLowerCase();
+    if (host !== "127.0.0.1" && host !== "localhost") {
+      const rest = url.slice(authority.length);
+      return rest === "" || rest === "/" ? url : `${scheme}${hostAndPort}/…`;
+    }
+  }
   const cut = url.search(/[?#]/);
   return cut < 0 ? url : `${url.slice(0, cut)}${url[cut]}…`;
 }
@@ -130,6 +146,23 @@ export function describeFolders(report: unknown): string {
     typeof value === "number" && Number.isFinite(value) ? Math.round(value) : "?";
   return (
     `folders=${number(fields.folders)} response=${number(fields.responseMs)} ` +
+    `painted=${number(fields.paintedMs)}`
+  );
+}
+
+/** `cells=24 precision=3->3 response=120 painted=180`: one drawing of the map
+ * (RFC-040 section 5.6). The counts, the precisions and the times, never the
+ * box nor the framing: the area one looks at is the map's query. */
+export function describeMap(report: unknown): string {
+  if (typeof report !== "object" || report === null) {
+    return "";
+  }
+  const fields = report as Record<string, unknown>;
+  const number = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? Math.round(value) : "?";
+  return (
+    `cells=${number(fields.cells)} precision=${number(fields.precisionRequested)}->` +
+    `${number(fields.precisionApplied)} response=${number(fields.responseMs)} ` +
     `painted=${number(fields.paintedMs)}`
   );
 }

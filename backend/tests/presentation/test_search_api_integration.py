@@ -396,4 +396,24 @@ def test_the_map_groups_real_rows(
         "precision_applied": 3,
         "cells": [{"latitude": -26.321, "longitude": -48.816, "count": 2}],
         "excluded_unknown_position": 1,
+        "excluded_unknown_date": None,
     }
+
+    # RFC-040 section 4.1: under a range, none of the three has a date. They
+    # are all in `excluded_unknown_date`, and the one with no position is not
+    # counted again in `excluded_unknown_position`.
+    dated = client.get(
+        "/api/v1/images/map",
+        params={
+            "min_lat": -27,
+            "min_lon": -49.5,
+            "max_lat": -26,
+            "max_lon": -48.5,
+            "captured_from": "2018-01-01",
+            "captured_to": "2019-01-01",
+        },
+    ).json()
+
+    assert dated["cells"] == []
+    assert dated["excluded_unknown_date"] == 3
+    assert dated["excluded_unknown_position"] == 0

@@ -1,10 +1,9 @@
 """Response shape for `GET /api/v1/images/map` (RFC-032 section 7).
 
-The contract a map draws from, defined before the map exists: `frontend/` is
-empty and there is no UI RFC yet, so this is the shape that RFC will consume.
-Cells rather than photos -- a centre and a count per square -- because the
-question is "where are my photos", and the answer to that for 100,000 photos
-is a few hundred squares, not 100,000 points.
+The contract the map screen draws from (`frontend/src/map/`, RFC-040). Cells
+rather than photos -- a centre and a count per square -- because the question
+is "where are my photos", and the answer to that for 100,000 photos is a few
+hundred squares, not 100,000 points.
 """
 
 from __future__ import annotations
@@ -64,6 +63,16 @@ class MapResponseSchema(BaseModel):
             "coordinates is in no area."
         )
     )
+    excluded_unknown_date: int | None = Field(
+        description=(
+            "How many photos under the same device filter have no capture "
+            "date, and so were left off the map by the date range -- the same "
+            "number a search with that range reports. Null when no date range "
+            "was sent. Not restricted to the area, as excluded_unknown_position "
+            "is not; a photo with neither a date nor a position is counted here "
+            "only."
+        )
+    )
 
     @classmethod
     def from_map(cls, answer: PositionMap) -> MapResponseSchema:
@@ -77,4 +86,5 @@ class MapResponseSchema(BaseModel):
                 for cell in answer.cells
             ],
             excluded_unknown_position=answer.excluded_unknown_position,
+            excluded_unknown_date=answer.excluded_unknown_date,
         )

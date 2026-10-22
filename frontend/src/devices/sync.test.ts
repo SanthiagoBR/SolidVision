@@ -9,6 +9,7 @@ import {
   foldersQuery,
   JOB_POLL_MS,
   jobQuery,
+  mapQuery,
   volumesQuery,
 } from "../api/queries";
 import { devicesInvalidations, jobInvalidations } from "./sync";
@@ -38,16 +39,25 @@ describe("what a job that changed makes stale (section 5.3)", () => {
     ]);
   });
 
-  it("the folders, the devices, the disk's jobs and the home's, when it ends", () => {
+  it("the folders, the devices, the disk's jobs, the home's and the map, when it ends", () => {
     expect(jobInvalidations(job("running"), job("completed"))).toEqual([
       keys.folders(DISK),
       keys.devices,
       keys.deviceJobs(DISK),
       keys.completedJobs,
+      keys.map,
     ]);
     expect(jobInvalidations(job("pending"), job("cancelled"))).toContainEqual(
       keys.devices,
     );
+  });
+
+  it("the map, every area of it, only when it ends (RFC-040 section 5.3)", () => {
+    expect(jobInvalidations(job("running"), job("failed"))).toContainEqual(keys.map);
+    expect(jobInvalidations(job("pending"), job("running"))).not.toContainEqual(
+      keys.map,
+    );
+    expect(keys.mapArea(null).slice(0, 1)).toEqual(keys.map);
   });
 });
 
@@ -68,6 +78,7 @@ describe("what a /devices that changed makes stale", () => {
       keys.deviceJobs(DISK),
       keys.job(JOB),
       keys.completedJobs,
+      keys.map,
     ]);
   });
 
@@ -145,5 +156,19 @@ describe("the intervals (section 5.3)", () => {
 
     expect(jobs.refetchOnWindowFocus).toBe(false);
     expect(jobs.refetchInterval).toBeUndefined();
+  });
+
+  it("reads the map neither on the focus nor by time (RFC-040 section 5.3)", () => {
+    const map = mapQuery({
+      box: { south: -27, west: -50, north: -26, east: -48 },
+      precision: 1,
+      filters: {},
+    });
+
+    expect(map.refetchOnWindowFocus).toBe(false);
+    expect(map.refetchInterval).toBeUndefined();
+    expect(map.staleTime).toBe(Infinity);
+    expect(map.queryKey[0]).toBe("map");
+    expect(mapQuery(null).enabled).toBe(false);
   });
 });

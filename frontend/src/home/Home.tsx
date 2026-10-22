@@ -4,7 +4,9 @@
  * Since RFC-038 the search bar, the pills and the example queries are wired:
  * Enter, an example or a dropped photo opens `/busca`, with the filters chosen
  * here. Since RFC-039 (section 5.11) the notice has "Escolher pastas", which
- * opens the folders of the first device never indexed.
+ * opens the folders of the first device never indexed. Since RFC-040 (section
+ * 5.4) a cell of the map with no search opens this screen with its circle: the
+ * bar has the focus, and its text says it is for that point.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -52,11 +54,14 @@ export function Home() {
       ? null
       : neverIndexedText(summary.neverIndexed.map((never) => never.label));
   const first = summary?.neverIndexed[0] ?? null;
+  // A circle that no photo gave is a cell of the map's (RFC-040 section 5.4).
+  const fromMapPoint = url.filters.near !== null && url.filters.nearOf === null;
 
   return (
     <div className={styles.home}>
       <SearchControls
         text=""
+        query={null}
         filters={url.filters}
         photo={null}
         onText={actions.text}
@@ -65,6 +70,7 @@ export function Home() {
         }}
         onClearPhoto={actions.home}
         onFilters={actions.filters}
+        fromMapPoint={fromMapPoint}
       />
 
       <section className={styles.hero}>

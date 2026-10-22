@@ -50,6 +50,18 @@ export interface FoldersReport {
   readonly paintedMs: number;
 }
 
+/** One drawing of the map: the mark of RFC-040 section 5.6. The counts, the
+ * precisions and the times, and never the box nor the framing. */
+export interface MapReport {
+  readonly cells: number;
+  readonly precisionRequested: number;
+  readonly precisionApplied: number;
+  /** From the gesture to the response. */
+  readonly responseMs: number;
+  /** From the gesture to the frame after the cells were drawn. */
+  readonly paintedMs: number;
+}
+
 export interface Bridge {
   onLauncherEvent(callback: (event: LauncherEventMessage) => void): () => void;
   openLogsFolder(): void;
@@ -63,6 +75,8 @@ export interface Bridge {
    * launcher, which hears nothing of it. */
   indexing?(): Promise<IndexingStatus | null>;
   reportFolders?(report: FoldersReport): void;
+  /** Optional, as the others: a window of RFC-039 has no such channel. */
+  reportMap?(report: MapReport): void;
 }
 
 declare global {
