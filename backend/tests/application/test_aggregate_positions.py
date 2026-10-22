@@ -3,7 +3,8 @@
 What it owns is policy, and each case pins one piece: the universe is the
 filters' and never the circle's, the grid coarsens instead of truncating, the
 precision applied is reported, and the photos with no position are counted
-under the same filters.
+under the same filters -- and, since RFC-040 (section 4.1), the photos a date
+range hid for having no date, as search counts them.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from app.application.use_cases.aggregate_positions import (
 from app.domain.entities.image import Image
 from app.domain.value_objects.capture_source import CaptureSource
 from app.domain.value_objects.date_range import DateRange
+from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
@@ -141,6 +143,85 @@ def test_the_photos_without_a_position_are_counted_under_the_same_filters() -> N
     answer = use_case(repository).execute(REGION)
 
     assert answer.excluded_unknown_position == 2
+
+
+class TestThePhotosWithoutADate:
+    """`excluded_unknown_date`, by search's own count (RFC-040 section 4.1)."""
+
+    YEAR = DateRange(datetime.datetime(2018, 1, 1), datetime.datetime(2019, 1, 1))
+
+    def test_no_date_range_is_none_and_no_query(self) -> None:
+        """`None`, not 0, and the repository is not asked (RFC-028 section 8.2)."""
+        repository = FakeImageRepository()
+        place(repository, -26.5, -49.0)
+        place(repository, -26.6, -49.1, captured_at=datetime.datetime(2018, 7, 1))
+
+        answer = use_case(repository).execute(REGION)
+
+        assert answer.excluded_unknown_date is None
+        assert repository.count_unknown_capture_date_calls == []
+
+    def test_a_range_counts_the_searchable_photos_without_a_date(self) -> None:
+        """With a position or without one, and only with an embedding."""
+        repository = FakeImageRepository()
+        place(repository, -26.5, -49.0, captured_at=datetime.datetime(2018, 7, 1))
+        place(repository, -26.6, -49.1)
+        place(repository, None, None)
+        place(repository, -26.7, -49.2, embedded=False)
+
+        answer = use_case(repository).execute(
+            REGION, SearchFilters(captured_between=self.YEAR)
+        )
+
+        assert answer.excluded_unknown_date == 2
+
+    def test_the_device_filter_applies_and_no_circle_does(self) -> None:
+        """The map's universe: the devices asked for, and never a circle."""
+        repository = FakeImageRepository()
+        place(repository, -26.6, -49.1)
+        other = Image(
+            id=ImageId(uuid.uuid4()),
+            device_id=DeviceId(uuid.uuid4()),
+            relative_path=ImagePath("fotos/outro.jpg"),
+            filename="outro",
+            extension="jpg",
+            latitude=-26.6,
+            longitude=-49.1,
+            position_source=PositionSource.EXIF_GPS,
+        )
+        repository.seed_embedding(other, EMBEDDING)
+        far_away = GeoCircle(Position(10.0, 10.0), 1000)
+
+        answer = use_case(repository).execute(
+            REGION,
+            SearchFilters(
+                device_ids=frozenset({TEST_DEVICE_ID}),
+                captured_between=self.YEAR,
+                taken_within=far_away,
+            ),
+        )
+
+        assert answer.excluded_unknown_date == 1
+        (asked,) = repository.count_unknown_capture_date_calls
+        assert asked.taken_within is None
+
+    def test_a_photo_with_neither_is_counted_once(self) -> None:
+        """Under a range, no date and no position: in the date count only.
+
+        The position count's universe has the date clause, which the photo
+        fails, so the sum of the two is what is missing from any map with
+        these filters.
+        """
+        repository = FakeImageRepository()
+        place(repository, None, None)
+        place(repository, None, None, captured_at=datetime.datetime(2018, 7, 1))
+
+        answer = use_case(repository).execute(
+            REGION, SearchFilters(captured_between=self.YEAR)
+        )
+
+        assert answer.excluded_unknown_date == 1
+        assert answer.excluded_unknown_position == 1
 
 
 class TestTheCeiling:

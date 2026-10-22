@@ -28,6 +28,24 @@ import { startGesture } from "./timing";
  * RFC-025 to 032 measured (RFC-038 section 4.3). */
 export const PAGE_SIZE = 40;
 
+/**
+ * Where "Buscar perto daqui" of a cell of the map goes (RFC-040 section 5.4):
+ * the search the map carries, with its filters and the circle of the cell's
+ * centre -- the radius chosen, and no photo, so no `perto_de`. Without a
+ * search, the home screen with the circle.
+ */
+export function nearPointSearch(
+  url: SearchUrl,
+  point: Point,
+  radiusM: number,
+): SearchUrl {
+  return {
+    query: url.query,
+    filters: { ...url.filters, near: point, radius: radiusM, nearOf: null },
+    photo: null,
+  };
+}
+
 interface DetailState {
   readonly detailFromGrid?: boolean;
 }
@@ -103,6 +121,16 @@ export function useSearchActions(url: SearchUrl) {
         filters: { ...url.filters, near: point, nearOf: imageId },
         photo: null,
       });
+    },
+    /** "Buscar perto daqui" of a cell of the map: the same gesture, with the
+     * cell's centre and the radius that covers it (`nearPointSearch()`). */
+    nearPoint(point: Point, radiusM: number): void {
+      const query = url.query;
+      if (query !== null) {
+        startGesture(query.kind, PAGE_SIZE);
+        fresh(query);
+      }
+      go(nearPointSearch(url, point, radiusM));
     },
     openPhoto(imageId: string): void {
       go({ ...url, photo: imageId }, { detailFromGrid: true });

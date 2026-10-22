@@ -10,8 +10,13 @@
  * - **"Dispositivos"** lists every device, connected or not. None checked is
  *   all of them; all checked is the same, and neither sends a `device_id`.
  * - **"Filtros"** holds the dates -- both inclusive, either optional -- and the
- *   "perto de", which is born only from a photo (section 5.4).
+ *   "perto de", which is born from a photo (section 5.4) or, since RFC-040,
+ *   from a cell of the map: *"Até 10 km do ponto do mapa"*.
  * - **The active filters** are dark pills with an ×, as in the Figma.
+ *
+ * Since RFC-040 (section 5.5) the pills are `FilterPills`, which the map uses
+ * without the bar and without the "perto de": the map's area is the visible
+ * one. Their rules did not change.
  *
  * With search `unavailable` the bar and the photo are disabled, with the
  * `search_detail`; "Parecidas com esta" still works, because it needs no
@@ -20,24 +25,39 @@
 
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
+import { Link } from "react-router";
 
 import type { Device } from "../api/client";
 import { useDevices, useHealth } from "../api/queries";
 import { searchStatusText } from "../home/search-status";
+import { startMapGesture } from "../map/timing";
+import { mapHrefFor } from "../map/url";
 import { useCapabilities, useImage } from "./api";
 import { dateFilterText, isInverted } from "./dates";
 import type { DroppedPhoto } from "./dropped-photo";
 import { uploadRefusal, UPLOAD_TYPES } from "./messages";
-import { devicePillText, type Filters, toggleDevice } from "./params";
+import { devicePillText, type Filters, type SearchQuery, toggleDevice } from "./params";
 import { fileName } from "./paths";
-import { effectiveRadius, formatRadius, radiusOptions } from "./radius";
+import {
+  effectiveRadius,
+  formatRadius,
+  nearFilterText,
+  nearTitleText,
+  radiusOptions,
+} from "./radius";
 import styles from "./SearchControls.module.css";
 
 export const PHOTO_PROMPT = "Solte a foto para buscar parecidas";
+export const TEXT_PROMPT = "Descreva a foto que você procura…";
+/** The bar's text when the home screen opens with the circle of a cell of the
+ * map, and no search (RFC-040 section 5.4). */
+export const MAP_POINT_PROMPT = "Descreva o que procurar perto do ponto do mapa…";
 
 export interface SearchControlsProps {
   /** The text in the bar when the screen opens: the current search's. */
   readonly text: string;
+  /** The current search, which "ou escolha um lugar no mapa" carries. */
+  readonly query: SearchQuery | null;
   readonly filters: Filters;
   /** The dropped photo, when the search is one. */
   readonly photo: DroppedPhoto | null;
@@ -47,22 +67,51 @@ export interface SearchControlsProps {
   readonly onFilters: (filters: Filters) => void;
   /** Right of the pills: "14 resultados · 0,13 s". */
   readonly summary?: ReactNode;
+  /** The circle came from a cell of the map, with no search: the bar has the
+   * focus, and its text says what it is for. */
+  readonly fromMapPoint?: boolean;
 }
 
 export function SearchControls(props: SearchControlsProps) {
   return (
     <div className={styles.controls}>
       <SearchBar key={props.text} {...props} />
-      <div className={styles.pills}>
-        <DevicesPill filters={props.filters} onFilters={props.onFilters} />
-        <FiltersPill filters={props.filters} onFilters={props.onFilters} />
-        <ActiveFilters filters={props.filters} onFilters={props.onFilters} />
-        {props.summary !== undefined && (
-          <span className={styles.summary} role="status">
-            {props.summary}
-          </span>
-        )}
-      </div>
+      <FilterPills
+        filters={props.filters}
+        onFilters={props.onFilters}
+        mapHref={mapHrefFor(props.query, props.filters)}
+        summary={props.summary}
+      />
+    </div>
+  );
+}
+
+export interface FilterPillsProps {
+  readonly filters: Filters;
+  readonly onFilters: (filters: Filters) => void;
+  /** The search's pills: "Perto de", with a link to the map with this search
+   * and its filters in its note. The map's pills have no "Perto de". */
+  readonly mapHref?: string;
+  readonly summary?: ReactNode;
+}
+
+/** "Dispositivos", "Filtros" and the active filters (RFC-040 section 5.5). */
+export function FilterPills({
+  filters,
+  onFilters,
+  mapHref,
+  summary,
+}: FilterPillsProps) {
+  return (
+    <div className={styles.pills}>
+      <DevicesPill filters={filters} onFilters={onFilters} />
+      <FiltersPill filters={filters} onFilters={onFilters} mapHref={mapHref} />
+      <ActiveFilters filters={filters} onFilters={onFilters} />
+      {summary !== undefined && (
+        <span className={styles.summary} role="status">
+          {summary}
+        </span>
+      )}
     </div>
   );
 }
@@ -76,6 +125,7 @@ function SearchBar({
   onText,
   onPhoto,
   onClearPhoto,
+  fromMapPoint = false,
 }: SearchControlsProps) {
   const health = useHealth();
   const [draft, setDraft] = useState(text);
@@ -159,8 +209,9 @@ function SearchBar({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={submit}
-          placeholder="Descreva a foto que você procura…"
-          aria-label="Descreva a foto que você procura"
+          placeholder={fromMapPoint ? MAP_POINT_PROMPT : TEXT_PROMPT}
+          aria-label={(fromMapPoint ? MAP_POINT_PROMPT : TEXT_PROMPT).replace("…", "")}
+          autoFocus={fromMapPoint}
           disabled={unavailable}
           enterKeyHint="search"
         />
@@ -297,9 +348,11 @@ function DevicesPill({
 function FiltersPill({
   filters,
   onFilters,
+  mapHref,
 }: {
   filters: Filters;
   onFilters: (filters: Filters) => void;
+  mapHref: string | undefined;
 }) {
   const { open, setOpen, root } = usePopover();
   const id = useId();
@@ -326,7 +379,9 @@ function FiltersPill({
               setOpen(false);
             }}
           />
-          <NearFilter filters={filters} onFilters={onFilters} />
+          {mapHref !== undefined && (
+            <NearFilter filters={filters} onFilters={onFilters} mapHref={mapHref} />
+          )}
         </div>
       )}
     </div>
@@ -386,9 +441,11 @@ function DatesFilter({
 function NearFilter({
   filters,
   onFilters,
+  mapHref,
 }: {
   filters: Filters;
   onFilters: (filters: Filters) => void;
+  mapHref: string;
 }) {
   const capabilities = useCapabilities();
   const minimum = capabilities.data?.min_radius_m ?? null;
@@ -399,14 +456,18 @@ function NearFilter({
       <div className={styles.section}>
         <p className={styles.sectionTitle}>Perto de</p>
         <p className={styles.note}>
-          Abra uma foto com posição e escolha “Buscar perto daqui”.
+          Abra uma foto com posição e escolha “Buscar perto daqui”, ou{" "}
+          <Link className={styles.inlineLink} to={mapHref} onClick={startMapGesture}>
+            escolha um lugar no mapa
+          </Link>
+          .
         </p>
       </div>
     );
   }
   return (
     <div className={styles.section}>
-      <p className={styles.sectionTitle}>Perto de {name}</p>
+      <p className={styles.sectionTitle}>{nearTitleText(name)}</p>
       {minimum === null ? (
         <p className={styles.note}>Lendo o raio mínimo…</p>
       ) : (
@@ -442,9 +503,13 @@ function NearFilter({
   );
 }
 
-/** The name of the photo that gave the centre, or a description of it. */
-function useNearName(nearOf: string | null): string {
+/** The name of the photo that gave the centre, or a description of it while
+ * it is read; `null` for a centre no photo gave -- a cell of the map's. */
+function useNearName(nearOf: string | null): string | null {
   const image = useImage(nearOf);
+  if (nearOf === null) {
+    return null;
+  }
   if (image.data !== undefined) {
     return fileName(image.data.relative_path);
   }
@@ -476,7 +541,7 @@ function ActiveFilters({
       )}
       {filters.near !== null && minimum !== undefined && (
         <Chip
-          label={`Até ${formatRadius(effectiveRadius(filters.radius, minimum))} de ${name}`}
+          label={nearFilterText(effectiveRadius(filters.radius, minimum), name)}
           onRemove={() =>
             onFilters({ ...filters, near: null, radius: null, nearOf: null })
           }

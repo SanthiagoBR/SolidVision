@@ -13,6 +13,10 @@ reflected the query could only aggregate the top K, and the top 100 of a
 100,000-image index describes nothing about geography. The map shows where the
 photos *the filters allow* are; ranking stays the search's job. Two questions,
 two endpoints.
+
+Since RFC-040 (section 4.1) the answer also says how many photos a date range
+left off the map for having no date: the count search already makes, by the
+same function, over the map's universe.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 
+from app.application.use_cases.search_images import count_hidden_by_unknown_date
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.value_objects.position import BoundingBox, PositionCell
 from app.domain.value_objects.search_filters import SearchFilters
@@ -54,12 +59,21 @@ class PositionMap:
     `excluded_unknown_position` is the number of photos under the same
     filters that have no coordinates and so cannot be on any map -- the
     number of RFC-032 section 6.2, in the place the map needs it.
+
+    `excluded_unknown_date` is its twin for a date range (RFC-040 section
+    4.1): how many photos under the device filter have no capture date, and
+    so were hidden by the range -- `None` with no range, as in search
+    (RFC-028 section 8.2). Neither count is restricted to the area: both are
+    of the collection under the filters, and do not change with every pan.
+    A photo with neither a date nor a position is in this one only: the
+    position count's universe has the date clause, which it fails.
     """
 
     precision_requested: int
     precision_applied: int
     cells: list[PositionCell]
     excluded_unknown_position: int
+    excluded_unknown_date: int | None
 
 
 class AggregatePositionsUseCase:
@@ -103,6 +117,11 @@ class AggregatePositionsUseCase:
         most 181 x 361 by geometry, and for a collection that fits in one
         country, a handful. Exceeding the ceiling there is the honest
         failure; dropping photos to honour it would not be.
+
+        **The photos a date range hid are counted as search counts them**
+        (RFC-040 section 4.1): `count_hidden_by_unknown_date()`, the function
+        both search use cases call, over this universe, which has no circle.
+        No range, no query, and `None`.
         """
         requested = DEFAULT_MAP_PRECISION if precision is None else precision
         if requested < 0:
@@ -122,4 +141,7 @@ class AggregatePositionsUseCase:
             precision_applied=applied,
             cells=cells,
             excluded_unknown_position=self._repository.count_unknown_position(universe),
+            excluded_unknown_date=count_hidden_by_unknown_date(
+                self._repository, universe
+            ),
         )

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   consoleLine,
   describeFolders,
+  describeMap,
   describeSearch,
   failedLoadLine,
   logDirectory,
@@ -140,6 +141,84 @@ describe("no query string reaches shell.log (RFC-038 section 2.7)", () => {
 
     expect(line).not.toContain("telhado");
     expect(line).toContain("/api/v1/images/search?…");
+  });
+});
+
+describe("no area of the map reaches shell.log (RFC-040 section 2.7)", () => {
+  it("cuts the path of a tile, which is a place", () => {
+    expect(redactUrl("https://tile.openstreetmap.org/12/1492/2358.png")).toBe(
+      "https://tile.openstreetmap.org/…",
+    );
+    expect(redactUrl("http://example.com:8080/a/b?c=d#e")).toBe(
+      "http://example.com:8080/…",
+    );
+    expect(redactUrl("https://user:secret@example.com/x")).toBe(
+      "https://example.com/…",
+    );
+  });
+
+  it("keeps the path of the origin's own URLs, without the query, as before", () => {
+    expect(
+      redactUrl("http://127.0.0.1:52011/mapa?centro=-26.3214,-48.8163&zoom=9"),
+    ).toBe("http://127.0.0.1:52011/mapa?…");
+    expect(redactUrl("http://localhost:5173/api/v1/images/map?min_lat=-27")).toBe(
+      "http://localhost:5173/api/v1/images/map?…",
+    );
+    expect(redactUrl("http://127.0.0.1:52011/")).toBe("http://127.0.0.1:52011/");
+  });
+
+  it("keeps a file: URL as it was: the start page", () => {
+    const start = "file:///C:/Users/x/SolidVision/frontend/electron/startup.html";
+
+    expect(redactUrl(start)).toBe(start);
+    expect(redactUrl(`${start}?a=b`)).toBe(`${start}?…`);
+  });
+
+  it("leaves no tile path in a line of the console", () => {
+    const tile = "https://tile.openstreetmap.org/12/1492/2358.png";
+    const line = consoleLine(
+      "error",
+      `Failed to load resource: net::ERR_NAME_NOT_RESOLVED ${tile}`,
+      tile,
+      0,
+    );
+
+    expect(line).not.toMatch(/tile\.openstreetmap\.org\/\d/);
+    expect(line).toContain("https://tile.openstreetmap.org/…");
+  });
+
+  it("the host alone is kept as it is", () => {
+    expect(redactUrl("https://tile.openstreetmap.org")).toBe(
+      "https://tile.openstreetmap.org",
+    );
+    expect(redactUrl("https://tile.openstreetmap.org/")).toBe(
+      "https://tile.openstreetmap.org/",
+    );
+  });
+});
+
+describe("the mark of the map (RFC-040 section 5.6)", () => {
+  it("carries the counts, the precisions and the times, and no coordinate", () => {
+    const detail = describeMap({
+      cells: 24,
+      precisionRequested: 1,
+      precisionApplied: 0,
+      responseMs: 412.4,
+      paintedMs: 530.6,
+      box: { south: -26.5, west: -49, north: -26.1, east: -48.6 },
+      centre: "-26.3214,-48.8163",
+    });
+
+    expect(detail).toBe("cells=24 precision=1->0 response=412 painted=531");
+    expect(detail).not.toContain("-26");
+    expect(detail).not.toContain("48.8");
+  });
+
+  it("does not trust what it is sent", () => {
+    expect(describeMap({ cells: "muitas" })).toBe(
+      "cells=? precision=?->? response=? painted=?",
+    );
+    expect(describeMap(null)).toBe("");
   });
 });
 

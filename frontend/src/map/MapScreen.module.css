@@ -1,0 +1,459 @@
+/* The map screen (RFC-040 section 5). Not in the Figma: built from the tokens
+   of RFC-037 and the map's of section 6. The pills, the amber notice and the
+   error are the search's (SearchScreen.module.css), with the same values. */
+
+.screen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-14);
+  min-height: 0;
+  padding: var(--space-28) var(--space-32) var(--space-24);
+}
+
+.carried,
+.offline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.carriedText,
+.offlineText {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.link {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-surface-muted);
+  color: var(--color-text-notice);
+  font-size: var(--font-size-label);
+}
+
+.notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-12) var(--space-10) var(--space-16);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-warning-surface);
+}
+
+.noticeText {
+  flex: 1;
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-label);
+}
+
+.noticeAction {
+  flex: none;
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+/* The map and the list beside it take the height left in the content, which
+   is a column since RFC-039; below the least height, the screen scrolls. */
+.body {
+  display: flex;
+  flex: 1;
+  gap: var(--space-14);
+  min-height: var(--size-map-min);
+}
+
+.area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+/* Its own stacking context, so that Leaflet's panes and controls stay under
+   the parts drawn over the map. The sea of the outline is the muted surface. */
+.map:global(.leaflet-container) {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: var(--color-surface-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height);
+}
+
+.map:global(.leaflet-container):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.map :global(.leaflet-control-attribution) {
+  font-size: var(--font-size-small);
+}
+
+.map :global(.leaflet-control-attribution:empty) {
+  display: none;
+}
+
+/* "Fundo do OpenStreetMap" and "Lista", in the corner above on the right. */
+.controls {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-10);
+  right: var(--space-10);
+  display: flex;
+  gap: var(--space-6);
+}
+
+.control,
+.controlOn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin: 0;
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.controlOn {
+  border-color: var(--color-surface-pill);
+  background: var(--color-surface-pill);
+}
+
+.control input {
+  margin: 0;
+}
+
+.loadingCentre,
+.empty {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  padding: var(--space-8) var(--space-14);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+/* Below the controls: "Lendo o mapa…" over the cells of before. */
+.loadingCorner {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--space-10) + var(--space-40));
+  right: var(--space-10);
+  margin: 0;
+  padding: var(--space-4) var(--space-10);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  pointer-events: none;
+}
+
+/* In the corner below on the left, above the line of the attribution, which
+   nothing covers. */
+.legend {
+  position: absolute;
+  z-index: 1;
+  bottom: var(--space-24);
+  left: var(--space-10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: calc(100% - 2 * var(--space-10));
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-notice);
+  background: var(--color-surface-overlay);
+  font-size: var(--font-size-small);
+}
+
+.legendTitle,
+.legendSize {
+  margin: 0;
+}
+
+.legendTitle {
+  font-weight: var(--font-weight-semibold);
+}
+
+.legendSize {
+  max-width: var(--size-popover);
+  color: var(--color-text-secondary);
+}
+
+.legendClasses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendClass {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  white-space: nowrap;
+}
+
+/* As the cells are drawn: 75% of the tone, with the darkest as the outline. */
+.swatch {
+  width: var(--size-swatch);
+  height: var(--size-swatch);
+  border: 1px solid var(--color-map-5);
+  border-radius: var(--space-2);
+}
+
+.swatch1 {
+  background: color-mix(in srgb, var(--color-map-1) 75%, transparent);
+}
+
+.swatch2 {
+  background: color-mix(in srgb, var(--color-map-2) 75%, transparent);
+}
+
+.swatch3 {
+  background: color-mix(in srgb, var(--color-map-3) 75%, transparent);
+}
+
+.swatch4 {
+  background: color-mix(in srgb, var(--color-map-4) 75%, transparent);
+}
+
+.swatch5 {
+  background: color-mix(in srgb, var(--color-map-5) 75%, transparent);
+}
+
+/* The hint of the cell under the pointer: a Leaflet tooltip. */
+.hint:global(.leaflet-tooltip) {
+  padding: var(--space-6) var(--space-10);
+  border-color: var(--color-border);
+  border-radius: var(--radius-tag);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+.hint strong,
+.hint small {
+  display: block;
+}
+
+.hint strong {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+}
+
+.hint small {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+/* The balloon: a Leaflet popup, with React inside. */
+.popup :global(.leaflet-popup-content-wrapper) {
+  border-radius: var(--radius-notice);
+  box-shadow: 0 var(--space-8) var(--space-24) var(--color-scrim);
+}
+
+.popup :global(.leaflet-popup-content) {
+  margin: var(--space-12) var(--space-14);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height);
+}
+
+.balloon {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  color: var(--color-text);
+}
+
+/* Two classes: Leaflet gives every `p` of a popup a margin of 1.3em
+   (`.leaflet-popup-content p`). */
+.balloon .balloonCount,
+.balloon .balloonSize,
+.balloon .balloonRadius {
+  margin: 0;
+}
+
+.balloonCount {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.balloonSize,
+.balloonRadius {
+  color: var(--color-text-secondary);
+}
+
+.balloonSearch {
+  margin-top: var(--space-8);
+  padding: var(--space-6) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.balloonSearch:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.balloonZoom {
+  align-self: flex-start;
+  margin-top: var(--space-6);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The list, beside the map. */
+.list {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--size-map-list);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+}
+
+.listHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-10) var(--space-12) var(--space-10) var(--space-16);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.listTitle {
+  margin: 0;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+}
+
+.listClose {
+  padding: 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-input);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.listEmpty {
+  margin: 0;
+  padding: var(--space-16);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
+}
+
+.listRows {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.listRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-16);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.listCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.listCount {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+}
+
+.listMeta {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.listSearch {
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.listSearch:disabled {
+  color: var(--color-text-icon);
+  cursor: default;
+}

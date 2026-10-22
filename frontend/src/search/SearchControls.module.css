@@ -301,3 +301,9 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* "ou escolha um lugar no mapa", inside the note of "Perto de" (RFC-040). */
+.inlineLink {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+}

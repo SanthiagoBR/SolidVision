@@ -1227,6 +1227,11 @@ export interface components {
              */
             cells: components["schemas"]["MapCellSchema"][];
             /**
+             * Excluded Unknown Date
+             * @description How many photos under the same device filter have no capture date, and so were left off the map by the date range -- the same number a search with that range reports. Null when no date range was sent. Not restricted to the area, as excluded_unknown_position is not; a photo with neither a date nor a position is counted here only.
+             */
+            excluded_unknown_date: number | null;
+            /**
              * Excluded Unknown Position
              * @description How many photos under the same device and date filters have no position, and so are on no map at all -- the same number a 'near here' search reports. Not restricted to the area: a photo with no coordinates is in no area.
              */

@@ -198,8 +198,7 @@ export function searchKeyOf(query: SearchQuery, photoToken: number | null): stri
 // ---------------------------------------------------------------------------
 // The API
 
-export interface ApiSearchQuery {
-  limit: number;
+export interface ApiFilters {
   device_id?: string[];
   captured_from?: string;
   captured_to?: string;
@@ -208,19 +207,22 @@ export interface ApiSearchQuery {
   radius_m?: number;
 }
 
+export interface ApiSearchQuery extends ApiFilters {
+  limit: number;
+}
+
 /**
  * The filters with the API's names, and nothing a filter did not set.
  *
  * The dates go as `AAAA-MM-DD`, which the API reads as midnight, camera-local;
  * the end as the day after, because the API's end is exclusive. An "até"
  * before the "de" is not sent. No `Date`, no `Z`, no offset anywhere.
+ *
+ * Without the `limit` since RFC-040: the map sends the same filters, and has
+ * no page (section 5.5).
  */
-export function apiQuery(
-  filters: Filters,
-  limit: number,
-  minRadiusM: number,
-): ApiSearchQuery {
-  const query: ApiSearchQuery = { limit };
+export function apiFilters(filters: Filters, minRadiusM: number): ApiFilters {
+  const query: ApiFilters = {};
   if (filters.devices.length > 0) {
     query.device_id = [...filters.devices];
   }
@@ -236,6 +238,15 @@ export function apiQuery(
     query.radius_m = effectiveRadius(filters.radius, minRadiusM);
   }
   return query;
+}
+
+/** `apiFilters()` with the page size of a search. */
+export function apiQuery(
+  filters: Filters,
+  limit: number,
+  minRadiusM: number,
+): ApiSearchQuery {
+  return { limit, ...apiFilters(filters, minRadiusM) };
 }
 
 // ---------------------------------------------------------------------------

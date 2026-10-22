@@ -5,9 +5,10 @@
  * "Na fila", "Indexando", "Indexada em…" -- and are read again; they are read
  * at no other time but navigation and the disk's return, because each listing
  * reads the disk. **When a job ends**, the page also reads again `/devices`
- * (the counts), the disk's list of jobs, and the completed jobs of the home
- * screen. The searches in the cache do not change by themselves: a gesture
- * runs them again (RFC-038 section 14.2).
+ * (the counts), the disk's list of jobs, the completed jobs of the home
+ * screen, and, since RFC-040 (section 5.3), every area of the map: what
+ * changes the cells is an indexing. The searches in the cache do not change by
+ * themselves: a gesture runs them again (RFC-038 section 14.2).
  *
  * Two places see a job change. `GET /jobs/{id}`, polled every 2 s while the
  * job is active, sees it first. `GET /devices`, polled every 10 s, sees the
@@ -31,7 +32,12 @@ export function jobInvalidations(before: JobFacts | undefined, after: JobFacts):
   }
   const stale: Key[] = [keys.folders(after.device_id)];
   if (isActive(before) && !isActive(after)) {
-    stale.push(keys.devices, keys.deviceJobs(after.device_id), keys.completedJobs);
+    stale.push(
+      keys.devices,
+      keys.deviceJobs(after.device_id),
+      keys.completedJobs,
+      keys.map,
+    );
   }
   return stale;
 }
@@ -68,7 +74,7 @@ export function devicesInvalidations(
     }
   }
   if (ended) {
-    stale.push(keys.completedJobs);
+    stale.push(keys.completedJobs, keys.map);
   }
   return stale;
 }

@@ -126,7 +126,29 @@ class TestTheBody:
             "precision_applied": 3,
             "cells": [{"latitude": -26.321, "longitude": -48.816, "count": 2}],
             "excluded_unknown_position": 1,
+            "excluded_unknown_date": None,
         }
+
+    def test_the_photos_a_date_range_hid_are_counted(
+        self, client: TestClient, repository: FakeImageRepository
+    ) -> None:
+        """`excluded_unknown_date`, as search reports it (RFC-040 section 4.1)."""
+        place(repository, -26.5, -49.0, captured_at=datetime.datetime(2018, 7, 1))
+        place(repository, -26.6, -49.1)
+        place(repository, None, None)
+
+        body = client.get(
+            MAP_URL,
+            params={
+                **AREA,
+                "captured_from": "2018-01-01",
+                "captured_to": "2019-01-01",
+            },
+        ).json()
+
+        assert body["excluded_unknown_date"] == 2
+        assert body["excluded_unknown_position"] == 0
+        assert body["cells"] == [{"latitude": -26.5, "longitude": -49.0, "count": 1}]
 
     def test_the_query_text_is_ignored(
         self, client: TestClient, repository: FakeImageRepository

@@ -188,6 +188,7 @@ function Search({ url, query }: { url: SearchUrl; query: SearchQuery }) {
     <div className={styles.screen}>
       <SearchControls
         text={query.kind === "text" ? query.q : ""}
+        query={query}
         filters={url.filters}
         photo={query.kind === "image" ? photo : null}
         onText={onText}
