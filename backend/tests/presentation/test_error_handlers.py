@@ -48,6 +48,9 @@ from app.domain.exceptions import (
     ThumbnailNotFoundError,
 )
 from app.infrastructure.ai.model_runtime import ModelUnavailableError
+from app.infrastructure.geocoding.nominatim_geocoder import (
+    AddressSearchUnavailableError,
+)
 from app.presentation.error_handlers import (
     DEFAULT_STATUS,
     register_error_handlers,
@@ -242,8 +245,9 @@ def test_only_domain_errors_are_routed_to_this_handler() -> None:
 
     # FastAPI installs its own handlers for HTTPException and validation
     # errors, so the question is what *this* function added. The second is
-    # RFC-035's: a model the installation cannot load answers 503.
+    # RFC-035's: a model the installation cannot load answers 503. The third
+    # is RFC-043's: an address search service that does not answer, 503.
     added = set(app.exception_handlers) - before
-    assert added == {DomainError, ModelUnavailableError}
+    assert added == {DomainError, ModelUnavailableError, AddressSearchUnavailableError}
     assert Exception not in app.exception_handlers
     assert ValueError not in app.exception_handlers

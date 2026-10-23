@@ -1,5 +1,6 @@
 """Public exports for domain exceptions."""
 
+from app.domain.exceptions.address_errors import EmptyAddressError
 from app.domain.exceptions.capture_date_errors import (
     InvalidCaptureDateError,
     InvalidDateRangeError,
@@ -62,6 +63,7 @@ __all__ = [
     "DeviceNotFoundError",
     "DomainError",
     "EmbeddingDimensionMismatchError",
+    "EmptyAddressError",
     "EmptySearchQueryError",
     "FileGoneError",
     "GoneError",

@@ -114,6 +114,11 @@ export function hiddenText(
     : `${photos} no mapa porque não ${have} posição.`;
 }
 
+export const COORDINATES_PLACEHOLDER = "-26.32, -48.82";
+export const COORDINATES_LABEL = "Ir para as coordenadas";
+/** Says, before anything is typed, that this field goes online. */
+export const ADDRESS_PLACEHOLDER = "Endereço (busca online)";
+
 export const LOADING_TEXT = "Lendo o mapa…";
 export const NONE_INDEXED_TEXT = "Nenhuma foto indexada ainda.";
 export const NONE_HERE_TEXT = "Nenhuma foto nesta área.";

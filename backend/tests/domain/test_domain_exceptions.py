@@ -108,6 +108,7 @@ def test_all_exceptions_are_exported_via_package_init() -> None:
         "DeviceNotFoundError",
         "DomainError",
         "EmbeddingDimensionMismatchError",
+        "EmptyAddressError",
         "EmptySearchQueryError",
         "FileGoneError",
         "GoneError",
