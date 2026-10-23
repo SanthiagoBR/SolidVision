@@ -21,6 +21,7 @@ import { DeviceCards } from "../devices/DeviceCards";
 import { IndexingBanner, IndexingProvider } from "../devices/indexing";
 import { startMapGesture } from "../map/timing";
 import { MAP_PATH } from "../map/url";
+import { Logo } from "./Logo";
 import styles from "./Shell.module.css";
 
 export function Shell() {
@@ -33,6 +34,7 @@ export function Shell() {
     <IndexingProvider>
       <div className={styles.shell}>
         <header className={styles.header}>
+          <Logo className={styles.logo} />
           <span className={styles.wordmark}>SolidVision</span>
           <nav className={styles.nav} aria-label="Telas">
             <Link

@@ -155,32 +155,37 @@ export function JobPanel({ device }: { device: Device }) {
       aria-label="A indexação deste disco"
       aria-live="polite"
     >
-      <p className={styles.panelTitle}>{panel.title}</p>
-      {panel.lines.map((line) => (
-        <p key={line} className={styles.panelLine}>
-          {line}
-        </p>
-      ))}
-      {panel.diagnostic !== null && panel.diagnostic !== "" && (
-        <p className={styles.diagnostic}>{panel.diagnostic}</p>
-      )}
-      {panel.bar?.kind === "indeterminate" && (
-        <span className={`${styles.bar} ${styles.barIndeterminate}`} aria-hidden="true">
-          <span className={styles.barFill} />
-        </span>
-      )}
-      {panel.bar?.kind === "share" && (
-        <>
-          <span className={styles.bar} aria-hidden="true">
-            <span
-              className={styles.barFill}
-              style={{ width: `${Math.min(100, panel.bar.ratio * 100)}%` }}
-            />
+      <div className={styles.panelBody}>
+        <p className={styles.panelTitle}>{panel.title}</p>
+        {panel.lines.map((line) => (
+          <p key={line} className={styles.panelLine}>
+            {line}
+          </p>
+        ))}
+        {panel.diagnostic !== null && panel.diagnostic !== "" && (
+          <p className={styles.diagnostic}>{panel.diagnostic}</p>
+        )}
+        {panel.bar?.kind === "indeterminate" && (
+          <span
+            className={`${styles.bar} ${styles.barIndeterminate}`}
+            aria-hidden="true"
+          >
+            <span className={styles.barFill} />
           </span>
-          <p className={styles.panelLine}>{panel.bar.text}</p>
-        </>
-      )}
-      {restarted && <p className={styles.panelNote}>{RESTART_NOTE}</p>}
+        )}
+        {panel.bar?.kind === "share" && (
+          <>
+            <span className={styles.bar} aria-hidden="true">
+              <span
+                className={styles.barFill}
+                style={{ width: `${Math.min(100, panel.bar.ratio * 100)}%` }}
+              />
+            </span>
+            <p className={styles.panelLine}>{panel.bar.text}</p>
+          </>
+        )}
+        {restarted && <p className={styles.panelNote}>{RESTART_NOTE}</p>}
+      </div>
       {panel.actions.length > 0 && (
         <div className={styles.panelActions}>{panel.actions.map(act)}</div>
       )}

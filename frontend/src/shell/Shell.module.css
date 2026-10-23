@@ -16,6 +16,18 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* The mark, before the name (RFC-037's header has no logo yet). Nudged up:
+   "SolidVision" has no descender, so its glyphs sit above the centre of
+   their own line box, and `align-items: center` alone centres the icon a
+   few pixels lower than that. A paint-time shift, so it costs no layout. */
+.logo {
+  flex: none;
+  width: var(--size-logo);
+  height: var(--size-logo);
+  margin-right: var(--space-10);
+  transform: translateY(-2px);
+}
+
 .wordmark {
   font-size: var(--font-size-input);
   font-weight: var(--font-weight-semibold);
@@ -48,18 +60,21 @@
   color: var(--color-text);
 }
 
+/* `--color-focus`, the indigo of the logo and the focus ring (tokens.css),
+   solid behind the sidebar. The cards keep their own white (RFC-039), so
+   only the text that sits directly on this background needs the
+   light-on-dark pair below. */
 .sidebar {
   grid-area: sidebar;
   overflow-y: auto;
   padding: var(--space-28) var(--space-16);
-  border-right: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
+  background: var(--color-focus);
 }
 
 .sidebarTitle {
   margin: 0 0 var(--space-12);
   padding: 0 var(--space-10);
-  color: var(--color-text-tertiary);
+  color: var(--color-on-inverse-muted);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-medium);
 }
