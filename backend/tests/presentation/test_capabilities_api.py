@@ -68,7 +68,18 @@ class TestTheLocalClientGetsAnAnswer:
             "version": settings.project_version,
             "max_search_limit": MAX_SEARCH_LIMIT,
             "min_radius_m": settings.min_radius_m,
+            "address_search": settings.allow_address_search,
         }
+
+    @pytest.mark.parametrize("on", [True, False])
+    def test_the_address_field_follows_the_setting(
+        self, monkeypatch: pytest.MonkeyPatch, on: bool
+    ) -> None:
+        """RFC-043: the interface draws the address field only when it is on."""
+        monkeypatch.setattr(settings, "allow_address_search", on)
+
+        with client_from(LOOPBACK) as client:
+            assert client.get(URL).json()["address_search"] is on
 
     def test_the_search_limits_are_the_policy_the_api_enforces(
         self, monkeypatch: pytest.MonkeyPatch
@@ -193,10 +204,11 @@ class TestTheGuardsOnTheRoute:
         assert dependant.cookie_params == []
         assert dependant.body_params == []
 
-    def test_it_publishes_exactly_five_fields(self) -> None:
-        """The bar for a sixth is "the UI draws differently because of it".
+    def test_it_publishes_exactly_six_fields(self) -> None:
+        """The bar for a seventh is "the UI draws differently because of it".
 
-        Three since RFC-031; RFC-038 added the two the search draws from.
+        Three since RFC-031; RFC-038 added the two the search draws from, and
+        RFC-043 the one the address field is drawn by.
         """
         schema = app.openapi()["components"]["schemas"]["CapabilitiesSchema"]
 
@@ -206,6 +218,7 @@ class TestTheGuardsOnTheRoute:
             "version",
             "max_search_limit",
             "min_radius_m",
+            "address_search",
         }
 
 

@@ -20,6 +20,7 @@ from app.application.use_cases.aggregate_positions import AggregatePositionsUseC
 from app.application.use_cases.cancel_indexing_job import CancelIndexingJobUseCase
 from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
 from app.application.use_cases.describe_devices import DescribeDevicesUseCase
+from app.application.use_cases.geocode_address import GeocodeAddressUseCase
 from app.application.use_cases.get_image_details import GetImageDetailsUseCase
 from app.application.use_cases.get_indexing_job import GetIndexingJobUseCase
 from app.application.use_cases.get_thumbnail import GetThumbnailUseCase
@@ -44,6 +45,7 @@ from app.domain.repositories.indexing_job_repository import IndexingJobRepositor
 from app.domain.services.device_locator import DeviceLocator
 from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.services.file_revealer_port import FileRevealerPort
+from app.domain.services.geocoder_port import GeocoderPort
 from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 from app.domain.services.volume_catalog import VolumeCatalog
 from app.infrastructure.ai.model_runtime import CLIP, TRANSLATOR, default_runtime
@@ -55,6 +57,7 @@ from app.infrastructure.filesystem.volume_catalog import MountedVolumeCatalog
 from app.infrastructure.filesystem.volume_identity_provider import (
     WindowsVolumeIdentityProvider,
 )
+from app.infrastructure.geocoding.nominatim_geocoder import NominatimGeocoder
 from app.infrastructure.persistence.postgres_device_repository import (
     PostgresDeviceRepository,
 )
@@ -241,6 +244,29 @@ def get_aggregate_positions_use_case(
     return AggregatePositionsUseCase(
         repository=repository, max_cells=settings.max_map_cells
     )
+
+
+_geocoder: GeocoderPort | None = None
+_geocoder_lock = threading.Lock()
+
+
+def get_geocoder() -> GeocoderPort:
+    """The process's one geocoder: one clock for the one-request-per-second rule,
+    and one cache, instead of one per request that forgets the last."""
+    global _geocoder
+    if _geocoder is None:
+        with _geocoder_lock:
+            if _geocoder is None:
+                _geocoder = NominatimGeocoder(
+                    settings.address_search_url, settings.project_version
+                )
+    return _geocoder
+
+
+def get_geocode_address_use_case(
+    geocoder: GeocoderPort = Depends(get_geocoder),
+) -> GeocodeAddressUseCase:
+    return GeocodeAddressUseCase(geocoder=geocoder)
 
 
 def get_device_repository(
@@ -507,6 +533,8 @@ __all__ = [
     "get_embedding_model",
     "get_file_revealer",
     "get_find_similar_images_use_case",
+    "get_geocode_address_use_case",
+    "get_geocoder",
     "get_image_details_use_case",
     "get_image_repository",
     "get_index_image_use_case",

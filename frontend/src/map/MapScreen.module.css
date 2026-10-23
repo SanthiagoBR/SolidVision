@@ -131,6 +131,9 @@
   top: var(--space-10);
   right: var(--space-10);
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
   gap: var(--space-6);
 }
 
@@ -158,6 +161,106 @@
 
 .control input {
   margin: 0;
+}
+
+/* "Ir para as coordenadas", beside the other controls. */
+.coordinates {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.coordinatesInput {
+  width: var(--size-coordinates-input);
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+}
+
+.coordinatesInput[aria-invalid="true"] {
+  border-color: var(--color-warning-border);
+}
+
+.coordinatesGo {
+  flex: none;
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.coordinatesError {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+  text-align: right;
+}
+
+/* "Buscar um endereço", the first of the controls (RFC-043). A fixed width,
+   so that a long answer wraps inside it instead of pushing the others. */
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  width: var(--size-address-control);
+}
+
+.addressInput {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+}
+
+.addressFound,
+.addressProblem {
+  flex: 1 0 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+}
+
+/* The label gives way to the credit, which the data's licence asks to show. */
+.addressFound {
+  display: flex;
+  gap: var(--space-6);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.addressLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.addressCredit {
+  flex: none;
+  color: var(--color-text-tertiary);
+}
+
+.addressProblem {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-surface);
+  color: var(--color-warning-text);
 }
 
 .loadingCentre,

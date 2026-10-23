@@ -116,7 +116,14 @@ export function readFilters(params: URLSearchParams): Filters {
   };
 }
 
-function readPoint(text: string | null): Point | null {
+/** What a typed coordinate's own field says when `readPoint()` refuses it:
+ * the one message, wherever a coordinate is typed by hand. */
+export const COORDINATES_INVALID_TEXT =
+  "Latitude e longitude separadas por vírgula, de -90 a 90 e de -180 a 180.";
+
+/** `lat,lon`, trimmed around each number; `null` for anything else, so a
+ * typed coordinate and the URL's own `perto` share the one rule. */
+export function readPoint(text: string | null): Point | null {
   if (text === null) {
     return null;
   }

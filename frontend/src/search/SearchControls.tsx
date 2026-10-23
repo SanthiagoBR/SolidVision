@@ -32,11 +32,20 @@ import { useDevices, useHealth } from "../api/queries";
 import { searchStatusText } from "../home/search-status";
 import { startMapGesture } from "../map/timing";
 import { mapHrefFor } from "../map/url";
+import { ADDRESS_NOTE, useAddressLookup } from "./address";
 import { useCapabilities, useImage } from "./api";
 import { dateFilterText, isInverted } from "./dates";
 import type { DroppedPhoto } from "./dropped-photo";
 import { uploadRefusal, UPLOAD_TYPES } from "./messages";
-import { devicePillText, type Filters, type SearchQuery, toggleDevice } from "./params";
+import {
+  COORDINATES_INVALID_TEXT,
+  devicePillText,
+  type Filters,
+  type Point,
+  readPoint,
+  type SearchQuery,
+  toggleDevice,
+} from "./params";
 import { fileName } from "./paths";
 import {
   effectiveRadius,
@@ -449,19 +458,26 @@ function NearFilter({
 }) {
   const capabilities = useCapabilities();
   const minimum = capabilities.data?.min_radius_m ?? null;
+  const addressOn = capabilities.data?.address_search === true;
   const name = useNearName(filters.nearOf);
 
   if (filters.near === null) {
+    const nearPoint = (near: Point) =>
+      onFilters({ ...filters, near, radius: null, nearOf: null });
     return (
       <div className={styles.section}>
         <p className={styles.sectionTitle}>Perto de</p>
         <p className={styles.note}>
-          Abra uma foto com posição e escolha “Buscar perto daqui”, ou{" "}
+          Abra uma foto com posição e escolha “Buscar perto daqui”,{" "}
           <Link className={styles.inlineLink} to={mapHref} onClick={startMapGesture}>
             escolha um lugar no mapa
           </Link>
-          .
+          {addressOn
+            ? ", ou digite as coordenadas ou um endereço."
+            : ", ou digite as coordenadas."}
         </p>
+        <CoordinatesField onApply={nearPoint} />
+        {addressOn && <AddressField onApply={nearPoint} />}
       </div>
     );
   }
@@ -500,6 +516,96 @@ function NearFilter({
         remover
       </button>
     </div>
+  );
+}
+
+/** `latitude, longitude`, typed by hand: the third way into "Perto de",
+ * beside a photo and the map. Parsed with the same rule as the URL's
+ * `perto`, so a pasted "-26.32, -48.82" and a cell's own centre agree on
+ * what counts. */
+function CoordinatesField({ onApply }: { onApply: (point: Point) => void }) {
+  const [text, setText] = useState("");
+  const [invalid, setInvalid] = useState(false);
+
+  const apply = () => {
+    const point = readPoint(text.trim());
+    if (point === null) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    onApply(point);
+  };
+
+  return (
+    <>
+      <label className={styles.field}>
+        coordenadas
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="-26.32, -48.82"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            setInvalid(false);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              apply();
+            }
+          }}
+        />
+      </label>
+      {invalid && <p className={styles.fieldError}>{COORDINATES_INVALID_TEXT}</p>}
+      <div className={styles.actions}>
+        <button type="button" className={styles.apply} onClick={apply}>
+          Usar estas coordenadas
+        </button>
+      </div>
+    </>
+  );
+}
+
+/** An address, found online (RFC-043): the fourth way into "Perto de". */
+function AddressField({ onApply }: { onApply: (point: Point) => void }) {
+  const lookup = useAddressLookup(onApply);
+
+  return (
+    <>
+      <label className={styles.field}>
+        endereço
+        <input
+          type="search"
+          placeholder="Rua, número, cidade"
+          value={lookup.text}
+          onChange={(event) => lookup.change(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              lookup.submit();
+            }
+          }}
+        />
+      </label>
+      {lookup.line?.kind === "problem" && (
+        <p className={styles.fieldError} role="status">
+          {lookup.line.text}
+        </p>
+      )}
+      <p className={styles.note}>{ADDRESS_NOTE}</p>
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.apply}
+          onClick={lookup.submit}
+          disabled={lookup.pending}
+        >
+          {lookup.pending ? "Buscando…" : "Buscar este endereço"}
+        </button>
+      </div>
+    </>
   );
 }
 

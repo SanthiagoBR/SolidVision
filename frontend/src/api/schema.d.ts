@@ -11,7 +11,7 @@ export interface paths {
         };
         /**
          * What this installation supports
-         * @description Report the five things a client draws differently because of.
+         * @description Report the six things a client draws differently because of.
          *
          *     `local_file_actions` mirrors `settings.allow_local_file_actions`
          *     exactly, including when it is `False` -- a `200` saying "no" is the
@@ -36,7 +36,10 @@ export interface paths {
          *     user's file -- and a copy of either in the interface is the copy RFC-026
          *     section 8.2 refused to put in the route's signature: it would drift.
          *
-         *     The bar for a sixth field is *the UI draws something different
+         *     `address_search` came with RFC-043: the address field is drawn only
+         *     when `/geocode` answers.
+         *
+         *     The bar for a seventh field is *the UI draws something different
          *     because of it*. Without a criterion this becomes a configuration
          *     dump, which is the risk RFC-031 section 15 names.
          */
@@ -201,6 +204,23 @@ export interface paths {
          *     it is paid.
          */
         get: operations["list_device_folders_api_v1_devices__device_id__folders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find a typed address: the address is sent to an online service */
+        get: operations["geocode_api_v1_geocode_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -770,6 +790,11 @@ export interface components {
          */
         CapabilitiesSchema: {
             /**
+             * Address Search
+             * @description Whether GET /api/v1/geocode answers: draw the address field only when it does. The address is sent to an online service (RFC-043).
+             */
+            address_search: boolean;
+            /**
              * Local File Actions
              * @description Whether POST /api/v1/images/{id}/reveal exists on this installation. **Ask before drawing the button.** With the setting off that route answers 404 with the body of a route that does not exist, so discovering it by trying means a button that disappears after it is clicked (RFC-030 section 6).
              */
@@ -1029,6 +1054,11 @@ export interface components {
          * @enum {string}
          */
         FolderState: "indexing" | "queued" | "partial" | "indexed" | "never_indexed";
+        /** GeocodeResponseSchema */
+        GeocodeResponseSchema: {
+            /** @description The best match, or null when the address matched nothing */
+            place: components["schemas"]["PlaceSchema"] | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1241,6 +1271,24 @@ export interface components {
              * @description Decimal places of a degree the cells were rounded to (3 is about 100 m). Lower than requested when the requested grid had too many cells, or than the finest grid offered.
              */
             precision_applied: number;
+        };
+        /** PlaceSchema */
+        PlaceSchema: {
+            /**
+             * Label
+             * @description What the service understood the address to be: show it, so the user can tell whether it found the right one
+             */
+            label: string;
+            /**
+             * Latitude
+             * @description Decimal degrees, WGS 84
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description Decimal degrees, WGS 84
+             */
+            longitude: number;
         };
         /**
          * PositionSource
@@ -1799,6 +1847,59 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    geocode_api_v1_geocode_get: {
+        parameters: {
+            query: {
+                /** @description The address, as the user typed it */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodeResponseSchema"];
+                };
+            };
+            /** @description The address is empty */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Address search is off, or the caller is not local */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The service did not answer; the coordinates still do */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

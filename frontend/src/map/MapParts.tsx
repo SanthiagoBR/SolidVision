@@ -4,16 +4,30 @@
  * Their words are `words.ts`, and the tests read them there.
  */
 
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 
 import type { MapCells } from "../api/queries";
-import type { SearchQuery } from "../search/params";
+import {
+  ADDRESS_LABEL,
+  ADDRESS_NOTE,
+  ATTRIBUTION,
+  useAddressLookup,
+} from "../search/address";
+import {
+  COORDINATES_INVALID_TEXT,
+  type Point,
+  readPoint,
+  type SearchQuery,
+} from "../search/params";
 import { type Cell, CLASS_LABELS } from "./cells";
 import styles from "./MapScreen.module.css";
 import { cellSizeText, MAX_CELL_PRECISION } from "./precision";
 import {
+  ADDRESS_PLACEHOLDER,
   balloonCountLines,
   centreText,
+  COORDINATES_LABEL,
+  COORDINATES_PLACEHOLDER,
   hiddenText,
   LEGEND_TITLE,
   legendSizeText,
@@ -50,6 +64,100 @@ export function Legend({ requested, applied }: { requested: number; applied: num
         ))}
       </ul>
       <p className={styles.legendSize}>{legendSizeText(requested, applied)}</p>
+    </div>
+  );
+}
+
+/** Beside "Fundo do OpenStreetMap" and "Lista": `latitude, longitude`,
+ * typed by hand, centres the map there without a search -- no network, and
+ * no filter changes. Parsed with the same rule as the search's own
+ * coordinate field and the URL's `perto`. */
+export function CoordinatesControl({ onGo }: { onGo: (point: Point) => void }) {
+  const [text, setText] = useState("");
+  const [invalid, setInvalid] = useState(false);
+
+  const go = () => {
+    const point = readPoint(text.trim());
+    if (point === null) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    onGo(point);
+  };
+
+  return (
+    <div className={styles.coordinates}>
+      <input
+        type="text"
+        inputMode="decimal"
+        className={styles.coordinatesInput}
+        placeholder={COORDINATES_PLACEHOLDER}
+        aria-label={COORDINATES_LABEL}
+        aria-invalid={invalid}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          setInvalid(false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            go();
+          }
+        }}
+      />
+      <button type="button" className={styles.coordinatesGo} onClick={go}>
+        Ir
+      </button>
+      {invalid && <p className={styles.coordinatesError}>{COORDINATES_INVALID_TEXT}</p>}
+    </div>
+  );
+}
+
+/** The first of the controls (RFC-043): an address, found online, centres the
+ * map there without a search. The line below says what was found, or why the
+ * map did not move. */
+export function AddressControl({ onGo }: { onGo: (point: Point) => void }) {
+  const lookup = useAddressLookup(onGo);
+  const line = lookup.line;
+
+  return (
+    <div className={styles.address}>
+      <input
+        type="search"
+        className={styles.addressInput}
+        placeholder={ADDRESS_PLACEHOLDER}
+        aria-label={ADDRESS_LABEL}
+        title={ADDRESS_NOTE}
+        value={lookup.text}
+        onChange={(event) => lookup.change(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            lookup.submit();
+          }
+        }}
+      />
+      <button
+        type="button"
+        className={styles.coordinatesGo}
+        onClick={lookup.submit}
+        disabled={lookup.pending}
+      >
+        {lookup.pending ? "Buscando…" : "Buscar"}
+      </button>
+      {line?.kind === "found" && (
+        <p className={styles.addressFound} title={line.text} role="status">
+          <span className={styles.addressLabel}>{line.text}</span>
+          <span className={styles.addressCredit}>{ATTRIBUTION}</span>
+        </p>
+      )}
+      {line?.kind === "problem" && (
+        <p className={styles.addressProblem} role="status">
+          {line.text}
+        </p>
+      )}
     </div>
   );
 }

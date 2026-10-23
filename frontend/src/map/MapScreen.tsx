@@ -38,7 +38,12 @@ import { ApiError } from "../api/client";
 import { type MapCells, useDevices, useMapCells } from "../api/queries";
 import { useSearchActions } from "../search/actions";
 import { useCapabilities, useImage } from "../search/api";
-import { type Filters, hasFilters, type SearchQuery } from "../search/params";
+import {
+  type Filters,
+  hasFilters,
+  type Point,
+  type SearchQuery,
+} from "../search/params";
 import { fileName } from "../search/paths";
 import { FilterPills } from "../search/SearchControls";
 import {
@@ -59,7 +64,14 @@ import {
   frameCell,
   type LeafletMap,
 } from "./leaflet";
-import { Balloon, CellList, Legend, Notices } from "./MapParts";
+import {
+  AddressControl,
+  Balloon,
+  CellList,
+  CoordinatesControl,
+  Legend,
+  Notices,
+} from "./MapParts";
 import styles from "./MapScreen.module.css";
 import {
   countTile,
@@ -99,6 +111,9 @@ interface BalloonState {
 }
 
 const LATE_MS = 300;
+/** The zoom "Ir para as coordenadas" lands on, unless the map is already
+ * closer: ~100 m cells (precision 3), close enough to a property. */
+const COORDINATES_ZOOM = 14;
 
 export default function MapScreen() {
   const [params] = useSearchParams();
@@ -392,6 +407,18 @@ export default function MapScreen() {
     setOsmOn(on);
     setPaused(false);
   };
+  const goToCoordinates = (point: Point) => {
+    const made = leafletRef.current;
+    if (made === null) {
+      return;
+    }
+    setBalloon(null);
+    const zoom = Math.min(
+      Math.max(made.map.getZoom(), COORDINATES_ZOOM),
+      made.map.getMaxZoom(),
+    );
+    made.map.setView([point.lat, point.lon], zoom);
+  };
 
   const indexedTotal =
     devices.data === undefined
@@ -465,6 +492,10 @@ export default function MapScreen() {
         <div className={styles.area}>
           <div ref={container} className={styles.map} />
           <div className={styles.controls}>
+            {capabilities.data?.address_search === true && (
+              <AddressControl onGo={goToCoordinates} />
+            )}
+            <CoordinatesControl onGo={goToCoordinates} />
             <label className={styles.control}>
               <input
                 type="checkbox"

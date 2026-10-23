@@ -25,6 +25,11 @@
       "CapabilitiesSchema": {
         "description": "What the client is allowed to assume about this server.",
         "properties": {
+          "address_search": {
+            "description": "Whether GET /api/v1/geocode answers: draw the address field only when it does. The address is sent to an online service (RFC-043).",
+            "title": "Address Search",
+            "type": "boolean"
+          },
           "local_file_actions": {
             "description": "Whether POST /api/v1/images/{id}/reveal exists on this installation. **Ask before drawing the button.** With the setting off that route answers 404 with the body of a route that does not exist, so discovering it by trying means a button that disappears after it is clicked (RFC-030 section 6).",
             "title": "Local File Actions",
@@ -56,7 +61,8 @@
           "platform",
           "version",
           "max_search_limit",
-          "min_radius_m"
+          "min_radius_m",
+          "address_search"
         ],
         "title": "CapabilitiesSchema",
         "type": "object"
@@ -391,6 +397,26 @@
         ],
         "title": "FolderState",
         "type": "string"
+      },
+      "GeocodeResponseSchema": {
+        "properties": {
+          "place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The best match, or null when the address matched nothing"
+          }
+        },
+        "required": [
+          "place"
+        ],
+        "title": "GeocodeResponseSchema",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -760,6 +786,32 @@
           "excluded_unknown_date"
         ],
         "title": "MapResponseSchema",
+        "type": "object"
+      },
+      "PlaceSchema": {
+        "properties": {
+          "label": {
+            "description": "What the service understood the address to be: show it, so the user can tell whether it found the right one",
+            "title": "Label",
+            "type": "string"
+          },
+          "latitude": {
+            "description": "Decimal degrees, WGS 84",
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Decimal degrees, WGS 84",
+            "title": "Longitude",
+            "type": "number"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "label"
+        ],
+        "title": "PlaceSchema",
         "type": "object"
       },
       "PositionSource": {
@@ -1229,7 +1281,7 @@
   "paths": {
     "/api/v1/capabilities": {
       "get": {
-        "description": "Report the five things a client draws differently because of.\n\n`local_file_actions` mirrors `settings.allow_local_file_actions`\nexactly, including when it is `False` -- a `200` saying \"no\" is the\nwhole reason this route exists, and is why the configuration guard is\nnot on it.\n\n`platform` is `sys.platform`, read here rather than inferred from\nanything: only the Windows volume adapter and the Windows file\nrevealer ship, and a client is entitled to know which operating\nsystem answered (RFC-027 section 4.1).\n\n`version` is `settings.project_version` -- the package version, which\nis `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the\nsprint number, and the sprint number is not the version of anything\nthat ships. The setting is reported as it stands rather than the\nproject being renumbered to match an illustration.\n\n`max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),\nand each passes the bar: the size *\"Mostrar mais\"* asks for, and the\nsmallest radius of the list. Both are policy the API already enforces\n-- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the\nuser's file -- and a copy of either in the interface is the copy RFC-026\nsection 8.2 refused to put in the route's signature: it would drift.\n\nThe bar for a sixth field is *the UI draws something different\nbecause of it*. Without a criterion this becomes a configuration\ndump, which is the risk RFC-031 section 15 names.",
+        "description": "Report the six things a client draws differently because of.\n\n`local_file_actions` mirrors `settings.allow_local_file_actions`\nexactly, including when it is `False` -- a `200` saying \"no\" is the\nwhole reason this route exists, and is why the configuration guard is\nnot on it.\n\n`platform` is `sys.platform`, read here rather than inferred from\nanything: only the Windows volume adapter and the Windows file\nrevealer ship, and a client is entitled to know which operating\nsystem answered (RFC-027 section 4.1).\n\n`version` is `settings.project_version` -- the package version, which\nis `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the\nsprint number, and the sprint number is not the version of anything\nthat ships. The setting is reported as it stands rather than the\nproject being renumbered to match an illustration.\n\n`max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),\nand each passes the bar: the size *\"Mostrar mais\"* asks for, and the\nsmallest radius of the list. Both are policy the API already enforces\n-- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the\nuser's file -- and a copy of either in the interface is the copy RFC-026\nsection 8.2 refused to put in the route's signature: it would drift.\n\n`address_search` came with RFC-043: the address field is drawn only\nwhen `/geocode` answers.\n\nThe bar for a seventh field is *the UI draws something different\nbecause of it*. Without a criterion this becomes a configuration\ndump, which is the risk RFC-031 section 15 names.",
         "operationId": "get_capabilities_api_v1_capabilities_get",
         "responses": {
           "200": {
@@ -1442,6 +1494,59 @@
         "summary": "List one level of a device's folders, with each folder's state",
         "tags": [
           "devices"
+        ]
+      }
+    },
+    "/api/v1/geocode": {
+      "get": {
+        "operationId": "geocode_api_v1_geocode_get",
+        "parameters": [
+          {
+            "description": "The address, as the user typed it",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "The address, as the user typed it",
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodeResponseSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "The address is empty"
+          },
+          "403": {
+            "description": "Address search is off, or the caller is not local"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "The service did not answer; the coordinates still do"
+          }
+        },
+        "summary": "Find a typed address: the address is sent to an online service",
+        "tags": [
+          "geocoding"
         ]
       }
     },

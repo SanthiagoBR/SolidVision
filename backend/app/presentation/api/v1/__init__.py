@@ -27,6 +27,7 @@ from fastapi import APIRouter
 from .routers import (
     capabilities_router,
     devices_router,
+    geocoding_router,
     images_router,
     jobs_router,
 )
@@ -36,5 +37,6 @@ api_v1_router.include_router(images_router)
 api_v1_router.include_router(jobs_router)
 api_v1_router.include_router(devices_router)
 api_v1_router.include_router(capabilities_router)
+api_v1_router.include_router(geocoding_router)
 
 __all__ = ["api_v1_router"]

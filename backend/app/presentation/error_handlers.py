@@ -50,6 +50,9 @@ from app.domain.exceptions import (
     NotFoundError,
 )
 from app.infrastructure.ai.model_runtime import ModelUnavailableError
+from app.infrastructure.geocoding.nominatim_geocoder import (
+    AddressSearchUnavailableError,
+)
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -137,7 +140,23 @@ def model_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+def address_search_unavailable_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """503, as for a model: the same address may be found a minute later (RFC-043).
+
+    The adapter already logged the reason, and its message never holds the address.
+    """
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": str(exc)},
+    )
+
+
 def register_error_handlers(app: FastAPI) -> None:
-    """Attach the domain-error mapping, and the models' 503, to `app`."""
+    """Attach the domain-error mapping, and the two 503s, to `app`."""
     app.add_exception_handler(DomainError, domain_error_handler)
     app.add_exception_handler(ModelUnavailableError, model_unavailable_handler)
+    app.add_exception_handler(
+        AddressSearchUnavailableError, address_search_unavailable_handler
+    )

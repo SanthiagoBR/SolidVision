@@ -559,6 +559,20 @@ class Settings(BaseSettings):
         "manager on this machine (loopback callers only)",
     )
 
+    # RFC-043 option B. On by default: the address leaves the machine only when
+    # the user presses Enter beside a line saying where it goes.
+    allow_address_search: bool = Field(
+        default=True,
+        description="Let the interface find a typed address by sending it to "
+        "ADDRESS_SEARCH_URL, an online service",
+    )
+    # A setting because Nominatim's usage policy requires switching the service
+    # without a software update.
+    address_search_url: str = Field(
+        default="https://nominatim.openstreetmap.org/search",
+        description="The Nominatim-compatible /search endpoint the address search asks",
+    )
+
     api_port: int | None = Field(
         default=None,
         ge=1,

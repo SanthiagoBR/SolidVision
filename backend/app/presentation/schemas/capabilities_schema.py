@@ -1,7 +1,7 @@
 """What this installation can do, as a UI needs to know it (RFC-031 section 9).
 
-Five fields since RFC-038, and the bar for a sixth is stated rather than left
-to taste: *the UI draws something different because of it*. A capabilities
+Six fields since RFC-043, and the bar for each is stated rather than left to
+taste: *the UI draws something different because of it*. A capabilities
 route that drifts into being a configuration dump is the failure RFC-031
 section 15 names, and the guard against it is the criterion, not the
 count.
@@ -45,5 +45,11 @@ class CapabilitiesSchema(BaseModel):
             "The smallest radius, in metres, a 'near here' search accepts: the "
             "first of the radii to offer. Photo positions are where the drone "
             "was, not the ground it photographed (RFC-032 section 6)."
+        )
+    )
+    address_search: bool = Field(
+        description=(
+            "Whether GET /api/v1/geocode answers: draw the address field only "
+            "when it does. The address is sent to an online service (RFC-043)."
         )
     )

@@ -51,7 +51,7 @@ router = APIRouter(tags=["capabilities"])
     },
 )
 def get_capabilities() -> CapabilitiesSchema:
-    """Report the five things a client draws differently because of.
+    """Report the six things a client draws differently because of.
 
     `local_file_actions` mirrors `settings.allow_local_file_actions`
     exactly, including when it is `False` -- a `200` saying "no" is the
@@ -76,7 +76,10 @@ def get_capabilities() -> CapabilitiesSchema:
     user's file -- and a copy of either in the interface is the copy RFC-026
     section 8.2 refused to put in the route's signature: it would drift.
 
-    The bar for a sixth field is *the UI draws something different
+    `address_search` came with RFC-043: the address field is drawn only
+    when `/geocode` answers.
+
+    The bar for a seventh field is *the UI draws something different
     because of it*. Without a criterion this becomes a configuration
     dump, which is the risk RFC-031 section 15 names.
     """
@@ -86,4 +89,5 @@ def get_capabilities() -> CapabilitiesSchema:
         version=settings.project_version,
         max_search_limit=MAX_SEARCH_LIMIT,
         min_radius_m=settings.min_radius_m,
+        address_search=settings.allow_address_search,
     )
