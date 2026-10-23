@@ -22,6 +22,61 @@
         "title": "ActiveJobSchema",
         "type": "object"
       },
+      "BrowseResponseSchema": {
+        "description": "One page of every photo under the filters, by capture date.\n\n`limit` echoes the page size applied, as the searches do (RFC-026).\n`summary` is the first page's and `null` on the pages after it, so that\ninside it `null` keeps meaning \"there was no such filter\" and never\n\"this page did not count\".",
+        "properties": {
+          "limit": {
+            "description": "The page size actually applied",
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The id to send as after for the next page; null when the list is over. Exact: never null while photos remain.",
+            "title": "Next After"
+          },
+          "order": {
+            "$ref": "#/components/schemas/ListingOrder",
+            "description": "The direction of the capture date"
+          },
+          "results": {
+            "description": "The photos of this page: by capture date in the direction of order, the undated last in both; then by relative_path and id, ascending",
+            "items": {
+              "$ref": "#/components/schemas/ImageSchema"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ListingSummarySchema"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The whole list at a glance, on the first page; null after it"
+          }
+        },
+        "required": [
+          "order",
+          "limit",
+          "results",
+          "next_after",
+          "summary"
+        ],
+        "title": "BrowseResponseSchema",
+        "type": "object"
+      },
       "CapabilitiesSchema": {
         "description": "What the client is allowed to assume about this server.",
         "properties": {
@@ -717,6 +772,90 @@
         ],
         "title": "JobStatus",
         "type": "string"
+      },
+      "ListingOrder": {
+        "description": "Which way the capture date runs. The tie-breaks never change direction.\n\n`NEWEST` answers \"how is it now\" first, the convention of every gallery;\n`OLDEST` is the same list with the date reversed -- \"from the hole in the\nground to the finished building\" (RFC-044 section 3.1).\n\nIn both, a photo with no capture date comes **after every dated one**, in\nfolder order (section 3.2). It has no place on a timeline, and putting it\nfirst in one direction would put the undated at the top of the list.",
+        "enum": [
+          "newest",
+          "oldest"
+        ],
+        "title": "ListingOrder",
+        "type": "string"
+      },
+      "ListingSummarySchema": {
+        "description": "The whole list under the filters, not this page (RFC-044 section 5.3).",
+        "properties": {
+          "excluded_unknown_date": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed photos the capture-date range left out because their date is unknown, as the search reports it. Null when no date range was sent: without one, those photos are in the list.",
+            "title": "Excluded Unknown Date"
+          },
+          "excluded_unknown_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many indexed photos the circle left out because they have no position, as the search reports it. Null when no circle was sent.",
+            "title": "Excluded Unknown Position"
+          },
+          "newest_captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest capture date of the list; null as oldest_captured_at",
+            "title": "Newest Captured At"
+          },
+          "oldest_captured_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The earliest capture date of the list, camera-local with no time zone, as captured_at. Null when no photo of the list has a date.",
+            "title": "Oldest Captured At"
+          },
+          "total": {
+            "description": "How many photos the whole list has, the undated included",
+            "title": "Total",
+            "type": "integer"
+          },
+          "undated": {
+            "description": "How many of them have no capture date: they come last, in folder order, in both directions. 0 under a date range, which an unknown date never matches.",
+            "title": "Undated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "undated",
+          "oldest_captured_at",
+          "newest_captured_at",
+          "excluded_unknown_date",
+          "excluded_unknown_position"
+        ],
+        "title": "ListingSummarySchema",
+        "type": "object"
       },
       "MapCellSchema": {
         "description": "One square of the grid: where its centre is, and how many photos are in it.",
@@ -1547,6 +1686,205 @@
         "summary": "Find a typed address: the address is sent to an online service",
         "tags": [
           "geocoding"
+        ]
+      }
+    },
+    "/api/v1/images/browse": {
+      "get": {
+        "description": "*\"Ver todas as fotos daqui, por data\"*: the photos of a place, in time (RFC-044).\n\n**No query and no model.** The use case's provider does not depend on\n`get_embedding_model()`, which would import `torch` for a route that never\nencodes anything; so this answers with search `unavailable`, which is the\nonly way to see a place's photos without the model. No 503.\n\n**Declared before `/{image_id}`**, beside `/search` and `/map`, by the rule\nof this file: after it, `/images/browse` would be `image_id=\"browse\"` and a\n422. `test_browse_api.py` asks for it and requires a 200.\n\nThe filters are the search's, by the same dependency and the same rules and\n400s. Any set is accepted, the empty one included: the whole collection by\ndate is a valid question. `after` is an id and never a path (RFC-030\nsection 5.1): the cursor's key is read from the database. An `after` that\nnames no row is a 404 -- the photo left the index since the page before.\n\nOne INFO line per request, with the direction, the sizes, whether there\nwas a cursor, how many devices and whether there was a range or a circle --\n**never the coordinates, the dates of the range or the cursor's id**: where\nsomeone looks is the query of this route (RFC-026 section 16.1, RFC-040\nsection 2.7).",
+        "operationId": "browse_images_api_v1_images_browse_get",
+        "parameters": [
+          {
+            "description": "newest (the default) or oldest first, by capture date. Photos with no capture date come last in both.",
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ListingOrder",
+              "default": "newest",
+              "description": "newest (the default) or oldest first, by capture date. Photos with no capture date come last in both."
+            }
+          },
+          {
+            "description": "The next_after of the page before; omitted for the first page. The list continues after that photo.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The next_after of the page before; omitted for the first page. The list continues after that photo.",
+              "title": "After"
+            }
+          },
+          {
+            "description": "Maximum results to return; omitted means the configured default",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum results to return; omitted means the configured default",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+            "in": "query",
+            "name": "device_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device",
+              "title": "Device Id"
+            }
+          },
+          {
+            "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+            "in": "query",
+            "name": "captured_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included.",
+              "title": "Captured From"
+            }
+          },
+          {
+            "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+            "in": "query",
+            "name": "captured_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset.",
+              "title": "Captured To"
+            }
+          },
+          {
+            "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+            "in": "query",
+            "name": "near_lat",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all.",
+              "title": "Near Lat"
+            }
+          },
+          {
+            "description": "Longitude of the centre of the circle, decimal degrees.",
+            "in": "query",
+            "name": "near_lon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Longitude of the centre of the circle, decimal degrees.",
+              "title": "Near Lon"
+            }
+          },
+          {
+            "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+            "in": "query",
+            "name": "radius_m",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle.",
+              "title": "Radius M"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowseResponseSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "after names no indexed image: the last photo of the page before left the index"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Every photo under the filters, by capture date, a page at a time",
+        "tags": [
+          "images"
         ]
       }
     },

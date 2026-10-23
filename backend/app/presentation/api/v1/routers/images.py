@@ -31,6 +31,10 @@ a photo the index holds, with its stored vector and no model; and
 `POST /search/by-image`, with the picture's bytes as the body -- still no
 path anywhere. The `limit` and the six filters are one dependency,
 `search_parameters()`, which the three searches share.
+
+RFC-044 added `GET /browse`: the photos the filters allow, by capture date, a
+page at a time, with no query and no model -- the fourth reader of
+`search_parameters()`, declared with the other literal paths.
 """
 
 from __future__ import annotations
@@ -45,6 +49,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response, status
 from fastapi.responses import FileResponse
 
 from app.application.use_cases.aggregate_positions import AggregatePositionsUseCase
+from app.application.use_cases.browse_images import BrowseImagesUseCase
 from app.application.use_cases.get_image_details import GetImageDetailsUseCase
 from app.application.use_cases.get_thumbnail import (
     GetThumbnailUseCase,
@@ -64,12 +69,14 @@ from app.domain.value_objects.date_range import DateRange
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.listing import ListingOrder
 from app.domain.value_objects.position import BoundingBox, Position
 from app.domain.value_objects.search_filters import SearchFilters
 from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
 from app.presentation.dependencies import (
     get_aggregate_positions_use_case,
+    get_browse_images_use_case,
     get_find_similar_images_use_case,
     get_image_details_use_case,
     get_resolve_image_location_use_case,
@@ -82,6 +89,7 @@ from app.presentation.local_file_actions import (
     require_loopback_client,
 )
 from app.presentation.query_image_upload import REQUEST_BODY, query_image_file
+from app.presentation.schemas.browse_schema import BrowseResponseSchema
 from app.presentation.schemas.image_schema import ImageSchema
 from app.presentation.schemas.map_schema import MapResponseSchema
 from app.presentation.schemas.search_schema import (
@@ -470,6 +478,86 @@ def map_images(
         (time.perf_counter() - started_at) * 1000,
     )
     return MapResponseSchema.from_map(answer)
+
+
+@router.get(
+    "/browse",
+    status_code=status.HTTP_200_OK,
+    response_model=BrowseResponseSchema,
+    summary="Every photo under the filters, by capture date, a page at a time",
+    responses={
+        404: {
+            "description": (
+                "after names no indexed image: the last photo of the page before "
+                "left the index"
+            )
+        }
+    },
+)
+def browse_images(
+    order: ListingOrder = Query(
+        default=ListingOrder.NEWEST,
+        description=(
+            "newest (the default) or oldest first, by capture date. Photos with "
+            "no capture date come last in both."
+        ),
+    ),
+    after: UUID | None = Query(
+        default=None,
+        description=(
+            "The next_after of the page before; omitted for the first page. "
+            "The list continues after that photo."
+        ),
+    ),
+    search: SearchRequest = Depends(search_parameters),
+    use_case: BrowseImagesUseCase = Depends(get_browse_images_use_case),
+    locations: ResolveImageLocationUseCase = Depends(
+        get_resolve_image_location_use_case
+    ),
+) -> BrowseResponseSchema:
+    """*"Ver todas as fotos daqui, por data"*: the photos of a place, in time (RFC-044).
+
+    **No query and no model.** The use case's provider does not depend on
+    `get_embedding_model()`, which would import `torch` for a route that never
+    encodes anything; so this answers with search `unavailable`, which is the
+    only way to see a place's photos without the model. No 503.
+
+    **Declared before `/{image_id}`**, beside `/search` and `/map`, by the rule
+    of this file: after it, `/images/browse` would be `image_id="browse"` and a
+    422. `test_browse_api.py` asks for it and requires a 200.
+
+    The filters are the search's, by the same dependency and the same rules and
+    400s. Any set is accepted, the empty one included: the whole collection by
+    date is a valid question. `after` is an id and never a path (RFC-030
+    section 5.1): the cursor's key is read from the database. An `after` that
+    names no row is a 404 -- the photo left the index since the page before.
+
+    One INFO line per request, with the direction, the sizes, whether there
+    was a cursor, how many devices and whether there was a range or a circle --
+    **never the coordinates, the dates of the range or the cursor's id**: where
+    someone looks is the query of this route (RFC-026 section 16.1, RFC-040
+    section 2.7).
+    """
+    filters = search.filters
+    started_at = time.perf_counter()
+    cursor = ImageId(after) if after is not None else None
+    listing = use_case.execute(filters, order, search.limit, cursor)
+    listed_at = time.perf_counter()
+    located = locations.execute(listing.images)
+    logger.info(
+        "browse completed: order=%s, limit=%d, results=%d, cursor=%s, devices=%d, "
+        "date_range=%s, circle=%s, elapsed_ms=%.0f, locate_ms=%.1f",
+        order.value,
+        listing.limit,
+        len(listing.images),
+        after is not None,
+        len(filters.device_ids),
+        filters.captured_between is not None,
+        filters.taken_within is not None,
+        (listed_at - started_at) * 1000,
+        (time.perf_counter() - listed_at) * 1000,
+    )
+    return BrowseResponseSchema.from_listing(listing, located)
 
 
 @router.get(

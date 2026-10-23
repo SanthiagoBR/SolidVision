@@ -138,6 +138,9 @@ export default function MapScreen() {
    * back, forward, "Mapa" again -- are the others. */
   const lastView = useRef("");
   const firstSync = useRef(true);
+  /** A button of the balloon or of the list is taking the screen elsewhere:
+   * the map no longer writes its framing to the URL. */
+  const leaving = useRef(false);
 
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [area, setArea] = useState<Area | null>(null);
@@ -175,6 +178,9 @@ export default function MapScreen() {
     const { map } = made;
 
     const viewChanged = (gesture: boolean) => {
+      if (leaving.current) {
+        return;
+      }
       const visible = boxOf(map.getBounds());
       const zoom = map.getZoom();
       setViewport({ visible, zoom });
@@ -378,9 +384,27 @@ export default function MapScreen() {
     startMapGesture();
     navigate(mapHref({ ...url, filters: next }));
   };
+  // The balloon's auto-pan may be running when one of its buttons is clicked,
+  // and its end would replace the URL with the map's framing after the
+  // navigation began -- undoing it (RFC-044 section 16). So the map stops, and
+  // stops writing, before the screen changes.
+  const leave = () => {
+    leaving.current = true;
+    leafletRef.current?.map.stop();
+  };
   const searchNear = (cell: Cell, precision: number) => {
     if (minRadius !== null) {
+      leave();
       search.nearPoint(
+        { lat: cell.latitude, lon: cell.longitude },
+        cellRadius(cell, precision, minRadius),
+      );
+    }
+  };
+  const browseNear = (cell: Cell, precision: number) => {
+    if (minRadius !== null) {
+      leave();
+      search.browseNear(
         { lat: cell.latitude, lon: cell.longitude },
         cellRadius(cell, precision, minRadius),
       );
@@ -561,6 +585,7 @@ export default function MapScreen() {
             }
             area={body}
             onSearch={() => searchNear(shown.cell, shown.precision)}
+            onBrowse={() => browseNear(shown.cell, shown.precision)}
             onZoom={() => zoomInto(shown.cell, shown.precision)}
             onClose={closeBalloon}
             onLayout={layoutBalloon}

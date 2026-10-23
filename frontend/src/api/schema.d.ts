@@ -229,6 +229,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every photo under the filters, by capture date, a page at a time
+         * @description *"Ver todas as fotos daqui, por data"*: the photos of a place, in time (RFC-044).
+         *
+         *     **No query and no model.** The use case's provider does not depend on
+         *     `get_embedding_model()`, which would import `torch` for a route that never
+         *     encodes anything; so this answers with search `unavailable`, which is the
+         *     only way to see a place's photos without the model. No 503.
+         *
+         *     **Declared before `/{image_id}`**, beside `/search` and `/map`, by the rule
+         *     of this file: after it, `/images/browse` would be `image_id="browse"` and a
+         *     422. `test_browse_api.py` asks for it and requires a 200.
+         *
+         *     The filters are the search's, by the same dependency and the same rules and
+         *     400s. Any set is accepted, the empty one included: the whole collection by
+         *     date is a valid question. `after` is an id and never a path (RFC-030
+         *     section 5.1): the cursor's key is read from the database. An `after` that
+         *     names no row is a 404 -- the photo left the index since the page before.
+         *
+         *     One INFO line per request, with the direction, the sizes, whether there
+         *     was a cursor, how many devices and whether there was a range or a circle --
+         *     **never the coordinates, the dates of the range or the cursor's id**: where
+         *     someone looks is the query of this route (RFC-026 section 16.1, RFC-040
+         *     section 2.7).
+         */
+        get: operations["browse_images_api_v1_images_browse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/map": {
         parameters: {
             query?: never;
@@ -785,6 +826,36 @@ export interface components {
             status: components["schemas"]["JobStatus"];
         };
         /**
+         * BrowseResponseSchema
+         * @description One page of every photo under the filters, by capture date.
+         *
+         *     `limit` echoes the page size applied, as the searches do (RFC-026).
+         *     `summary` is the first page's and `null` on the pages after it, so that
+         *     inside it `null` keeps meaning "there was no such filter" and never
+         *     "this page did not count".
+         */
+        BrowseResponseSchema: {
+            /**
+             * Limit
+             * @description The page size actually applied
+             */
+            limit: number;
+            /**
+             * Next After
+             * @description The id to send as after for the next page; null when the list is over. Exact: never null while photos remain.
+             */
+            next_after: string | null;
+            /** @description The direction of the capture date */
+            order: components["schemas"]["ListingOrder"];
+            /**
+             * Results
+             * @description The photos of this page: by capture date in the direction of order, the undated last in both; then by relative_path and id, ascending
+             */
+            results: components["schemas"]["ImageSchema"][];
+            /** @description The whole list at a glance, on the first page; null after it */
+            summary: components["schemas"]["ListingSummarySchema"] | null;
+        };
+        /**
          * CapabilitiesSchema
          * @description What the client is allowed to assume about this server.
          */
@@ -1219,6 +1290,56 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "pending" | "running" | "completed" | "failed" | "cancelled";
+        /**
+         * ListingOrder
+         * @description Which way the capture date runs. The tie-breaks never change direction.
+         *
+         *     `NEWEST` answers "how is it now" first, the convention of every gallery;
+         *     `OLDEST` is the same list with the date reversed -- "from the hole in the
+         *     ground to the finished building" (RFC-044 section 3.1).
+         *
+         *     In both, a photo with no capture date comes **after every dated one**, in
+         *     folder order (section 3.2). It has no place on a timeline, and putting it
+         *     first in one direction would put the undated at the top of the list.
+         * @enum {string}
+         */
+        ListingOrder: "newest" | "oldest";
+        /**
+         * ListingSummarySchema
+         * @description The whole list under the filters, not this page (RFC-044 section 5.3).
+         */
+        ListingSummarySchema: {
+            /**
+             * Excluded Unknown Date
+             * @description How many indexed photos the capture-date range left out because their date is unknown, as the search reports it. Null when no date range was sent: without one, those photos are in the list.
+             */
+            excluded_unknown_date: number | null;
+            /**
+             * Excluded Unknown Position
+             * @description How many indexed photos the circle left out because they have no position, as the search reports it. Null when no circle was sent.
+             */
+            excluded_unknown_position: number | null;
+            /**
+             * Newest Captured At
+             * @description The latest capture date of the list; null as oldest_captured_at
+             */
+            newest_captured_at: string | null;
+            /**
+             * Oldest Captured At
+             * @description The earliest capture date of the list, camera-local with no time zone, as captured_at. Null when no photo of the list has a date.
+             */
+            oldest_captured_at: string | null;
+            /**
+             * Total
+             * @description How many photos the whole list has, the undated included
+             */
+            total: number;
+            /**
+             * Undated
+             * @description How many of them have no capture date: they come last, in folder order, in both directions. 0 under a date range, which an unknown date never matches.
+             */
+            undated: number;
+        };
         /**
          * MapCellSchema
          * @description One square of the grid: where its centre is, and how many photos are in it.
@@ -1900,6 +2021,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    browse_images_api_v1_images_browse_get: {
+        parameters: {
+            query?: {
+                /** @description newest (the default) or oldest first, by capture date. Photos with no capture date come last in both. */
+                order?: components["schemas"]["ListingOrder"];
+                /** @description The next_after of the page before; omitted for the first page. The list continues after that photo. */
+                after?: string | null;
+                /** @description Maximum results to return; omitted means the configured default */
+                limit?: number | null;
+                /** @description Restrict results to these devices; repeat the parameter for several, omit it to search every indexed device */
+                device_id?: string[] | null;
+                /** @description Only photos taken at or after this camera-local time, e.g. 2018-01-01 or 2018-01-01T00:00:00. Must not carry a time zone or offset. Photos with an unknown date are never included. */
+                captured_from?: string | null;
+                /** @description Only photos taken strictly before this camera-local time; 2019-01-01 ends the year 2018. Must not carry a time zone or offset. */
+                captured_to?: string | null;
+                /** @description Latitude of the centre of a 'near here' circle, decimal degrees. Sent with near_lon and radius_m, or not at all. */
+                near_lat?: number | null;
+                /** @description Longitude of the centre of the circle, decimal degrees. */
+                near_lon?: number | null;
+                /** @description Radius of the circle in metres. The photo positions are where the drone was, not the ground it photographed, so radii below the configured minimum are refused. Photos with no position never match, however large the circle. */
+                radius_m?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowseResponseSchema"];
+                };
+            };
+            /** @description after names no indexed image: the last photo of the page before left the index */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

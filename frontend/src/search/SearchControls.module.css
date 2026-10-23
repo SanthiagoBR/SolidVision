@@ -176,6 +176,18 @@
   white-space: nowrap;
 }
 
+/* Beside the summary (RFC-044 section 6): an action, or the two directions. */
+.extra,
+.extraAlone {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.extraAlone {
+  margin-left: auto;
+}
+
 .popover {
   position: absolute;
   z-index: 10;

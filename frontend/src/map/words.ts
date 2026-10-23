@@ -8,6 +8,7 @@
  * never says "nesta área".
  */
 
+import { BROWSE_ACTION_TEXT } from "../search/browse";
 import type { SearchQuery } from "../search/params";
 import { formatRadius } from "../search/radius";
 import { cellSizeText } from "./precision";
@@ -55,6 +56,10 @@ function subject(query: SearchQuery, photoName: string | null): string {
       return `parecidas com ${photoName ?? "uma foto"}`;
     case "image":
       return "parecidas com a foto solta";
+    case "browse":
+      // The map never carries the listing (`url.ts`): its balloon has the
+      // listing's own button.
+      return "todas as fotos";
   }
 }
 
@@ -68,6 +73,10 @@ export function searchButtonText(
     ? "Buscar perto daqui"
     : `Buscar ${subject(query, photoName)} perto daqui`;
 }
+
+/** Below "Buscar perto daqui": the listing by date of the same circle, without
+ * the search the map carries (RFC-044 section 6.2). */
+export const BROWSE_BUTTON_TEXT = BROWSE_ACTION_TEXT;
 
 /** Below the button: `num raio de 10 km do centro da célula`. */
 export function radiusLine(radiusM: number): string {

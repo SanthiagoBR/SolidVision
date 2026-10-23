@@ -6,7 +6,10 @@
  * here. Since RFC-039 (section 5.11) the notice has "Escolher pastas", which
  * opens the folders of the first device never indexed. Since RFC-040 (section
  * 5.4) a cell of the map with no search opens this screen with its circle: the
- * bar has the focus, and its text says it is for that point.
+ * bar has the focus, and its text says it is for that point. Since RFC-044
+ * (section 6.2), with a circle -- from the map, the coordinates or an address --
+ * *"Ver todas as fotos daqui, por data"* below the bar lists the place with no
+ * text to type.
  */
 
 import { useEffect, useMemo, useRef } from "react";
@@ -16,6 +19,7 @@ import { useCompletedJobs, useDevices } from "../api/queries";
 import { devicePath } from "../devices/folders";
 import { startFoldersGesture } from "../devices/timing";
 import { useSearchActions } from "../search/actions";
+import { BROWSE_ACTION_TEXT } from "../search/browse";
 import { readFilters, type SearchUrl } from "../search/params";
 import { SearchControls } from "../search/SearchControls";
 import { bridge } from "../shell/bridge";
@@ -72,6 +76,18 @@ export function Home() {
         onFilters={actions.filters}
         fromMapPoint={fromMapPoint}
       />
+
+      {url.filters.near !== null && (
+        <div className={styles.browse}>
+          <button
+            type="button"
+            className={styles.browseAction}
+            onClick={() => actions.browse()}
+          >
+            {BROWSE_ACTION_TEXT}
+          </button>
+        </div>
+      )}
 
       <section className={styles.hero}>
         <div className={styles.emptyState}>

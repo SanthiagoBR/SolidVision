@@ -123,7 +123,10 @@ export function describeSearch(report: unknown): string {
   }
   const fields = report as Record<string, unknown>;
   const kind =
-    fields.kind === "text" || fields.kind === "similar" || fields.kind === "image"
+    fields.kind === "text" ||
+    fields.kind === "similar" ||
+    fields.kind === "image" ||
+    fields.kind === "browse"
       ? fields.kind
       : "?";
   const number = (value: unknown) =>

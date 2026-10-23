@@ -13,11 +13,14 @@ from sqlalchemy import (
     Numeric,
     Select,
     Table,
+    and_,
     bindparam,
     case,
     func,
     literal,
+    or_,
     select,
+    tuple_,
     update,
 )
 from sqlalchemy import cast as sql_cast
@@ -41,6 +44,11 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.listing import (
+    ListedImages,
+    ListingOrder,
+    ListingSummary,
+)
 from app.domain.value_objects.position import (
     BoundingBox,
     PositionCell,
@@ -334,21 +342,7 @@ class PostgresImageRepository(ImageRepository):
         statement = self.search_statement(embedding, limit, filters)
 
         return [
-            SearchHit(
-                image=Image(
-                    id=ImageId(row.id),
-                    device_id=DeviceId(row.device_id),
-                    relative_path=ImagePath(row.relative_path),
-                    filename=row.filename,
-                    extension=row.extension,
-                    captured_at=row.captured_at,
-                    capture_source=_source_member(row.capture_source),
-                    latitude=row.latitude,
-                    longitude=row.longitude,
-                    position_source=_position_member(row.position_source),
-                ),
-                similarity=1.0 - row.distance,
-            )
+            SearchHit(image=_image_of(row), similarity=1.0 - row.distance)
             for row in self._session.execute(statement)
         ]
 
@@ -371,22 +365,96 @@ class PostgresImageRepository(ImageRepository):
             "distance"
         )
         statement = (
-            select(
-                ImageModel.id,
-                ImageModel.device_id,
-                ImageModel.relative_path,
-                ImageModel.filename,
-                ImageModel.extension,
-                ImageModel.captured_at,
-                ImageModel.capture_source,
-                ImageModel.latitude,
-                ImageModel.longitude,
-                ImageModel.position_source,
-                distance,
-            )
+            select(*_ENTITY_COLUMNS, distance)
             .where(ImageModel.embedding.is_not(None))
             .order_by(distance, ImageModel.id)
             .limit(limit)
+        )
+        return cls._apply_filters(statement, filters)
+
+    def list_by_filters(
+        self,
+        filters: SearchFilters,
+        order: ListingOrder,
+        limit: int,
+        after: Image | None,
+    ) -> ListedImages:
+        """One page of the capture-date listing, in one `SELECT` (RFC-044 5.2).
+
+        The `WHERE` is `search_similar()`'s -- `embedding IS NOT NULL` and
+        `_apply_filters()` -- and the columns are the entity's, the same
+        list: the `embedding` stays out, so the vectors in the TOAST are
+        never read (RFC-044 section 2.3). Behind a `LIMIT`, PostgreSQL sorts
+        with a top-N heapsort that keeps only `limit` rows in memory; that
+        is a hypothesis the measurement's `EXPLAIN` checks, not a promise.
+
+        The cursor is `after`'s own key, read by the caller from the primary
+        key -- never a path a client sent (RFC-030 section 5.1).
+        """
+        statement = self.listing_statement(filters, order, limit, after)
+        return [_image_of(row) for row in self._session.execute(statement)]
+
+    @classmethod
+    def listing_statement(
+        cls,
+        filters: SearchFilters,
+        order: ListingOrder,
+        limit: int,
+        after: Image | None = None,
+    ) -> Select[Any]:
+        """The exact `SELECT` `list_by_filters()` runs, for the measurement.
+
+        Public for the reason `search_statement()` is:
+        `experiments/rfc-044-browse/measure_browse.py` has to `EXPLAIN` the
+        query the route sends.
+
+        `ORDER BY captured_at DESC NULLS LAST` (or `ASC NULLS LAST`), then
+        the path and the id ascending. **The path is sorted `COLLATE "C"`,
+        explicitly**: byte order of UTF-8, which is code-point order, which
+        is how `str` compares in the in-memory doubles. Both clusters are
+        initialised with the `C` locale (RFC-033a section 5), and saying it
+        in the query keeps the order from depending on that.
+        """
+        date = (
+            ImageModel.captured_at.desc()
+            if order is ListingOrder.NEWEST
+            else ImageModel.captured_at.asc()
+        )
+        statement = (
+            select(*_ENTITY_COLUMNS)
+            .where(ImageModel.embedding.is_not(None))
+            .order_by(date.nulls_last(), _path_in_c(), ImageModel.id)
+            .limit(limit)
+        )
+        if after is not None:
+            statement = statement.where(_after_clause(after, order))
+        return cls._apply_filters(statement, filters)
+
+    def summarize_listing(self, filters: SearchFilters) -> ListingSummary:
+        """`count(*)`, the undated, `min` and `max`, in one aggregate (RFC-044 5.3).
+
+        The listing's `WHERE` with no `ORDER BY` and no `LIMIT`: one pass
+        over the rows the filters keep.
+        """
+        row = self._session.execute(self.summary_statement(filters)).one()
+        return ListingSummary(
+            total=int(row.total),
+            undated=int(row.undated),
+            oldest=row.oldest,
+            newest=row.newest,
+        )
+
+    @classmethod
+    def summary_statement(cls, filters: SearchFilters) -> Select[Any]:
+        """The exact `SELECT` `summarize_listing()` runs, for the same reader."""
+        statement = select(
+            func.count().label("total"),
+            func.count().filter(ImageModel.captured_at.is_(None)).label("undated"),
+            func.min(ImageModel.captured_at).label("oldest"),
+            func.max(ImageModel.captured_at).label("newest"),
+        )
+        statement = statement.select_from(ImageModel).where(
+            ImageModel.embedding.is_not(None)
         )
         return cls._apply_filters(statement, filters)
 
@@ -860,6 +928,81 @@ class PostgresImageRepository(ImageRepository):
             str(name): int(total)
             for name, total in self._session.execute(statement).all()
         }
+
+
+_ENTITY_COLUMNS = (
+    ImageModel.id,
+    ImageModel.device_id,
+    ImageModel.relative_path,
+    ImageModel.filename,
+    ImageModel.extension,
+    ImageModel.captured_at,
+    ImageModel.capture_source,
+    ImageModel.latitude,
+    ImageModel.longitude,
+    ImageModel.position_source,
+)
+"""The columns an `Image` is built from: every one but the `embedding`.
+
+Shared by the search and the listing, so that a photo found by a query and
+the same photo listed by date carry the same fields. `absolute_path` is not a
+column: the database does not know where a device is mounted (RFC-027 7).
+"""
+
+
+def _image_of(row: Any) -> Image:
+    """An `Image` from a row of `_ENTITY_COLUMNS`."""
+    return Image(
+        id=ImageId(row.id),
+        device_id=DeviceId(row.device_id),
+        relative_path=ImagePath(row.relative_path),
+        filename=row.filename,
+        extension=row.extension,
+        captured_at=row.captured_at,
+        capture_source=_source_member(row.capture_source),
+        latitude=row.latitude,
+        longitude=row.longitude,
+        position_source=_position_member(row.position_source),
+    )
+
+
+def _path_in_c() -> ColumnElement[str]:
+    """`relative_path COLLATE "C"`: compared by code point, as Python compares."""
+    return ImageModel.relative_path.collate("C")
+
+
+def _after_clause(after: Image, order: ListingOrder) -> ColumnElement[bool]:
+    """Every row whose listing key is past `after`'s (RFC-044 section 5.2).
+
+    With `after`'s key `(c, p, i)`:
+
+        after dated     captured_at < c                       (> c for OLDEST)
+                        OR (captured_at = c AND (path, id) > (p, i))
+                        OR captured_at IS NULL
+        after undated   captured_at IS NULL AND (path, id) > (p, i)
+
+    The undated come after every dated row in both directions, so past a
+    dated cursor they are all still ahead, and past an undated one only the
+    undated with a greater path and id are. `(path, id) > (p, i)` is a row
+    comparison, which PostgreSQL evaluates lexicographically -- the path
+    `COLLATE "C"`, the id byte by byte, as the `ORDER BY` sorts them.
+    """
+    rest = tuple_(_path_in_c(), ImageModel.id) > tuple_(
+        literal(str(after.relative_path)), literal(after.id.value, ImageModel.id.type)
+    )
+    captured = after.captured_at
+    if captured is None:
+        return and_(ImageModel.captured_at.is_(None), rest)
+    beyond = (
+        ImageModel.captured_at < captured
+        if order is ListingOrder.NEWEST
+        else ImageModel.captured_at > captured
+    )
+    return or_(
+        beyond,
+        and_(ImageModel.captured_at == captured, rest),
+        ImageModel.captured_at.is_(None),
+    )
 
 
 def _device_clause(filters: SearchFilters) -> ColumnElement[bool]:

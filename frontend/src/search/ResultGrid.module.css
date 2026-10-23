@@ -71,7 +71,7 @@
 
 .device,
 .deviceAway,
-.similarity {
+.corner {
   position: absolute;
   top: var(--space-8);
   display: inline-flex;
@@ -102,7 +102,7 @@
   color: var(--color-text-tertiary);
 }
 
-.similarity {
+.corner {
   right: var(--space-8);
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
@@ -148,6 +148,30 @@
 }
 
 .folder {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+}
+
+/* The listing by date (RFC-044 section 6.3): before its first undated photo, a
+   line the width of the grid. */
+.divider {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-12) 0 var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.dividerTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+}
+
+.dividerNote {
+  margin: 0;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-small);
 }

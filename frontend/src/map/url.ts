@@ -13,7 +13,8 @@
  *                                                 names
  *
  * `perto`, `raio`, `perto_de` and `foto` do not enter: the map's area is the
- * visible one. Back, forward and the "Reconectando…" that reloads the page
+ * visible one -- and neither does `todas`, the listing by date (RFC-044), which
+ * is a circle's question: the balloon of a cell has its own button for it. Back, forward and the "Reconectando…" that reloads the page
  * return to the same framing; the whole query string leaves `shell.log` by
  * `redactUrl()`, the framing with it (RFC-038 section 5.6).
  *
@@ -51,10 +52,15 @@ export function withoutCircle(filters: Filters): Filters {
   return { ...filters, near: null, radius: null, nearOf: null };
 }
 
+/** The search a cell's balloon may run: never the listing by date. */
+function carried(query: SearchQuery | null): SearchQuery | null {
+  return query?.kind === "browse" ? null : query;
+}
+
 export function readMapUrl(params: URLSearchParams): MapUrl {
   const search = readSearchUrl(params);
   return {
-    query: search.query,
+    query: carried(search.query),
     filters: withoutCircle(search.filters),
     view: readView(params),
   };
@@ -115,7 +121,7 @@ export function mapQueryString(url: MapUrl): string {
     );
   }
   const search = searchQueryString({
-    query: url.query,
+    query: carried(url.query),
     filters: withoutCircle(url.filters),
     photo: null,
   });

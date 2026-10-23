@@ -28,6 +28,14 @@ export function similarityTitle(similarity: number): string {
   );
 }
 
+/** The corner of a search's card: the cosine, and what it is. */
+export function similarityCorner(similarity: number): {
+  readonly text: string;
+  readonly title: string;
+} {
+  return { text: formatSimilarity(similarity), title: similarityTitle(similarity) };
+}
+
 export const GRID_FOOTNOTE =
   "Ordenado por similaridade. O número é o cosseno entre a busca e a foto, não " +
   "uma porcentagem, e só compara fotos da mesma busca.";

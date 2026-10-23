@@ -24,6 +24,11 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.listing import (
+    ListedImages,
+    ListingOrder,
+    ListingSummary,
+)
 from app.domain.value_objects.mounted_volume import MountedVolume
 from app.domain.value_objects.position import (
     BoundingBox,
@@ -47,8 +52,10 @@ from app.infrastructure.persistence.in_memory_image_repository import (
     count_images_by_path_prefix,
     count_unknown_capture_date,
     count_unknown_position,
+    list_by_filters,
     matches_filters,
     store_thumbnail,
+    summarize_listing,
     with_capture_date,
     with_position,
 )
@@ -86,6 +93,16 @@ class FakeImageRepository(ImageRepository):
         self.aggregate_positions_calls: list[
             tuple[SearchFilters, BoundingBox, int, int | None]
         ] = []
+        self.list_by_filters_calls: list[
+            tuple[SearchFilters, ListingOrder, int, Image | None]
+        ] = []
+        self.summarize_listing_calls: list[SearchFilters] = []
+        """Every listing summary, so a test can prove a later page asked none.
+
+        RFC-044 section 5.3: the summary is the first page's, and the pages
+        after it must not pay for a number the screen already has.
+        """
+
         self.count_by_device_calls = 0
         """How many times the grouped device count was asked for.
 
@@ -327,6 +344,22 @@ class FakeImageRepository(ImageRepository):
         return aggregate_positions(
             self._indexed(), filters, area, precision, cell_limit
         )
+
+    def list_by_filters(
+        self,
+        filters: SearchFilters,
+        order: ListingOrder,
+        limit: int,
+        after: Image | None,
+    ) -> ListedImages:
+        """The shared listing, recorded so a test can see the `limit + 1`."""
+        self.list_by_filters_calls.append((filters, order, limit, after))
+        return list_by_filters(self._indexed(), filters, order, limit, after)
+
+    def summarize_listing(self, filters: SearchFilters) -> ListingSummary:
+        """The shared summary, recorded; see `summarize_listing_calls`."""
+        self.summarize_listing_calls.append(filters)
+        return summarize_listing(self._indexed(), filters)
 
     def _indexed(self) -> Sequence[Image]:
         """The images a search could return: those with an embedding."""

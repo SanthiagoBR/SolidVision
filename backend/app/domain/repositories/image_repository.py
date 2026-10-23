@@ -13,6 +13,11 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.listing import (
+    ListedImages,
+    ListingOrder,
+    ListingSummary,
+)
 from app.domain.value_objects.position import (
     BoundingBox,
     PositionCells,
@@ -460,6 +465,74 @@ class ImageRepository(ABC):
         `filters.taken_within` is not consulted: the map's area is the
         viewport, and "near here" is a different question (RFC-032
         section 9).
+        """
+
+    @abstractmethod
+    def list_by_filters(
+        self,
+        filters: SearchFilters,
+        order: ListingOrder,
+        limit: int,
+        after: Image | None,
+    ) -> ListedImages:
+        """Every searchable image under `filters`, in capture-date order (RFC-044).
+
+        The read behind *"Ver todas as fotos daqui, por data"*: no query, no
+        model, no score -- what exists here, in time. A page at a time:
+        at most `limit` images, starting right after `after` in the order.
+
+        The contract every implementation owes, which
+        `test_listing_contract.py` holds the three to:
+
+        - **The universe is the search's** (RFC-032 section 7): images with
+          an embedding, under the device set, the date range and the circle
+          of `filters`, by the same clauses -- a range never matches an
+          unknown date, a circle never matches an unknown position (RFC-020),
+          and `SearchFilters()` narrows nothing.
+        - **A total order.** `captured_at` in the direction of `order`; then
+          `relative_path`, then the id, both always ascending. The path puts
+          a burst shot in the same second in the camera's numbering
+          (`DJI_0042`, `DJI_0043`) and the undated in folder order; the id
+          separates the same path on two disks, as it breaks ties in search
+          (RFC-025 section 6). Without it the order would not be total, and a
+          cursor would repeat or skip one of the copies.
+        - **The undated come after every dated image, in both directions**
+          (RFC-044 section 3.2). No undated photo ever sits between two dated
+          ones.
+        - **Paths compare by code point**, in all three implementations: the
+          `C` collation in PostgreSQL, `str` comparison in Python -- which are
+          the same order for UTF-8 text. `B` comes before `a`.
+        - **`after` is a position in the order, not a member of the list.**
+          The page starts with the first image whose sort key is past
+          `after`'s, whether or not `after` itself satisfies `filters` or
+          has an embedding. `None` is the first page.
+        - Asking page after page, each `after` being the last image of the
+          page before, yields exactly the list asked for at once: no image
+          repeated, none skipped.
+        - At most `limit` images, `[]` when nothing is left. A caller that
+          needs to know whether there is a next page asks for one more
+          (`limit + 1`), as the map asks for `MAX_MAP_CELLS + 1` cells: a
+          short page is not the signal.
+        - Every image carries its `captured_at`, `capture_source`,
+          `latitude`, `longitude` and `position_source`, as a search hit
+          does, and no embedding is read: the vectors stay out of the query.
+
+        `limit` is expected to be positive and already vetted; the page-size
+        policy is the Application layer's.
+        """
+
+    @abstractmethod
+    def summarize_listing(self, filters: SearchFilters) -> ListingSummary:
+        """The size and the time span of `list_by_filters()`'s list (RFC-044 5.3).
+
+        Over the same universe, as one aggregate: how many images, how many
+        of them undated, and the first and last capture dates. Under a date
+        range `undated` is 0 -- an unknown date never matches one -- and on
+        an empty list the counts are 0 and the dates `None`.
+
+        The two counts of excluded photos (`count_unknown_capture_date()`,
+        `count_unknown_position()`) are not part of this answer: they belong
+        to the search's request policy, which the listing calls as it is.
         """
 
     @abstractmethod

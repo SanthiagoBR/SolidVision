@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import math
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
@@ -18,6 +19,11 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.listing import (
+    ListedImages,
+    ListingOrder,
+    ListingSummary,
+)
 from app.domain.value_objects.position import (
     BoundingBox,
     PositionCell,
@@ -204,6 +210,74 @@ def aggregate_positions(
         for (latitude, longitude), count in sorted(counts.items())
     ]
     return cells if cell_limit is None else cells[:cell_limit]
+
+
+_ONE_MICROSECOND = datetime.timedelta(microseconds=1)
+
+
+def listing_key(image: Image, order: ListingOrder) -> tuple[int, int, str, int]:
+    """The sort key of RFC-044 section 5.2, as one comparable tuple.
+
+    `(undated, date, path, id)`: the undated after every dated image in both
+    directions, the date in the direction of `order`, then the path and the
+    id, always ascending. The date is whole microseconds from `datetime.min`
+    -- an integer, so negating it for `NEWEST` is exact, where a float of
+    seconds would round the microseconds of a year-9999 date away.
+
+    The path is compared as `str`, by code point, which is the order of the
+    `COLLATE "C"` the PostgreSQL implementation sorts by; the id as
+    `UUID.int`, which is PostgreSQL's byte order over the same 16 bytes.
+    """
+    path = str(image.relative_path)
+    identity = image.id.value.int
+    if image.captured_at is None:
+        return (1, 0, path, identity)
+    micros = (image.captured_at - datetime.datetime.min) // _ONE_MICROSECOND
+    return (0, -micros if order is ListingOrder.NEWEST else micros, path, identity)
+
+
+def list_by_filters(
+    indexed: Iterable[Image],
+    filters: SearchFilters,
+    order: ListingOrder,
+    limit: int,
+    after: Image | None,
+) -> ListedImages:
+    """One page of the listing, as the `ORDER BY` and the cursor clause give it.
+
+    `indexed` must already be restricted to images with an embedding. The
+    filters are `matches_filters()`, the search's own predicate; the cursor is
+    "every key past `after`'s", with `after`'s key computed by the same
+    function -- so the order and the cursor cannot disagree, which is the
+    property the contract test pages through.
+
+    Shared by both in-process doubles for the reason `matches_filters()` is.
+    """
+    start = None if after is None else listing_key(after, order)
+    page = sorted(
+        (
+            image
+            for image in indexed
+            if matches_filters(image, filters)
+            and (start is None or listing_key(image, order) > start)
+        ),
+        key=lambda image: listing_key(image, order),
+    )
+    return page[:limit]
+
+
+def summarize_listing(
+    indexed: Iterable[Image], filters: SearchFilters
+) -> ListingSummary:
+    """`count(*)`, the undated, `min` and `max` of the date, over the listing."""
+    listed = [image for image in indexed if matches_filters(image, filters)]
+    dates = [image.captured_at for image in listed if image.captured_at is not None]
+    return ListingSummary(
+        total=len(listed),
+        undated=len(listed) - len(dates),
+        oldest=min(dates, default=None),
+        newest=max(dates, default=None),
+    )
 
 
 def count_images_by_device(images: Iterable[Image]) -> dict[DeviceId, int]:
@@ -469,6 +543,18 @@ class InMemoryImageRepository(ImageRepository):
         return aggregate_positions(
             self._indexed(), filters, area, precision, cell_limit
         )
+
+    def list_by_filters(
+        self,
+        filters: SearchFilters,
+        order: ListingOrder,
+        limit: int,
+        after: Image | None,
+    ) -> ListedImages:
+        return list_by_filters(self._indexed(), filters, order, limit, after)
+
+    def summarize_listing(self, filters: SearchFilters) -> ListingSummary:
+        return summarize_listing(self._indexed(), filters)
 
     def _indexed(self) -> Sequence[Image]:
         """The images a search could return: those with an embedding."""

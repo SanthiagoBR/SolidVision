@@ -57,6 +57,18 @@ describe("the URL of the map (RFC-040 section 5.1)", () => {
     expect(mapQueryString(url)).toBe("q=telhado");
   });
 
+  it("never carries the listing by date: the balloon has its own button", () => {
+    const url = read("zoom=9&centro=-26.3214,-48.8163&todas&perto=1,2&raio=1000");
+
+    expect(url.query).toBeNull();
+    expect(
+      mapHrefFor(
+        { kind: "browse", order: "oldest" },
+        { ...NO_FILTERS, from: "2018-01-01" },
+      ),
+    ).toBe(`${MAP_PATH}?de=2018-01-01`);
+  });
+
   it("ignores a framing that is not valid", () => {
     const invalid = [
       "centro=-26.3,-48.8",

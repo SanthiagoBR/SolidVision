@@ -10,6 +10,9 @@ import { describe, expect, it } from "vitest";
 
 import type { SearchResult } from "../api/client";
 import { ResultGrid } from "./ResultGrid";
+import { similarityCorner } from "./similarity";
+
+const cosine = (result: SearchResult) => similarityCorner(result.similarity);
 
 function result(id: string, similarity: number, connected = true): SearchResult {
   return {
@@ -46,7 +49,7 @@ describe("the grid", () => {
       result("e", 0.29),
     ];
 
-    const html = renderToStaticMarkup(<ResultGrid results={results} />);
+    const html = renderToStaticMarkup(<ResultGrid results={results} corner={cosine} />);
 
     expect(cards(html).map((card) => card.id)).toEqual(["c", "a", "d", "b", "e"]);
   });
@@ -54,7 +57,7 @@ describe("the grid", () => {
   it("shows on each card the similarity of that same result", () => {
     const results = [result("x", 0.3124), result("y", -0.05), result("z", 1)];
 
-    const html = renderToStaticMarkup(<ResultGrid results={results} />);
+    const html = renderToStaticMarkup(<ResultGrid results={results} corner={cosine} />);
 
     expect(cards(html)).toEqual([
       { id: "x", similarity: "0,312" },
@@ -65,7 +68,7 @@ describe("the grid", () => {
 
   it("names the file by its last segment, and says when the disk is away", () => {
     const html = renderToStaticMarkup(
-      <ResultGrid results={[result("q", 0.2, false)]} />,
+      <ResultGrid results={[result("q", 0.2, false)]} corner={cosine} />,
     );
 
     expect(html).toContain("DJI_q.JPG");
@@ -74,7 +77,9 @@ describe("the grid", () => {
   });
 
   it("asks for every thumbnail at once, from the API", () => {
-    const html = renderToStaticMarkup(<ResultGrid results={[result("q", 0.2)]} />);
+    const html = renderToStaticMarkup(
+      <ResultGrid results={[result("q", 0.2)]} corner={cosine} />,
+    );
 
     expect(html).toContain('src="/api/v1/images/q/thumbnail"');
     expect(html).toContain('loading="eager"');

@@ -17,7 +17,7 @@ import {
   type ImageDetail,
   type SearchResult,
 } from "../api/client";
-import type { ApiSearchQuery } from "./params";
+import type { ApiBrowseQuery, ApiSearchQuery, BrowseOrder } from "./params";
 
 export interface SearchPage {
   readonly results: readonly SearchResult[];
@@ -105,6 +105,61 @@ export function searchByImage(
       ),
     ),
   );
+}
+
+/** The whole list at a glance: the first page's, `null` on the others. */
+export interface BrowseSummary {
+  readonly total: number;
+  readonly undated: number;
+  /** `AAAA-MM-DDTHH:MM:SS`, camera-local, never through a `Date`. */
+  readonly oldest: string | null;
+  readonly newest: string | null;
+  readonly excludedUnknownDate: number | null;
+  readonly excludedUnknownPosition: number | null;
+}
+
+/** One page of the listing by date (RFC-044 section 5.1). */
+export interface BrowsePage {
+  readonly results: readonly ImageDetail[];
+  readonly order: BrowseOrder;
+  readonly limit: number;
+  /** The `after` of the next page; `null` when the list is over. */
+  readonly nextAfter: string | null;
+  readonly summary: BrowseSummary | null;
+  readonly requestMs: number;
+  readonly receivedAt: number;
+}
+
+/** `GET /images/browse`: no model, so never the text of the model loading. */
+export async function browseImages(
+  query: ApiBrowseQuery,
+  signal?: AbortSignal,
+): Promise<BrowsePage> {
+  const startedAt = performance.now();
+  const body = bodyOf(
+    await answered(api.GET("/api/v1/images/browse", { params: { query }, signal })),
+  );
+  const receivedAt = performance.now();
+  const summary = body.summary;
+  return {
+    results: body.results,
+    order: body.order,
+    limit: body.limit,
+    nextAfter: body.next_after,
+    summary:
+      summary === null
+        ? null
+        : {
+            total: summary.total,
+            undated: summary.undated,
+            oldest: summary.oldest_captured_at,
+            newest: summary.newest_captured_at,
+            excludedUnknownDate: summary.excluded_unknown_date,
+            excludedUnknownPosition: summary.excluded_unknown_position,
+          },
+    requestMs: receivedAt - startedAt,
+    receivedAt,
+  };
 }
 
 /** Asked once a minute and when the window comes back: the setting behind

@@ -17,6 +17,7 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.aggregate_positions import AggregatePositionsUseCase
+from app.application.use_cases.browse_images import BrowseImagesUseCase
 from app.application.use_cases.cancel_indexing_job import CancelIndexingJobUseCase
 from app.application.use_cases.create_indexing_job import CreateIndexingJobUseCase
 from app.application.use_cases.describe_devices import DescribeDevicesUseCase
@@ -226,6 +227,25 @@ def get_find_similar_images_use_case(
     called. The page size and the radius floor arrive as for search.
     """
     return FindSimilarImagesUseCase(
+        repository=repository,
+        default_limit=settings.top_k_results,
+        min_radius_m=settings.min_radius_m,
+    )
+
+
+def get_browse_images_use_case(
+    repository: ImageRepository = Depends(get_image_repository),
+) -> BrowseImagesUseCase:
+    """Return the use case behind `GET /api/v1/images/browse` (RFC-044).
+
+    **No embedding model**, as `/similar`'s and the map's: a listing by date
+    never encodes anything, and composing CLIP would import `torch` -- 13 to
+    18 s of a hard disk (RFC-034 section 9) -- for a route that is the only
+    way to see a place's photos with search `unavailable`.
+    `test_browse_api.py` swaps the model's provider for one that fails if
+    called. The page size and the radius floor arrive as for search.
+    """
+    return BrowseImagesUseCase(
         repository=repository,
         default_limit=settings.top_k_results,
         min_radius_m=settings.min_radius_m,
@@ -525,6 +545,7 @@ def get_list_device_folders_use_case(
 
 __all__ = [
     "get_aggregate_positions_use_case",
+    "get_browse_images_use_case",
     "get_cancel_indexing_job_use_case",
     "get_create_indexing_job_use_case",
     "get_describe_devices_use_case",

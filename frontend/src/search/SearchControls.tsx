@@ -76,9 +76,14 @@ export interface SearchControlsProps {
   readonly onFilters: (filters: Filters) => void;
   /** Right of the pills: "14 resultados · 0,13 s". */
   readonly summary?: ReactNode;
+  /** Beside the summary: "Ver todas as fotos daqui, por data" on a search
+   * with a circle, the two directions on the listing (RFC-044 section 6). */
+  readonly extra?: ReactNode;
   /** The circle came from a cell of the map, with no search: the bar has the
    * focus, and its text says what it is for. */
   readonly fromMapPoint?: boolean;
+  /** The bar's text when it is empty, instead of the search's. */
+  readonly prompt?: string;
 }
 
 export function SearchControls(props: SearchControlsProps) {
@@ -90,6 +95,7 @@ export function SearchControls(props: SearchControlsProps) {
         onFilters={props.onFilters}
         mapHref={mapHrefFor(props.query, props.filters)}
         summary={props.summary}
+        extra={props.extra}
       />
     </div>
   );
@@ -102,6 +108,7 @@ export interface FilterPillsProps {
    * and its filters in its note. The map's pills have no "Perto de". */
   readonly mapHref?: string;
   readonly summary?: ReactNode;
+  readonly extra?: ReactNode;
 }
 
 /** "Dispositivos", "Filtros" and the active filters (RFC-040 section 5.5). */
@@ -110,6 +117,7 @@ export function FilterPills({
   onFilters,
   mapHref,
   summary,
+  extra,
 }: FilterPillsProps) {
   return (
     <div className={styles.pills}>
@@ -119,6 +127,11 @@ export function FilterPills({
       {summary !== undefined && (
         <span className={styles.summary} role="status">
           {summary}
+        </span>
+      )}
+      {extra !== undefined && (
+        <span className={summary === undefined ? styles.extraAlone : styles.extra}>
+          {extra}
         </span>
       )}
     </div>
@@ -135,6 +148,7 @@ function SearchBar({
   onPhoto,
   onClearPhoto,
   fromMapPoint = false,
+  prompt,
 }: SearchControlsProps) {
   const health = useHealth();
   const [draft, setDraft] = useState(text);
@@ -143,6 +157,7 @@ function SearchBar({
   const picker = useRef<HTMLInputElement>(null);
   const unavailable = health.data?.search === "unavailable";
   const status = refusal ?? searchStatusText(health.data);
+  const placeholder = prompt ?? (fromMapPoint ? MAP_POINT_PROMPT : TEXT_PROMPT);
 
   const take = (file: File | undefined) => {
     setDragging(false);
@@ -218,8 +233,8 @@ function SearchBar({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={submit}
-          placeholder={fromMapPoint ? MAP_POINT_PROMPT : TEXT_PROMPT}
-          aria-label={(fromMapPoint ? MAP_POINT_PROMPT : TEXT_PROMPT).replace("…", "")}
+          placeholder={placeholder}
+          aria-label={placeholder.replace("…", "")}
           autoFocus={fromMapPoint}
           disabled={unavailable}
           enterKeyHint="search"
