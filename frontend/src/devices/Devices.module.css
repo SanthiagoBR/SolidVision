@@ -3,10 +3,13 @@
    a card per disk, the label, a thin bar and the percentage under it -- in the
    tokens of RFC-037; the dialog and the banner are not in the Figma. */
 
+/* Sits directly on the sidebar's indigo, not inside a white card, so it
+   takes the light-on-dark pair instead of the dark-on-light the rest of
+   this file uses. */
 .note {
   margin: 0 0 var(--space-12);
   padding: 0 var(--space-10);
-  color: var(--color-text-secondary);
+  color: var(--color-on-inverse-muted);
   font-size: var(--font-size-label);
 }
 
@@ -35,8 +38,10 @@
   border-color: var(--color-text-icon);
 }
 
+/* White, not `--color-focus`: the ring sits over the sidebar's indigo
+   (its own colour now), where that tone would disappear. */
 .card:focus-visible {
-  outline: 2px solid var(--color-focus);
+  outline: 2px solid var(--color-on-inverse);
   outline-offset: 1px;
 }
 
@@ -120,13 +125,14 @@
   border-color: var(--color-text-icon);
 }
 
+/* Also directly on the sidebar's indigo (see `.note` above). */
 .add {
   width: 100%;
   padding: var(--space-8) var(--space-10);
-  border: 1px dashed var(--color-text-icon);
+  border: 1px dashed var(--color-on-inverse-muted);
   border-radius: var(--radius-card);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--color-on-inverse-muted);
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-medium);
   text-align: left;
@@ -134,8 +140,8 @@
 }
 
 .add:hover {
-  border-color: var(--color-text);
-  color: var(--color-text);
+  border-color: var(--color-on-inverse);
+  color: var(--color-on-inverse);
 }
 
 /* ------------------------------------------------------------------------ */

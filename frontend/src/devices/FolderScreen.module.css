@@ -180,10 +180,16 @@
 /* ------------------------------------------------------------------------ */
 /* The panel of the job (section 5.7) */
 
+/* A row, not a column: the text and the bar on the left, the action at the
+   right edge on the same line, so the panel is wide and short rather than
+   narrow and tall. `.message`'s own `flex-basis: 100%` still drops it to a
+   line of its own when it appears. */
 .panel {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-16);
   padding: var(--space-12) var(--space-16);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-notice);
@@ -193,6 +199,14 @@
 .panelAttention {
   border-color: var(--color-warning-border);
   background: var(--color-warning-surface);
+}
+
+.panelBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
 }
 
 .panelTitle {
@@ -221,12 +235,14 @@
   font-size: var(--font-size-small);
 }
 
+/* `.panel`'s own `justify-content: space-between` already pushes this to
+   the right edge, on the same line as `.panelBody`. */
 .panelActions {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-10);
-  margin-top: var(--space-4);
 }
 
 .bar {

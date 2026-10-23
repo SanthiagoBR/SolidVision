@@ -101,4 +101,5 @@
   --size-map-list: 300px; /* the map's list of cells (RFC-040) */
   --size-map-min: 320px; /* the map's least height, below which the screen scrolls */
   --size-swatch: 12px; /* a class of the legend */
+  --size-logo: 28px; /* the mark beside "SolidVision", half the header's height */
 }
