@@ -79,3 +79,79 @@
   font-size: var(--font-size-small);
   text-align: center;
 }
+
+/* The listing by date (RFC-044 section 6.3). */
+
+/* "Ver todas as fotos daqui, por data", beside the count of a search with a
+   circle. */
+.browseAction {
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The two directions, beside the header; the chosen one pressed. */
+.order {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.orderButton,
+.orderPressed {
+  padding: var(--space-4) var(--space-10);
+  border: 0;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.orderButton + .orderPressed,
+.orderPressed + .orderButton {
+  border-left: 1px solid var(--color-border);
+}
+
+.orderPressed {
+  background: var(--color-surface-pill);
+  color: var(--color-text);
+  cursor: default;
+}
+
+.moreRow {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-12);
+}
+
+.more:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.moreCount {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.restart {
+  margin-left: var(--space-12);
+  padding: var(--space-4) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}

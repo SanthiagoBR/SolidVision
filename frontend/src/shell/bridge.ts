@@ -24,7 +24,8 @@ export interface HomeReport {
 /** One search, painted: the mark of RFC-038 section 5.6. The kind and the
  * counts, and never the query. */
 export interface SearchReport {
-  readonly kind: "text" | "similar" | "image";
+  /** `browse` since RFC-044: a page of the listing by date. */
+  readonly kind: "text" | "similar" | "image" | "browse";
   readonly limit: number;
   readonly results: number;
   /** From the gesture to the response. */

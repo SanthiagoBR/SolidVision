@@ -7,24 +7,45 @@
  *
  * Each card: the thumbnail, with the device's label over it at the top left --
  * "HD3 · desconectado" in grey when the disk is away, and the name in a fainter
- * tone, still clickable -- and the similarity at the top right, as a number
- * (section 2.10); below it, the file's name and its folder. The thumbnails are
- * all asked for at once (`loading="eager"`), in a box of reserved proportion so
- * the grid does not jump, and a 404 -- no thumbnail yet -- is a frame with the
- * file's name, not an error.
+ * tone, still clickable -- and the corner at the top right; below it, the
+ * file's name and its folder. The thumbnails are all asked for at once
+ * (`loading="eager"`), in a box of reserved proportion so the grid does not
+ * jump, and a 404 -- no thumbnail yet -- is a frame with the file's name, not
+ * an error.
+ *
+ * **The corner is a space each kind of list fills** (RFC-044 section 2.7): a
+ * search writes the similarity, as a number (RFC-038 section 2.10); the listing
+ * by date writes the date, and nothing for a photo without one. And the listing
+ * puts a divider, the width of the grid, before its first undated photo.
  */
 
 import type { SyntheticEvent } from "react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
-import type { SearchResult } from "../api/client";
+import type { ImageDetail } from "../api/client";
 import { thumbnailUrl } from "./api";
 import { fileName, folderOf } from "./paths";
 import styles from "./ResultGrid.module.css";
-import { formatSimilarity, similarityTitle } from "./similarity";
 
-export interface ResultGridProps {
-  readonly results: readonly SearchResult[];
+/** What the top right corner of a card says: `0,312`, or `14/07/2018 15:32`. */
+export interface Corner {
+  readonly text: string;
+  /** The `title`, and what a screen reader says of the card. */
+  readonly title: string;
+}
+
+/** A line across the grid, before the card `beforeId`. */
+export interface Divider {
+  readonly beforeId: string;
+  readonly title: string;
+  readonly note: string;
+}
+
+export interface ResultGridProps<R extends ImageDetail> {
+  readonly results: readonly R[];
+  /** The corner of each card; `null` leaves it empty. */
+  readonly corner: (result: R) => Corner | null;
+  readonly divider?: Divider | null;
   /** The results of the search before this one, while this one runs. */
   readonly faded?: boolean;
   readonly onOpen?: (imageId: string) => void;
@@ -32,12 +53,14 @@ export interface ResultGridProps {
   readonly onSettled?: (imageId: string) => void;
 }
 
-export function ResultGrid({
+export function ResultGrid<R extends ImageDetail>({
   results,
+  corner,
+  divider = null,
   faded = false,
   onOpen,
   onSettled,
-}: ResultGridProps) {
+}: ResultGridProps<R>) {
   return (
     <ol
       className={faded ? `${styles.grid} ${styles.faded}` : styles.grid}
@@ -45,12 +68,20 @@ export function ResultGrid({
       aria-label="Resultados"
     >
       {results.map((result) => (
-        <ResultCard
-          key={result.id}
-          result={result}
-          onOpen={onOpen}
-          onSettled={onSettled}
-        />
+        <Fragment key={result.id}>
+          {divider !== null && divider.beforeId === result.id && (
+            <li className={styles.divider}>
+              <p className={styles.dividerTitle}>{divider.title}</p>
+              <p className={styles.dividerNote}>{divider.note}</p>
+            </li>
+          )}
+          <ResultCard
+            result={result}
+            corner={corner(result)}
+            onOpen={onOpen}
+            onSettled={onSettled}
+          />
+        </Fragment>
       ))}
     </ol>
   );
@@ -58,10 +89,12 @@ export function ResultGrid({
 
 function ResultCard({
   result,
+  corner,
   onOpen,
   onSettled,
 }: {
-  result: SearchResult;
+  result: ImageDetail;
+  corner: Corner | null;
   onOpen?: (imageId: string) => void;
   onSettled?: (imageId: string) => void;
 }) {
@@ -72,7 +105,6 @@ function ResultCard({
   const device = connected
     ? result.device.label
     : `${result.device.label} · desconectado`;
-  const title = similarityTitle(result.similarity);
 
   const loaded = (event: SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
@@ -92,7 +124,11 @@ function ResultCard({
         type="button"
         className={styles.open}
         onClick={() => onOpen?.(result.id)}
-        aria-label={`${name}, ${device}. ${title}`}
+        aria-label={
+          corner === null
+            ? `${name}, ${device}.`
+            : `${name}, ${device}. ${corner.title}`
+        }
       >
         <span className={styles.thumbnail}>
           {missing ? (
@@ -115,9 +151,11 @@ function ResultCard({
             />
             {device}
           </span>
-          <span className={styles.similarity} title={title} aria-hidden="true">
-            {formatSimilarity(result.similarity)}
-          </span>
+          {corner !== null && (
+            <span className={styles.corner} title={corner.title} aria-hidden="true">
+              {corner.text}
+            </span>
+          )}
         </span>
         <span className={connected ? styles.name : styles.nameAway}>{name}</span>
         <span className={styles.folder}>{folder || " "}</span>

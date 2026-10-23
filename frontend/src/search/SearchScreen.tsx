@@ -17,6 +17,10 @@
  * 100 arrive, then shows the 100 in their own order: with the `ef_search` of
  * section 4.3 their first 40 may not be the first page's. Fewer than asked for
  * means there is no more, and the button does not appear.
+ *
+ * `/busca?todas` is the listing by date (RFC-044), `BrowseScreen`: the same screen
+ * with no query, and pages that append. A search with a circle offers it
+ * beside the count: *"Ver todas as fotos daqui, por data"*.
  */
 
 import {
@@ -38,11 +42,14 @@ import {
   type SearchPage,
   useCapabilities,
 } from "./api";
+import { BROWSE_ACTION_TEXT } from "./browse";
+import { BrowseScreen } from "./BrowseScreen";
 import { type DroppedPhoto, useDroppedPhoto } from "./dropped-photo";
 import { errorMessage, type Route } from "./messages";
+import { Notices } from "./Notices";
 import {
   apiQuery,
-  type Filters,
+  BROWSE_PARAMS,
   hasFilters,
   readSearchUrl,
   type SearchQuery,
@@ -54,8 +61,13 @@ import { PhotoDetail } from "./PhotoDetail";
 import { ResultGrid } from "./ResultGrid";
 import { SearchControls } from "./SearchControls";
 import styles from "./SearchScreen.module.css";
-import { GRID_FOOTNOTE } from "./similarity";
+import { GRID_FOOTNOTE, similarityCorner } from "./similarity";
 import { finishGesture, startGesture } from "./timing";
+
+export { excludedText } from "./Notices";
+
+/** The three searches that rank: every kind but the listing by date. */
+type RankedQuery = Exclude<SearchQuery, { kind: "browse" }>;
 
 export const MODEL_LOADING_TEXT =
   "Carregando o modelo de busca. A primeira busca depois de abrir o SolidVision " +
@@ -79,15 +91,7 @@ export function summaryText(results: number, requestMs: number): string {
   return `${COUNT.format(results)} ${noun} · ${SECONDS.format(requestMs / 1000)} s`;
 }
 
-export function excludedText(count: number, reason: "date" | "position"): string {
-  const photos = count === 1 ? "1 foto ficou" : `${COUNT.format(count)} fotos ficaram`;
-  const have = count === 1 ? "tem" : "têm";
-  return reason === "date"
-    ? `${photos} de fora porque não ${have} data de captura.`
-    : `${photos} de fora porque não ${have} posição.`;
-}
-
-function routeOf(query: SearchQuery): Route {
+function routeOf(query: RankedQuery): Route {
   return query.kind === "text"
     ? "search"
     : query.kind === "similar"
@@ -99,13 +103,20 @@ export function SearchScreen() {
   const [params] = useSearchParams();
   const url = useMemo(() => readSearchUrl(params), [params]);
   if (url.query === null) {
-    const rest = params.toString();
+    const home = new URLSearchParams(params);
+    for (const name of BROWSE_PARAMS) {
+      home.delete(name);
+    }
+    const rest = home.toString();
     return <Navigate to={rest === "" ? "/" : `/?${rest}`} replace />;
+  }
+  if (url.query.kind === "browse") {
+    return <BrowseScreen url={url} query={url.query} />;
   }
   return <Search url={url} query={url.query} />;
 }
 
-function Search({ url, query }: { url: SearchUrl; query: SearchQuery }) {
+function Search({ url, query }: { url: SearchUrl; query: RankedQuery }) {
   const actions = useSearchActions(url);
   const queryClient = useQueryClient();
   const health = useHealth();
@@ -198,6 +209,17 @@ function Search({ url, query }: { url: SearchUrl; query: SearchQuery }) {
         onClearPhoto={actions.home}
         onFilters={actions.filters}
         summary={fresh ? summaryText(page.results.length, page.requestMs) : undefined}
+        extra={
+          url.filters.near !== null ? (
+            <button
+              type="button"
+              className={styles.browseAction}
+              onClick={() => actions.browse()}
+            >
+              {BROWSE_ACTION_TEXT}
+            </button>
+          ) : undefined
+        }
       />
 
       {missingPhoto && (
@@ -218,7 +240,14 @@ function Search({ url, query }: { url: SearchUrl; query: SearchQuery }) {
       )}
 
       {shown !== undefined && (
-        <Notices page={shown} filters={url.filters} onFilters={actions.filters} />
+        <Notices
+          excludedUnknownDate={shown.excludedUnknownDate}
+          excludedUnknownPosition={shown.excludedUnknownPosition}
+          onClearDates={() => actions.filters({ ...url.filters, from: null, to: null })}
+          onClearPosition={() =>
+            actions.filters({ ...url.filters, near: null, radius: null, nearOf: null })
+          }
+        />
       )}
 
       {shown !== undefined && shown.results.length === 0 && !search.isFetching && (
@@ -233,6 +262,7 @@ function Search({ url, query }: { url: SearchUrl; query: SearchQuery }) {
         <>
           <ResultGrid
             results={shown.results}
+            corner={(result) => similarityCorner(result.similarity)}
             faded={search.isFetching || status !== null}
             onOpen={actions.openPhoto}
             onSettled={paint}
@@ -276,7 +306,7 @@ function lastPage(queryClient: QueryClient): SearchPage | undefined {
 }
 
 function run(
-  query: SearchQuery,
+  query: RankedQuery,
   photo: DroppedPhoto | null,
   api: ReturnType<typeof apiQuery>,
   signal: AbortSignal,
@@ -323,7 +353,7 @@ function useModelLoading(
 /** The mark of section 5.6: the frame after every thumbnail of a fresh page
  * settled. A card reused from the page before is already settled. */
 function usePaintMark(
-  query: SearchQuery,
+  query: RankedQuery,
   limit: number,
   page: SearchPage | undefined,
 ): (imageId: string) => void {
@@ -371,52 +401,6 @@ function usePaintMark(
       check();
     },
     [check],
-  );
-}
-
-function Notices({
-  page,
-  filters,
-  onFilters,
-}: {
-  page: SearchPage;
-  filters: Filters;
-  onFilters: (filters: Filters) => void;
-}) {
-  const date = page.excludedUnknownDate ?? 0;
-  const position = page.excludedUnknownPosition ?? 0;
-  if (date === 0 && position === 0) {
-    return null;
-  }
-  return (
-    <div className={styles.notices}>
-      {date > 0 && (
-        <div className={styles.notice}>
-          <p className={styles.noticeText}>{excludedText(date, "date")}</p>
-          <button
-            type="button"
-            className={styles.noticeAction}
-            onClick={() => onFilters({ ...filters, from: null, to: null })}
-          >
-            Tirar o filtro de datas
-          </button>
-        </div>
-      )}
-      {position > 0 && (
-        <div className={styles.notice}>
-          <p className={styles.noticeText}>{excludedText(position, "position")}</p>
-          <button
-            type="button"
-            className={styles.noticeAction}
-            onClick={() =>
-              onFilters({ ...filters, near: null, radius: null, nearOf: null })
-            }
-          >
-            Tirar o filtro de posição
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
 

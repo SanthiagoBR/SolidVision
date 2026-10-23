@@ -237,6 +237,18 @@ describe("the mark of a search", () => {
     expect(detail).not.toContain("telhado");
   });
 
+  it("knows a page of the listing by date (RFC-044 section 6.3)", () => {
+    expect(
+      describeSearch({
+        kind: "browse",
+        limit: 100,
+        results: 100,
+        responseMs: 120.2,
+        paintedMs: 240.7,
+      }),
+    ).toBe("kind=browse limit=100 results=100 response=120 painted=241");
+  });
+
   it("does not trust what it is sent", () => {
     expect(describeSearch({ kind: "telhado azul", limit: "x" })).toBe(
       "kind=? limit=? results=? response=? painted=?",

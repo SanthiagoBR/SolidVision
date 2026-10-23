@@ -13,6 +13,7 @@ from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.listing import ListingOrder, ListingSummary
 from app.domain.value_objects.position import (
     BoundingBox,
     PositionCell,
@@ -40,6 +41,8 @@ ALL_METHODS = (
     "update_position_many",
     "count_unknown_position",
     "aggregate_positions",
+    "list_by_filters",
+    "summarize_listing",
     "update_thumbnail_path",
     "update_thumbnail_path_many",
     "count_by_device",
@@ -69,6 +72,8 @@ def test_image_repository_is_abstract() -> None:
         "update_position_many",
         "count_unknown_position",
         "aggregate_positions",
+        "list_by_filters",
+        "summarize_listing",
         "update_thumbnail_path",
         "update_thumbnail_path_many",
         "count_by_device",
@@ -169,6 +174,17 @@ def test_image_repository_methods_use_domain_types_only() -> None:
         signatures["aggregate_positions"].parameters["area"].annotation is BoundingBox
     )
     assert signatures["aggregate_positions"].return_annotation == list[PositionCell]
+    listing = signatures["list_by_filters"].parameters
+    assert listing["filters"].annotation is SearchFilters
+    assert listing["order"].annotation is ListingOrder
+    assert listing["limit"].annotation is int
+    assert listing["after"].annotation == Image | None
+    assert signatures["list_by_filters"].return_annotation == list[Image]
+    assert (
+        signatures["summarize_listing"].parameters["filters"].annotation
+        is SearchFilters
+    )
+    assert signatures["summarize_listing"].return_annotation is ListingSummary
     assert (
         signatures["update_thumbnail_path"].parameters["image_id"].annotation is ImageId
     )

@@ -7,6 +7,12 @@
  * Infinity`), so back and forward, and the reload of "Reconectando…", show it
  * at once. An Enter, a filter or "Parecidas com esta" marks it stale first:
  * whoever asks again means now.
+ *
+ * **The listing by date (RFC-044) starts a new list on a gesture.** Its pages
+ * are one entry of the cache, and marking it stale would make TanStack Query
+ * ask again for every page on the screen, one cursor after the other; so a
+ * gesture drops the lists of that direction that no screen shows, and the one
+ * it opens starts again from its first page.
  */
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,6 +21,7 @@ import { useLocation, useNavigate } from "react-router";
 import { clearDroppedPhoto, setDroppedPhoto } from "./dropped-photo";
 import { uploadRefusal } from "./messages";
 import {
+  type BrowseOrder,
   type Filters,
   type Point,
   type SearchQuery,
@@ -46,6 +53,32 @@ export function nearPointSearch(
   };
 }
 
+/** The cache's key of a listing by date: apart from the searches', whose
+ * entries are a page each. */
+export function browseKey(order: BrowseOrder, api: unknown) {
+  return ["browse", searchKeyOf({ kind: "browse", order }, null), api] as const;
+}
+
+/**
+ * Where "Ver todas as fotos daqui, por data" goes (RFC-044 section 6.2): the
+ * listing, with the circle and the filters of the screen, and without the
+ * text -- from the home screen with a circle, and from a search with one.
+ */
+export function browseSearch(url: SearchUrl, order: BrowseOrder = "newest"): SearchUrl {
+  return { query: { kind: "browse", order }, filters: url.filters, photo: null };
+}
+
+/** The same, from the balloon of a cell of the map: the circle of the cell's
+ * centre with the radius that covers it, the map's filters, and not the search
+ * the map carries, which is another question. */
+export function nearPointBrowse(
+  url: SearchUrl,
+  point: Point,
+  radiusM: number,
+): SearchUrl {
+  return browseSearch(nearPointSearch(url, point, radiusM));
+}
+
 interface DetailState {
   readonly detailFromGrid?: boolean;
 }
@@ -57,7 +90,12 @@ export function useSearchActions(url: SearchUrl) {
   const go = (next: SearchUrl, state?: DetailState) =>
     navigate(searchHref(next), state ? { state } : undefined);
   const fresh = (query: SearchQuery) => {
-    if (query.kind !== "image") {
+    if (query.kind === "browse") {
+      queryClient.removeQueries({
+        queryKey: ["browse", searchKeyOf(query, null)],
+        type: "inactive",
+      });
+    } else if (query.kind !== "image") {
       void queryClient.invalidateQueries({
         queryKey: ["search", searchKeyOf(query, null)],
         refetchType: "none",
@@ -94,6 +132,19 @@ export function useSearchActions(url: SearchUrl) {
       startGesture("image", PAGE_SIZE);
       go({ query: { kind: "image" }, filters: url.filters, photo: null });
       return null;
+    },
+    /** "Ver todas as fotos daqui, por data", or a direction of the listing:
+     * a gesture, which enters the history and starts a new list. */
+    browse(order: BrowseOrder = "newest"): void {
+      startGesture("browse", PAGE_SIZE);
+      fresh({ kind: "browse", order });
+      go(browseSearch(url, order));
+    },
+    /** The same, from the balloon of a cell of the map. */
+    browseNear(point: Point, radiusM: number): void {
+      startGesture("browse", PAGE_SIZE);
+      fresh({ kind: "browse", order: "newest" });
+      go(nearPointBrowse(url, point, radiusM));
     },
     /** The × of the dropped photo: back to the home screen, filters kept. */
     home(): void {

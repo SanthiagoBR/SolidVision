@@ -11,7 +11,7 @@
  * from there to `shell.log`, without the `detail`.
  */
 
-export type Route = "search" | "similar" | "upload" | "detail" | "reveal";
+export type Route = "search" | "similar" | "upload" | "browse" | "detail" | "reveal";
 
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export const UPLOAD_TYPES = ["image/jpeg", "image/png"] as const;
@@ -25,6 +25,9 @@ export const NOT_INDEXED = "Essa foto ainda não foi indexada.";
 export const NO_ANSWER =
   "Sem resposta do SolidVision. A busca volta quando ele voltar.";
 export const FAILED = "A busca falhou. Tente de novo.";
+/** A 404 of the listing by date: the last photo of the page before -- the
+ * cursor -- left the index (RFC-044 section 6.4). */
+export const LIST_CHANGED = "A lista mudou desde a última página.";
 
 export interface RevealContext {
   readonly label: string;
@@ -55,6 +58,9 @@ export function errorMessage(
     case 400:
       return route === "upload" ? UNREADABLE : BAD_FILTERS;
     case 404:
+      if (route === "browse") {
+        return LIST_CHANGED;
+      }
       return route === "similar" || route === "detail" ? NOT_IN_INDEX : FAILED;
     case 409:
       return route === "similar" ? NOT_INDEXED : FAILED;

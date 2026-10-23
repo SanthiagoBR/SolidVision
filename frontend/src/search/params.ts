@@ -5,6 +5,8 @@
  *     /busca?q=…               the search by text
  *     /busca?parecidas=<id>    "Parecidas com esta"
  *     /busca?imagem            the dropped photo; its results stay in the page
+ *     /busca?todas&perto=…     every photo of the circle, by date (RFC-044);
+ *                              `&ordem=antigas` for the oldest first
  *     …&foto=<id>              the detail, open over the grid
  *
  * and the filters beside them, with the interface's names: `dispositivo`
@@ -21,10 +23,14 @@
 import { isInverted, isIsoDate, nextDay } from "./dates";
 import { effectiveRadius } from "./radius";
 
+/** The direction of the capture date in a listing (RFC-044 section 3.1). */
+export type BrowseOrder = "newest" | "oldest";
+
 export type SearchQuery =
   | { readonly kind: "text"; readonly q: string }
   | { readonly kind: "similar"; readonly imageId: string }
-  | { readonly kind: "image" };
+  | { readonly kind: "image" }
+  | { readonly kind: "browse"; readonly order: BrowseOrder };
 
 export type SearchKind = SearchQuery["kind"];
 
@@ -76,12 +82,19 @@ export function hasFilters(filters: Filters): boolean {
 // The URL
 
 export function readSearchUrl(params: URLSearchParams): SearchUrl {
+  const filters = readFilters(params);
+  const query = readQuery(params);
   return {
-    query: readQuery(params),
-    filters: readFilters(params),
+    // Without a circle, `todas` is not a search: the interface lists a place,
+    // and the URL opens the home screen with the other filters (RFC-044 6.1).
+    query: query?.kind === "browse" && filters.near === null ? null : query,
+    filters,
     photo: params.get("foto") || null,
   };
 }
+
+/** The listing's own parameters, which the home screen does not keep. */
+export const BROWSE_PARAMS = ["todas", "ordem"] as const;
 
 function readQuery(params: URLSearchParams): SearchQuery | null {
   const q = params.get("q");
@@ -94,6 +107,12 @@ function readQuery(params: URLSearchParams): SearchQuery | null {
   }
   if (params.has("imagem")) {
     return { kind: "image" };
+  }
+  if (params.has("todas")) {
+    return {
+      kind: "browse",
+      order: params.get("ordem") === "antigas" ? "oldest" : "newest",
+    };
   }
   return null;
 }
@@ -155,6 +174,11 @@ export function searchQueryString(url: SearchUrl): string {
     add("parecidas", query.imageId);
   } else if (query?.kind === "image") {
     parts.push("imagem");
+  } else if (query?.kind === "browse") {
+    parts.push("todas");
+    if (query.order === "oldest") {
+      add("ordem", "antigas");
+    }
   }
   const filters = url.filters;
   for (const device of filters.devices) {
@@ -199,6 +223,8 @@ export function searchKeyOf(query: SearchQuery, photoToken: number | null): stri
       return `similar:${query.imageId}`;
     case "image":
       return `image:${photoToken ?? 0}`;
+    case "browse":
+      return `browse:${query.order}`;
   }
 }
 
@@ -254,6 +280,28 @@ export function apiQuery(
   minRadiusM: number,
 ): ApiSearchQuery {
   return { limit, ...apiFilters(filters, minRadiusM) };
+}
+
+export interface ApiBrowseQuery extends ApiSearchQuery {
+  order: BrowseOrder;
+  after?: string;
+}
+
+/** A page of the listing (RFC-044 section 6.1): `apiFilters()` as for every
+ * search, with the direction and, after the first page, the cursor beside
+ * them. */
+export function apiBrowseQuery(
+  filters: Filters,
+  order: BrowseOrder,
+  limit: number,
+  after: string | null,
+  minRadiusM: number,
+): ApiBrowseQuery {
+  const query: ApiBrowseQuery = { ...apiQuery(filters, limit, minRadiusM), order };
+  if (after !== null) {
+    query.after = after;
+  }
+  return query;
 }
 
 // ---------------------------------------------------------------------------

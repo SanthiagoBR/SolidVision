@@ -25,6 +25,7 @@ import { cellSizeText, MAX_CELL_PRECISION } from "./precision";
 import {
   ADDRESS_PLACEHOLDER,
   balloonCountLines,
+  BROWSE_BUTTON_TEXT,
   centreText,
   COORDINATES_LABEL,
   COORDINATES_PLACEHOLDER,
@@ -174,16 +175,21 @@ export interface BalloonProps {
    * map handles itself. */
   readonly area: HTMLElement | null;
   readonly onSearch: () => void;
+  /** "Ver todas as fotos daqui, por data", with the same circle (RFC-044). */
+  readonly onBrowse: () => void;
   readonly onZoom: () => void;
   readonly onClose: () => void;
-  /** After every render: the popup measures its content again. */
+  /** After a render that changed the content: the popup measures it again. */
   readonly onLayout: () => void;
 }
 
 /**
  * Over the clicked cell (section 5.4): the count, "Buscar perto daqui" with the
- * search the map carries and the radius below it, and "Aproximar" while the
- * precision is below 3. It closes on `Esc`, on a click outside, and when other
+ * search the map carries, "Ver todas as fotos daqui, por data" below it with the
+ * same circle and without the search (RFC-044 section 6.2), the radius below
+ * both, and "Aproximar" while the precision is below 3. The listing's button
+ * carries no number: the balloon counts the cell, and the list counts the
+ * circle, which covers the neighbouring cells too. It closes on `Esc`, on a click outside, and when other
  * cells arrive -- which the screen does by drawing no balloon for them.
  */
 export function Balloon({
@@ -194,13 +200,23 @@ export function Balloon({
   radiusM,
   area,
   onSearch,
+  onBrowse,
   onZoom,
   onClose,
   onLayout,
 }: BalloonProps) {
   const [count, size] = balloonCountLines(cell.count, precision);
 
-  useLayoutEffect(() => onLayout());
+  // The popup measures its content again only when the content changed. After
+  // every render, as it once did, it looped: re-measuring makes Leaflet stop the
+  // auto-pan it is running, which ends the move at once, whose handler renders
+  // this again -- "Maximum update depth exceeded" whenever the balloon does not
+  // fit above its cell, as at 1280 x 800 with the list open (RFC-044 section 16).
+  const subject = searchButtonText(query, photoName);
+  useLayoutEffect(
+    () => onLayout(),
+    [onLayout, count, size, subject, radiusM, precision],
+  );
 
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
@@ -232,7 +248,15 @@ export function Balloon({
         onClick={onSearch}
         disabled={radiusM === null}
       >
-        {searchButtonText(query, photoName)}
+        {subject}
+      </button>
+      <button
+        type="button"
+        className={styles.balloonBrowse}
+        onClick={onBrowse}
+        disabled={radiusM === null}
+      >
+        {BROWSE_BUTTON_TEXT}
       </button>
       {radiusM !== null && (
         <p className={styles.balloonRadius}>{radiusLine(radiusM)}</p>
