@@ -11,8 +11,14 @@
  *     development   SOLIDVISION_PYTHON when set; else  the repository root, with
  *                   .venv (the README); else           PYTHONPATH=backend
  *                   backend\.venv (this machine)       (RFC-036 section 9)
- *     installed     RFC-041's. The branch exists, and fails with a line that
- *                   says so
+ *     installed     resources\runtime\python\          resources\, and the
+ *                   python.exe, and nothing else       window's own environment
+ *                   (RFC-041 section 6.1)
+ *
+ * Installed, no variable chooses the interpreter: the environment is not a
+ * source of an installed app (RFC-034 section 5.2). And nothing is added to
+ * the environment, because the embedded Python reads its paths from its
+ * `python312._pth` and ignores `PYTHONPATH` (RFC-041 section 2.8).
  *
  * Nothing here touches the disk but `exists`, which the tests replace.
  */
@@ -40,6 +46,8 @@ export interface Where {
   readonly packaged: boolean;
   /** The repository root, in development: the parent of `frontend`. */
   readonly repositoryRoot: string;
+  /** Electron's `process.resourcesPath`, installed: the root of the layout. */
+  readonly resourcesPath?: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly exists: (file: string) => boolean;
   readonly platform?: NodeJS.Platform;
@@ -65,16 +73,20 @@ export function developmentCandidates(
   ];
 }
 
+/** The installed interpreter, under the root of the layout. */
+export function installedPython(
+  resourcesPath: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const join = platform === "win32" ? path.win32.join : path.posix.join;
+  return join(resourcesPath, "runtime", "python", "python.exe");
+}
+
 export function resolvePython(where: Where): Resolution {
-  if (where.packaged) {
-    return {
-      ok: false,
-      line:
-        "Esta instalação ainda não sabe onde está o próprio Python: o caminho do " +
-        "Python instalado é do RFC-041.",
-    };
-  }
   const platform = where.platform ?? process.platform;
+  if (where.packaged) {
+    return installedResolution(where, platform);
+  }
   const executable = developmentPython(where, platform);
   if (!executable.ok) {
     return executable;
@@ -94,6 +106,28 @@ export function resolvePython(where: Where): Resolution {
         // `backend` first: whatever else the environment had cannot shadow `app`.
         PYTHONPATH: inherited ? `${backend}${delimiter}${inherited}` : backend,
       },
+    },
+  };
+}
+
+function installedResolution(where: Where, platform: NodeJS.Platform): Resolution {
+  const resources = where.resourcesPath ?? "";
+  const executable = installedPython(resources, platform);
+  if (resources === "" || !where.exists(executable)) {
+    return {
+      ok: false,
+      line:
+        `A instalação está incompleta: falta ${executable}. ` +
+        "Reinstale o SolidVision.",
+    };
+  }
+  return {
+    ok: true,
+    command: {
+      executable,
+      args: LAUNCHER_ARGUMENTS,
+      cwd: resources,
+      env: { ...where.environment },
     },
   };
 }

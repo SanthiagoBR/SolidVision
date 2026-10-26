@@ -2,7 +2,8 @@
  * The window's log, `shell.log` (RFC-037 section 6.5).
  *
  * In `logs` under the data root of the mode: `%LOCALAPPDATA%\SolidVision\logs`
- * packaged, `SolidVision-dev\logs` in development (RFC-034 section 6.2). The
+ * packaged, `SolidVision-dev\logs` in development (RFC-034 section 6.2), beside
+ * the Chromium profile in `shell` (RFC-041 section 6.2). The
  * window does not read the configuration: a `LOG_DIRECTORY` changed in the
  * user's file does not move this one.
  *
@@ -25,9 +26,11 @@ export const ROTATE_BYTES = 10 * 1024 * 1024;
 export const INSTALLED_DATA_NAME = "SolidVision";
 export const DEVELOPMENT_DATA_NAME = "SolidVision-dev";
 
-/** `logs` under the data root of the mode, by the backend's rule: the variable,
- * when it is an absolute path, and the profile's folder otherwise. */
-export function logDirectory(
+export const SHELL_PROFILE_NAME = "shell";
+
+/** The data root of the mode, by the backend's rule (RFC-034 section 6.2): the
+ * variable, when it is an absolute path, and the profile's folder otherwise. */
+export function dataDirectory(
   packaged: boolean,
   environment: Readonly<Record<string, string | undefined>>,
 ): string {
@@ -36,11 +39,32 @@ export function logDirectory(
     variable && path.isAbsolute(variable)
       ? variable
       : path.join(os.homedir(), "AppData", "Local");
-  return path.join(
-    local,
-    packaged ? INSTALLED_DATA_NAME : DEVELOPMENT_DATA_NAME,
-    "logs",
-  );
+  return path.join(local, packaged ? INSTALLED_DATA_NAME : DEVELOPMENT_DATA_NAME);
+}
+
+/** `logs` under the data root of the mode. */
+export function logDirectory(
+  packaged: boolean,
+  environment: Readonly<Record<string, string | undefined>>,
+): string {
+  return path.join(dataDirectory(packaged, environment), "logs");
+}
+
+/**
+ * The Chromium profile -- the `userData` of Electron -- under the data root:
+ * `<dados>\shell` in both modes (RFC-041 section 6.2).
+ *
+ * Not `%APPDATA%`, the roaming profile, which a network profile carries from
+ * machine to machine with the cache of the tiles one looked at: the app keeps
+ * one directory per user, and an uninstall leaves that one whole. The
+ * Electron instance lock lives here, so it is one per data root, as the
+ * launcher's is.
+ */
+export function shellProfileDirectory(
+  packaged: boolean,
+  environment: Readonly<Record<string, string | undefined>>,
+): string {
+  return path.join(dataDirectory(packaged, environment), SHELL_PROFILE_NAME);
 }
 
 /** `shell.log` to `shell.log.1`, replacing it, when above the limit. */

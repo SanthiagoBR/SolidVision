@@ -214,6 +214,10 @@ Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2](rfc-040-
 
 ## Etapa 4 — Empacotamento e instalador (RFC-041) · qui 29 e sex 30
 
+**Status: implementada** ([RFC-041](rfc-041-empacotamento-e-instalador.md), medição em [§15](rfc-041-empacotamento-e-instalador.md#15-validação)), **com o teste em conta limpa pendente**: ele pede uma segunda conta do Windows, e criá-la é ato do administrador da máquina. Implementada em 26/10, três dias úteis antes do calendário, sem o corte 2: o NSIS aceitou o payload. Do que a implementação achou e não esperava ([§14](rfc-041-empacotamento-e-instalador.md#14-correções-feitas-durante-a-implementação)): o `._pth` do Python 3.12.9 deixa o `site-packages` do usuário ligado, e o `import site` saiu; o `transformers` troca o processador do `torchvision` pelo do PIL em silêncio, que dá outros pixels, e o adaptador confere o que carregou; e o PostgreSQL embarcado tem uma extensão, a `xml2`, que não carrega em máquina nenhuma.
+
+Três itens abaixo saíram como o RFC decidiu ([§2](rfc-041-empacotamento-e-instalador.md#2-o-que-o-estado-atual-muda-no-roadmap)): as dependências ganharam um lockfile, com o `torchvision`, que o app não importa, e as DLLs do Visual C++, que o pacote do Python não traz; o perfil do Chromium saiu do `%APPDATA%` para `%LOCALAPPDATA%\SolidVision\shell`, para os dados caberem numa pasta só; e a segunda conta testa o perfil, e não a máquina, que as conferências do build cobrem.
+
 **Escopo**
 - O Python 3.12 na distribuição *embeddable* oficial, com as dependências instaladas numa pasta, sem congelar. Congelar o `torch` com o PyInstaller é uma fonte conhecida de dias perdidos. O launcher já usa `sys.executable`.
 - `runtime\postgres` (123 MB) e `runtime\models` (881 MB) dentro do pacote.
@@ -223,10 +227,10 @@ Cinco itens abaixo saíram diferentes no RFC, e ele diz por quê ([§2](rfc-040-
 - A atualização do `README.md` (o "Como rodar"), do [índice dos RFCs](README.md) e da seção "Fora deste roadmap" do [roadmap sem Docker](ROADMAP-standalone.md#fora-deste-roadmap).
 
 **Critérios de pronto**
-- Numa conta sem nada instalado e com a rede desligada: instalar, abrir pelo atalho, indexar o dataset de demonstração e buscar.
-- O tamanho do instalador: `TBM`.
-- A primeira abertura, a frio: `TBM`. O RFC-036 mediu 35,0 s com o `initdb`.
-- Desinstalar remove o programa. Os dados em `%LOCALAPPDATA%\SolidVision` ficam, e essa política fica escrita.
+- Numa conta sem nada instalado e com a rede desligada: instalar, abrir pelo atalho, indexar o dataset de demonstração e buscar. **Pendente: a segunda conta.** A pasta do build, aberta nesta conta sem instalar e com um `LOCALAPPDATA` vazio, chegou à tela inicial, e a busca respondeu.
+- O tamanho do instalador: `TBM`. **Medido: 1,03 GB**, com 2,16 GB instalados; o build leva 37 min.
+- A primeira abertura, a frio: `TBM`. O RFC-036 mediu 35,0 s com o `initdb`. **Pendente: a segunda conta.** A pasta do build, com a raiz de dados vazia, chegou à tela inicial em 63,4 s, com o `initdb`; não a frio, porque os arquivos tinham acabado de ser escritos.
+- Desinstalar remove o programa. Os dados em `%LOCALAPPDATA%\SolidVision` ficam, e essa política fica escrita. **Escrita** no `README.md` e no RFC-041 §7.4; **o teste, pendente**. O comando que o desinstalador roda antes de apagar, `launcher stop`, parou o pacote em 17,6 s, sem deixar processo.
 
 **Riscos**
 - O antivírus. O RFC-036 §17.3 mediu um aquecimento de 49,6 s e outro de 104,9 s logo depois de uma instalação nova, e não separou a varredura de arquivos da disputa de disco.

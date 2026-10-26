@@ -9,11 +9,17 @@ The tree is the same in both modes (section 4.1)::
 
     <root>\\
         backend\\           app\\, alembic\\, alembic.ini
+        runtime\\python\\    RFC-041: the embedded interpreter, which finds
+                           `backend` through its `python312._pth`
         runtime\\postgres\\  RFC-033
         runtime\\models\\    RFC-035
         frontend\\dist\\     RFC-037: the interface the API serves
         pyproject.toml     only in a checkout
         .env               only in a checkout
+
+Installed, the root is the Electron app's `resources\\` folder (RFC-041
+section 4), and `parents[4]` of this file lands on it as it lands on the
+repository root in a checkout.
 
 A `Layout` can be built by hand, with any root and any data directory. That is
 how the tests exercise the installed mode from inside a checkout, with no
@@ -106,8 +112,8 @@ class Layout:
         """The interface's build, which the API serves (RFC-037 section 5.1).
 
         `frontend\\dist`, where `npm run build` writes in a checkout. Installed,
-        it is wherever RFC-041 puts it beside the code -- outside the Electron
-        archive, because the reader is Python.
+        `resources\\frontend\\dist`: beside the code and outside the Electron
+        archive, because the reader is Python (RFC-041 section 4).
         """
         return self.root / "frontend" / "dist"
 

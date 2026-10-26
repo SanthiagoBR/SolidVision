@@ -151,16 +151,20 @@ start`). With `external`, the default in a checkout, nothing changes:
 
 ### Running the code as an installed app
 `scripts/stage_installation.py` copies the installed tree to a directory
-outside the repository, without `pyproject.toml`, `.env` and the tests:
+outside the repository, without `pyproject.toml`, `.env` and the tests. Since
+RFC-041 the tree carries its own Python (`python scripts/vendor_python.py`,
+once) and the interface's build (`npm run build`), and the copy runs on that
+Python, which ignores `PYTHONPATH`:
 ```powershell
 python scripts/stage_installation.py C:\stage\SolidVision --read-only
-$env:PYTHONPATH = "C:\stage\SolidVision\backend"
 $env:LOCALAPPDATA = "C:\stage\profile"      # leave the real profile alone
-python -m app.launcher
+& C:\stage\SolidVision\runtime\python\python.exe -m app.launcher
 python scripts/stage_installation.py C:\stage\SolidVision --remove
 ```
 `--read-only` locks the tree as `C:\Program Files` is locked to an ordinary
-process. It is not the installer: the interpreter is the virtualenv's.
+process. The same copy, without the lock, is the installer's `resources`
+folder: `npm run dist` in `frontend/` stages it and hands it to electron-builder
+(RFC-041 section 7.2).
 
 ## The launcher (RFC-036)
 
