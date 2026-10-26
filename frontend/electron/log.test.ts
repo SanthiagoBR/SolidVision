@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   consoleLine,
+  dataDirectory,
   describeFolders,
   describeMap,
   describeSearch,
@@ -14,6 +15,7 @@ import {
   redactUrl,
   redactUrls,
   rotate,
+  shellProfileDirectory,
   ShellLog,
   timestamp,
 } from "./log";
@@ -44,6 +46,43 @@ describe("logDirectory", () => {
     expect(logDirectory(true, { LOCALAPPDATA: "relative" })).toBe(
       path.join(os.homedir(), "AppData", "Local", "SolidVision", "logs"),
     );
+  });
+});
+
+describe("the Chromium profile (RFC-041 section 6.2)", () => {
+  it("is shell under the data root, in both modes", () => {
+    const local = path.join(work, "Local");
+
+    expect(shellProfileDirectory(true, { LOCALAPPDATA: local })).toBe(
+      path.join(local, "SolidVision", "shell"),
+    );
+    expect(shellProfileDirectory(false, { LOCALAPPDATA: local })).toBe(
+      path.join(local, "SolidVision-dev", "shell"),
+    );
+  });
+
+  it("is under the profile's own AppData\\Local without the variable, never Roaming", () => {
+    for (const environment of [{}, { LOCALAPPDATA: "relative" }]) {
+      expect(shellProfileDirectory(true, environment)).toBe(
+        path.join(os.homedir(), "AppData", "Local", "SolidVision", "shell"),
+      );
+      expect(shellProfileDirectory(false, environment)).toBe(
+        path.join(os.homedir(), "AppData", "Local", "SolidVision-dev", "shell"),
+      );
+    }
+  });
+
+  it("shares its root with the logs: one directory per user to keep or delete", () => {
+    const environment = { LOCALAPPDATA: path.join(work, "Local") };
+
+    for (const packaged of [true, false]) {
+      expect(path.dirname(shellProfileDirectory(packaged, environment))).toBe(
+        dataDirectory(packaged, environment),
+      );
+      expect(path.dirname(logDirectory(packaged, environment))).toBe(
+        dataDirectory(packaged, environment),
+      );
+    }
   });
 });
 

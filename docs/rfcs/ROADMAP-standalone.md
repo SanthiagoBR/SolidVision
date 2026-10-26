@@ -158,8 +158,9 @@ O frontend começa quando, **numa máquina com o Docker desligado e sem rede**:
 
 Deixados de fora de propósito, porque dependem do frontend ou só valem a pena depois dele:
 
-- **Congelar o runtime Python** (PyInstaller ou Python embutido) e o tamanho final do torch em CPU.
-- **Instalador** (Inno Setup ou WiX), assinatura de código, desinstalação e política sobre os dados do usuário.
-- **Atualizações:** migrations entre versões do app, e `pg_upgrade` entre versões maiores do Postgres.
+- ~~**Congelar o runtime Python** (PyInstaller ou Python embutido) e o tamanho final do torch em CPU.~~ Feito pelo [RFC-041](rfc-041-empacotamento-e-instalador.md), sem congelar: o Python 3.12 *embeddable* oficial, com as dependências de um lockfile numa pasta, ao lado dos outros dois runtimes.
+- ~~**Instalador**, desinstalação e política sobre os dados do usuário.~~ Feito pelo [RFC-041](rfc-041-empacotamento-e-instalador.md): electron-builder com NSIS, por usuário e sem elevação; a desinstalação para o launcher, remove o programa e deixa `%LOCALAPPDATA%\SolidVision` inteira.
+- **Assinatura de código.** O instalador não é assinado, e o SmartScreen avisa ([RFC-041 §7.5](rfc-041-empacotamento-e-instalador.md#75-sem-assinatura-o-smartscreen)).
+- **Atualizações:** migrations entre versões do app, e `pg_upgrade` entre versões maiores do Postgres. A parada antes de trocar os arquivos já existe ([RFC-041 §7.4](rfc-041-empacotamento-e-instalador.md#74-a-parada-a-desinstalação-e-a-política-dos-dados)).
 - **GPU:** ainda não medido. É a maior alavanca de velocidade (inferência em CPU ≈ 450 ms por imagem domina tudo), mas não é pré-requisito para o app ser standalone.
 - **Varredura a frio de HD externo mecânico:** ainda não medida.

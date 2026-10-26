@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   developmentCandidates,
+  installedPython,
   LAUNCHER_ARGUMENTS,
   resolvePython,
   type Where,
@@ -94,13 +95,61 @@ describe("resolvePython() in development", () => {
   });
 });
 
-describe("resolvePython() installed", () => {
-  it("is RFC-041's, and fails with a line that says so", () => {
-    const resolution = resolvePython({ ...where([DOT_VENV]), packaged: true });
+describe("resolvePython() installed (RFC-041 section 6.1)", () => {
+  const RESOURCES = "C:\\Users\\ana\\AppData\\Local\\Programs\\SolidVision\\resources";
+  const INSTALLED = `${RESOURCES}\\runtime\\python\\python.exe`;
 
-    expect(resolution.ok).toBe(false);
-    if (!resolution.ok) {
-      expect(resolution.line).toContain("RFC-041");
+  function installed(
+    present: readonly string[],
+    environment: Record<string, string> = {},
+  ): Where {
+    return { ...where(present, environment), packaged: true, resourcesPath: RESOURCES };
+  }
+
+  it("is runtime\\python\\python.exe under the resources path", () => {
+    expect(installedPython(RESOURCES, "win32")).toBe(INSTALLED);
+
+    const resolution = resolvePython(installed([INSTALLED]));
+
+    expect(resolution.ok).toBe(true);
+    if (resolution.ok) {
+      expect(resolution.command.executable).toBe(INSTALLED);
+      expect(resolution.command.args).toBe(LAUNCHER_ARGUMENTS);
+      expect(resolution.command.cwd).toBe(RESOURCES);
     }
+  });
+
+  it("ignores SOLIDVISION_PYTHON: no variable chooses an installed app's Python", () => {
+    const chosen = "D:\\python\\python.exe";
+    const resolution = resolvePython(
+      installed([INSTALLED, chosen, DOT_VENV], { SOLIDVISION_PYTHON: chosen }),
+    );
+
+    expect(resolution.ok && resolution.command.executable).toBe(INSTALLED);
+  });
+
+  it("adds nothing to the environment, PYTHONPATH least of all", () => {
+    const environment = { PATH: "C:\\Windows", LOCALAPPDATA: "C:\\Users\\ana\\Local" };
+    const resolution = resolvePython(installed([INSTALLED], environment));
+
+    expect(resolution.ok && resolution.command.env).toEqual(environment);
+    expect(resolution.ok && "PYTHONPATH" in resolution.command.env).toBe(false);
+  });
+
+  it("passes on a PYTHONPATH the user had, which the embedded Python ignores", () => {
+    const resolution = resolvePython(
+      installed([INSTALLED], { PYTHONPATH: "D:\\libs" }),
+    );
+
+    expect(resolution.ok && resolution.command.env.PYTHONPATH).toBe("D:\\libs");
+  });
+
+  it("says the installation is incomplete when the file is missing", () => {
+    const resolution = resolvePython(installed([DOT_VENV, BACKEND_VENV]));
+
+    expect(resolution).toEqual({
+      ok: false,
+      line: `A instalação está incompleta: falta ${INSTALLED}. Reinstale o SolidVision.`,
+    });
   });
 });

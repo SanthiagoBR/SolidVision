@@ -8,12 +8,23 @@ directory outside the repository::
 
     <target>\\
         backend\\           app\\, alembic\\, alembic.ini
+        frontend\\dist\\     RFC-037: the interface the API serves
+        runtime\\python\\    RFC-041: the embedded interpreter
         runtime\\postgres\\  RFC-033
         runtime\\models\\    RFC-035
 
 **without** `pyproject.toml`, `.env` and the tests, which is what makes the
 copy an installation: the mode is read from the tree, and `pyproject.toml` is
 what makes a directory a checkout (section 4.2).
+
+**Since RFC-041 it is the installer's `resources\\` folder** (section 7.2):
+`npm run dist` stages to `%LOCALAPPDATA%\\SolidVision-build\\resources` and
+hands the copy to electron-builder, without the marker below. The copy runs on
+its own Python, `runtime\\python\\python.exe -m app.launcher`, which reads the
+copy's `backend` from its `python312._pth` and ignores `PYTHONPATH`. The
+`.pyc` files are written by that interpreter in `unchecked-hash` mode, and a
+`licenses` tree of a `dist-info` that would pass `MAX_PATH` once installed
+becomes a `licenses.zip` (RFC-041 section 2.5).
 
     python scripts/stage_installation.py TARGET              # copy and compile
     python scripts/stage_installation.py TARGET --read-only  # ... and lock it
@@ -27,9 +38,9 @@ to an ordinary process. The `.pyc` files are compiled before the lock, because
 after it Python cannot write them and would recompile the project's modules on
 every start; `--no-compile` is how section 16 measures that cost.
 
-**It is not the installer.** The code is run by the interpreter of the
-development virtualenv, with `PYTHONPATH` pointing at the copy. Freezing the
-runtime stays out of the roadmap.
+The measurements of RFC-034 to 036 ran the copy with the development
+virtualenv's interpreter and `PYTHONPATH` pointing at it
+(`Staged.environment()`), and still can. The installed app never does.
 
 No new dependency: `shutil`, `compileall` and `subprocess` are the standard
 library's, and the SID comes from the adapter of RFC-033.
@@ -38,7 +49,6 @@ library's, and the SID comes from the adapter of RFC-033.
 from __future__ import annotations
 
 import argparse
-import compileall
 import datetime
 import json
 import os
@@ -51,6 +61,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "backend"))
+if str(REPO / "scripts") not in sys.path:
+    sys.path.insert(1, str(REPO / "scripts"))
 
 from app.infrastructure.database.embedded.cluster_home import (  # noqa: E402
     CREATE_NO_WINDOW,
@@ -62,11 +74,37 @@ COPIED = (
     "backend/app",
     "backend/alembic",
     "backend/alembic.ini",
+    "frontend/dist",
+    "runtime/python",
     "runtime/postgres",
     "runtime/models",
 )
 """The tree of section 4.1, and nothing else of the repository. Since RFC-035
-that includes the 924 MB of models, copied like any other file."""
+that includes the 924 MB of models, copied like any other file; since RFC-041,
+the interpreter and the interface's build."""
+
+WITHOUT_BYTECODE = ("backend/app", "backend/alembic")
+"""Copied without their `__pycache__`: a checkout's bytecode is of whatever
+interpreter last ran it. `runtime/python` keeps its own, which
+`vendor_python.py` wrote with that very interpreter."""
+
+PYTHON = Path("runtime", "python", "python.exe")
+"""The copy's own interpreter (RFC-041 section 5)."""
+
+INVALIDATION_MODE = "unchecked-hash"
+"""A `.pyc` that is not compared with its source's date (RFC-041 section 5.4):
+in an installation the source only changes with the bytecode, and an
+extraction need not keep the dates."""
+
+SOURCE_HINTS = {
+    "frontend/dist": "the interface is built with `npm run build` in frontend/",
+    "runtime/python": "the Python runtime is materialized with "
+    "`python scripts/vendor_python.py`",
+    "runtime/postgres": "the PostgreSQL runtime is materialized with "
+    "`python scripts/vendor_postgres.py`",
+    "runtime/models": "the models are materialized with "
+    "`python scripts/vendor_models.py`",
+}
 
 NEVER_STAGED = ("pyproject.toml", ".env")
 """Either one at the root would make the copy a checkout again: the first
@@ -117,13 +155,20 @@ class Staged:
     def backend(self) -> Path:
         return self.root / "backend"
 
+    @property
+    def python(self) -> Path:
+        """The copy's own interpreter, which reads the copy's `backend` from
+        its `._pth` and nothing from the environment (RFC-041 section 5.1)."""
+        return self.root / PYTHON
+
     def environment(
         self, local_app_data: Path, base: Mapping[str, str] | None = None
     ) -> dict[str, str]:
         """The environment of a process that runs the copy, not the checkout.
 
         `PYTHONPATH` is replaced, never extended: a `backend` left in it by a
-        developer's shell would put the checkout's `app` back on the path.
+        developer's shell would put the checkout's `app` back on the path of
+        the virtualenv's interpreter. The copy's own ignores it.
         `LOCALAPPDATA` is the caller's choice, so that a first run is really
         the first and the real profile is not touched (section 9).
         """
@@ -139,31 +184,42 @@ def stage(
     source: Path = REPO,
     compile_bytecode: bool = True,
     read_only: bool = False,
+    python: Path | None = None,
 ) -> Staged:
-    """Copy the installed tree of `source` to `target`, which must not exist."""
+    """Copy the installed tree of `source` to `target`, which must not exist.
+
+    `python` compiles the copy's bytecode; by default the copy's own, which is
+    the one that will read it. The tests, whose miniature runtime has no
+    interpreter, hand it theirs.
+    """
     target = _checked_target(target, source)
     missing = [name for name in COPIED if not (source / name).exists()]
     if missing:
+        hints = [SOURCE_HINTS[name] for name in missing if name in SOURCE_HINTS]
         raise StagingError(
-            f"{source} has no {', '.join(missing)}. The PostgreSQL runtime is "
-            "materialized with `python scripts/vendor_postgres.py`, and the "
-            "models with `python scripts/vendor_models.py`."
+            f"{source} has no {', '.join(missing)}. " + "; ".join(hints) + "."
         )
     target.mkdir(parents=True)
     try:
         for name in COPIED:
             origin, copy = source / name, target / name
             if origin.is_dir():
-                shutil.copytree(
-                    origin, copy, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
+                ignore = (
+                    shutil.ignore_patterns("__pycache__", "*.pyc")
+                    if name in WITHOUT_BYTECODE
+                    else None
                 )
+                shutil.copytree(origin, copy, ignore=ignore)
             else:
                 copy.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(origin, copy)
         _refuse_a_checkout(target)
         _write_marker(target, source)
+        zipped = fit_the_path_budget(target)
+        if zipped:
+            _update_marker(target, zipped_licenses=zipped)
         if compile_bytecode:
-            compile_tree(target)
+            compile_tree(target, python=python)
     except BaseException:
         # Created here a moment ago, and not locked yet: nothing half-built
         # is left under a name that looks like a staging.
@@ -184,20 +240,65 @@ def staged_at(target: Path) -> Staged:
     )
 
 
-def compile_tree(target: Path) -> None:
-    """Write the `.pyc` of every module of the copy, for this interpreter."""
+def compile_tree(target: Path, python: Path | None = None) -> None:
+    """Write the `.pyc` of every module of the copy's backend.
+
+    By the copy's own interpreter unless another is named, in
+    `unchecked-hash` mode (RFC-041 section 5.4). `compileall` runs in a child,
+    so that the bytecode is that interpreter's and not this one's.
+    """
     _read_marker(target)
-    if not compileall.compile_dir(str(target / "backend"), quiet=1):
-        raise StagingError(f"Some module under {target / 'backend'} did not compile.")
+    interpreter = python if python is not None else target / PYTHON
+    if not interpreter.is_file():
+        raise StagingError(
+            f"{interpreter} does not exist: nothing can compile the copy."
+        )
+    completed = subprocess.run(
+        [
+            str(interpreter),
+            "-X",
+            "utf8",
+            "-m",
+            "compileall",
+            "-q",
+            "--invalidation-mode",
+            INVALIDATION_MODE,
+            str(target / "backend"),
+        ],
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=VERIFY_SECONDS * 10,
+    )
+    if completed.returncode != 0:
+        output = (completed.stdout + completed.stderr).strip()[-500:]
+        raise StagingError(
+            f"Some module under {target / 'backend'} did not compile: {output}"
+        )
     _update_marker(target, compiled=True)
 
 
 def discard_bytecode(target: Path) -> None:
-    """Remove every `__pycache__` of the copy: what `--no-compile` leaves."""
+    """Remove every `__pycache__` of the copy's backend: what `--no-compile`
+    leaves. The interpreter's own stays, as `vendor_python.py` wrote it."""
     _read_marker(target)
     for cache in sorted((target / "backend").rglob("__pycache__")):
         shutil.rmtree(cache)
     _update_marker(target, compiled=False)
+
+
+def fit_the_path_budget(target: Path) -> list[str]:
+    """The `licenses` trees that would pass `MAX_PATH` once installed, zipped.
+
+    `check_package.py` holds the budget and the zipping, and checks what is
+    left; it is imported here, when a staging is made, and not at the top:
+    its other half runs inside the package's Python.
+    """
+    from check_package import RESOURCES_PREFIX, zip_license_trees
+
+    return zip_license_trees(target, RESOURCES_PREFIX)
 
 
 def lock(target: Path) -> None:
@@ -307,7 +408,7 @@ def _write_marker(target: Path, source: Path) -> None:
     )
 
 
-def _update_marker(target: Path, **facts: bool) -> None:
+def _update_marker(target: Path, **facts: object) -> None:
     record = _read_marker(target)
     record.update(facts)
     (target / MARKER_NAME).write_text(
@@ -381,9 +482,8 @@ def _how_to_run(staged: Staged) -> str:
     return (
         "Run the copy from an empty directory, with a profile of its own "
         "(PowerShell):\n"
-        f'    $env:PYTHONPATH = "{staged.backend}"\n'
         '    $env:LOCALAPPDATA = "<an empty directory>"\n'
-        "    python -m app.launcher"
+        f'    & "{staged.python}" -m app.launcher'
     )
 
 

@@ -42,6 +42,32 @@ logger = get_logger(__name__)
 # product, the aerial-specific template was the worst of the three.
 TEXT_PROMPT_TEMPLATE = "a photo of {query}"
 
+IMAGE_PROCESSOR_BACKEND = "torchvision"
+"""The image processor, asked for by name (RFC-041 section 5.5).
+
+Without a name, `transformers` 5.15 picks `torchvision` when the package is
+installed and PIL's when it is not, and the two resize differently: on ten
+demo images their pixels differ by up to 0.015 (RFC-041 section 14). Every
+vector of the project came from `torchvision`'s, which the app never imports,
+so a tree without it would encode other vectors without a word. Asked for by
+name, and checked after the load: `transformers` falls back to PIL even then.
+"""
+
+
+def image_processor_backend(processor: object) -> str | None:
+    """`torchvision` or `pil`: which backend the processor's images go through.
+
+    Read from the class's ancestry by name, so that nothing here imports the
+    backend classes, one of which needs `torchvision`.
+    """
+    image_processor = getattr(processor, "image_processor", None)
+    ancestry = {cls.__name__ for cls in type(image_processor).__mro__}
+    if "TorchvisionBackend" in ancestry:
+        return "torchvision"
+    if "PilBackend" in ancestry:
+        return "pil"
+    return None
+
 
 class ClipEmbeddingModel(EmbeddingModelPort):
     """Encode images and text into one 512-dimensional CLIP similarity space.
@@ -226,8 +252,15 @@ class ClipEmbeddingModel(EmbeddingModelPort):
             model.eval()  # type: ignore[no-untyped-call]
             loaded = model.to(self._device)  # type: ignore[arg-type]
             processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
-                directory, local_files_only=True
+                directory, local_files_only=True, backend=IMAGE_PROCESSOR_BACKEND
             )
+            backend = image_processor_backend(processor)
+            if backend != IMAGE_PROCESSOR_BACKEND:
+                raise RuntimeError(
+                    f"The image processor's backend is {backend}, not "
+                    f"{IMAGE_PROCESSOR_BACKEND}: is the torchvision package missing? "
+                    "Its vectors would not be the index's (RFC-041 section 5.5)."
+                )
         except Exception as error:
             raise load_failed(directory) from error
         self._loaded_from = directory

@@ -3,7 +3,8 @@
  *
  * In order: the name, before the lock -- `SolidVision` packaged and
  * `SolidVision-dev` in development, each with its own lock and its own
- * Chromium profile, side by side as the data roots of RFC-036 section 8 are;
+ * Chromium profile, in `shell` under its data root (RFC-041 section 6.2), as
+ * the launcher's lock is one per data root (RFC-036 section 8);
  * the lock, and a second window that leaves at once and brings the first to
  * the front; the launcher, before the window, because the backend is the long
  * part; and one window, shown with the start page, that goes to the URL of
@@ -60,6 +61,7 @@ import {
   failedLoadLine,
   logDirectory,
   redactUrl,
+  shellProfileDirectory,
   ShellLog,
 } from "./log";
 import { resolvePython } from "./python";
@@ -78,7 +80,7 @@ const ERR_ABORTED = -3;
 
 const NAME = app.isPackaged ? "SolidVision" : "SolidVision-dev";
 app.setName(NAME);
-app.setPath("userData", path.join(app.getPath("appData"), NAME));
+app.setPath("userData", shellProfileDirectory(app.isPackaged, process.env));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -181,6 +183,7 @@ function main(): void {
     const resolution = resolvePython({
       packaged,
       repositoryRoot,
+      resourcesPath: process.resourcesPath,
       environment: process.env,
       exists: (file) => fs.existsSync(file),
     });

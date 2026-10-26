@@ -37,9 +37,12 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.clip_embedding_model import (
+    IMAGE_PROCESSOR_BACKEND,
     TEXT_PROMPT_TEMPLATE,
     ClipEmbeddingModel,
+    image_processor_backend,
 )
+from app.infrastructure.ai.model_runtime import ModelUnavailableError
 from app.infrastructure.ai.query_translator import QueryTranslator
 
 DIMENSION = 512
@@ -73,6 +76,24 @@ class RecordingTranslator(QueryTranslator):
         return self._translation if self._translation is not None else text
 
 
+class TorchvisionBackend:
+    """Named like the base of `transformers`' torchvision image processors,
+    which is what the adapter reads (RFC-041 section 5.5)."""
+
+
+class PilBackend:
+    """Named like the base of the PIL ones: what a tree without the
+    `torchvision` package gets, even when it asks for torchvision's."""
+
+
+class StubTorchvisionImageProcessor(TorchvisionBackend):
+    pass
+
+
+class StubPilImageProcessor(PilBackend):
+    pass
+
+
 class StubProcessor:
     """Stands in for `CLIPProcessor`, capturing what it was handed.
 
@@ -85,6 +106,7 @@ class StubProcessor:
     def __init__(self) -> None:
         self.images: list[PILImage.Image] = []
         self.texts: list[str] = []
+        self.image_processor: object = StubTorchvisionImageProcessor()
 
     def __call__(
         self,
@@ -255,8 +277,43 @@ class TestContract:
 
         assert stub_clip.requested == [
             (MODEL_DIRECTORY, {"local_files_only": True}),
-            (MODEL_DIRECTORY, {"local_files_only": True}),
+            (MODEL_DIRECTORY, {"local_files_only": True, "backend": "torchvision"}),
         ]
+
+    def test_the_image_processor_is_asked_for_by_name(self) -> None:
+        """RFC-041 section 5.5: every vector of the project came from
+        torchvision's processor, and `transformers` picks it by itself only
+        when the package happens to be installed."""
+        assert IMAGE_PROCESSOR_BACKEND == "torchvision"
+
+    def test_a_processor_that_fell_back_to_pil_fails_the_load(
+        self, stub_clip: StubLoads, jpeg_path: Path
+    ) -> None:
+        """Without `torchvision`, `transformers` 5.15 hands back PIL's
+        processor even when torchvision's is asked for. The load fails with
+        RFC-035's line, rather than encoding other vectors without a word."""
+        stub_clip.processor.image_processor = StubPilImageProcessor()
+
+        with pytest.raises(ModelUnavailableError, match="could not be loaded"):
+            _adapter().encode_image(_image(jpeg_path))
+
+        assert stub_clip.processor.images == []
+
+    @pytest.mark.parametrize(
+        ("image_processor", "backend"),
+        [
+            (StubTorchvisionImageProcessor(), "torchvision"),
+            (StubPilImageProcessor(), "pil"),
+            (object(), None),
+        ],
+    )
+    def test_the_backend_is_read_from_the_class_ancestry(
+        self, image_processor: object, backend: str | None
+    ) -> None:
+        processor = StubProcessor()
+        processor.image_processor = image_processor
+
+        assert image_processor_backend(processor) == backend
 
     def test_the_directory_is_asked_for_on_the_first_load_and_not_before(
         self, stub_clip: StubLoads, jpeg_path: Path

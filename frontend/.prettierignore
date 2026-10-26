@@ -5,3 +5,4 @@ package-lock.json
 src/api/openapi.json
 src/api/schema.d.ts
 src/map/brazil-states.json
+release/

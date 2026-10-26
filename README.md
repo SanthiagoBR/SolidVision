@@ -12,7 +12,7 @@ O **SolidVision** é uma plataforma de busca semântica desenvolvida para resolv
 
 ## Estado atual
 
-O backend está implementado até o **RFC-036**, e o frontend começou no **RFC-037**: uma janela que sobe o backend e abre a tela inicial com os números do acervo. Cada mudança do projeto é descrita em um RFC numerado, escrito antes da implementação e atualizado com as medições depois dela.
+O backend está implementado até o **RFC-036**, e o frontend do **RFC-037** ao **RFC-041**, mais os RFCs 043 e 044: uma janela com a busca, os dispositivos e a indexação e o mapa, que se instala com um instalador, sem terminal e sem rede. Cada mudança do projeto é descrita em um RFC numerado, escrito antes da implementação e atualizado com as medições depois dela.
 
 | Etapa | RFCs | Situação |
 |---|---|---|
@@ -22,7 +22,8 @@ O backend está implementado até o **RFC-036**, e o frontend começou no **RFC-
 | Sem Docker: PostgreSQL embarcado, configuração do usuário, modelos offline | 033-035 | Pronto |
 | Launcher e supervisão de processos | 036 | Pronto |
 | Frontend: a janela, a casca e a tela inicial | 037 | Pronto |
-| Frontend: busca, dispositivos e indexação, mapa, instalador | 038-041 | Em andamento ([roadmap](docs/rfcs/ROADMAP-frontend.md)) |
+| Frontend: busca, dispositivos e indexação, mapa | 038-040, 043, 044 | Pronto |
+| O instalador | 041 | Pronto; o teste numa conta limpa do Windows, pendente ([roadmap](docs/rfcs/ROADMAP-frontend.md)) |
 
 Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](docs/rfcs/ROADMAP-standalone.md), [roadmap do frontend](docs/rfcs/ROADMAP-frontend.md) e a [arquitetura](ARCHITECTURE.md).
 
@@ -56,6 +57,26 @@ Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](do
 2.  **Extração:** o modelo multimodal converte cada imagem em um vetor (**embedding**).
 3.  **Persistência:** vetores e metadados (caminho, data, posição) vão para o banco vetorial.
 4.  **Recuperação:** a consulta textual vira um vetor e é comparada aos das imagens, gerando um ranking de relevância.
+
+---
+
+## Como instalar
+
+O SolidVision se instala com um arquivo só, `SolidVision-Setup-0.1.0.exe`, que se gera com `npm run dist` ([abaixo](#7-o-instalador)). Ele traz tudo o que o app usa — o Python, o PostgreSQL e os modelos de IA — e não precisa de rede, de Docker nem de um administrador ([RFC-041](docs/rfcs/rfc-041-empacotamento-e-instalador.md)). O instalador tem 1,03 GB, e o programa instalado ocupa 2,2 GB. Requer Windows 10 ou 11, 64 bits.
+
+1. **Dois cliques no instalador.** Ele não é assinado, e o Windows avisa. Na tela azul *"O Windows protegeu o computador"*, clique em *"Mais informações"*; na mesma tela aparece o botão *"Executar assim mesmo"*. Nenhuma senha de administrador é pedida.
+2. **O app abre sozinho ao terminar.** A primeira abertura prepara o banco de dados e leva cerca de um minuto; as seguintes, alguns segundos. Os atalhos ficam no Menu Iniciar e na área de trabalho.
+
+**Onde as coisas ficam**, as duas na conta de quem instalou, e mais nenhuma pasta:
+
+| O quê | Onde |
+|---|---|
+| O programa | `%LOCALAPPDATA%\Programs\SolidVision` |
+| Os dados: o banco com o acervo indexado, as miniaturas, os logs, os caches e o perfil da janela | `%LOCALAPPDATA%\SolidVision` |
+
+**Desinstalar** é por *Configurações > Aplicativos > SolidVision*, com o app aberto ou fechado: ele fecha o app, para a indexação em andamento e remove o programa e os atalhos. **Os dados ficam**, inteiros: instalar de novo reaproveita o acervo, sem reindexar — e indexar um disco leva horas. Para apagar os dados, feche o app e apague a pasta `%LOCALAPPDATA%\SolidVision`.
+
+O mapa mostra os tiles do OpenStreetMap quando há rede, com a atribuição na tela e um User-Agent que identifica o app; sem rede, o contorno dos estados, que vai no instalador. Contato sobre o uso dos tiles: as [issues do projeto](https://github.com/SanthiagoBR/SolidVision/issues).
 
 ---
 
@@ -127,6 +148,20 @@ npm start          # a janela: sobe o launcher e abre a tela inicial
 Sem Docker, use `DATABASE_SOURCE=embedded` no `.env`. Fechar a janela para o launcher e tudo o que ele subiu; abrir de novo com a janela aberta só a traz para a frente. A janela registra a própria subida e o que o launcher escreve em `%LOCALAPPDATA%\SolidVision-dev\logs\shell.log`.
 
 Para trabalhar na interface, `npm run dev` abre a janela sobre o Vite, com recarga ao salvar, e sobe um launcher na porta 8000, para onde o Vite encaminha `/api`. `npm run api:types` regenera os tipos depois de uma mudança na API.
+
+A janela guarda o perfil do Chromium em `%LOCALAPPDATA%\SolidVision-dev\shell`, ao lado dos logs. Um perfil de antes do RFC-041, em `%APPDATA%\SolidVision-dev`, não é mais lido e pode ser apagado.
+
+### 7. O instalador
+O instalador leva o Python embutido, com as dependências de `scripts/python-win-64.lock`, ao lado dos outros dois runtimes ([RFC-041](docs/rfcs/rfc-041-empacotamento-e-instalador.md)). Os três se materializam uma vez por cópia do repositório, com o Python do ambiente virtual:
+```powershell
+python scripts/vendor_postgres.py
+python scripts/vendor_models.py
+python scripts/vendor_python.py     # o Python 3.12.9 embeddable e as rodas do lockfile, em runtime/python
+cd frontend
+npm run dist        # o build, a montagem, as conferências e o NSIS: release\SolidVision-Setup-0.1.0.exe
+npm run dist:dir    # o mesmo até a pasta release\win-unpacked, sem o NSIS
+```
+A montagem fica em `%LOCALAPPDATA%\SolidVision-build\resources`, e as conferências do `scripts/check_package.py` param o build se o pacote não for o que a suíte testou: os vetores do CLIP calculados pelo Python do pacote, bit a bit contra os de referência, as DLLs de cada binário, o orçamento de caminho e o que vai no `app.asar`. O primeiro build precisa de rede, para o electron-builder baixar o NSIS. Mudar uma dependência do Python é mudar o ambiente virtual e o lockfile juntos: `python scripts/vendor_python.py --lock` recusa uma versão diferente da do ambiente virtual.
 
 ### Verificações de qualidade
 ```powershell
