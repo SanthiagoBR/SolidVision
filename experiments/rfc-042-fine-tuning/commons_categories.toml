@@ -1,0 +1,149 @@
+# Wikimedia Commons categories for RFC-042 section 4.2, read by
+# collect_commons.py.
+#
+# Every root below was checked against the live Commons API on 2026-10-31:
+# it exists and has members. The list is a starting point, not a decision.
+# After `--phase describe`, `--phase status` shows what each root brought and
+# why files were rejected; adjust here before `--phase download`.
+#
+# Growing this file between runs is safe: a new root is walked, a larger depth
+# reaches further, and the filters are re-applied to every file not yet
+# downloaded. A category reached from two roots belongs to the first one
+# listed. To shrink a walk that already happened, use a new output directory.
+
+# Never entered, and their files are rejected even when reached through
+# another category (a file's categories come with its metadata). Matched
+# case-insensitively; `*` is a wildcard.
+exclude = [
+    # selfies with the drone, not views from it
+    "Dronies",
+    # videos: the MIME filter drops them anyway; this saves listing them
+    "Drone videos",
+    "Videos taken with DJI*",
+    # DJI's handheld cameras, not drones
+    "Taken with DJI Osmo*",
+    # thermal cameras: false-colour infrared, nothing like the product's photos
+    "Taken with DJI Mavic 3T",
+    "Taken with DJI Matrice M30T",
+    "Taken with DJI Mavic 2 Enterprise Advanced",
+    "Taken with DJI Zenmuse H20T",
+    "Taken with DJI Zenmuse XT2",
+    "Taken with Fimi X8 Thermal",
+    "Infrared aerial photography",
+    # historical black-and-white aerial photography
+    "Black and white*",
+]
+
+[filters]
+# License families: cc0, pd, cc-by, cc-by-sa, other (GFDL, FAL, ...). Commons
+# accepts no NC or ND license, so the choice is among free ones. cc-by-sa is
+# collected and marked in provenance.csv: whether a checkpoint trained on it
+# can ship in the installer is RFC-042 section 8.3's question, to be answered
+# before packaging, not here.
+#
+# Measured on the full collection (2026-10-31): 69,095 of 83,600 files are
+# CC BY-SA; after every filter, 30,379 photos are accepted with it and 8,080
+# without it. Level A of section 3.2 needs 2 to 5 thousand pairs, so cc-by-sa
+# stays out until the question is answered, and no caption written by hand
+# lands on a photo that might not be allowed to train. Adding it back later
+# only adds photos: the ones downloaded keep their places.
+licenses = ["cc0", "pd", "cc-by"]
+# The 500 px thumbnail's shorter side must cover CLIP's 224 px input.
+min_short_side = 224
+# Longest side over shortest. A 2:1 panorama loses half of itself to the crop.
+max_aspect = 2.0
+# Files per author per capture day. Drone sessions upload dozens of
+# near-identical shots of one place; uncapped, a few sessions dominate the set
+# (RFC-042 section 4.5) and leak across the splits (section 4.6). Delete the
+# line for no cap.
+max_per_series = 5
+# Capture year, from the capture date or else the title; files with neither
+# pass. Before 1990 it is historical aerial photography, mostly black and
+# white or faded: 380 of the 8,080 accepted photos, and nothing like the
+# product's drone photos. Photos found to be grayscale once downloaded are
+# rejected as well, whatever their year.
+min_year = 1990
+
+# Drone photographs, grouped by camera model: the bulk, and the closest to the
+# product's oblique views. Depth 3 reaches the model categories:
+#   Photos and videos from unmanned aerial vehicles
+#   > Taken with DJI radio-controlled helicopters
+#   > Taken with DJI Mavic
+#   > Taken with DJI FC3411
+# `limit` caps the downloads of a root; which files fill it is a fixed
+# pseudo-random order, so every subcategory is sampled, not the first ones.
+[[root]]
+category = "Photos and videos from unmanned aerial vehicles"
+depth = 3
+limit = 30000
+
+# The product's geography.
+[[root]]
+category = "Aerial photographs of Brazil"
+depth = 3
+
+# The subjects of the RFC-023 benchmark queries: properties with lakes, ponds
+# and pools, fields and farms, cleared land, roads, streets and small towns.
+[[root]]
+category = "Aerial photographs of lakes"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of reservoirs"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of rivers"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of swimming pools"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of fields"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of farms"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of agriculture"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of forests"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of construction sites"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of quarries"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of villages"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of towns"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of streets"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of roads"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of highways"
+depth = 2
+
+[[root]]
+category = "Aerial photographs of car parks"
+depth = 2
