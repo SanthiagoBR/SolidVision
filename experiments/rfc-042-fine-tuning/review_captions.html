@@ -131,6 +131,9 @@ legend { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; }
 #status { min-height: 1.4em; font-size: 14px; color: var(--ok); }
+#progress { padding: 10px 12px; border-radius: 8px; background: var(--chip); }
+#progress-text { margin: 0 0 6px; font-weight: 600; color: var(--accent); }
+#progress-bar { width: 100%; height: 8px; accent-color: var(--accent); }
 #status.error { color: var(--error); }
 [hidden] { display: none !important; }
 @media (max-width: 820px) {
@@ -159,6 +162,10 @@ legend { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
     <p id="empty" hidden></p>
   </div>
   <aside>
+    <div id="progress" hidden>
+      <p id="progress-text" role="status"></p>
+      <progress id="progress-bar" value="0" max="1"></progress>
+    </div>
     <div id="details" hidden>
       <p><a id="title" target="_blank" rel="noopener noreferrer"></a></p>
       <p id="description" class="small"></p>
@@ -184,6 +191,14 @@ legend { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
         <label class="field" for="query-en" style="margin-top: 10px">
           Consulta em inglês (opcional)</label>
         <textarea id="query-en" rows="2"></textarea>
+        <div id="south-block" hidden>
+          <label class="field" for="query-south" style="margin-top: 10px">
+            Com termos do sul (conjunto regional)</label>
+          <textarea id="query-south" rows="2"></textarea>
+          <p class="hint">A mesma foto, como alguém do sul buscaria: sanga, potreiro,
+            coxilha, açude, costão, trapiche… Mede o tradutor, à parte.</p>
+        </div>
+        <p class="hint" id="query-draft" hidden></p>
         <p class="hint">Escreva como alguém buscaria esta foto no app. Ela e a série dela
           (mesmo autor, mesmo dia) ficam fora do treino.</p>
       </section>
@@ -219,6 +234,10 @@ let lastFocus = "other";
 const visited = [];
 
 function readMode() {
+  const asked = new URLSearchParams(location.search).get("mode");
+  if (asked === "write" || asked === "review" || asked === "queries") {
+    return asked;
+  }
   try {
     const saved = localStorage.getItem(MODE_KEY);
     if (saved === "write" || saved === "review" || saved === "queries") {
@@ -302,6 +321,9 @@ function render(data) {
   $("form").hidden = !showing;
   $("actions").hidden = !showing;
   $("empty").hidden = showing;
+  if (data.stats) {
+    showStats(data.stats);
+  }
   if (!showing) {
     $("empty").textContent = data.message;
     $("remaining").textContent = "";
@@ -336,8 +358,17 @@ function render(data) {
     $("vlm-model").textContent = `Gerada por ${vlm.model}.${before}`;
     $("reviewed").focus();
   } else {
-    $("query-pt").value = saved ? saved.pt : "";
-    $("query-en").value = saved ? saved.en : "";
+    const draft = current.draft;
+    $("query-pt").value = saved ? saved.pt : (draft ? draft.pt : "");
+    $("query-en").value = saved ? saved.en : (draft ? draft.en : "");
+    const south = saved ? (saved.pt_south || "") : (draft ? (draft.pt_south || "") : "");
+    $("query-south").value = south;
+    $("south-block").hidden = !south;
+    $("query-draft").hidden = !draft;
+    if (draft) {
+      $("query-draft").textContent = `Rascunho de ${draft.model}. Corrija, ou`
+        + " reescreva com as suas palavras se não for algo que você digitaria.";
+    }
     $("query-pt").focus();
   }
 }
@@ -384,6 +415,7 @@ async function save(reject) {
   } else {
     body.pt = $("query-pt").value;
     body.en = $("query-en").value;
+    body.pt_south = $("south-block").hidden ? "" : $("query-south").value;
   }
   busy = true;
   try {
@@ -405,7 +437,8 @@ async function skip() {
   }
   busy = true;
   try {
-    await api("/api/skip", { mode, pageid: current.pageid, q: filterText() });
+    const result = await api("/api/skip", { mode, pageid: current.pageid, q: filterText() });
+    showStats(result.stats);
     visited.push(current.pageid);
     await loadNext();
     setStatus("Pulada.");
@@ -438,8 +471,37 @@ function showStats(stats) {
       : `${Math.round(stats.error_rate * 100)}% com erro`;
     parts.push(`${stats.reviews} de ${stats.review_target} revisões (${rate})`);
   }
-  parts.push(`${stats.queries} consultas`);
+  const fromDrafts = Object.values(stats.draft_verdicts || {}).reduce((a, b) => a + b, 0);
+  if (stats.drafts) {
+    const edited = (stats.draft_verdicts || {}).edited || 0;
+    const rate = fromDrafts ? `${Math.round((edited / fromDrafts) * 100)}% corrigidas` : "nenhuma ainda";
+    parts.push(`${stats.queries} consultas (${fromDrafts} de ${stats.drafts} rascunhos, ${rate})`);
+  } else {
+    parts.push(`${stats.queries} consultas`);
+  }
   $("stats").textContent = parts.join(" · ");
+  showProgress(stats);
+}
+
+function showProgress(stats) {
+  const box = $("progress");
+  box.hidden = mode !== "queries" || !stats.drafts;
+  if (box.hidden) {
+    return;
+  }
+  const left = stats.drafts_left;
+  const done = stats.drafts - left;
+  $("progress-bar").max = stats.drafts;
+  $("progress-bar").value = done;
+  if (left === 0) {
+    $("progress-text").textContent = `Todos os ${stats.drafts} rascunhos foram vistos.`;
+    return;
+  }
+  const south = stats.south_left
+    ? ` (${stats.south_left} com termos do sul)`
+    : "";
+  $("progress-text").textContent =
+    `Faltam ${left} de ${stats.drafts} imagens para corrigir${south}`;
 }
 
 async function loadStats() {
