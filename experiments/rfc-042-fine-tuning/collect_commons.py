@@ -970,7 +970,11 @@ def keep_thumbnail(
             gray = is_grayscale(image)
     except (OSError, ValueError, Image.DecompressionBombError) as error:
         return Fetched(error=f"not a readable image: {error}", permanent=True)
-    if abs(found[0] - width) > 1 or abs(found[1] - height) > 1:
+    # Tall images sometimes come back smaller than the API announced, in the
+    # same proportions (473x788 for 500x833): accepted, at the size served.
+    # A different proportion, or a larger image, is another file.
+    same_shape = abs(found[0] * height - found[1] * width) <= max(width, height)
+    if found[0] > width + 1 or found[1] > height + 1 or not same_shape:
         return Fetched(
             error=f"{found[0]}x{found[1]}, the API said {width}x{height}",
             permanent=True,

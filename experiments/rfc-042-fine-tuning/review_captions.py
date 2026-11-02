@@ -19,7 +19,18 @@ and accepted:
 - **Consultas de avaliação** (`query`): queries written by hand for the new
   oblique evaluation set (section 5.1.2), in Portuguese (which the app
   translates, as it does for a user) and optionally in English (section 5.2
-  measures both).
+  measures both). A model may draft them first, in `query_drafts.jsonl` in
+  the collection directory (`{"pageid": 123, "pt": "...", "en": "...",
+  "model": "..."}` per line): drafted photos come first, the draft fills the
+  fields, and the saved query records the draft and whether it was approved
+  as is or edited. Model-drafted queries can share wording with
+  model-written captions, so the analysis keeps them apart from the ones
+  written from scratch (`"source": "human"`). Queries saved before drafts
+  existed carry no `source` and were all written from scratch. Some photos
+  also get a second Portuguese query with southern Brazilian vocabulary
+  (`pt_south`: sanga, potreiro, coxilha, açude...), searching for the same
+  photo: the pair measures what the translator does to regional words,
+  which no fine-tuning of CLIP can fix, so it is scored apart.
 
 **Evaluation photos never train.** A photo with a query, and every photo of
 its series (same author, same capture day: near-identical shots from one
@@ -39,7 +50,8 @@ correcting a caption appends instead of rewriting:
      "focus": "negation"}
     {"at": "...", "kind": "review", ..., "vlm": "...", "model": "...",
      "verdict": "approved" | "edited" | "rejected", "text": "..."}
-    {"at": "...", "kind": "query", ..., "pt": "...", "en": "..."}
+    {"at": "...", "kind": "query", ..., "pt": "...", "en": "...", "pt_south": "...",
+     "source": "human" | "model draft", "draft_pt": "...", "verdict": ...}
     {"at": "...", "kind": "caption", "pageid": 123, ..., "deleted": true}
 
 Skipped photos are not work and do not go there: they are kept in the
@@ -51,8 +63,9 @@ open in the browser cannot write captions through it.
 
     python experiments/rfc-042-fine-tuning/review_captions.py --out DIR
 
-`DIR` is the collector's output directory. The page reads the photo list
-when it starts: restart it after downloading more.
+`DIR` is the collector's output directory. The page follows it while open:
+new downloads, re-applied filters and new VLM or draft files show up on the
+next photo, without a restart.
 """
 
 from __future__ import annotations
@@ -81,6 +94,7 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_CAPTIONS = HERE / "captions.jsonl"
 PAGE = HERE / "review_captions.html"
 VLM_NAME = "vlm_captions.jsonl"
+DRAFTS_NAME = "query_drafts.jsonl"
 DEFAULT_PORT = 8742
 
 # Page mode -> the `kind` of the records it writes.
@@ -199,6 +213,36 @@ def load_vlm(path: Path) -> dict[int, dict[str, str]]:
     return captions
 
 
+def load_drafts(path: Path) -> dict[int, dict[str, str]]:
+    """Query drafts a model wrote, for the person to correct: pt, en, model."""
+    drafts: dict[int, dict[str, str]] = {}
+    if not path.exists():
+        return drafts
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+            drafts[int(record["pageid"])] = {
+                "pt": str(record.get("pt", "")),
+                "en": str(record.get("en", "")),
+                "pt_south": str(record.get("pt_south", "")),
+                "model": str(record.get("model", "?")),
+            }
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            print(f"{path}:{number}: not a query draft, ignored", file=sys.stderr)
+    return drafts
+
+
+def _mtime(path: Path | None) -> int | None:
+    if path is None:
+        return None
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
 class Ledger:
     """`captions.jsonl`: append-only; per photo and kind, the last line counts."""
 
@@ -260,6 +304,7 @@ class Workbench:
         vlm_path: Path,
         db: sqlite3.Connection,
         out_dir: Path,
+        drafts_path: Path | None = None,
     ) -> None:
         self.photos = photos
         self.by_id = {photo.pageid: photo for photo in photos}
@@ -275,22 +320,19 @@ class Workbench:
                 "SELECT pageid, mode, filter FROM review_skips"
             )
         }
+        self.drafts_path = drafts_path
+        self.drafts = load_drafts(drafts_path) if drafts_path else {}
         self._photos_signature = self._signature()
-        self._vlm_stamp = self._vlm_mtime()
+        self._vlm_stamp = _mtime(vlm_path)
+        self._drafts_stamp = _mtime(drafts_path)
 
     # -- keeping up with the collection while the page is open
 
     def _signature(self) -> tuple[Any, ...]:
         return tuple(self.db.execute(PHOTOS_SIGNATURE).fetchone())
 
-    def _vlm_mtime(self) -> int | None:
-        try:
-            return self.vlm_path.stat().st_mtime_ns
-        except OSError:
-            return None
-
     def _refresh(self) -> None:
-        """Pick up new downloads, changed filters and a new VLM file.
+        """Pick up new downloads, changed filters, and new VLM or draft files.
 
         Without this, a page started before a download or before the VLM
         captions were written showed the old state until it was restarted.
@@ -300,10 +342,14 @@ class Workbench:
             self.photos = load_photos(self.db)
             self.by_id = {photo.pageid: photo for photo in self.photos}
             self._photos_signature = signature
-        stamp = self._vlm_mtime()
+        stamp = _mtime(self.vlm_path)
         if stamp != self._vlm_stamp:
             self.vlm = load_vlm(self.vlm_path)
             self._vlm_stamp = stamp
+        stamp = _mtime(self.drafts_path)
+        if self.drafts_path is not None and stamp != self._drafts_stamp:
+            self.drafts = load_drafts(self.drafts_path)
+            self._drafts_stamp = stamp
 
     # -- reads
 
@@ -317,8 +363,12 @@ class Workbench:
                     "item": None,
                     "remaining": 0,
                     "message": self._empty(mode, words),
+                    "stats": self._stats(),
                 }
-            return self._item(mode, candidates[0], len(candidates))
+            return {
+                **self._item(mode, candidates[0], len(candidates)),
+                "stats": self._stats(),
+            }
 
     def item(self, mode: str, pageid: int) -> dict[str, Any]:
         with self.lock:
@@ -403,6 +453,29 @@ class Workbench:
                         base, existing, "Escreva a consulta em português."
                     )
                 record = {**base, "pt": portuguese, "en": english}
+                south = clean_text(payload, "pt_south")
+                if south:
+                    record["pt_south"] = south
+                draft = self.drafts.get(photo.pageid)
+                if draft is None:
+                    record["source"] = "human"
+                else:
+                    # Kept apart in the analysis: a model drafted these, so
+                    # they may share its wording with model-written captions.
+                    same = (
+                        portuguese == " ".join(draft["pt"].split())
+                        and english == " ".join(draft["en"].split())
+                        and south == " ".join(draft["pt_south"].split())
+                    )
+                    record.update(
+                        source="model draft",
+                        draft_pt=draft["pt"],
+                        draft_en=draft["en"],
+                        draft_model=draft["model"],
+                        verdict="approved" if same else "edited",
+                    )
+                    if draft["pt_south"]:
+                        record["draft_pt_south"] = draft["pt_south"]
             self.ledger.add(record)
             return {"stats": self._stats(), "deleted": False}
 
@@ -417,9 +490,27 @@ class Workbench:
             )
             self.db.commit()
             self.skips.add((photo.pageid, mode, key))
-            return {"ok": True}
+            return {"ok": True, "stats": self._stats()}
 
     # -- internals
+
+    def _drafts_left(self) -> tuple[int, int]:
+        """Drafts still to correct (all, and those with a southern variant).
+
+        A drafted photo is done once its query is saved or it was skipped in
+        the queries mode, under any filter; a draft whose photo is no longer
+        downloaded and accepted cannot be corrected and is not counted.
+        """
+        skipped = {pageid for pageid, mode, _ in self.skips if mode == "queries"}
+        left = south = 0
+        for pageid, draft in self.drafts.items():
+            if pageid not in self.by_id or pageid in skipped:
+                continue
+            if self.ledger.get(pageid, "query") is not None:
+                continue
+            left += 1
+            south += bool(draft.get("pt_south"))
+        return left, south
 
     def _delete(
         self, base: dict[str, Any], existing: dict[str, Any] | None, message: str
@@ -477,6 +568,15 @@ class Workbench:
             if mode == "review" and photo.pageid not in self.vlm:
                 continue
             found.append(photo)
+        if mode == "queries" and self.drafts:
+            # Drafted photos first; the sort is stable, so `spread` order holds.
+            # Regional pairs first among them, so the set fills before the rest.
+            found.sort(
+                key=lambda photo: (
+                    photo.pageid not in self.drafts,
+                    not self.drafts.get(photo.pageid, {}).get("pt_south"),
+                )
+            )
         return found
 
     def _empty(self, mode: str, words: list[str]) -> str:
@@ -512,11 +612,14 @@ class Workbench:
         }
         if mode == "review":
             item["vlm"] = self.vlm.get(photo.pageid)
+        if mode == "queries":
+            item["draft"] = self.drafts.get(photo.pageid)
         return {"item": item, "remaining": remaining}
 
     def _stats(self) -> dict[str, Any]:
         focus: Counter[str] = Counter()
         verdicts: Counter[str] = Counter()
+        draft_verdicts: Counter[str] = Counter()
         queries = 0
         for _, kind, record in self.ledger.live():
             if kind == "caption":
@@ -525,8 +628,11 @@ class Workbench:
                 verdicts[str(record.get("verdict"))] += 1
             elif kind == "query":
                 queries += 1
+                if record.get("source") == "model draft":
+                    draft_verdicts[str(record.get("verdict"))] += 1
         reviewed = sum(verdicts.values())
         wrong = verdicts["edited"] + verdicts["rejected"]
+        left, south_left = self._drafts_left()
         return {
             "photos": len(self.photos),
             "captions": sum(focus.values()),
@@ -537,6 +643,10 @@ class Workbench:
             "verdicts": dict(verdicts),
             "error_rate": wrong / reviewed if reviewed else None,
             "queries": queries,
+            "drafts": len(self.drafts),
+            "draft_verdicts": dict(draft_verdicts),
+            "drafts_left": left,
+            "south_left": south_left,
         }
 
 
@@ -665,6 +775,11 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--vlm", type=Path, help=f"VLM captions to review (default: OUT/{VLM_NAME})"
     )
+    parser.add_argument(
+        "--drafts",
+        type=Path,
+        help=f"query drafts to correct (default: OUT/{DRAFTS_NAME})",
+    )
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument(
         "--no-browser", action="store_true", help="do not open the page in a browser"
@@ -693,6 +808,7 @@ def main(argv: list[str] | None = None) -> int:
         vlm_path=vlm_path,
         db=db,
         out_dir=out_dir,
+        drafts_path=args.drafts or out_dir / DRAFTS_NAME,
     )
 
     Handler.bench = bench
