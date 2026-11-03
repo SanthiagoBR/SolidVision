@@ -1,10 +1,10 @@
 # RFC-042 — Fine-tuning do CLIP
 
-**Status:** Proposto. Rascunho para ser desenvolvido depois que os RFCs em andamento forem fechados. Nada aqui foi medido ou implementado
+**Status:** Em implementação. A porta de entrada de §3.1 foi medida (§14): nenhum checkpoint aéreo supera o atual, e o treino próprio segue. As fotos do Commons estão baixadas e o conjunto de §5.1.2 está congelado; faltam as legendas de treino e o treino (§15)
 **Depende de:** RFC-023 (o adaptador de embedding, o benchmark do bake-off e [§18](rfc-023-adaptador-de-embedding-clip.md#18-fine-tuning-e-trabalho-futuro), que adiou este assunto), RFC-025 (a busca semântica e a linha de base de [§11.2](rfc-025-busca-semantica.md)), RFC-035 (o lockfile de modelos, por onde um checkpoint novo entra)
 **Bloqueia:** nada
 **Migration:** não, se a dimensão do vetor continuar 512. Sim, se mudar (§9)
-**Medição:** nenhuma ainda
+**Medição:** `experiments/rfc-042-fine-tuning/measure_baseline.py` (o `.json`, com o rank de cada consulta e cada tradução, fica fora do git), rodado em 2026-11-02 nesta máquina, em CPU, na divisão de validação de `eval_set.jsonl` (§14)
 
 > **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir*. Os números sem marca vêm de outros RFCs e dizem de qual. As estimativas de tempo de treino, de volume de dados e de ganho esperado de §4, §6 e §7 são regras gerais de adaptação de domínio do CLIP, e não foram medidas neste projeto. Este RFC não afirma que o fine-tuning vai melhorar a busca. Ele define como saber se melhorou.
 
@@ -209,3 +209,49 @@ Qualquer mudança nos pesos do encoder de imagem invalida os vetores armazenados
 - Fixar a margem de aceitação de §5.3 antes de abrir o conjunto de teste.
 - Medir tempo real de treino, tamanho de dados necessário e ganho (todos os `TBM`).
 - Se algum nível passar: o RFC de troca de modelo e reindexação.
+
+## 14. Medição da porta de entrada (§3.1)
+
+Rodada em 2026-11-02, em CPU, por `measure_baseline.py`, na divisão de **validação** do conjunto de §5.1.2: 178 consultas contra as 525 fotos de avaliação. O teste (347 consultas) não foi aberto (§4.6).
+
+**Como.** O checkpoint atual é medido pelo próprio `ClipEmbeddingModel` do app, carregado da árvore do lockfile, com o pré-processamento, o template `a photo of {query}` e o tradutor do produto. Os candidatos rodam pelo `open_clip` (3.3.0, numa pasta à parte, sem tocar no ambiente do app), cada um com o seu pré-processamento, e leem o mesmo inglês: o tradutor do produto, chamado uma vez por consulta. Cada candidato foi tentado com o template do produto e sem template, e com as duas ativações (GELU e QuickGELU), porque as instruções dos autores divergem sobre o nome da arquitetura. As métricas são recall@1 e recall@5 (a foto certa entre as K primeiras). A diferença para o atual vem com o intervalo de 95% de um bootstrap pareado sobre as consultas.
+
+**Conferência do script.** No benchmark do RFC-023, o atual dá 64,0% de top-1 estrito e 80,4% de pareado. O 64,0% é o que o RFC-025 já mediu pelo caminho do app (+1 consulta sobre os 60,0% do bake-off). O 80,4% é idêntico ao do bake-off. O script mede o produto.
+
+**Resultado.** A melhor variante de cada modelo, escolhida pelo recall@5 em português na validação:
+
+| modelo | en R@1 | en R@5 | pt R@1 | pt R@5 | pt R@1 vs atual | pt R@5 vs atual | RFC-023 estrito / pareado |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **atual**, LAION ViT-B/32 | 55,1% | 83,7% | 46,6% | 78,1% | | | 64,0% / 80,4% |
+| GeoRSCLIP ViT-B/32, QuickGELU, `a photo of` | 55,1% | 80,3% | 52,2% | 73,6% | +5,6 [−1,1; +11,8] | −4,5 [−10,1; +1,1] | 52,0% / 81,5% |
+| RemoteCLIP ViT-B/32, QuickGELU, sem template | 26,4% | 48,9% | 22,5% | 47,2% | −24,2 [−32,0; −16,3] | −30,9 [−40,4; −21,3] | 32,0% / 73,5% |
+
+- **Nenhum candidato supera o atual por mais que o ruído.** O caminho de §3.1 se aplica como escrito: não há troca de checkpoint, e o treino próprio continua, a começar pelo nível A.
+- **GeoRSCLIP empata.** Ganha no recall@1 em português e perde no recall@5, e nos dois casos o intervalo cruza o zero. As outras três variantes do GeoRSCLIP perdem de 4,5 a 6,7 pontos de recall@5 em português.
+- **RemoteCLIP perde por 25 a 40 pontos** em todas as variantes. Foi treinado em imagens de satélite, de cima, e as fotos daqui são oblíquas. É o risco 1 de §11, medido.
+- **Licenças**, que deixaram de decidir: RemoteCLIP é Apache-2.0 no GitHub; GeoRSCLIP é MIT no GitHub, mas o cartão no Hugging Face diz só "cc", sem a variante. Os pesos medidos foram `chendelong/RemoteCLIP@bf1d8a3c`, `RemoteCLIP-ViT-B-32.pt` (SHA-256 `60014e39…`), e `Zilun/GeoRSCLIP@4920188e`, `ckpt/RS5M_ViT-B-32.pt` (SHA-256 `129bafaa…`).
+
+**O ruído, medido (`TBM` de §5.1.2).** Com 178 consultas, o intervalo de 95% da diferença entre dois modelos parecidos tem cerca de ±6 pontos, no recall@1 e no recall@5. No teste, com 347, deve ficar perto de ±4,3 (a largura cai com a raiz do número de consultas; a confirmar quando o teste abrir). É a ordem da margem de §5.3, ainda a fixar antes de abrir o teste.
+
+**O tradutor custa mais que o checkpoint.** No modelo atual e nas mesmas fotos, a consulta em português traduzida acerta menos que a mesma consulta escrita em inglês:
+
+| comparação, modelo atual | R@1 | R@5 | consultas |
+| --- | --- | --- | --- |
+| português traduzido contra inglês | −8,4 [−13,5; −3,9] | −5,6 [−10,1; −0,6] | 178 |
+| termos do sul contra português padrão, traduzidos | −17,4 [−34,8; −4,3] | −30,4 [−47,8; −13,0] | 23 |
+
+Das 178, 15 acham a foto entre as 5 primeiras em inglês e não em português. As traduções explicam: "casarão" vira *they will marry*, "corredeiras" vira *slides*, "mato" vira *I kill*, "trapiche em água barrenta" vira *barren water trap*. Uma consulta ("campos verdes divididos por cercas vivas vistos do helicóptero") não foi detectada como português e chegou ao CLIP sem tradução. O nível A, que ajusta o lado da consulta, e uma correção do tradutor atacam essa perda **sem reindexar**: nenhum dos dois muda os vetores das imagens.
+
+**Por cena** (recall@5 do atual, em português; o rótulo vem da primeira palavra de cena da consulta, §15): água 84,1% (44 consultas), construído 74,0% (104), campo 83,3% (30). Consultas que falam de água: 82,1% (78); as que não falam: 75,0% (100). A cena construída é a mais fraca, como o RFC-023 já tinha visto nas consultas de rua e de paisagem urbana.
+
+## 15. Correções feitas durante a implementação
+
+O texto acima fica como foi proposto. O que a implementação mudou ou mediu está aqui, com a seção de origem.
+
+1. **§2 e §5.1.1: a linha de base do benchmark do RFC-023 é 64,0%, não 60,0%.** Os 60,0% são do bake-off. Pelo caminho do app, o mesmo checkpoint dá 64,0%, como o RFC-025 já registrou, e foi o que §14 reproduziu. A comparação deste RFC é contra 64,0%.
+2. **§7, item 8: o pacote não vai em SSD.** O único SSD disponível é o interno do notebook de desenvolvimento. O pacote passa a ser baixado na máquina de treino: o código por `git clone`; os dados como shards WebDataset num dataset privado do Hugging Face, fixado por commit; o checkpoint base por `scripts/vendor_models.py`; e o PyTorch com CUDA escolhido pela saída de `nvidia-smi`. Voltam só os adaptadores LoRA e os logs; a fusão e a avaliação rodam em casa, em CPU. Um pendrive com o mesmo pacote é o plano B. Ainda não executado.
+3. **§4.1 e §4.2: Commons verificado foto a foto, sem CC BY-SA por enquanto.** `collect_commons.py` lê a licença de cada arquivo e grava a procedência em `provenance.csv` (§4.4). A descoberta achou 83.600 fotos, das quais 69.095 são CC BY-SA, e a pergunta de §8.3 continua sem resposta. Sem elas, e com os filtros (de 1990 em diante, sem tons de cinza, proporção até 2:1, lado menor de pelo menos 224 px, no máximo 5 fotos por autor e dia), sobram **7.652** fotos aceitas, todas baixadas em 500 px (~72 KB cada, 565 MB). Com BY-SA seriam 30.379. O volume serve ao nível A (2 a 5 mil pares, §4.5), não ao B (20 a 50 mil).
+4. **§4.3, `TBM` "taxa de erro encontrada": 5,1%.** O Claude (Sonnet 5.5) escreveu 216 legendas a partir das fotos, e o usuário revisou todas, não só 5 a 10%: 205 aprovadas, 11 corrigidas, nenhuma rejeitada. A revisão levou mediana de 16 s por legenda (média de 29 s); uma legenda escrita do zero levou ~65 s. As legendas das outras ~7,4 mil fotos ainda não foram geradas.
+5. **§5.1.2: 525 fotos, cada consulta revisada à mão.** Uma foto por série (autor e dia), e nenhuma de série que tenha legenda de treino, para que o mesmo voo não apareça dos dois lados. O Claude escreveu os rascunhos das consultas em português a partir das fotos, e o usuário corrigiu cada um na página de revisão: 14 escritas do zero e 511 a partir de rascunho, das quais 359 aprovadas sem mudança (70,3%) e 152 editadas. Os rascunhos refeitos olhando as fotos de novo tiveram 61 de 65 aprovados. 66 consultas têm uma variante com termos do sul do Brasil, para medir o tradutor nesse vocabulário. As versões em inglês (§5.2: "nos dois idiomas") foram escritas pelo Claude a partir do português e conferidas por amostra.
+6. **§4.6: as divisões estão congeladas em `eval_set.jsonl`** por `freeze_eval_set.py`. Um terço das consultas é validação (178) e o resto é teste (347), sorteados pela ordem `spread` do coletor dentro de cada estrato (tipo de cena e presença da variante do sul). Validação e teste usam a mesma galeria, as 525 fotos. O teste só abre com `--open-test`, e a primeira abertura fica registrada. O tipo de cena é um rótulo grosso, para ler resultados em separado, e não uma verdade: a primeira palavra da consulta que nomeia uma cena decide (água, construído, campo).
+7. **§5.1.3, o conjunto de regressão, ainda não existe.** Ele não pesa na decisão de §3.1, que não treina nada, mas é pré-requisito do critério de §5.3 para qualquer nível.
