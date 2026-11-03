@@ -194,6 +194,26 @@ class ImageModel(Base):
     cost no migration when they arrive.
     """
 
+    missing_since: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    """When a whole-disk scan first failed to list this file, or NULL (RFC-046).
+
+    NULL is **present**. A date is *"not in the scan of this date"*: the row,
+    its vector and its thumbnail stay, every read that serves the interface
+    hides it, and the next scan that lists the file again sets it back to
+    NULL -- without inference, because the size and the date are the ones the
+    row holds (RFC-046 section 3).
+
+    **A date and not a boolean**, for two reasons (section 5.1): the card says
+    since when -- *"não encontradas no scan de 12/03"* -- and a purge by age,
+    if one ever exists, needs no other migration.
+
+    `TIMESTAMPTZ`, like `file_modified_at`: it is an instant on this machine's
+    clock, not a camera's wall-clock reading. No index: the filter discards
+    almost nothing (section 6).
+    """
+
     __table_args__ = (
         UniqueConstraint(
             "device_id", "relative_path", name="uq_images_device_relative_path"
@@ -263,6 +283,7 @@ class ImageModel(Base):
                 image.position_source.value if image.position_source else None
             ),
             thumbnail_path=None,
+            missing_since=None,
         )
 
     def to_domain(self) -> Image:

@@ -20,8 +20,8 @@ As imagens **nunca** são copiadas para o banco nem para um diretório gerenciad
 
 Mudanças no sistema de arquivos precisam ser monitoradas. O banco pode ficar dessincronizado do disco:
 
-- um arquivo **movido ou renomeado** aparece como imagem nova, e a antiga permanece indexada (ver [RFC-021 §3.1](../rfcs/rfc-021-worker-de-indexacao.md));
-- um arquivo **removido** continua no índice — não há detecção de exclusão hoje;
+- um arquivo **movido ou renomeado** aparece como imagem nova (ver [RFC-021 §3.1](../rfcs/rfc-021-worker-de-indexacao.md)), e, desde o [RFC-046](../rfcs/rfc-046-fotos-ausentes-do-disco.md), a antiga sai da busca no scan seguinte do disco inteiro: fica marcada como não encontrada, com o vetor, e volta sem inferência se o arquivo voltar ao caminho antigo;
+- um arquivo **removido** sai da busca no scan seguinte do disco inteiro, e do banco pela purga, um botão por disco ([RFC-046](../rfcs/rfc-046-fotos-ausentes-do-disco.md)). Até lá, continua no índice;
 - um arquivo **modificado** só é notado na próxima execução do worker.
 
 ## Consequências no design

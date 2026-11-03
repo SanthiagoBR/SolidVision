@@ -46,3 +46,14 @@ class ThumbnailStorePort(ABC):
         "not generated yet" (RFC-030 section 7.2) instead of failing the
         request.
         """
+
+    @abstractmethod
+    def delete(self, location: str) -> None:
+        """Remove the thumbnail behind a stored location, if it is there (RFC-046).
+
+        The purge's second step, after the rows are gone (section 5.7). A
+        location with nothing behind it is not an error -- the cache is the
+        application's, and the file may have been cleaned already -- and a
+        location that does not resolve inside the store deletes nothing:
+        the same check `locate()` makes, because this one removes.
+        """

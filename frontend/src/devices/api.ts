@@ -12,6 +12,8 @@
  *                                                           stale
  *     POST /jobs/{id}/     nothing                          the job's cache
  *     cancel
+ *     DELETE /devices/{id} nothing: the purge of RFC-046    /devices and its
+ *     /missing-images                                       folders go stale
  *
  * No body carries a path the user typed: the identity is the one `/volumes`
  * gave, and the scopes are the `path` of the listing (RFC-031 section 5.1).
@@ -66,6 +68,26 @@ export async function createJob(
       api.POST("/api/v1/jobs", { body: { device_id: deviceId, scopes: [...scopes] } }),
     ),
   );
+}
+
+/** Forget the photos a scan of the whole disk did not find (RFC-046 section
+ * 5.7); the number removed. Irreversible: the card asks first. */
+export async function purgeMissing(deviceId: string): Promise<number> {
+  const purged = bodyOf(
+    await answered(
+      api.DELETE("/api/v1/devices/{device_id}/missing-images", {
+        params: { path: { device_id: deviceId } },
+      }),
+    ),
+  );
+  return purged.purged;
+}
+
+/** After a purge: the card loses its line of missing photos, and the folders'
+ * counts are read again. The search, the listing and the map already hid the
+ * photos, and change nothing. */
+export function afterPurge(client: QueryClient, deviceId: string): void {
+  invalidate(client, [keys.devices, keys.folders(deviceId)]);
 }
 
 export async function cancelJob(jobId: string): Promise<Job> {

@@ -27,6 +27,7 @@ process when that happens (RFC-027 §7).
 
 from __future__ import annotations
 
+import datetime
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,6 +71,10 @@ class DeviceSummary:
     indexed_images: int
     """How many rows `images` holds for this device.
 
+    Since RFC-046 only the **visible** ones: a row the last scan did not
+    find is not counted, so the numerator of the percentage is what the
+    search can find (section 5.8). The marked ones are `missing_images`.
+
     One of the three parts of "% indexed". The API returns the parts and
     never the percentage: a `percent_indexed` field would be consumable
     without `last_scan_at` beside it, and the first client to render it
@@ -79,6 +84,12 @@ class DeviceSummary:
 
     active_job: IndexingJob | None
     """The `pending` or `running` job holding this disk, if any."""
+
+    missing_images: int = 0
+    """How many rows the last scans of the whole disk did not find (RFC-046)."""
+
+    missing_since: datetime.datetime | None = None
+    """The oldest of their marks: the scan the card names. `None` with none."""
 
     @property
     def connected(self) -> bool:
@@ -116,11 +127,12 @@ class DescribeDevicesUseCase:
         of the same filesystem here. `DeviceLocator` is therefore not
         used at all: every method on it takes one `Device`.
 
-        The same trap sits under the other two columns and is easier to
-        miss. A `COUNT(*)` per device is N queries, and
+        The same trap sits under the other columns and is easier to miss.
+        A `COUNT(*)` per device is N queries, and
         `IndexingJobRepository.list(device_id=...)` per device is N more.
         Both are answered by asking for everything once and grouping in
-        memory.
+        memory -- and so are the missing photos of RFC-046, one more
+        grouped read, with their count and their oldest mark together.
 
         The order and length of `devices` are preserved exactly, so a
         caller that sorted them keeps its order -- and so that a caller
@@ -128,17 +140,23 @@ class DescribeDevicesUseCase:
         """
         mounted = self._catalog.mount_points()
         indexed = self._images.count_by_device()
+        missing = self._images.count_missing_by_device()
         active = self._active_jobs()
 
-        return [
-            DeviceSummary(
-                device=device,
-                mount_point=mounted.get(device.volume_identity),
-                indexed_images=indexed.get(device.id, 0),
-                active_job=active.get(device.id),
+        summaries = []
+        for device in devices:
+            marked = missing.get(device.id)
+            summaries.append(
+                DeviceSummary(
+                    device=device,
+                    mount_point=mounted.get(device.volume_identity),
+                    indexed_images=indexed.get(device.id, 0),
+                    active_job=active.get(device.id),
+                    missing_images=marked.count if marked is not None else 0,
+                    missing_since=marked.since if marked is not None else None,
+                )
             )
-            for device in devices
-        ]
+        return summaries
 
     def execute_one(self, device: Device) -> DeviceSummary:
         """Describe a single device; the one-element case of `execute()`."""

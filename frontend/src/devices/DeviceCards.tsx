@@ -10,6 +10,12 @@
  * The node draws a thin bar under the label and "50% indexado"; the card keeps
  * the bar and writes the percentage only with the date of the scan, and the
  * connection is the dot, the strongest signal of the card (RFC-031).
+ *
+ * A disk with photos a scan did not find has a strip under its card (RFC-046
+ * section 5.8): "312 fotos não encontradas no scan de 12/03" and "Remover do
+ * índice", which asks first and waits while the disk has a job. A strip and
+ * not a line of the card, because the card is a link and a button cannot sit
+ * inside one.
  */
 
 import { useState } from "react";
@@ -18,9 +24,16 @@ import { Link, useMatch } from "react-router";
 import type { Device } from "../api/client";
 import { useDevices, useJob } from "../api/queries";
 import { AddDeviceDialog } from "./AddDeviceDialog";
-import { cardJobText, cardPhotosText, connectionText } from "./card";
+import {
+  cardJobText,
+  cardMissingText,
+  cardPhotosText,
+  connectionText,
+  purgeDisabled,
+} from "./card";
 import styles from "./Devices.module.css";
 import { devicePath } from "./folders";
+import { PurgeMissingDialog } from "./PurgeMissingDialog";
 import { scanShare } from "./share";
 import { startFoldersGesture } from "./timing";
 
@@ -56,12 +69,21 @@ function DeviceCard({ device, open }: { device: Device; open: boolean }) {
   const job = useJob(device.active_job?.id ?? null);
   const share = scanShare(device);
   const jobText = cardJobText(device.active_job, job.data);
+  const missingText = cardMissingText(device);
+  const [confirming, setConfirming] = useState(false);
+  const cardClasses = [
+    styles.card,
+    open ? styles.cardOpen : "",
+    missingText !== null ? styles.cardWithMissing : "",
+  ]
+    .filter((name) => name !== "")
+    .join(" ");
 
   return (
     <li>
       <Link
         to={devicePath(device.id)}
-        className={open ? `${styles.card} ${styles.cardOpen}` : styles.card}
+        className={cardClasses}
         aria-current={open ? "page" : undefined}
         onClick={() => startFoldersGesture(device.id, "")}
       >
@@ -87,6 +109,27 @@ function DeviceCard({ device, open }: { device: Device; open: boolean }) {
         )}
         {jobText !== null && <span className={styles.cardJob}>{jobText}</span>}
       </Link>
+      {missingText !== null && (
+        <div className={styles.cardMissing}>
+          <span className={styles.cardMissingText}>{missingText}</span>
+          <button
+            type="button"
+            className={styles.cardMissingAction}
+            disabled={purgeDisabled(device)}
+            title={
+              purgeDisabled(device)
+                ? `Espere a indexação do ${device.label} terminar.`
+                : undefined
+            }
+            onClick={() => setConfirming(true)}
+          >
+            Remover do índice
+          </button>
+        </div>
+      )}
+      {confirming && (
+        <PurgeMissingDialog device={device} onClose={() => setConfirming(false)} />
+      )}
     </li>
   );
 }

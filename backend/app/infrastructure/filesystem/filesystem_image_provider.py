@@ -25,7 +25,9 @@ paths with paths.
 from __future__ import annotations
 
 import datetime
+import os
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from pathlib import Path, PurePath
 
 from app.domain.services.indexing_observer import (
@@ -33,8 +35,12 @@ from app.domain.services.indexing_observer import (
     NullIndexingObserver,
 )
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.root_listing import RootListing
 from app.infrastructure.filesystem.discovered_image_file import DiscoveredImageFile
 from app.infrastructure.filesystem.exif_capture_date import read_exif_facts
+from app.infrastructure.logging.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def discovery_sort_key(relative_path: PurePath) -> PurePath:
@@ -51,6 +57,85 @@ def discovery_sort_key(relative_path: PurePath) -> PurePath:
     the same decision rather than two independent `sorted()` calls.
     """
     return relative_path
+
+
+@dataclass(frozen=True)
+class ListedTree:
+    """What `_list_tree()` found under one directory.
+
+    `entries` are what `sorted(root.rglob("*"))` used to give -- folders and
+    files, without the root itself -- unsorted; `files` are the entries the
+    walk classed as files, **the same objects** as in `entries`;
+    `unreadable` are the folders whose listing failed, absolute, in the order
+    they failed.
+    """
+
+    entries: list[Path]
+    files: list[Path]
+    unreadable: list[Path]
+
+    def file_identities(self) -> set[int]:
+        """The `id()` of each file, to ask "is this entry a file" of `entries`.
+
+        **By identity, not by path.** Hashing a `WindowsPath` case-folds its
+        text, every time: a `set` of the 116,396 paths of `E:` was 1.5 s of
+        the 2.2 s the first listing took, and made the walk twice as slow as
+        the `rglob` it replaces (RFC-046 section 16.12). The objects are the
+        ones in `entries`, alive as long as this tree is, so their ids are
+        theirs.
+        """
+        return {id(path) for path in self.files}
+
+
+def _list_tree(scope_root: Path) -> ListedTree:
+    """List everything under `scope_root`, and say which folders could not be read.
+
+    **`Path.walk(on_error=...)`, not `rglob("*")`** (RFC-046 section 5.2). In
+    the Python 3.12 of this installation `rglob("*")` finds the folders with a
+    `walk()` that has no `on_error`, and lists each one again with a
+    `scandir()` inside an `except OSError: pass` -- so a folder that cannot be
+    read vanishes from the listing, with everything in it, and nothing says
+    so. The pilot of section 2 showed it with a folder denied by `icacls`.
+    The walk gives the same entries and hands the failure here.
+
+    What does not change, and why:
+
+    * **the entries**: the walk's `dirnames` and `filenames` of every folder
+      are what the `scandir()` of the `rglob` listed;
+    * **the links**: `follow_symlinks=False`, which is what the `rglob` used
+      inside; a link to a folder is an entry and is not walked into;
+    * **the order**: none here. It comes from the `sorted()` with
+      `discovery_sort_key` after the listing, as before.
+
+    Two behaviours of the 3.12 `walk()` the callers rely on (section 5.2): an
+    error **while reading** a folder that did open is not given to `on_error`
+    -- it propagates, ends the scan, and the job fails, which marks nothing;
+    and an `is_dir()` that fails classes the entry as a file, whose folder is
+    then not walked into. On Windows the type comes from the listing itself.
+
+    One read per folder, where the `rglob` made two.
+    """
+    entries: list[Path] = []
+    files: list[Path] = []
+    unreadable: list[Path] = []
+
+    def note(error: OSError) -> None:
+        # `filename` is the folder whose `scandir()` failed. Without one the
+        # failure has no place, and the conservative answer is the root:
+        # everything under it is then out of the sweep's reach.
+        failed = None if error.filename is None else Path(error.filename)
+        if failed is None or not failed.is_relative_to(scope_root):
+            failed = scope_root
+        unreadable.append(failed)
+
+    for folder, dirnames, filenames in scope_root.walk(on_error=note):
+        for name in dirnames:
+            entries.append(folder / name)
+        for name in filenames:
+            path = folder / name
+            entries.append(path)
+            files.append(path)
+    return ListedTree(entries=entries, files=files, unreadable=unreadable)
 
 
 def is_after_checkpoint(relative_path: PurePath, checkpoint: PurePath | None) -> bool:
@@ -152,6 +237,17 @@ class FilesystemImageProvider:
         self._excluded = tuple(
             directory.resolve() for directory in excluded_directories
         )
+        # `pathlib`'s own rule: `PurePath` equality folds case where the
+        # platform does (`_str_normcase`), and so does `_is_excluded()`.
+        self._case_insensitive = PurePath("A") == PurePath("a")
+        self._excluded_texts = tuple(
+            (folded, folded if folded.endswith(os.sep) else folded + os.sep)
+            for folded in (self._fold(str(directory)) for directory in self._excluded)
+        )
+        root_text = str(root)
+        self._root_prefix = (
+            root_text if root_text.endswith(os.sep) else root_text + os.sep
+        )
 
     def discover(self) -> Iterator[DiscoveredImageFile]:
         """Yield metadata for every supported image file the scan covers.
@@ -223,22 +319,39 @@ class FilesystemImageProvider:
         saves (RFC-029 section 9.1).
 
         **The `sorted()` is what this cannot cover.** It consumes the
-        entire `rglob` before the first file comes out, so a cold walk of
+        entire walk before the first file comes out, so a cold walk of
         a large disk produces no callback at all until it finishes. That
         is the gap `job_stale_timeout` has to clear, and it is why
         RFC-029 section 9.1's timeout comes from a measured distribution
         that includes the first window rather than from the length of a
         batch.
 
-        With `report`, the listing is counted as soon as it exists, and
-        the count goes to `IndexingObserver.listed()` before the first
-        file is yielded: that is when the denominator of "% indexed" is
-        known, and the scan is the one the job already does (RFC-039
-        section 4.1).
+        With `report`, the listing goes to `IndexingObserver.listed()` as
+        soon as it exists and before the first file is yielded: that is
+        when the denominator of "% indexed" is known (RFC-039 section 4.1),
+        and since RFC-046 the files themselves, which the job compares with
+        the device's rows when it ends (`RootListing`).
+
+        **A folder that could not be read is a WARNING, in every scan** --
+        of some folders too -- with its name (RFC-046 section 5.2). Before,
+        it left no trace. One inside an excluded directory is not reported:
+        nothing there is listed anyway, and `System Volume Information` is
+        unreadable on every disk.
         """
-        listing = sorted(scope_root.rglob("*"), key=discovery_sort_key)
+        tree = _list_tree(scope_root)
+        unreadable = [
+            folder for folder in tree.unreadable if not self._is_excluded(folder)
+        ]
+        for folder in unreadable:
+            logger.warning(
+                "Could not read the folder %s; nothing under it was listed",
+                self._posix(folder),
+            )
+        listing = sorted(tree.entries, key=discovery_sort_key)
         if report:
-            self._observer.listed(self._count_supported(listing))
+            self._observer.listed(
+                self._root_listing(listing, tree.file_identities(), unreadable)
+            )
         for path in listing:
             if not path.is_file():
                 continue
@@ -268,31 +381,65 @@ class FilesystemImageProvider:
                 position=facts.position,
             )
 
-    def _count_supported(self, listing: list[Path]) -> int:
-        """How many entries of a listing a scan would treat as photographs.
+    def _root_listing(
+        self, listing: list[Path], files: set[int], unreadable: list[Path]
+    ) -> RootListing:
+        """The listing a whole-root scan reports: its photographs, and its holes.
 
-        By the extension, outside the excluded directories -- the two
-        tests the walk applies -- and **without** the third, `is_file()`,
-        which is a `stat` per entry: on a cold disk, the read this count
-        exists to avoid. A folder named `x.jpg` therefore counts, and the
-        percentage it feeds is off by one for it (RFC-039 section 4.1).
+        The files are the entries the walk classed as files, with a
+        supported extension, outside the excluded directories -- the
+        walk's own tests, and **no `stat`**: the walk already knows a
+        folder from a file, so a folder named `x.jpg` no longer counts
+        (RFC-046 section 5.2, which removes the imprecision RFC-039 section
+        4.1 declared). In listing order, as text relative to the root.
 
-        Every entry is counted, the ones before a checkpoint too: the
-        denominator is the size of the disk, and a resume lists the whole
-        tree again.
+        Every file is in it, the ones before a checkpoint too: the
+        denominator is the size of the disk, and the sweep compares the
+        whole disk; a resume lists the whole tree again.
         """
-        return sum(
-            1
+        photographs = tuple(
+            self._posix(path)
             for path in listing
             if path.suffix.lower() in self._supported_extensions
+            and id(path) in files
             and not self._is_excluded(path)
         )
+        return RootListing(
+            file_count=len(photographs),
+            files=photographs,
+            unreadable=tuple(self._posix(folder) for folder in unreadable),
+        )
+
+    def _posix(self, path: Path) -> str:
+        """`path` relative to the scan root, in the posix form `ImagePath` keeps.
+
+        **The text after the root's, not `relative_to()`.** Every path of a
+        listing is the root joined with names, so its text begins with the
+        root's; `relative_to()` reaches the same answer by walking the
+        parents, and on the 123,353 files of `E:` that was 6.2 s per scan
+        (RFC-046 section 16.12). A path that does not begin with the root's
+        text -- the root itself, or one spelled otherwise -- goes the long
+        way.
+        """
+        text = str(path)
+        if text.startswith(self._root_prefix) and len(text) > len(self._root_prefix):
+            return text[len(self._root_prefix) :].replace(os.sep, "/")
+        return path.relative_to(self._root).as_posix()
 
     def _is_excluded(self, path: Path) -> bool:
         """Whether `path` lies inside one of the excluded directories.
 
         Compared as paths, so the platform's case rule applies: on Windows
         `AppData/Local` and `appdata/local` are the same directory.
+
+        **As text, by the rule `pathlib` uses** (RFC-046 section 16.12):
+        the path's text, folded as `pathlib` folds it for its own
+        comparisons, either is the excluded directory's or begins with it
+        and a separator -- which is `is_relative_to()` for the absolute,
+        `..`-free paths a walk yields, and the separator is what keeps
+        `cache` from excluding `cache2`. `is_relative_to()` builds every
+        parent of the path to compare it; with the three directories of
+        RFC-046 that was 8.9 s on the files of `E:`, twice per scan.
 
         The discovered path is *not* resolved, although the excluded ones
         are. Resolving is a system call per file on the one loop that runs
@@ -301,7 +448,15 @@ class FilesystemImageProvider:
         listing spells them, which is how the excluded directory resolves
         too.
         """
-        return any(path.is_relative_to(excluded) for excluded in self._excluded)
+        text = self._fold(str(path))
+        return any(
+            text == excluded or text.startswith(prefix)
+            for excluded, prefix in self._excluded_texts
+        )
+
+    def _fold(self, text: str) -> str:
+        """`text` in the case `pathlib` compares paths in, on this platform."""
+        return text.lower() if self._case_insensitive else text
 
     def _relative(self, path: Path) -> PurePath:
         """Express a discovered file the way a checkpoint names it.

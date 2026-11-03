@@ -30,6 +30,8 @@ from app.domain.entities.image import Image
 from app.domain.entities.indexing_job import IndexingJob
 from app.domain.repositories.device_repository import DeviceRepository
 from app.domain.repositories.indexing_job_repository import IndexingJobRepository
+from app.domain.value_objects.device_id import DeviceId
+from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.job_id import JobId
 from app.domain.value_objects.job_scope import JobScope
@@ -166,6 +168,23 @@ class IndexingWorker:
         )
 
 
+def listed_identity(
+    device_id: DeviceId, relative: str | Path
+) -> tuple[ImagePath, ImageId]:
+    """The stored path and the id of a file listed on a device (RFC-046 §4).
+
+    **The one translation from a listed file to an `ImageId`**, called by
+    `discovered_candidates()` for every file it hands to indexing and by the
+    job runner's sweep for every file of a whole disk's listing. The sweep
+    marks a row missing when its id is not among the listing's, so a second
+    copy of this -- one that normalised a separator or a case another way --
+    would mark as missing a photo that is on the disk. `relative` is relative
+    to the mount point, as a path or as the posix text of `RootListing`.
+    """
+    relative_path = ImagePath(relative)
+    return relative_path, compute_image_id(device_id, relative_path)
+
+
 def discovered_candidates(
     filesystem_provider: FilesystemImageProvider,
     device: Device,
@@ -184,11 +203,13 @@ def discovered_candidates(
         logger.info("Discovered file: %s", discovered.path)
         try:
             absolute_path = ImagePath(str(discovered.path))
-            relative_path = ImagePath(discovered.path.relative_to(mount_point))
+            relative_path, image_id = listed_identity(
+                device.id, discovered.path.relative_to(mount_point)
+            )
             capture = discovered.capture_date
             position = discovered.position
             image = Image(
-                id=compute_image_id(device.id, relative_path),
+                id=image_id,
                 device_id=device.id,
                 relative_path=relative_path,
                 filename=discovered.filename,

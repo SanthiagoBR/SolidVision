@@ -203,14 +203,31 @@ class DeviceDetailSchema(BaseModel):
     )
     indexed_images: int = Field(
         description=(
-            "How many images of this device are in the index. The "
-            "numerator. **There is no percent_indexed field**, so that no "
+            "How many images of this device are in the index and visible -- "
+            "what the search can find. The numerator. Photos the last scan "
+            "did not find are not counted here but in missing_images "
+            "(RFC-046). **There is no percent_indexed field**, so that no "
             "client can show the ratio without having held the scan date "
             "(RFC-031 section 4.2)."
         )
     )
     active_job: ActiveJobSchema | None = Field(
         description="The pending or running job holding this disk, if any"
+    )
+    missing_images: int = Field(
+        description=(
+            "How many indexed photos of this disk a scan of the whole disk "
+            "did not find (RFC-046). Hidden from every search, listing, map "
+            "and count; still in the database, with their vectors and "
+            "thumbnails, until DELETE /devices/{id}/missing-images -- or "
+            "until a scan finds them again."
+        )
+    )
+    missing_since: datetime.datetime | None = Field(
+        description=(
+            "The scan that first missed any of them: the oldest mark. Null "
+            "when missing_images is 0."
+        )
     )
 
     @classmethod
@@ -253,7 +270,20 @@ class DeviceDetailSchema(BaseModel):
                 if summary.active_job is not None
                 else None
             ),
+            missing_images=summary.missing_images,
+            missing_since=summary.missing_since,
         )
+
+
+class PurgedImagesSchema(BaseModel):
+    """What `DELETE /devices/{id}/missing-images` removed (RFC-046 section 5.7)."""
+
+    purged: int = Field(
+        description=(
+            "How many photos left the index: every one a scan had marked as "
+            "not found on this disk. Their thumbnails left the cache too."
+        )
+    )
 
 
 class DeviceListSchema(BaseModel):

@@ -81,14 +81,18 @@ class World:
         read_ahead: ReadAheadLimits | None = None,
         content_hasher: ContentHasherPort | None = None,
         embedding_model: EmbeddingModelPort | None = None,
+        locator: FakeDeviceLocator | None = None,
+        images: FakeImageRepository | None = None,
+        supported_extensions: tuple[str, ...] = SUPPORTED,
     ) -> None:
         self.clock = MovableClock()
         self.events = events if events is not None else []
         self.device = make_device(label="HD2")
         self.devices = FakeDeviceRepository([self.device])
         self.jobs = jobs or InMemoryIndexingJobRepository()
-        self.locator = FakeDeviceLocator({self.device.id: disk})
-        self.images = FakeImageRepository()
+        self.locator = locator or FakeDeviceLocator({self.device.id: disk})
+        self.images = images or FakeImageRepository()
+        self.model = embedding_model or FakeEmbeddingModel()
         self.warmed: list[str] = []
         # As `build_runner()` composes them, when asked (RFC-036 section 7.5).
         wrap = deferring if deferring_repositories else _unchanged
@@ -98,12 +102,12 @@ class World:
             locator=self.locator,
             indexer=IndexOrUpdateImagesUseCase(
                 repository=wrap(self.images),
-                embedding_model=embedding_model or FakeEmbeddingModel(),
+                embedding_model=self.model,
                 content_hasher=content_hasher or StubContentHasher(),
                 batch_size=4,
                 metadata_prefetch_size=8,
             ),
-            supported_extensions=SUPPORTED,
+            supported_extensions=supported_extensions,
             extract_capture_date=False,
             clock=self.clock,
             stale_timeout=STALE_TIMEOUT,
@@ -112,7 +116,9 @@ class World:
             sleep=sleep,
             # RFC-045: off unless a test asks, as every test before it ran.
             read_ahead=read_ahead,
-            images=wrap(self.images) if read_ahead is not None else None,
+            # Always, as `build_runner()` passes it: since RFC-046 a job of
+            # the whole disk ends with the sweep, which needs it.
+            images=wrap(self.images),
         )
 
     def _record_warm_up(self) -> None:

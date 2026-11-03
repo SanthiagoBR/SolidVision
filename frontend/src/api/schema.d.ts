@@ -212,6 +212,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/{device_id}/missing-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove from the index the photos a scan no longer found on a disk
+         * @description Delete the photos of this disk that a scan marked as not found (RFC-046).
+         *
+         *     **The one route that deletes rows of the index**, and only these: the
+         *     ones a scan of the whole disk did not find, and that are hidden from
+         *     every read since. The rows go in one transaction, and only then their
+         *     thumbnails, from the application's own cache. **Irreversible**, which is
+         *     why the interface asks first, with the number.
+         *
+         *     **409 while the disk has a job**, pending or running: the job ends by
+         *     unmarking the photos it found again, and this would delete them first.
+         *     The request is legitimate and the state does not allow it -- RFC-030's
+         *     409.
+         *
+         *     **The disk does not have to be connected.** The marks came from a scan
+         *     that was checked when it ran, and forgetting what is no longer on a disk
+         *     needs nothing from the disk. Nothing in the user's file system is
+         *     touched, so none of RFC-030's guards apply.
+         */
+        delete: operations["purge_missing_images_api_v1_devices__device_id__missing_images_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geocode": {
         parameters: {
             query?: never;
@@ -975,7 +1011,7 @@ export interface components {
             id: string;
             /**
              * Indexed Images
-             * @description How many images of this device are in the index. The numerator. **There is no percent_indexed field**, so that no client can show the ratio without having held the scan date (RFC-031 section 4.2).
+             * @description How many images of this device are in the index and visible -- what the search can find. The numerator. Photos the last scan did not find are not counted here but in missing_images (RFC-046). **There is no percent_indexed field**, so that no client can show the ratio without having held the scan date (RFC-031 section 4.2).
              */
             indexed_images: number;
             /**
@@ -998,6 +1034,16 @@ export interface components {
              * @description When it was last observed plugged in. History, not state -- it never answers 'is it connected now'.
              */
             last_seen_at: string | null;
+            /**
+             * Missing Images
+             * @description How many indexed photos of this disk a scan of the whole disk did not find (RFC-046). Hidden from every search, listing, map and count; still in the database, with their vectors and thumbnails, until DELETE /devices/{id}/missing-images -- or until a scan finds them again.
+             */
+            missing_images: number;
+            /**
+             * Missing Since
+             * @description The scan that first missed any of them: the oldest mark. Null when missing_images is 0.
+             */
+            missing_since: string | null;
             /**
              * Mount Point
              * @description Where the disk is attached right now -- 'F:/' -- or null when it is not. Absent from the database on purpose: a drive letter is a function of mount order.
@@ -1437,6 +1483,17 @@ export interface components {
          * @enum {string}
          */
         PositionSource: "exif_gps" | "unknown";
+        /**
+         * PurgedImagesSchema
+         * @description What `DELETE /devices/{id}/missing-images` removed (RFC-046 section 5.7).
+         */
+        PurgedImagesSchema: {
+            /**
+             * Purged
+             * @description How many photos left the index: every one a scan had marked as not found on this disk. Their thumbnails left the cache too.
+             */
+            purged: number;
+        };
         /**
          * RankedImagesSchema
          * @description A ranking of the index, whatever the query was (RFC-038 section 4.1).
@@ -1954,6 +2011,51 @@ export interface operations {
                 content?: never;
             };
             /** @description The device is not connected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    purge_missing_images_api_v1_devices__device_id__missing_images_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgedImagesSchema"];
+                };
+            };
+            /** @description No device has this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The device has a pending or running indexing job */
             409: {
                 headers: {
                     [name: string]: unknown;

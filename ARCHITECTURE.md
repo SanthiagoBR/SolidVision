@@ -701,6 +701,7 @@ Represents a single indexed image.
 | longitude | Paired with `latitude`: both NULL or both set (`ck_images_position_pairing`) |
 | position_source | Where the position came from: `exif_gps`, `unknown`, or NULL (never examined) |
 | thumbnail_path | Thumbnail location, relative to the application's thumbnail cache; NULL if none yet |
+| missing_since | When a scan of the whole disk first did not find the file (`TIMESTAMPTZ`); NULL if present (RFC-046) |
 
 An image's location is the pair `(device_id, relative_path)`; there is no
 absolute-path column. The absolute path still exists but is *computed*,
@@ -988,6 +989,35 @@ largest DCT reduction that keeps both sides at least 1,000 px, none under
 2,000 px. It changes the vectors of large photos -- so, by the rule of the
 product, the migration that introduced it restarted the index from zero,
 keeping the devices. Any later change to the vectors needs the same.
+
+## Photos No Longer on the Disk (RFC-046)
+
+The filesystem is the source of truth (ADR-003), so a photo deleted, moved or
+renamed on the disk has to leave the index. It does, in two steps, and the
+first one never deletes:
+
+* **A job of the whole disk marks.** When it ends -- completed, not
+  cancelled, not failed, not taken over, and with the disk still at the mount
+  point it was listed at -- the job compares the device's rows with the ids
+  of every file its listing found, minted by the one function that mints them
+  during indexing. A visible row not listed gets `missing_since`; a marked row
+  listed again loses it. A job of some folders marks nothing.
+* **A marked row is hidden** from every read that serves the interface: the
+  search, the listing, the map and the counts all require `embedding IS NOT
+  NULL AND missing_since IS NULL`, written once (`_searchable()`). The row,
+  its vector and its thumbnail stay, so a file that comes back -- a folder
+  moved back, a photo restored from the bin -- is unmarked by the next scan
+  without inference. `GET /images/{id}` still answers for it.
+* **Only a button deletes**: `DELETE /devices/{id}/missing-images`, per disk,
+  with the number in the confirmation, refused while the disk has a job. The
+  rows go in one transaction, then their thumbnails.
+
+The listing is `Path.walk(on_error=...)`, not `rglob`, because `rglob`
+swallows a folder it cannot read along with everything in it; a row inside a
+folder the walk could not read is never marked, and the folder is a WARNING
+in the job's log. The recycle bin and `System Volume Information` at a
+volume's root are excluded from every scan, so a photo deleted by the
+Explorer leaves the search like one deleted for good.
 
 ## Resuming an Interrupted Job
 
@@ -1281,7 +1311,9 @@ Respect user privacy.
 
 ### Tradeoffs
 
-Filesystem changes must be monitored.
+Filesystem changes must be monitored. Since RFC-046 a removed or moved file
+leaves the search at the next scan of the whole disk, and the database by
+the purge.
 
 ---
 

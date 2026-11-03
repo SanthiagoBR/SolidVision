@@ -1,6 +1,7 @@
 r"""HTTP entry points for devices, volumes and their folders (RFC-031).
 
-Five routes, and the thing they have in common is what they refuse to
+Six routes -- the sixth, the purge of the photos a scan no longer found, is
+RFC-046's -- and the thing they have in common is what they refuse to
 take: **no route in this module accepts a file path, in a body, a query
 string, a header or a URL segment.** The property RFC-030 section 5.1
 established for `/reveal` survives a route whose entire purpose is to let
@@ -40,6 +41,7 @@ from app.application.use_cases.describe_devices import DescribeDevicesUseCase
 from app.application.use_cases.list_device_folders import ListDeviceFoldersUseCase
 from app.application.use_cases.list_devices import ListDevicesUseCase
 from app.application.use_cases.list_mounted_volumes import ListMountedVolumesUseCase
+from app.application.use_cases.purge_missing_images import PurgeMissingImagesUseCase
 from app.application.use_cases.register_device import RegisterDeviceUseCase
 from app.application.use_cases.rename_device import RenameDeviceUseCase
 from app.domain.value_objects.device_id import DeviceId
@@ -49,6 +51,7 @@ from app.presentation.dependencies import (
     get_list_device_folders_use_case,
     get_list_devices_use_case,
     get_list_mounted_volumes_use_case,
+    get_purge_missing_images_use_case,
     get_register_device_use_case,
     get_rename_device_use_case,
 )
@@ -56,6 +59,7 @@ from app.presentation.schemas.device_schema import (
     DeviceDetailSchema,
     DeviceListSchema,
     FolderListSchema,
+    PurgedImagesSchema,
     RegisterDeviceRequestSchema,
     RenameDeviceRequestSchema,
     VolumeListSchema,
@@ -290,3 +294,41 @@ def list_device_folders(
     it is paid.
     """
     return FolderListSchema.from_domain(use_case.execute(DeviceId(device_id), path))
+
+
+@router.delete(
+    "/devices/{device_id}/missing-images",
+    status_code=status.HTTP_200_OK,
+    response_model=PurgedImagesSchema,
+    summary="Remove from the index the photos a scan no longer found on a disk",
+    responses={
+        404: {"description": "No device has this id"},
+        409: {"description": "The device has a pending or running indexing job"},
+    },
+)
+def purge_missing_images(
+    device_id: UUID,
+    use_case: PurgeMissingImagesUseCase = Depends(get_purge_missing_images_use_case),
+) -> PurgedImagesSchema:
+    """Delete the photos of this disk that a scan marked as not found (RFC-046).
+
+    **The one route that deletes rows of the index**, and only these: the
+    ones a scan of the whole disk did not find, and that are hidden from
+    every read since. The rows go in one transaction, and only then their
+    thumbnails, from the application's own cache. **Irreversible**, which is
+    why the interface asks first, with the number.
+
+    **409 while the disk has a job**, pending or running: the job ends by
+    unmarking the photos it found again, and this would delete them first.
+    The request is legitimate and the state does not allow it -- RFC-030's
+    409.
+
+    **The disk does not have to be connected.** The marks came from a scan
+    that was checked when it ran, and forgetting what is no longer on a disk
+    needs nothing from the disk. Nothing in the user's file system is
+    touched, so none of RFC-030's guards apply.
+    """
+    logger.info("purge of missing images requested for device %s", device_id)
+    purged = use_case.execute(DeviceId(device_id))
+    logger.info("device %s: %d missing images purged", device_id, purged)
+    return PurgedImagesSchema(purged=purged)

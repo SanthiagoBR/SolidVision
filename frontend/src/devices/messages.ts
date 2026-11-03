@@ -20,6 +20,8 @@
  *     400      POST /devices  a defect: the identity is the API's own
  *     422      PATCH          a defect: the interface sends no blank label
  *     409      cancel         nothing: the job ended first, and is read again
+ *     409      DELETE missing a job holds the disk (RFC-046)
+ *     404      DELETE missing the device is no longer registered
  *     none     any            the shell's "Reconectando…", and a line here
  */
 
@@ -128,6 +130,21 @@ export function indexBlockedText(
     return `O ${device.label} já tem uma indexação em andamento.`;
   }
   return null;
+}
+
+/** A `DELETE /devices/{id}/missing-images` that failed (RFC-046 section 5.7).
+ * The 409 is a job that started since the card was drawn. */
+export function purgeErrorText(status: number, label: string): string {
+  switch (status) {
+    case 0:
+      return NO_ANSWER;
+    case 404:
+      return NOT_REGISTERED;
+    case 409:
+      return `O ${label} tem uma indexação em andamento. Tente quando ela terminar.`;
+    default:
+      return "Não deu para remover as fotos do índice. Tente de novo.";
+  }
 }
 
 /** A cancel that failed with something other than the 409 of a job that had

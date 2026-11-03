@@ -51,6 +51,7 @@ from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
+from app.domain.value_objects.root_listing import RootListing
 from app.infrastructure.filesystem.sha256_content_hasher import sha256_of
 from app.infrastructure.logging.logger import get_logger
 
@@ -182,7 +183,7 @@ class _Discovered:
 
 @dataclass(frozen=True)
 class _Listed:
-    file_count: int
+    listing: RootListing
 
 
 @dataclass(frozen=True)
@@ -213,8 +214,8 @@ class _QueueingObserver(IndexingObserver):
     def discovered(self, files_seen: int, complete: bool) -> None:
         self._put(_Discovered(files_seen, complete))
 
-    def listed(self, file_count: int) -> None:
-        self._put(_Listed(file_count))
+    def listed(self, listing: RootListing) -> None:
+        self._put(_Listed(listing))
 
     def window_decided(
         self, progress: IndexingProgress, durable_through: ImagePath | None
@@ -315,7 +316,7 @@ class ReadAheadCandidates:
             elif isinstance(item, _Discovered):
                 self._observer.discovered(item.files_seen, item.complete)
             elif isinstance(item, _Listed):
-                self._observer.listed(item.file_count)
+                self._observer.listed(item.listing)
             elif isinstance(item, _Raised):
                 raise item.error
             else:

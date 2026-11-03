@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 
 from app.domain.entities.device import Device
@@ -22,6 +22,11 @@ from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeK
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.image_presence import (
+    MissingImages,
+    Presences,
+    PurgedImages,
+)
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
@@ -52,12 +57,17 @@ from app.infrastructure.persistence.in_memory_image_repository import (
     cosine_search,
     count_images_by_device,
     count_images_by_path_prefix,
+    count_missing_images,
     count_unknown_capture_date,
     count_unknown_position,
     list_by_filters,
+    marked_on_device,
+    marks_after,
     matches_filters,
+    presence_of,
     store_thumbnail,
     summarize_listing,
+    visible_images,
     with_capture_date,
     with_position,
 )
@@ -71,6 +81,7 @@ class FakeImageRepository(ImageRepository):
         self._metadata: dict[uuid.UUID, IndexMetadata] = {}
         self._embeddings: dict[uuid.UUID, EmbeddingVector] = {}
         self._thumbnails: dict[uuid.UUID, str] = {}
+        self._missing: dict[uuid.UUID, datetime.datetime] = {}
         self.save_calls: list[Image] = []
         self.exists_calls: list[ImageId] = []
         self.list_calls = 0
@@ -123,6 +134,13 @@ class FakeImageRepository(ImageRepository):
         single grouped read from a loop over one folder.
         """
 
+        self.list_presence_calls: list[DeviceId] = []
+        self.mark_presence_calls: list[
+            tuple[frozenset[ImageId], frozenset[ImageId], datetime.datetime]
+        ] = []
+        """Every sweep's write (RFC-046), so a test can see it was one call."""
+        self.purge_missing_calls: list[DeviceId] = []
+        self.count_missing_by_device_calls = 0
         self.get_embedding_calls: list[ImageId] = []
         self.update_thumbnail_path_calls: list[tuple[ImageId, str]] = []
         self.update_thumbnail_path_many_calls: list[dict[ImageId, str]] = []
@@ -174,6 +192,7 @@ class FakeImageRepository(ImageRepository):
         self._metadata.pop(image_id.value, None)
         self._embeddings.pop(image_id.value, None)
         self._thumbnails.pop(image_id.value, None)
+        self._missing.pop(image_id.value, None)
 
     def list(self) -> list[Image]:
         self.list_calls += 1
@@ -190,6 +209,7 @@ class FakeImageRepository(ImageRepository):
         )
         self._embeddings[record.image.id.value] = record.embedding
         store_thumbnail(self._thumbnails, record)
+        self._missing.pop(record.image.id.value, None)
 
     def search_similar(
         self,
@@ -212,9 +232,8 @@ class FakeImageRepository(ImageRepository):
             embedding,
             (
                 (image, self._embeddings[image.id.value])
-                for image in self._images
-                if image.id.value in self._embeddings
-                and matches_filters(image, filters)
+                for image in self._indexed()
+                if matches_filters(image, filters)
             ),
             limit,
         )
@@ -370,8 +389,46 @@ class FakeImageRepository(ImageRepository):
         return summarize_listing(self._indexed(), filters)
 
     def _indexed(self) -> Sequence[Image]:
-        """The images a search could return: those with an embedding."""
-        return [image for image in self._images if image.id.value in self._embeddings]
+        """The images a search could return: an embedding, and no mark (RFC-046)."""
+        return [
+            image
+            for image in visible_images(self._images, self._missing)
+            if image.id.value in self._embeddings
+        ]
+
+    def list_presence(self, device_id: DeviceId) -> Presences:
+        """The shared presence, recorded so a test can see the sweep asked once."""
+        self.list_presence_calls.append(device_id)
+        return presence_of(self._images, self._missing, device_id)
+
+    def mark_presence(
+        self,
+        missing: Collection[ImageId],
+        present: Collection[ImageId],
+        since: datetime.datetime,
+    ) -> None:
+        self.mark_presence_calls.append((frozenset(missing), frozenset(present), since))
+        self._missing = marks_after(
+            self._missing, self._images, missing, present, since
+        )
+
+    def count_missing_by_device(self) -> dict[DeviceId, MissingImages]:
+        self.count_missing_by_device_calls += 1
+        return count_missing_images(self._images, self._missing)
+
+    def purge_missing(self, device_id: DeviceId) -> PurgedImages:
+        self.purge_missing_calls.append(device_id)
+        doomed = marked_on_device(self._images, self._missing, device_id)
+        thumbnails = tuple(
+            self._thumbnails[value] for value in doomed if value in self._thumbnails
+        )
+        self._images = [image for image in self._images if image.id.value not in doomed]
+        for value in doomed:
+            self._metadata.pop(value, None)
+            self._embeddings.pop(value, None)
+            self._thumbnails.pop(value, None)
+            self._missing.pop(value, None)
+        return PurgedImages(count=len(doomed), thumbnail_paths=thumbnails)
 
     def count_by_device(self) -> dict[DeviceId, int]:
         """Delegates to the shared tally, and records that it was asked.
@@ -382,14 +439,16 @@ class FakeImageRepository(ImageRepository):
         a second hand-written tally here would be the first to drift.
         """
         self.count_by_device_calls += 1
-        return count_images_by_device(self._images)
+        return count_images_by_device(visible_images(self._images, self._missing))
 
     def count_by_path_prefixes(
         self, device_id: DeviceId, parent: JobScope
     ) -> dict[str, int]:
         """The grouped folder count, delegated and recorded; see above."""
         self.count_by_path_prefixes_calls.append((device_id, str(parent)))
-        return count_images_by_path_prefix(self._images, device_id, parent)
+        return count_images_by_path_prefix(
+            visible_images(self._images, self._missing), device_id, parent
+        )
 
 
 class RecordingContentHasher(ContentHasherPort):
@@ -449,6 +508,7 @@ class InMemoryThumbnailStore(ThumbnailStorePort):
     def __init__(self) -> None:
         self.saved: dict[ImageId, bytes] = {}
         self.locate_calls: list[str] = []
+        self.deleted: list[str] = []
 
     def save(self, image_id: ImageId, data: bytes) -> str:
         self.saved[image_id] = data
@@ -457,6 +517,15 @@ class InMemoryThumbnailStore(ThumbnailStorePort):
     def locate(self, location: str) -> Path | None:
         self.locate_calls.append(location)
         return None
+
+    def delete(self, location: str) -> None:
+        """Forget the thumbnail at `location`, and record that it was asked."""
+        self.deleted.append(location)
+        self.saved = {
+            image_id: data
+            for image_id, data in self.saved.items()
+            if f"memory/{image_id.value}.jpg" != location
+        }
 
 
 class FakeFileRevealer(FileRevealerPort):

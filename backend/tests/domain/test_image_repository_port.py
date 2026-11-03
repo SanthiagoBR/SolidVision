@@ -81,6 +81,11 @@ def test_image_repository_is_abstract() -> None:
         "update_thumbnail_path_many",
         "count_by_device",
         "count_by_path_prefixes",
+        # RFC-046: the photos a scan of the whole disk no longer finds.
+        "list_presence",
+        "mark_presence",
+        "count_missing_by_device",
+        "purge_missing",
     }
 
 

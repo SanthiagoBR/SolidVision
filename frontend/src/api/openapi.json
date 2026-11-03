@@ -207,7 +207,7 @@
             "type": "string"
           },
           "indexed_images": {
-            "description": "How many images of this device are in the index. The numerator. **There is no percent_indexed field**, so that no client can show the ratio without having held the scan date (RFC-031 section 4.2).",
+            "description": "How many images of this device are in the index and visible -- what the search can find. The numerator. Photos the last scan did not find are not counted here but in missing_images (RFC-046). **There is no percent_indexed field**, so that no client can show the ratio without having held the scan date (RFC-031 section 4.2).",
             "title": "Indexed Images",
             "type": "integer"
           },
@@ -253,6 +253,24 @@
             ],
             "description": "When it was last observed plugged in. History, not state -- it never answers 'is it connected now'.",
             "title": "Last Seen At"
+          },
+          "missing_images": {
+            "description": "How many indexed photos of this disk a scan of the whole disk did not find (RFC-046). Hidden from every search, listing, map and count; still in the database, with their vectors and thumbnails, until DELETE /devices/{id}/missing-images -- or until a scan finds them again.",
+            "title": "Missing Images",
+            "type": "integer"
+          },
+          "missing_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scan that first missed any of them: the oldest mark. Null when missing_images is 0.",
+            "title": "Missing Since"
           },
           "mount_point": {
             "anyOf": [
@@ -303,7 +321,9 @@
           "last_scan_at",
           "last_scan_file_count",
           "indexed_images",
-          "active_job"
+          "active_job",
+          "missing_images",
+          "missing_since"
         ],
         "title": "DeviceDetailSchema",
         "type": "object"
@@ -961,6 +981,21 @@
         ],
         "title": "PositionSource",
         "type": "string"
+      },
+      "PurgedImagesSchema": {
+        "description": "What `DELETE /devices/{id}/missing-images` removed (RFC-046 section 5.7).",
+        "properties": {
+          "purged": {
+            "description": "How many photos left the index: every one a scan had marked as not found on this disk. Their thumbnails left the cache too.",
+            "title": "Purged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "purged"
+        ],
+        "title": "PurgedImagesSchema",
+        "type": "object"
       },
       "RankedImagesSchema": {
         "description": "A ranking of the index, whatever the query was (RFC-038 section 4.1).\n\nThe body of `POST /images/search/by-image` as it stands, and the base of\nthe other two: the search by text adds the `query` it echoes, and\n*\"Parecidas com esta\"* the id of the photo it started from. One shape\nand one set of rules for the three, so a client reads them the same way.\n\n`limit` echoes the value actually used, not the one requested, which\nis usually not sent at all: without it a caller receiving three\nresults cannot tell \"there were only three images\" from \"the default\nis smaller than I assumed\".",
@@ -1631,6 +1666,56 @@
           }
         },
         "summary": "List one level of a device's folders, with each folder's state",
+        "tags": [
+          "devices"
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}/missing-images": {
+      "delete": {
+        "description": "Delete the photos of this disk that a scan marked as not found (RFC-046).\n\n**The one route that deletes rows of the index**, and only these: the\nones a scan of the whole disk did not find, and that are hidden from\nevery read since. The rows go in one transaction, and only then their\nthumbnails, from the application's own cache. **Irreversible**, which is\nwhy the interface asks first, with the number.\n\n**409 while the disk has a job**, pending or running: the job ends by\nunmarking the photos it found again, and this would delete them first.\nThe request is legitimate and the state does not allow it -- RFC-030's\n409.\n\n**The disk does not have to be connected.** The marks came from a scan\nthat was checked when it ran, and forgetting what is no longer on a disk\nneeds nothing from the disk. Nothing in the user's file system is\ntouched, so none of RFC-030's guards apply.",
+        "operationId": "purge_missing_images_api_v1_devices__device_id__missing_images_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgedImagesSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No device has this id"
+          },
+          "409": {
+            "description": "The device has a pending or running indexing job"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove from the index the photos a scan no longer found on a disk",
         "tags": [
           "devices"
         ]

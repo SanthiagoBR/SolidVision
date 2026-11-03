@@ -29,6 +29,7 @@ from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
+from app.domain.value_objects.root_listing import RootListing
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
@@ -52,9 +53,9 @@ class RecordingObserver(IndexingObserver):
         self.threads.add(threading.get_ident())
         self.log.append(("discovered", (files_seen, complete)))
 
-    def listed(self, file_count: int) -> None:
+    def listed(self, listing: RootListing) -> None:
         self.threads.add(threading.get_ident())
-        self.log.append(("listed", file_count))
+        self.log.append(("listed", listing.file_count))
 
     def window_decided(
         self, progress: IndexingProgress, durable_through: ImagePath | None

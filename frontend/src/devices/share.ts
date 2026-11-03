@@ -9,7 +9,10 @@
  *     a denominator of zero          "o scan de 12/03 não achou fotos"
  *     more indexed than scanned      "o disco mudou desde o scan de 12/03": a
  *                                    disk whose photos were deleted after the
- *                                    scan, and no number above 100%
+ *                                    scan, and no number above 100%. Since
+ *                                    RFC-046 the next scan of the whole disk
+ *                                    hides what it did not find, so this lasts
+ *                                    until then
  *     between zero and one percent   "menos de 1% no scan de 12/03"
  *     otherwise                      "50% no scan de 12/03", rounded down, so
  *                                    that 100% means every file

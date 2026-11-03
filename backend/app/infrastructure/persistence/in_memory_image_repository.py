@@ -6,7 +6,7 @@ import dataclasses
 import datetime
 import math
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.domain.entities.image import Image
@@ -17,6 +17,12 @@ from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.image_presence import (
+    ImagePresence,
+    MissingImages,
+    Presences,
+    PurgedImages,
+)
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
@@ -322,6 +328,99 @@ def change_signals_of(
     return signals
 
 
+def visible_images(
+    images: Iterable[Image], marks: Mapping[uuid.UUID, datetime.datetime]
+) -> list[Image]:
+    """The images no scan has marked missing (RFC-046 section 6).
+
+    Shared by both in-process doubles, so that what they hide cannot drift
+    from each other; `test_missing_images_contract.py` holds them and
+    PostgreSQL to one answer.
+    """
+    return [image for image in images if image.id.value not in marks]
+
+
+def presence_of(
+    images: Iterable[Image],
+    marks: Mapping[uuid.UUID, datetime.datetime],
+    device_id: DeviceId,
+) -> Presences:
+    """`list_presence()` over the doubles' storage: every image of the device.
+
+    Taken whole before it is handed out, so that a caller writing while it
+    iterates -- which the sweep does not -- would not see its own writes.
+    """
+    return iter(
+        [
+            ImagePresence(
+                image_id=image.id,
+                relative_path=str(image.relative_path),
+                missing=image.id.value in marks,
+            )
+            for image in images
+            if image.device_id == device_id
+        ]
+    )
+
+
+def marks_after(
+    marks: Mapping[uuid.UUID, datetime.datetime],
+    images: Iterable[Image],
+    missing: Collection[ImageId],
+    present: Collection[ImageId],
+    since: datetime.datetime,
+) -> dict[uuid.UUID, datetime.datetime]:
+    """The marks once `mark_presence()` has applied, as a new mapping.
+
+    A new mapping rather than an edit in place, so that a refusal leaves the
+    double as it was -- the transaction the PostgreSQL implementation rolls
+    back. An image already marked keeps its date; an id with no image is
+    skipped, as the `UPDATE` skips it.
+    """
+    missing_ids = {image_id.value for image_id in missing}
+    present_ids = {image_id.value for image_id in present}
+    if missing_ids & present_ids:
+        raise ValueError("An image cannot be both missing and present")
+    known = {image.id.value for image in images}
+    updated = dict(marks)
+    for value in missing_ids & known:
+        updated.setdefault(value, since)
+    for value in present_ids:
+        updated.pop(value, None)
+    return updated
+
+
+def count_missing_images(
+    images: Iterable[Image], marks: Mapping[uuid.UUID, datetime.datetime]
+) -> dict[DeviceId, MissingImages]:
+    """`count_missing_by_device()`: marked images per device, and the oldest mark."""
+    tallies: dict[DeviceId, MissingImages] = {}
+    for image in images:
+        since = marks.get(image.id.value)
+        if since is None:
+            continue
+        current = tallies.get(image.device_id)
+        tallies[image.device_id] = (
+            MissingImages(count=1, since=since)
+            if current is None
+            else MissingImages(count=current.count + 1, since=min(current.since, since))
+        )
+    return tallies
+
+
+def marked_on_device(
+    images: Iterable[Image],
+    marks: Mapping[uuid.UUID, datetime.datetime],
+    device_id: DeviceId,
+) -> set[uuid.UUID]:
+    """The ids `purge_missing()` deletes: the marked images of one device."""
+    return {
+        image.id.value
+        for image in images
+        if image.device_id == device_id and image.id.value in marks
+    }
+
+
 def count_images_by_path_prefix(
     images: Iterable[Image], device_id: DeviceId, parent: JobScope
 ) -> dict[str, int]:
@@ -447,6 +546,8 @@ class InMemoryImageRepository(ImageRepository):
         # change signals never knows the thumbnail. Kept in `_metadata`, a
         # refresh would erase it; the PostgreSQL `UPDATE` does not.
         self._thumbnails: dict[uuid.UUID, str] = {}
+        # `images.missing_since` (RFC-046): absent is present.
+        self._missing: dict[uuid.UUID, datetime.datetime] = {}
 
     def save(self, image: Image) -> None:
         self._images.append(image)
@@ -465,6 +566,7 @@ class InMemoryImageRepository(ImageRepository):
         self._metadata.pop(image_id.value, None)
         self._embeddings.pop(image_id.value, None)
         self._thumbnails.pop(image_id.value, None)
+        self._missing.pop(image_id.value, None)
 
     def list(self) -> list[Image]:
         return list(self._images)
@@ -486,6 +588,7 @@ class InMemoryImageRepository(ImageRepository):
         )
         self._embeddings[record.image.id.value] = record.embedding
         store_thumbnail(self._thumbnails, record)
+        self._missing.pop(record.image.id.value, None)
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
         """Persist every record, or none of them.
@@ -501,6 +604,7 @@ class InMemoryImageRepository(ImageRepository):
         metadata = dict(self._metadata)
         embeddings = dict(self._embeddings)
         thumbnails = dict(self._thumbnails)
+        missing = dict(self._missing)
 
         for record in records:
             images = [image for image in images if image.id != record.image.id]
@@ -512,11 +616,13 @@ class InMemoryImageRepository(ImageRepository):
             )
             embeddings[record.image.id.value] = record.embedding
             store_thumbnail(thumbnails, record)
+            missing.pop(record.image.id.value, None)
 
         self._images = images
         self._metadata = metadata
         self._embeddings = embeddings
         self._thumbnails = thumbnails
+        self._missing = missing
 
     def search_similar(
         self,
@@ -545,9 +651,8 @@ class InMemoryImageRepository(ImageRepository):
             embedding,
             (
                 (image, self._embeddings[image.id.value])
-                for image in self._images
-                if image.id.value in self._embeddings
-                and matches_filters(image, filters)
+                for image in self._indexed()
+                if matches_filters(image, filters)
             ),
             limit,
         )
@@ -582,8 +687,12 @@ class InMemoryImageRepository(ImageRepository):
         return summarize_listing(self._indexed(), filters)
 
     def _indexed(self) -> Sequence[Image]:
-        """The images a search could return: those with an embedding."""
-        return [image for image in self._images if image.id.value in self._embeddings]
+        """The images a search could return: an embedding, and no mark (RFC-046)."""
+        return [
+            image
+            for image in visible_images(self._images, self._missing)
+            if image.id.value in self._embeddings
+        ]
 
     def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
         return self._embeddings.get(image_id.value)
@@ -675,10 +784,41 @@ class InMemoryImageRepository(ImageRepository):
             if image_id in known:
                 self._thumbnails[image_id.value] = location
 
+    def list_presence(self, device_id: DeviceId) -> Presences:
+        return presence_of(self._images, self._missing, device_id)
+
+    def mark_presence(
+        self,
+        missing: Collection[ImageId],
+        present: Collection[ImageId],
+        since: datetime.datetime,
+    ) -> None:
+        self._missing = marks_after(
+            self._missing, self._images, missing, present, since
+        )
+
+    def count_missing_by_device(self) -> dict[DeviceId, MissingImages]:
+        return count_missing_images(self._images, self._missing)
+
+    def purge_missing(self, device_id: DeviceId) -> PurgedImages:
+        doomed = marked_on_device(self._images, self._missing, device_id)
+        thumbnails = tuple(
+            self._thumbnails[value] for value in doomed if value in self._thumbnails
+        )
+        self._images = [image for image in self._images if image.id.value not in doomed]
+        for value in doomed:
+            self._metadata.pop(value, None)
+            self._embeddings.pop(value, None)
+            self._thumbnails.pop(value, None)
+            self._missing.pop(value, None)
+        return PurgedImages(count=len(doomed), thumbnail_paths=thumbnails)
+
     def count_by_device(self) -> dict[DeviceId, int]:
-        return count_images_by_device(self._images)
+        return count_images_by_device(visible_images(self._images, self._missing))
 
     def count_by_path_prefixes(
         self, device_id: DeviceId, parent: JobScope
     ) -> dict[str, int]:
-        return count_images_by_path_prefix(self._images, device_id, parent)
+        return count_images_by_path_prefix(
+            visible_images(self._images, self._missing), device_id, parent
+        )

@@ -26,12 +26,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 from tests.conftest import make_test_device
 
-from app.domain.entities.image import Image
 from app.domain.entities.indexing_job import IndexingJob
-from app.domain.value_objects.device_id import DeviceId
-from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_path import ImagePath
-from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_id import JobId
 from app.domain.value_objects.job_scope import JobScope
 from app.infrastructure.config.settings import settings
@@ -45,13 +41,9 @@ from app.infrastructure.database.embedded.database_setup import (
 )
 from app.infrastructure.database.embedded.errors import RuntimeInvalidError
 from app.infrastructure.database.embedded.runtime import PostgresRuntime
-from app.infrastructure.database.models.image_model import EMBEDDING_DIMENSION
 from app.infrastructure.filesystem.image_identity import compute_image_id
 from app.infrastructure.persistence.postgres_device_repository import (
     PostgresDeviceRepository,
-)
-from app.infrastructure.persistence.postgres_image_repository import (
-    PostgresImageRepository,
 )
 from app.infrastructure.persistence.postgres_indexing_job_repository import (
     PostgresIndexingJobRepository,
@@ -113,15 +105,24 @@ def test_the_index_and_the_jobs_go_and_the_devices_stay(
             migrate(db, BEFORE_RFC_045)
             with Session(bind=db) as session:
                 PostgresDeviceRepository(session).save(device)
+                # In SQL, not through `PostgresImageRepository`: the ORM
+                # model is the head's, and since RFC-046 it reads a column
+                # this revision does not have yet.
                 path = ImagePath("fotos/2018/DJI_0042.JPG")
-                PostgresImageRepository(session).save_indexed(
-                    IndexingRecord(
-                        image=_image(device.id, path),
-                        embedding=EmbeddingVector([0.1] * EMBEDDING_DIMENSION),
-                        file_size=1024,
-                        file_modified_at=now,
-                        content_hash="a" * 64,
-                    )
+                session.execute(
+                    text(
+                        "INSERT INTO images (id, device_id, relative_path, "
+                        "filename, extension, file_size, file_modified_at, "
+                        "content_hash) VALUES (:id, :device, :path, 'DJI_0042', "
+                        "'jpg', 1024, :now, :hash)"
+                    ),
+                    {
+                        "id": compute_image_id(device.id, path).value,
+                        "device": device.id.value,
+                        "path": str(path),
+                        "now": now,
+                        "hash": "a" * 64,
+                    },
                 )
                 PostgresIndexingJobRepository(session).create(
                     IndexingJob(
@@ -137,7 +138,7 @@ def test_the_index_and_the_jobs_go_and_the_devices_stay(
                 for table in ("images", "indexing_jobs", "indexing_job_scopes")
             ] == [1, 1, 1]
 
-            migrate(db, "head")
+            migrate(db, RFC_045)
 
             assert count(db, "images") == 0
             assert count(db, "indexing_jobs") == 0
@@ -151,7 +152,7 @@ def test_the_index_and_the_jobs_go_and_the_devices_stay(
             assert _revision(db) == BEFORE_RFC_045
             assert count(db, "devices") == 1
 
-            migrate(db, "head")
+            migrate(db, RFC_045)
             assert _revision(db) == RFC_045
     finally:
         engine.dispose()
@@ -159,13 +160,3 @@ def test_the_index_and_the_jobs_go_and_the_devices_stay(
 
 def _revision(db: Connection) -> str:
     return str(db.execute(text("SELECT version_num FROM alembic_version")).scalar_one())
-
-
-def _image(device_id: DeviceId, path: ImagePath) -> Image:
-    return Image(
-        id=compute_image_id(device_id, path),
-        device_id=device_id,
-        relative_path=path,
-        filename="DJI_0042",
-        extension="jpg",
-    )

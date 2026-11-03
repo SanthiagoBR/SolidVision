@@ -50,6 +50,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
 from app.domain.value_objects.job_id import JobId
 from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.root_listing import RootListing
 from app.infrastructure.ai.fake_embedding_model import FakeEmbeddingModel
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
@@ -71,11 +72,13 @@ class ListingObserver(IndexingObserver):
 
     def __init__(self) -> None:
         self.listings: list[int] = []
+        self.received: list[RootListing] = []
         self.events: list[str] = []
 
-    def listed(self, file_count: int) -> None:
-        self.listings.append(file_count)
-        self.events.append(f"listed {file_count}")
+    def listed(self, listing: RootListing) -> None:
+        self.received.append(listing)
+        self.listings.append(listing.file_count)
+        self.events.append(f"listed {listing.file_count}")
 
     def discovered(self, files_seen: int, complete: bool) -> None:
         return None
@@ -154,21 +157,25 @@ class TestTheListing:
 
         assert observer.listings == [len(discovered)] == [7]
 
-    def test_a_folder_named_like_a_photo_counts_and_is_declared(
-        self, disk: Path
-    ) -> None:
-        """The price of counting without a `stat` (RFC-039 section 4.1).
+    def test_a_folder_named_like_a_photo_does_not_count(self, disk: Path) -> None:
+        """RFC-046 section 5.2: the walk knows a folder without a `stat`.
 
-        The walk sees that `album.jpg` is a directory and yields nothing
-        for it; the count, which opens nothing, does not see it.
+        Until RFC-046 the count took entries by extension alone, and
+        `album.jpg` counted (RFC-039 section 4.1). `Path.walk()` classes it
+        as a folder, so neither the count nor the files of the listing
+        have it -- and the photo inside it is listed as the file it is.
         """
         (disk / "album.jpg").mkdir()
+        (disk / "album.jpg" / "inside.jpg").write_bytes(b"data")
         observer = ListingObserver()
 
         discovered = list(scan(disk, observer).discover())
 
-        assert len(discovered) == 7
+        assert len(discovered) == 8
         assert observer.listings == [8]
+        (listing,) = observer.received
+        assert "album.jpg" not in listing.files
+        assert "album.jpg/inside.jpg" in listing.files
 
     def test_a_scan_of_some_folders_never_reports_a_listing(self, disk: Path) -> None:
         """Two folders are not the size of the disk."""

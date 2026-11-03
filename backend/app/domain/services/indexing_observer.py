@@ -24,6 +24,7 @@ from abc import ABC, abstractmethod
 
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
+from app.domain.value_objects.root_listing import RootListing
 
 
 class IndexingObserver(ABC):
@@ -54,30 +55,32 @@ class IndexingObserver(ABC):
         ahead would mean reading the disk twice.
         """
 
-    def listed(self, file_count: int) -> None:
-        """Report how many supported files the listing of the whole root holds.
+    def listed(self, listing: RootListing) -> None:
+        """Report what the listing of the whole root holds.
 
         Called once, by a scan of a whole root -- no scopes -- as soon as
         the listing is done and before the first file comes out
         (RFC-039 section 4.1). It is not `discovered()`: that one counts
         what the scan has *yielded so far*, and only knows the total at
-        the very end of the run, while this one is the size of the
-        listing the scan already holds in memory, known before any file
-        is read. On a resume it includes the files the checkpoint skips,
-        because the listing is always of the whole tree.
+        the very end of the run, while this one is the listing the scan
+        already holds in memory, known before any file is read. On a
+        resume it includes the files the checkpoint skips, because the
+        listing is always of the whole tree.
 
-        The count is taken without a `stat`: an entry is counted by its
-        extension, outside the excluded directories, so a folder named
-        `x.jpg` counts as a file. That is the price of opening nothing.
+        Since RFC-046 it carries the listing itself, and not only its
+        size: the files, relative to the root, and the folders that could
+        not be read (`RootListing`). The size is the denominator of "% indexed";
+        the files are what the sweep at the end of the job compares the
+        device's rows with, to mark the ones that are no longer on the disk
+        (RFC-046 section 5.3). Only files count: the walk tells a folder
+        named `x.jpg` from a file without a `stat` (section 5.2).
 
         A scan of some folders never calls it: the files of two folders
-        are not the size of the disk.
+        are not the disk.
 
         **Not abstract, and empty here**, so that the null observer and
         every test double written before RFC-039 keep working unchanged.
-        It is the denominator of the "% indexed" figure (RFC-027 section
-        8), and only the observer that writes a device row has a use for
-        it.
+        Only the observer of a job has a use for it.
         """
         return None
 
