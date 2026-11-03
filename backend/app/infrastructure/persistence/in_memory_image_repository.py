@@ -13,6 +13,7 @@ from app.domain.entities.image import Image
 from app.domain.exceptions import EmbeddingDimensionMismatchError
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -295,6 +296,30 @@ def count_images_by_device(images: Iterable[Image]) -> dict[DeviceId, int]:
     for image in images:
         counts[image.device_id] = counts.get(image.device_id, 0) + 1
     return counts
+
+
+def change_signals_of(
+    images: Iterable[Image],
+    metadata: Mapping[uuid.UUID, IndexMetadata],
+    device_id: DeviceId,
+) -> dict[ImageId, ChangeSignals]:
+    """The stored size and mtime of every image of one device (RFC-045 section 5.2).
+
+    Shared by both in-process doubles, for the reason the tallies above are:
+    `test_change_signals_contract.py` holds them and PostgreSQL to one
+    answer. A row with no metadata yet gives two `None`s, as the columns
+    would read back.
+    """
+    signals: dict[ImageId, ChangeSignals] = {}
+    for image in images:
+        if image.device_id != device_id:
+            continue
+        stored = metadata.get(image.id.value)
+        signals[image.id] = ChangeSignals(
+            file_size=stored.file_size if stored is not None else None,
+            file_modified_at=(stored.file_modified_at if stored is not None else None),
+        )
+    return signals
 
 
 def count_images_by_path_prefix(
@@ -602,6 +627,9 @@ class InMemoryImageRepository(ImageRepository):
             if metadata is not None:
                 found[image_id] = metadata
         return found
+
+    def list_change_signals(self, device_id: DeviceId) -> dict[ImageId, ChangeSignals]:
+        return change_signals_of(self._images, self._metadata, device_id)
 
     def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
         if not self.exists(image_id):

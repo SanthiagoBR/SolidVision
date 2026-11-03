@@ -48,3 +48,15 @@ class Sha256ContentHasher(ContentHasherPort):
                 digest.update(chunk)
 
         return digest.hexdigest()
+
+
+def sha256_of(data: bytes) -> str:
+    """The fingerprint `Sha256ContentHasher` would give a file holding `data`.
+
+    For the read-ahead of RFC-045, which reads a whole file at once and
+    hashes what it read instead of opening the file a second time. Here,
+    beside the streaming version, so that the two cannot drift apart in
+    algorithm or in spelling -- lowercase hex, as the column stores it; a
+    test holds them to the same digest for the same files.
+    """
+    return hashlib.sha256(data).hexdigest()

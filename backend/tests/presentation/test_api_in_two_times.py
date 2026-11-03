@@ -147,7 +147,9 @@ class Recording(EmbeddingModelPort):
         self.encoded.append(text)
         return self._delegate.encode_text(text)
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         return self._delegate.encode_image(image)
 
 

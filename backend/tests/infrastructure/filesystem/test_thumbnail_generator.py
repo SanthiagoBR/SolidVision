@@ -183,3 +183,52 @@ class TestReadingTheFile:
 
         assert (source.read_bytes(), source.stat().st_mtime_ns) == before
         assert sorted(tmp_path.iterdir()) == [source]
+
+
+class TestTheBytesAlreadyRead:
+    """RFC-045 section 5.3: the thumbnail of the bytes is the file's, byte for byte."""
+
+    def test_every_hard_case_renders_the_same_from_its_bytes(
+        self, hard_cases_root: Path
+    ) -> None:
+        rendered = 0
+        for source in sorted(hard_cases_root.rglob("*")):
+            if not source.is_file():
+                continue
+            try:
+                from_file = GENERATOR.generate(image_at(source), max_edge=64)
+            except Exception:
+                continue  # a case built to fail; the bytes path fails alike
+            from_bytes = GENERATOR.generate(
+                image_at(source), max_edge=64, content=source.read_bytes()
+            )
+            assert from_bytes == from_file, source.name
+            rendered += 1
+        assert rendered > 5
+
+    def test_a_drone_sized_jpeg_renders_the_same_from_its_bytes(
+        self, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "dji.jpg"
+        PILImage.linear_gradient("L").resize((4000, 3000)).convert("RGB").save(
+            source, "JPEG"
+        )
+
+        from_file = GENERATOR.generate(image_at(source), max_edge=512)
+        from_bytes = GENERATOR.generate(
+            image_at(source), max_edge=512, content=source.read_bytes()
+        )
+
+        assert from_bytes == from_file
+
+    def test_with_bytes_the_file_is_never_opened(self, tmp_path: Path) -> None:
+        """Not even for a device that is not mounted any more."""
+        source = tmp_path / "a.jpg"
+        PILImage.new("RGB", (400, 300), "olive").save(source, "JPEG")
+        data = source.read_bytes()
+
+        picture = decode(
+            GENERATOR.generate(image_at(source, mounted=False), 64, content=data)
+        )
+
+        assert picture.size == (64, 48)

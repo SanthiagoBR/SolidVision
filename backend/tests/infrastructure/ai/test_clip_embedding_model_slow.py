@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image as PILImage
+from PIL.JpegImagePlugin import JpegImageFile
 from tests.conftest import (
     TEST_DEVICE_ID,
     make_test_device,
@@ -384,3 +385,79 @@ class TestBatchedInferenceOnTheRealCheckpoint:
 
         assert len(results) == 4
         assert all(len(result.values) == 512 for result in results)
+
+
+def _photo(path: Path, size: tuple[int, int]) -> Path:
+    """A JPEG with structure in it -- a gradient and a few shapes -- at `size`."""
+    picture = PILImage.linear_gradient("L").resize(size).convert("RGB")
+    width, height = size
+    for index, colour in enumerate(("red", "green", "blue", "yellow")):
+        box = (
+            width * (index + 1) // 6,
+            height // 4,
+            width * (index + 1) // 6 + width // 8,
+            height // 2,
+        )
+        picture.paste(colour, box)
+    picture.save(path, "JPEG", quality=92)
+    return path
+
+
+class TestTheBytesAndTheDraft:
+    """RFC-045 sections 5.3 and 5.6, with the real model."""
+
+    def test_the_bytes_give_the_vector_the_file_gives(
+        self, clip: ClipEmbeddingModel, tmp_path: Path
+    ) -> None:
+        """Difference 0, not a tolerance: the same bytes decode to the same pixels."""
+        paths = [
+            _photo(tmp_path / "large.jpg", (4000, 3000)),
+            _photo(tmp_path / "small.jpg", (1024, 576)),
+        ]
+        images = [_image(path) for path in paths]
+
+        from_files = clip.encode_images(images)
+        from_bytes = clip.encode_images(images, [path.read_bytes() for path in paths])
+        one_by_one = [
+            clip.encode_image(image, path.read_bytes())
+            for image, path in zip(images, paths, strict=True)
+        ]
+
+        assert [vector.values for vector in from_bytes] == [
+            vector.values for vector in from_files
+        ]
+        for single, batched in zip(one_by_one, from_files, strict=True):
+            assert single.values == pytest.approx(batched.values, abs=1e-5)
+
+    @pytest.mark.parametrize("size", [(1600, 1200), (1024, 576)])
+    def test_a_photo_the_draft_leaves_whole_keeps_its_vector(
+        self,
+        clip: ClipEmbeddingModel,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        size: tuple[int, int],
+    ) -> None:
+        """The vector of before RFC-045 is the one with the draft made a no-op."""
+        image = _image(_photo(tmp_path / "photo.jpg", size))
+        with_draft = clip.encode_image(image)
+
+        monkeypatch.setattr(JpegImageFile, "draft", lambda self, mode, size: None)
+        before = clip.encode_image(image)
+
+        assert with_draft.values == before.values
+
+    def test_a_drone_sized_photo_moves_its_vector_only_a_little(
+        self,
+        clip: ClipEmbeddingModel,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Reduced to 1/2: a different vector, close to the old (pilot: 0.9997)."""
+        image = _image(_photo(tmp_path / "dji.jpg", (4000, 3000)))
+        with_draft = clip.encode_image(image)
+
+        monkeypatch.setattr(JpegImageFile, "draft", lambda self, mode, size: None)
+        before = clip.encode_image(image)
+
+        assert with_draft.values != before.values
+        assert _cosine(with_draft, before) > 0.99

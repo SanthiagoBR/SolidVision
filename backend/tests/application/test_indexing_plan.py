@@ -21,14 +21,17 @@ found identical, and refreshed instead of skipped.
 from __future__ import annotations
 
 import datetime
+import gc
 import uuid
 
 import pytest
 
 from app.application.use_cases.capture_date_plan import capture_date_to_write
 from app.application.use_cases.indexing_plan import (
+    FileContent,
     IndexAction,
     IndexCandidate,
+    is_unchanged,
     plan_indexing,
 )
 from app.application.use_cases.position_plan import position_to_write
@@ -142,6 +145,146 @@ class TestTheCaptureDateNeverDrivesTheSkipDecision:
         plan = plan_indexing(candidate(), existing, StubContentHasher(default="b" * 64))
 
         assert plan.action is IndexAction.EMBED
+
+
+class TestTheBytesOfTheReadAhead:
+    """RFC-045 section 5.3: the hash of step 3 may come with the candidate.
+
+    The three outcomes, in both forms: hashed by the hasher, as before, and
+    hashed by the read-ahead, which already read the file. The decision must
+    be the same, and with the bytes the hasher must never be asked.
+    """
+
+    OUTCOMES = [
+        pytest.param(None, IndexAction.EMBED, id="new file"),
+        pytest.param(
+            IndexMetadata(1024, MODIFIED_AT, HASH),
+            IndexAction.SKIP_UNCHANGED,
+            id="unchanged",
+        ),
+        pytest.param(
+            IndexMetadata(1024, MODIFIED_AT - datetime.timedelta(days=1), HASH),
+            IndexAction.REFRESH_METADATA,
+            id="touched, same bytes",
+        ),
+        pytest.param(
+            IndexMetadata(2048, MODIFIED_AT, "b" * 64),
+            IndexAction.EMBED,
+            id="changed bytes",
+        ),
+    ]
+
+    @pytest.mark.parametrize(("existing", "expected"), OUTCOMES)
+    def test_the_hasher_decides_as_before_without_bytes(
+        self, existing: IndexMetadata | None, expected: IndexAction
+    ) -> None:
+        plan = plan_indexing(candidate(), existing, StubContentHasher(default=HASH))
+
+        assert plan.action is expected
+
+    @pytest.mark.parametrize(("existing", "expected"), OUTCOMES)
+    def test_the_bytes_decide_the_same_and_the_hasher_is_never_asked(
+        self, existing: IndexMetadata | None, expected: IndexAction
+    ) -> None:
+        hasher = StubContentHasher(default="c" * 64)
+        read_ahead = IndexCandidate(
+            image=candidate().image,
+            file_size=1024,
+            file_modified_at=MODIFIED_AT,
+            content=FileContent(HASH, b"the bytes"),
+        )
+
+        plan = plan_indexing(read_ahead, existing, hasher)
+
+        assert plan.action is expected
+        assert hasher.hashed == []
+        if expected is not IndexAction.SKIP_UNCHANGED:
+            assert plan.content_hash == HASH
+
+    def test_an_unchanged_file_never_looks_at_its_bytes(self) -> None:
+        """Step 2 decides first: the hash it would have read is the stored one."""
+        content = FileContent(HASH, b"the bytes")
+        content.release()
+        read_ahead = IndexCandidate(
+            image=candidate().image,
+            file_size=1024,
+            file_modified_at=MODIFIED_AT,
+            content=content,
+        )
+
+        plan = plan_indexing(
+            read_ahead, IndexMetadata(1024, MODIFIED_AT, "d" * 64), StubContentHasher()
+        )
+
+        assert plan.action is IndexAction.SKIP_UNCHANGED
+        assert plan.content_hash == "d" * 64
+
+
+class TestIsUnchanged:
+    """Step 2, extracted (RFC-045 section 5.2): the read-ahead calls it too."""
+
+    def test_both_signals_equal_is_unchanged(self) -> None:
+        assert is_unchanged(candidate(), 1024, MODIFIED_AT) is True
+
+    @pytest.mark.parametrize(
+        ("file_size", "file_modified_at"),
+        [
+            (2048, MODIFIED_AT),
+            (1024, MODIFIED_AT + datetime.timedelta(seconds=1)),
+            (None, MODIFIED_AT),
+            (1024, None),
+            (None, None),
+        ],
+    )
+    def test_any_signal_different_or_unknown_is_changed(
+        self, file_size: int | None, file_modified_at: datetime.datetime | None
+    ) -> None:
+        assert is_unchanged(candidate(), file_size, file_modified_at) is False
+
+    @pytest.mark.parametrize("stored", EVERY_STORED_POSITION_SOURCE)
+    def test_neither_exif_fact_is_consulted(
+        self, stored: PositionSource | None
+    ) -> None:
+        """The rule `plan_indexing()` holds to, held by the extracted function too."""
+        dated_and_placed = candidate(
+            CaptureDate(SHOT, CaptureSource.EXIF_ORIGINAL), position=FARM
+        )
+
+        assert is_unchanged(dated_and_placed, 1024, MODIFIED_AT) is True
+
+
+class TestFileContent:
+    """The bytes travel with their hash, and go back to whoever counts them."""
+
+    def test_the_bytes_are_readable_until_released(self) -> None:
+        content = FileContent(HASH, b"12345")
+
+        assert content.data == b"12345"
+        assert content.size == 5
+        content.release()
+        assert content.released is True
+        with pytest.raises(RuntimeError, match="released"):
+            _ = content.data
+
+    def test_release_tells_the_size_once(self) -> None:
+        returned: list[int] = []
+        content = FileContent(HASH, b"12345", on_release=returned.append)
+
+        content.release()
+        content.release()
+
+        assert returned == [5]
+
+    def test_a_content_nobody_released_gives_its_bytes_back_when_collected(
+        self,
+    ) -> None:
+        returned: list[int] = []
+        content = FileContent(HASH, b"123", on_release=returned.append)
+
+        del content
+        gc.collect()
+
+        assert returned == [3]
 
 
 class TestThePositionNeverDrivesTheSkipDecision:

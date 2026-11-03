@@ -17,6 +17,7 @@ from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.filesystem.sha256_content_hasher import (
     READ_CHUNK_BYTES,
     Sha256ContentHasher,
+    sha256_of,
 )
 
 
@@ -162,3 +163,22 @@ class TestStreaming:
         digest = Sha256ContentHasher().hash_image(_image(path))
 
         assert digest == hashlib.sha256(payload).hexdigest()
+
+
+class TestTheBytesOfTheReadAhead:
+    """RFC-045 section 5.1: the read-ahead hashes what it read, the same way."""
+
+    @pytest.mark.parametrize(
+        "data",
+        [b"", b"x", bytes(range(256)) * 9_000, bytes([255]) * (READ_CHUNK_BYTES + 1)],
+        ids=["empty", "one byte", "a few chunks", "one chunk and a byte"],
+    )
+    def test_sha256_of_the_bytes_is_the_digest_of_the_file(
+        self, tmp_path: Path, data: bytes
+    ) -> None:
+        path = tmp_path / "photo.jpg"
+        path.write_bytes(data)
+
+        assert sha256_of(path.read_bytes()) == Sha256ContentHasher().hash_image(
+            _image(path)
+        )

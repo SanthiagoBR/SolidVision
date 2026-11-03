@@ -17,14 +17,30 @@ class EmbeddingModelPort(ABC):
     """
 
     @abstractmethod
-    def encode_image(self, image: Image) -> EmbeddingVector:
-        """Return an embedding for the supplied image."""
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
+        """Return an embedding for the supplied image.
+
+        `content`, when given, is the file's bytes, already read (RFC-045
+        section 5.3): the implementation decodes them instead of opening
+        the file again, and must produce exactly the embedding it would
+        have produced from the file. When `None` the image is read from
+        its location, as before RFC-045. Raw bytes rather than a type of
+        the Application layer, because the Domain imports nothing above
+        it. An implementation that has no file to read -- a test double --
+        accepts the argument and ignores it.
+        """
 
     @abstractmethod
     def encode_text(self, text: str) -> EmbeddingVector:
         """Return an embedding for the supplied text."""
 
-    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+    def encode_images(
+        self,
+        images: Sequence[Image],
+        contents: Sequence[bytes | None] | None = None,
+    ) -> list[EmbeddingVector]:
         """Return one embedding per supplied image, in the order given.
 
         Concrete rather than abstract, and that is the whole design. An
@@ -47,12 +63,27 @@ class EmbeddingModelPort(ABC):
         images together may change *how* the work is scheduled; it must
         never change *what* is computed.
 
+        `contents`, when given, holds one entry per image -- the bytes
+        already read, or `None` for an image to read from its location
+        (RFC-045 section 5.3) -- and is handed to `encode_image()` pair by
+        pair. A length that does not match `images` is a caller's mistake
+        and raises `ValueError` before anything is encoded.
+
         Errors propagate. A failure anywhere in the group aborts the whole
         call, and it is the caller's job -- not this method's -- to work
         out which image was responsible, because only the caller knows
         whether retrying one at a time is worth the time it costs.
         """
-        return [self.encode_image(image) for image in images]
+        if contents is None:
+            return [self.encode_image(image) for image in images]
+        if len(contents) != len(images):
+            raise ValueError(
+                f"{len(contents)} contents were given for {len(images)} images"
+            )
+        return [
+            self.encode_image(image, content)
+            for image, content in zip(images, contents, strict=True)
+        ]
 
     def warm_up(self) -> None:
         """Do now whatever the first `encode_*` call would otherwise do.

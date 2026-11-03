@@ -36,6 +36,7 @@ from app.domain.repositories.image_repository import ImageRepository
 from app.domain.services.haversine import EARTH_RADIUS_M
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.capture_source import CaptureSource
+from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.geo_circle import GeoCircle
@@ -707,6 +708,26 @@ class PostgresImageRepository(ImageRepository):
                 capture_source=_source_member(row.capture_source),
                 position_source=_position_member(row.position_source),
                 thumbnail_path=row.thumbnail_path,
+            )
+            for row in self._session.execute(statement)
+        }
+
+    def list_change_signals(self, device_id: DeviceId) -> dict[ImageId, ChangeSignals]:
+        """Three columns of every row of the device, in one query (RFC-045 section 5.2).
+
+        Named columns rather than `ImageModel` rows, for the reason the
+        prefetch gives: hydrating the embedding of 116,396 rows to compare
+        two scalars would read the whole index to answer a question about
+        its metadata. No `ORDER BY`: the caller looks ids up, and an order
+        would cost a sort nobody reads.
+        """
+        statement = select(
+            ImageModel.id, ImageModel.file_size, ImageModel.file_modified_at
+        ).where(ImageModel.device_id == device_id.value)
+
+        return {
+            ImageId(row.id): ChangeSignals(
+                file_size=row.file_size, file_modified_at=row.file_modified_at
             )
             for row in self._session.execute(statement)
         }

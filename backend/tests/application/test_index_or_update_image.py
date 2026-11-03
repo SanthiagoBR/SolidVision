@@ -27,7 +27,9 @@ class _RecordingEmbeddingModel(EmbeddingModelPort):
         self._delegate = FakeEmbeddingModel()
         self.encode_image_calls: list[Image] = []
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         self.encode_image_calls.append(image)
         return self._delegate.encode_image(image)
 

@@ -65,7 +65,9 @@ class SeeingModel(FakeEmbeddingModel):
         super().__init__()
         self.seen: list[tuple[Path, bool]] = []
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         assert image.absolute_path is not None
         path = image.absolute_path.value
         self.seen.append((path, path.is_file()))
@@ -336,7 +338,7 @@ class TestTheFolder:
     def test_an_error_in_the_search_still_deletes_the_file(
         self, client: TestClient, model: SeeingModel, folder: Path
     ) -> None:
-        def broken(image: Image) -> EmbeddingVector:
+        def broken(image: Image, content: bytes | None = None) -> EmbeddingVector:
             raise RuntimeError("the model broke")
 
         model.encode_image = broken  # type: ignore[method-assign]

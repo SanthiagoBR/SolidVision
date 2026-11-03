@@ -36,8 +36,13 @@ class ThumbnailWriter:
         self._store = store
         self._max_edge = max_edge
 
-    def write(self, image: Image) -> str:
+    def write(self, image: Image, content: bytes | None = None) -> str:
         """Render and store one thumbnail, returning the stored location.
+
+        `content` is the file's bytes when the caller already has them
+        (RFC-045 section 5.3), handed to the generator so that it decodes
+        them instead of reading the file again; the backfill has none and
+        passes nothing.
 
         Errors from either port propagate. Whether a failed thumbnail
         matters is the caller's decision, and both callers decided it does
@@ -45,5 +50,5 @@ class ThumbnailWriter:
         backfill moves on to the next file.
         """
         return self._store.save(
-            image.id, self._generator.generate(image, self._max_edge)
+            image.id, self._generator.generate(image, self._max_edge, content)
         )

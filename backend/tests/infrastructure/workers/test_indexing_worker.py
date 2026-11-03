@@ -67,16 +67,22 @@ class _RecordingEmbeddingModel(EmbeddingModelPort):
         self.encode_image_calls: list[Image] = []
         self.batch_sizes: list[int] = []
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         self.encode_image_calls.append(image)
         return self._delegate.encode_image(image)
 
     def encode_text(self, text: str) -> EmbeddingVector:
         return self._delegate.encode_text(text)
 
-    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+    def encode_images(
+        self,
+        images: Sequence[Image],
+        contents: Sequence[bytes | None] | None = None,
+    ) -> list[EmbeddingVector]:
         self.batch_sizes.append(len(images))
-        return super().encode_images(images)
+        return super().encode_images(images, contents)
 
 
 class _FailsForFilename(EmbeddingModelPort):
@@ -86,7 +92,9 @@ class _FailsForFilename(EmbeddingModelPort):
         self._delegate = FakeEmbeddingModel()
         self._failing_filename = failing_filename
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         if image.filename == self._failing_filename:
             raise RuntimeError("boom")
         return self._delegate.encode_image(image)

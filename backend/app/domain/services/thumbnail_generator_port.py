@@ -27,6 +27,11 @@ class ThumbnailGeneratorPort(ABC):
     file, beside the hash, the EXIF header read and the model's decode,
     each for its own narrow purpose.
 
+    **Since RFC-045 it need not be a fourth read of the disk.** The caller
+    may hand over the bytes it already read for the hash (`content`), and
+    the implementation decodes those. It is still a decode of its own --
+    the refusal above stands -- only the source of the bytes changes.
+
     Implementations read `Image.require_absolute_path()`, which raises
     `DeviceNotConnectedError` for an unmounted device, and let decode and
     I/O errors propagate rather than returning a placeholder -- the caller
@@ -35,11 +40,17 @@ class ThumbnailGeneratorPort(ABC):
     """
 
     @abstractmethod
-    def generate(self, image: Image, max_edge: int) -> bytes:
+    def generate(
+        self, image: Image, max_edge: int, content: bytes | None = None
+    ) -> bytes:
         """Return encoded thumbnail bytes for `image`, decoding it fresh.
 
         The longer side of the result is at most `max_edge` pixels and the
         aspect ratio is preserved. A source smaller than that is never
         enlarged: an upscaled thumbnail costs bytes and shows nothing the
         original did not.
+
+        `content`, when given, is the file's bytes, already read (RFC-045
+        section 5.3), and the result must be the one the file would have
+        given. `None` reads the image from its location, as before.
         """

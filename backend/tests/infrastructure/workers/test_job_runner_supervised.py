@@ -47,9 +47,9 @@ from app.infrastructure.workers.job_runner import JobRunner
 
 
 class SlowModel(FakeEmbeddingModel):
-    def encode_images(self, images):
+    def encode_images(self, images, contents=None):
         time.sleep(0.4)  # where the main thread is when the stop comes
-        return super().encode_images(images)
+        return super().encode_images(images, contents)
 
 
 disk, report = Path(sys.argv[1]), Path(sys.argv[2])

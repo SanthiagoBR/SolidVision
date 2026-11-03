@@ -31,6 +31,8 @@ from tests.application.fakes import (
 
 from app.application.use_cases.index_or_update_images import IndexOrUpdateImagesUseCase
 from app.domain.entities.indexing_job import IndexingJob, JobStatus
+from app.domain.services.content_hasher_port import ContentHasherPort
+from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
 from app.domain.value_objects.job_id import JobId
@@ -41,6 +43,7 @@ from app.infrastructure.persistence.in_memory_indexing_job_repository import (
 )
 from app.infrastructure.process.interrupts import deferring, install
 from app.infrastructure.workers.job_runner import JobRunner
+from app.infrastructure.workers.read_ahead import ReadAheadLimits
 
 START = datetime.datetime(2026, 9, 15, 12, 0, tzinfo=datetime.UTC)
 SUPPORTED = (".jpg", ".png")
@@ -75,6 +78,9 @@ class World:
         events: list[str] | None = None,
         sleep: Callable[[float], None] = lambda _: None,
         deferring_repositories: bool = False,
+        read_ahead: ReadAheadLimits | None = None,
+        content_hasher: ContentHasherPort | None = None,
+        embedding_model: EmbeddingModelPort | None = None,
     ) -> None:
         self.clock = MovableClock()
         self.events = events if events is not None else []
@@ -92,8 +98,8 @@ class World:
             locator=self.locator,
             indexer=IndexOrUpdateImagesUseCase(
                 repository=wrap(self.images),
-                embedding_model=FakeEmbeddingModel(),
-                content_hasher=StubContentHasher(),
+                embedding_model=embedding_model or FakeEmbeddingModel(),
+                content_hasher=content_hasher or StubContentHasher(),
                 batch_size=4,
                 metadata_prefetch_size=8,
             ),
@@ -104,6 +110,9 @@ class World:
             max_attempts=MAX_ATTEMPTS,
             warm_up=self._record_warm_up,
             sleep=sleep,
+            # RFC-045: off unless a test asks, as every test before it ran.
+            read_ahead=read_ahead,
+            images=wrap(self.images) if read_ahead is not None else None,
         )
 
     def _record_warm_up(self) -> None:

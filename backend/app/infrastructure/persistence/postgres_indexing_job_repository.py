@@ -95,7 +95,25 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         return model.to_domain()
 
     def get(self, job_id: JobId) -> IndexingJob | None:
-        model = self._session.get(IndexingJobModel, job_id.value)
+        """The row as it stands now -- never a copy this session kept.
+
+        **Every read in this class asks for `populate_existing`**, and the
+        reason is a defect RFC-045's measurement found. The sessions of the
+        job runner and the CLI are made with `expire_on_commit=False`, so a
+        model this session wrote stays in its identity map, with the values
+        it had then, for as long as it is alive -- and a job model is kept
+        alive past its last reference by the cycle with its scopes, until
+        the garbage collector happens to run. Without `populate_existing`,
+        `Session.get()` and an ORM `select` hand that copy back instead of
+        the row, `with_for_update` included. The CLI creates a job and
+        claims it in one session, so its first `record_progress()` could
+        read the `pending` its `create()` left there, conclude the job had
+        been taken over, and leave it `running` for ever while the CLI
+        followed it. Whether it happened depended on the collector.
+        """
+        model = self._session.get(
+            IndexingJobModel, job_id.value, populate_existing=True
+        )
         return model.to_domain() if model is not None else None
 
     def record_progress(
@@ -121,7 +139,10 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         """
         try:
             model = self._session.get(
-                IndexingJobModel, job_id.value, with_for_update=True
+                IndexingJobModel,
+                job_id.value,
+                with_for_update=True,
+                populate_existing=True,
             )
             if model is None or model.status != JobStatus.RUNNING.value:
                 self._session.rollback()
@@ -161,7 +182,10 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         """
         try:
             model = self._session.get(
-                IndexingJobModel, job.id.value, with_for_update=True
+                IndexingJobModel,
+                job.id.value,
+                with_for_update=True,
+                populate_existing=True,
             )
             if model is None or model.status != expected.value:
                 self._session.rollback()
@@ -221,9 +245,10 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         started_at` is the queue latency RFC-029 section 6.1 measures, and
         a job that crashed twice must not look like it started promptly.
 
-        `synchronize_session=False` because nothing in this session holds
-        a stale copy of the row worth reconciling -- the entity is rebuilt
-        from the returned id below.
+        `synchronize_session=False` because the entity is rebuilt from the
+        returned id below, read with `populate_existing`: a copy this
+        session still holds -- the `pending` the CLI's own `create()` left
+        -- is overwritten by the row, not trusted (see `get()`).
         """
         statement = (
             update(IndexingJobModel)
@@ -245,7 +270,7 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
 
         if claimed_id is None:
             return None
-        model = self._session.get(IndexingJobModel, claimed_id)
+        model = self._session.get(IndexingJobModel, claimed_id, populate_existing=True)
         return model.to_domain() if model is not None else None
 
     def list_stale(self, heartbeat_before: datetime.datetime) -> list[IndexingJob]:
@@ -266,7 +291,11 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
             )
             .order_by(IndexingJobModel.created_at)
         )
-        models = self._session.execute(statement).scalars().all()
+        models = (
+            self._session.execute(statement.execution_options(populate_existing=True))
+            .scalars()
+            .all()
+        )
         return [model.to_domain() for model in models]
 
     def list(
@@ -283,7 +312,11 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         if status is not None:
             statement = statement.where(IndexingJobModel.status == status.value)
 
-        models = self._session.execute(statement).scalars().all()
+        models = (
+            self._session.execute(statement.execution_options(populate_existing=True))
+            .scalars()
+            .all()
+        )
         return [model.to_domain() for model in models]
 
 

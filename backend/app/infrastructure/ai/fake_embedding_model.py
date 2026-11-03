@@ -29,7 +29,16 @@ class FakeEmbeddingModel(EmbeddingModelPort):
     longer trivially defeats similarity search.
     """
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
+        """Derive a vector from the image's id and path; `content` is ignored.
+
+        Ignored on purpose (RFC-045 section 5.3): the fake reads no file,
+        so the bytes the read-ahead hands over have nothing to change, and
+        a vector that depended on them would differ between a run with the
+        read-ahead and one without.
+        """
         seed = f"image::{image.id}::{image.relative_path}".encode()
         return self._build_embedding(seed)
 

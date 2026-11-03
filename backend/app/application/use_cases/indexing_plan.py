@@ -17,11 +17,76 @@ from __future__ import annotations
 
 import datetime
 import enum
+import weakref
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.domain.entities.image import Image
 from app.domain.services.content_hasher_port import ContentHasherPort
 from app.domain.value_objects.index_metadata import IndexMetadata
+
+
+class FileContent:
+    """The bytes of one file, read once, and their SHA-256 (RFC-045 section 5.3).
+
+    Produced by the read-ahead thread, in Infrastructure, which read the
+    whole file and hashed what it read; consumed here, where the hash
+    answers step 3 of `plan_indexing()` and the bytes go to the embedding
+    model and the thumbnail instead of the file being opened again. Each
+    consumer still decodes for itself: what this carries is where the bytes
+    come from, never a decoded picture (RFC-030 section 7.2).
+
+    **The bytes are released explicitly**, by the pipeline, as soon as the
+    file needs them no more (RFC-045 section 5.5): a decision that skips
+    it, a failed hash, the write of the batch it went into. After
+    `release()`, `data` raises rather than handing back something stale.
+    `on_release` is told how many bytes went, once, on the first of
+    `release()` or the garbage collection of this object -- a path that
+    forgets to release still gives the bytes back, it only gives them back
+    later. It is called with the size alone and holds no reference to this
+    object, which is what lets the collection happen at all.
+    """
+
+    __slots__ = ("__weakref__", "_data", "_finalizer", "content_hash", "size")
+
+    def __init__(
+        self,
+        content_hash: str,
+        data: bytes,
+        on_release: Callable[[int], None] | None = None,
+    ) -> None:
+        self.content_hash = content_hash
+        """The SHA-256 of `data`, as `Sha256ContentHasher` writes it."""
+        self.size = len(data)
+        """How many bytes `data` holds, and still says so once released."""
+        self._data: bytes | None = data
+        self._finalizer = (
+            weakref.finalize(self, on_release, self.size)
+            if on_release is not None
+            else None
+        )
+
+    @property
+    def data(self) -> bytes:
+        """The file's bytes; raises `RuntimeError` once they were released."""
+        if self._data is None:
+            raise RuntimeError("The bytes of this file were already released")
+        return self._data
+
+    @property
+    def released(self) -> bool:
+        """Whether `release()` was called."""
+        return self._data is None
+
+    def release(self) -> None:
+        """Drop the bytes and give them back to whoever counts them. Idempotent."""
+        self._data = None
+        if self._finalizer is not None:
+            self._finalizer()
+
+    def __repr__(self) -> str:
+        state = "released" if self.released else f"{self.size} bytes"
+        return f"FileContent({self.content_hash[:12]}..., {state})"
 
 
 @dataclass(frozen=True)
@@ -44,6 +109,15 @@ class IndexCandidate:
     image: Image
     file_size: int | None
     file_modified_at: datetime.datetime | None
+    content: FileContent | None = None
+    """The file's bytes and their hash, when the read-ahead read them (RFC-045).
+
+    `None` -- every candidate built before RFC-045, the CLI with the
+    read-ahead off, the backfills, the tests -- means the pipeline works as
+    it did: the hash and the decodes read the file from its location. Not a
+    change signal either: `plan_indexing()` takes its hash from here only
+    after steps 1 and 2 have decided that a hash is needed.
+    """
 
 
 class IndexAction(enum.Enum):
@@ -73,6 +147,29 @@ class IndexPlan:
     candidate: IndexCandidate
     action: IndexAction
     content_hash: str | None
+
+
+def is_unchanged(
+    candidate: IndexCandidate,
+    file_size: int | None,
+    file_modified_at: datetime.datetime | None,
+) -> bool:
+    """Step 2 of the incremental check: both stored change signals match.
+
+    Extracted from `plan_indexing()` by RFC-045 section 5.2, because a
+    second caller needs the same rule: the read-ahead thread, which decides
+    from a snapshot of the stored signals whether the decision will ask for
+    a file's bytes, before it reads them. One function, so the rule of "not
+    changed" stays in one place.
+
+    A stored `None` never matches a value the scan read, which is a plain
+    consequence of `None != int` -- a row that never had the columns is
+    treated as changed, never as unchanged.
+    """
+    return (
+        file_size == candidate.file_size
+        and file_modified_at == candidate.file_modified_at
+    )
 
 
 def plan_indexing(
@@ -118,11 +215,16 @@ def plan_indexing(
     before RFC-024 carry NULL and were deliberately not backfilled
     (RFC-024 section 15), so "unknown" has to cost one re-embed rather than
     risk a wrongly skipped one.
+
+    **The hash of step 3 comes from `candidate.content` when there is one**
+    (RFC-045 section 5.3): the read-ahead already read the file and hashed
+    those bytes, with the same SHA-256 the hasher computes. Without it the
+    hasher reads the file, as before. Same three outcomes either way, and
+    the bytes are not read for a file step 2 skips -- `content` is only
+    looked at after it.
     """
-    if (
-        existing is not None
-        and existing.file_size == candidate.file_size
-        and existing.file_modified_at == candidate.file_modified_at
+    if existing is not None and is_unchanged(
+        candidate, existing.file_size, existing.file_modified_at
     ):
         return IndexPlan(
             candidate=candidate,
@@ -130,7 +232,11 @@ def plan_indexing(
             content_hash=existing.content_hash,
         )
 
-    content_hash = content_hasher.hash_image(candidate.image)
+    content_hash = (
+        candidate.content.content_hash
+        if candidate.content is not None
+        else content_hasher.hash_image(candidate.image)
+    )
 
     if existing is not None and existing.content_hash == content_hash:
         return IndexPlan(

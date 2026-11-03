@@ -124,6 +124,15 @@ Segue o [roadmap do frontend](ROADMAP-frontend.md): um RFC curto por etapa, do 0
 
 > **O que o RFC-044 mediu e não esperava** ([§16](rfc-044-fotos-por-localizacao-sem-consulta-textual.md#16-correções-feitas-durante-a-implementação)). O balão do mapa, com um botão a mais, deixou de caber acima da célula a 1280 × 800 com a lista aberta, e isso achou dois defeitos do RFC-040: o balão se media depois de toda renderização, e cada medida interrompia o *auto-pan*, que o renderizava de novo, até o React derrubar a tela; e um clique num botão dele durante o *auto-pan* era desfeito pelo fim da animação, que gravava o enquadramento do mapa na URL. *"Mostrar mais"* responde em 108 ms e pinta em 1,1 s: o resto são as 100 miniaturas, pedidas de uma vez. E a "parte datada de um sentido igual à do outro ao contrário" do contrato vale para as datas, e não para as fotos de um mesmo segundo, que ficam na ordem da câmera nos dois sentidos.
 
+## Desempenho da indexação
+
+| # | RFC | Entrega | Status |
+|---|---|---|---|
+| 045 | [Leitura Antecipada e Decodificação Reduzida na Indexação](rfc-045-leitura-antecipada-e-decodificacao-reduzida.md) | Uma thread de leitura por job, que lê cada arquivo uma vez — só os que a decisão incremental vai pedir, por um retrato do banco carregado antes — e entrega os bytes ao CLIP e à thumbnail; o CLIP decodifica com `draft("RGB", (1000, 1000))`; a janela de metadados do job de 512 para 32; e uma migration que recomeça o índice do zero, mantendo os dispositivos. Medido pelo `job_runner` de produção contra um PostgreSQL 16 embarcado só da medição: a primeira indexação do HD externo de 12,4 h para **8,7 h** (−29,8%; os pilotos deram −45%), com os vetores pelos bytes idênticos aos do caminho, o demo com os mesmos quatro números e o cancelamento mais rápido que antes | ✅ |
+
+> **O que o RFC-045 mediu e não esperava** ([§13](rfc-045-leitura-antecipada-e-decodificacao-reduzida.md#13-validação), [§14](rfc-045-leitura-antecipada-e-decodificacao-reduzida.md#14-correções-feitas-durante-a-implementação)). A leitura antecipada tirou o disco do caminho, e o que sobrou foi CPU: no dia da medição a leitura estava mais rápida e o processador mais lento que nos pilotos, e o ganho parou em 30%, abaixo dos 35% do critério. Numa nova varredura com tudo em cache, a fila e a janela de 32 custam ~0,3 ms por arquivo, acima dos 5% pedidos. E a medição achou um defeito do RFC-029: o CLI cria e reivindica o job na mesma sessão, e uma cópia velha do job, presa no mapa de identidade até o coletor de lixo passar, fazia o primeiro progresso dar o job como tomado por outro executor — o CLI o seguia para sempre. Corrigido com `populate_existing` em toda leitura do repositório de jobs.
+
+
 ---
 
 ## Como ler estes documentos
