@@ -752,5 +752,19 @@
     "projected_hours": 2.33,
     "date": "2026-10-31T13:43:53",
     "step_seconds": 157.4
+  },
+  "unplug": {
+    "first_status": "completed",
+    "rows_after_first": 40,
+    "status": "failed",
+    "error": "The device was disconnected before the scan finished; the work already done is kept and the next job will skip it.",
+    "seconds_to_pull": 2.9,
+    "job_seconds": 23.3,
+    "indexed_before_the_pull": 58,
+    "failed": 0,
+    "rows": 98,
+    "marked": 0,
+    "date": "2026-11-03T12:46:56",
+    "step_seconds": 90.1
   }
 }

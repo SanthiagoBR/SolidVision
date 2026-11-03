@@ -1027,18 +1027,75 @@ def step_rescan(
 # ---------------------------------------------------------------------------
 
 
-def step_unplug(scratch: Path, pen: Path) -> dict[str, Any]:
-    """A job of the whole pen drive, which waits for it to be pulled out.
+TRIAL_FOLDER = "rfc046-ensaio"
+DRIVE_REMOVABLE = 2
+"""`GetDriveTypeW`'s answer for a pen drive or a card; an external HDD is fixed."""
 
-    The pen drive holds a copy of the tree of `tree`, indexed once first. Then
-    a photo is removed from it -- so that a sweep would have something to mark
-    -- and a second job runs; at its first batch the script asks for the pen
-    drive to be pulled out, and waits until the volume is gone.
+
+def is_removable(root: Path) -> bool:
+    kernel32 = ctypes.WinDLL("kernel32")  # type: ignore[attr-defined]
+    kernel32.GetDriveTypeW.argtypes = [wintypes.LPCWSTR]
+    kernel32.GetDriveTypeW.restype = wintypes.UINT
+    return int(kernel32.GetDriveTypeW(root.anchor)) == DRIVE_REMOVABLE
+
+
+def ask_to_pull(root: Path) -> None:
+    """A message box, on top of every window: pull the pen drive out now."""
+    user32 = ctypes.WinDLL("user32")  # type: ignore[attr-defined]
+    user32.MessageBoxW.argtypes = [
+        wintypes.HWND,
+        wintypes.LPCWSTR,
+        wintypes.LPCWSTR,
+        wintypes.UINT,
+    ]
+    exclamation, system_modal, topmost = 0x30, 0x1000, 0x40000
+    user32.MessageBoxW(
+        None,
+        f"Tire o pen drive {root.anchor} agora, direto da USB, sem ejetar.\n\n"
+        "A medição continua sozinha quando ele sumir.",
+        "RFC-046: pen drive no meio do job",
+        exclamation | system_modal | topmost,
+    )
+
+
+def step_unplug(scratch: Path, pen: Path) -> dict[str, Any]:
+    """A job of the whole pen drive, pulled out by hand halfway through.
+
+    **Writes only inside `<pen>/rfc046-ensaio/`**, which it creates and which
+    must not exist yet; the rest of the pen drive is read, never written. And
+    refuses anything but the root of a removable volume -- a pen drive or a
+    card -- so that it can be pointed at neither `C:` nor `E:`, which Windows
+    reports as fixed.
+
+    A first job of the whole pen drive indexes 40 photos of the trial folder
+    (and whatever photos the pen drive already had). Then one of the 40 is
+    deleted -- a sweep that ran would mark it -- and 120 more are written, so
+    that the second job still has inference to do when, at its first batch,
+    it asks for the pen drive to be pulled out and waits for the volume to go.
+    RFC-046 section 10 wants that job `failed` and nothing marked.
+
+    The folder stays on the pen drive, to be deleted by hand once it is back.
     """
     from app.infrastructure.filesystem.volume_identity_provider import (
         WindowsVolumeIdentityProvider,
     )
     from app.infrastructure.workers.indexing_worker import register_device
+
+    root = pen.resolve()
+    if root != Path(root.anchor):
+        raise SystemExit(f"--pen must be the root of a volume, like F:/, not {pen}")
+    if not is_removable(root):
+        raise SystemExit(
+            f"{root} is not a removable volume: the trial writes to the disk it "
+            "is pointed at, and only a pen drive or a card will do"
+        )
+    trial = root / TRIAL_FOLDER
+    if trial.exists():
+        raise SystemExit(f"{trial} already exists: delete it, and run again")
+
+    generator = random.Random(SEED + 2)
+    make_photos(trial / "antes", 40, generator, 1)
+    print(f"\nunplug: 40 photos written in {trial}", flush=True)
 
     cluster = Cluster(scratch)
     settings.thumbnail_directory = scratch / "thumbnails"  # type: ignore[misc]
@@ -1048,7 +1105,7 @@ def step_unplug(scratch: Path, pen: Path) -> dict[str, Any]:
         device, volume = register_device(
             WindowsVolumeIdentityProvider(),
             PostgresDeviceRepository(job_session),
-            root=pen,
+            root=root,
             label="PEN",
         )
         jobs = PostgresIndexingJobRepository(job_session)
@@ -1064,36 +1121,63 @@ def step_unplug(scratch: Path, pen: Path) -> dict[str, Any]:
                 )
             )
 
+        def presence() -> dict[str, bool]:
+            with Session(bind=cluster.engine) as session:
+                rows = PostgresImageRepository(session).list_presence(device.id)
+            return {row.relative_path: row.missing for row in rows}
+
         first = runner.run_job(new_job().id)
-        print(f"  first job: {first.status.value if first else None}", flush=True)
-        victim = next(p for p in volume.mount_point.rglob("*.JPG") if p.is_file())
-        victim.unlink()
-        (volume.mount_point / "nova.jpg").write_bytes(victim.name.encode())
+        assert first is not None
+        rows_after_first = presence()
+        print(
+            f"  first job: {first.status.value}, {len(rows_after_first)} rows",
+            flush=True,
+        )
+
+        (trial / "antes" / "DJI_0001.JPG").unlink()
+        make_photos(trial / "depois", 120, generator, 1001)
 
         repository = runner._indexer._repository  # type: ignore[attr-defined]
         original = repository.save_indexed_many
-        asked: list[float] = []
+        pulled: list[float] = []
 
         def wait_for_the_pen(records: Any) -> None:
-            if not asked:
-                print("  >>> PULL THE PEN DRIVE OUT NOW <<<", flush=True)
+            if not pulled:
+                asked = time.perf_counter()
+                print(
+                    "\a\n  >>> TIRE O PEN DRIVE AGORA (sem ejetar) <<<\n",
+                    flush=True,
+                )
+                # And a window on top of the others, for whoever is not
+                # watching this terminal; it does not hold the wait up.
+                threading.Thread(target=ask_to_pull, args=(root,), daemon=True).start()
                 while volume.mount_point.exists():
                     time.sleep(0.2)
-                asked.append(time.perf_counter())
+                pulled.append(time.perf_counter() - asked)
+                print(
+                    f"  the volume went {pulled[0]:.1f} s after the request",
+                    flush=True,
+                )
             original(records)
 
         repository.save_indexed_many = wait_for_the_pen
+        started = time.perf_counter()
         finished = runner.run_job(new_job().id)
-        with Session(bind=cluster.engine) as session:
-            marked = sum(
-                1
-                for row in PostgresImageRepository(session).list_presence(device.id)
-                if row.missing
-            )
+        seconds = time.perf_counter() - started
+        rows = presence()
         return {
+            "first_status": first.status.value,
+            "rows_after_first": len(rows_after_first),
             "status": finished.status.value if finished else None,
             "error": finished.error_message if finished else None,
-            "marked": marked,
+            "seconds_to_pull": round(pulled[0], 1) if pulled else None,
+            "job_seconds": round(seconds, 1),
+            "indexed_before_the_pull": (
+                finished.progress.processed_images if finished else None
+            ),
+            "failed": finished.progress.failed_images if finished else None,
+            "rows": len(rows),
+            "marked": sum(1 for missing in rows.values() if missing),
         }
     finally:
         job_session.close()
