@@ -22,6 +22,7 @@ RFC_028_REVISION = "c5d1e8f24a90"
 RFC_029_REVISION = "e7a2c9b41f30"
 RFC_030_REVISION = "f4b9e2d7c615"
 RFC_032_REVISION = "6d77379a36a1"
+RFC_045_REVISION = "c3f81a5e7d24"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -84,6 +85,7 @@ def test_history_is_linear_from_base_to_head() -> None:
         )
 
     assert chain == [
+        RFC_045_REVISION,
         RFC_032_REVISION,
         RFC_030_REVISION,
         RFC_029_REVISION,
@@ -512,3 +514,36 @@ def test_rfc_032_migration_downgrade_is_real() -> None:
     # prose, that no embedding is touched, and that sentence is not a drop.
     assert '"embedding"' not in downgrade_source
     assert "drop_table" not in downgrade_source
+
+
+def test_rfc_045_migration_follows_rfc_032() -> None:
+    rfc_045 = _revision_after(RFC_032_REVISION)
+
+    assert rfc_045.revision == RFC_045_REVISION
+
+
+def test_rfc_045_migration_empties_the_index_and_the_jobs_and_keeps_the_devices() -> (
+    None
+):
+    """RFC-045 section 5.9: a new vector recipe restarts the index from zero.
+
+    The devices stay -- their labels and volume identities are not vectors --
+    and the schema does not change, which is why `downgrade()` has nothing to
+    do. That the statements do what they say is tested against a real
+    cluster, in `test_restart_index_migration.py` (`-m embedded`).
+    """
+    module = _revision_after(RFC_032_REVISION).module
+    upgrade_source = _statements_only(inspect.getsource(module.upgrade))
+    downgrade_source = _statements_only(inspect.getsource(module.downgrade))
+
+    statements = [line for line in upgrade_source.splitlines() if "op." in line]
+
+    assert statements == [
+        '    op.execute("TRUNCATE TABLE images")',
+        '    op.execute("TRUNCATE TABLE indexing_job_scopes, indexing_jobs")',
+    ]
+    for schema_change in ("add_column", "drop_column", "create_table", "drop_table"):
+        assert schema_change not in upgrade_source
+        assert schema_change not in downgrade_source
+    assert "op." not in downgrade_source
+

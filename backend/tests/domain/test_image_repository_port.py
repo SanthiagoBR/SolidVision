@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from app.domain.entities.image import Image
 from app.domain.repositories.image_repository import ImageRepository
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -33,6 +34,7 @@ ALL_METHODS = (
     "search_similar",
     "get_index_metadata",
     "get_index_metadata_many",
+    "list_change_signals",
     "update_index_metadata",
     "update_capture_date",
     "update_capture_date_many",
@@ -64,6 +66,7 @@ def test_image_repository_is_abstract() -> None:
         "get_embedding",
         "get_index_metadata",
         "get_index_metadata_many",
+        "list_change_signals",
         "update_index_metadata",
         "update_capture_date",
         "update_capture_date_many",
@@ -124,6 +127,15 @@ def test_image_repository_methods_use_domain_types_only() -> None:
     assert (
         signatures["get_index_metadata_many"].return_annotation
         == dict[ImageId, IndexMetadata]
+    )
+    # RFC-045: the snapshot of a device's change signals, keyed like the
+    # prefetch, so the read-ahead looks a candidate up by the id it carries.
+    assert (
+        signatures["list_change_signals"].parameters["device_id"].annotation is DeviceId
+    )
+    assert (
+        signatures["list_change_signals"].return_annotation
+        == dict[ImageId, ChangeSignals]
     )
     assert (
         signatures["update_index_metadata"].parameters["image_id"].annotation is ImageId

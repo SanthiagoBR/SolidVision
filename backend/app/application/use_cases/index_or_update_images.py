@@ -13,6 +13,12 @@ The stages are explicit and composed as a stream, not as queues or threads
     candidates -> prefetch window -> skip decision -> inference batch
                -> thumbnails -> persistence
 
+Still one thread here since RFC-045. The thread that reads files ahead of
+this stream lives in the *source* of the candidates, in Infrastructure
+(`ReadAheadCandidates`): what reaches this class is a candidate that may
+carry its file's bytes (`IndexCandidate.content`), which it hands to the
+model and the thumbnail and releases as soon as the file needs them no more.
+
 Two window sizes appear below and they are deliberately different. Metadata
 prefetch reads a handful of scalars per row, so it wants a large window;
 inference holds decoded pixels in memory, so it wants a small one. See
@@ -139,6 +145,29 @@ class IndexingSummary:
     (RFC-030 section 7.2). Reporting it as a failed file would tell a job
     that a photo was lost when nothing was.
     """
+    candidate_wait_seconds: float = 0.0
+    """Time spent waiting for the next candidate (RFC-045 section 5.8).
+
+    Without the read-ahead, the time of discovery itself -- the walk, the
+    `stat` and the EXIF read. With it, the time the pipeline waited for the
+    reading thread: when it is large, the disk is what limits the run, and
+    a faster model would not make it shorter.
+    """
+    contents_prefetched: int = 0
+    """Candidates whose bytes came from the read-ahead (RFC-045 section 5.8).
+
+    Every one of them was read from the disk, whether or not the decision
+    then needed it: zero on a re-scan of an unchanged disk, and the number
+    of touched files on a re-scan of one where some were touched.
+    """
+    contents_read_late: int = 0
+    """Files whose hash was read from their location (RFC-045 section 5.8).
+
+    Without the read-ahead, every file that was hashed. With it, the ones
+    the thread did not read -- a prediction that missed, a file above the
+    per-file limit, a budget that was full -- and so were read here, in
+    series with the model.
+    """
     elapsed_seconds: float = 0.0
     failures: list[IndexingFailure] = field(default_factory=list)
     inference_fallbacks: list[BatchFallback] = field(default_factory=list)
@@ -233,6 +262,14 @@ class IndexingSummary:
                 "(image indexed, no thumbnail)",
                 f"  avg:          {average_thumbnail:6.3f}s",
                 f"  total:        {self.thumbnail_seconds:6.2f}s",
+                "",
+                "Reading:",
+                f"  prefetched:   {self.contents_prefetched:6d}   "
+                "(bytes from the read-ahead)",
+                f"  read late:    {self.contents_read_late:6d}   "
+                "(hashed from the file)",
+                f"  waiting:      {self.candidate_wait_seconds:6.2f}s   "
+                "(for the next file)",
                 "",
                 "Persistence:",
                 f"  rows:         {self.persistence_writes:6d}",
@@ -411,25 +448,32 @@ class IndexOrUpdateImagesUseCase:
         pending: list[IndexPlan] = []
         frontier = DurableFrontier()
 
-        for window in windowed(candidates, self._metadata_prefetch_size):
+        for window in windowed(
+            _timed(candidates, summary), self._metadata_prefetch_size
+        ):
             if watcher.should_stop():
                 summary.stopped = True
+                _release(window)
                 break
 
             summary.discovered += len(window)
+            summary.contents_prefetched += sum(
+                1 for candidate in window if candidate.content is not None
+            )
             existing = self._repository.get_index_metadata_many(
                 [candidate.image.id for candidate in window]
             )
             capture_dates: list[tuple[IndexCandidate, CaptureDate]] = []
             positions: list[tuple[IndexCandidate, PositionReading]] = []
 
-            for candidate in window:
+            for position_in_window, candidate in enumerate(window):
                 plan = self._plan(candidate, existing, summary)
                 if plan is None:
                     # Reported as a failure, which accounts for the file:
                     # a checkpoint may pass it, because resuming would
                     # only fail on it again.
                     frontier.decided(candidate.image.relative_path)
+                    _release([candidate])
                     continue
 
                 if plan.action is IndexAction.EMBED:
@@ -444,9 +488,12 @@ class IndexOrUpdateImagesUseCase:
                         )
                         if watcher.should_stop():
                             summary.stopped = True
+                            _release(window[position_in_window + 1 :])
                             break
                     continue
 
+                # Skipped or refreshed: the bytes have done their job.
+                _release([candidate])
                 frontier.decided(candidate.image.relative_path)
                 if plan.action is IndexAction.SKIP_UNCHANGED:
                     summary.skipped_unchanged += 1
@@ -492,18 +539,28 @@ class IndexOrUpdateImagesUseCase:
         indexing can -- a file deleted between discovery and processing, a
         permission change, unreadable media -- and that must not abort the
         run any more than a corrupt JPEG does.
+
+        A file hashed here without bytes from the read-ahead is counted in
+        `contents_read_late`, whether the read succeeded or not: either way
+        it was read in series with the model (RFC-045 section 5.8).
         """
         try:
-            return plan_indexing(
+            plan = plan_indexing(
                 candidate,
                 existing.get(candidate.image.id),
                 self._content_hasher,
             )
         except Exception as exc:
+            if candidate.content is None:
+                summary.contents_read_late += 1
             summary.failures.append(
                 IndexingFailure(path=str(candidate.image.display_path), error=exc)
             )
             return None
+
+        if candidate.content is None and plan.action is not IndexAction.SKIP_UNCHANGED:
+            summary.contents_read_late += 1
+        return plan
 
     def _flush(self, plans: list[IndexPlan], summary: IndexingSummary) -> None:
         """Encode one assembled batch and persist whatever survived it.
@@ -523,10 +580,18 @@ class IndexOrUpdateImagesUseCase:
         written once with its thumbnail location in it rather than written
         and then updated -- a second round trip per batch for a value known
         before the first.
+
+        **The batch's bytes are released here, however it ended** (RFC-045
+        section 5.5): after the write, whether every row landed or none
+        did. Past this point nothing reads them again -- a row that failed
+        is reported, not retried.
         """
-        encoded = self._encode_batch(plans, summary)
-        thumbnails = self._render_thumbnails(encoded, summary)
-        self._persist_batch(encoded, thumbnails, summary)
+        try:
+            encoded = self._encode_batch(plans, summary)
+            thumbnails = self._render_thumbnails(encoded, summary)
+            self._persist_batch(encoded, thumbnails, summary)
+        finally:
+            _release([plan.candidate for plan in plans])
 
     def _encode_batch(
         self, plans: list[IndexPlan], summary: IndexingSummary
@@ -550,7 +615,9 @@ class IndexOrUpdateImagesUseCase:
 
         images = [plan.candidate.image for plan in plans]
         try:
-            embeddings = self._embedding_model.encode_images(images)
+            embeddings = self._embedding_model.encode_images(
+                images, [_bytes_of(plan.candidate) for plan in plans]
+            )
         except Exception as exc:
             summary.inference_fallbacks.append(
                 BatchFallback(
@@ -580,7 +647,9 @@ class IndexOrUpdateImagesUseCase:
         encoded: list[tuple[IndexPlan, EmbeddingVector]] = []
         for plan in plans:
             try:
-                embedding = self._embedding_model.encode_image(plan.candidate.image)
+                embedding = self._embedding_model.encode_image(
+                    plan.candidate.image, _bytes_of(plan.candidate)
+                )
             except Exception as exc:
                 summary.failures.append(
                     IndexingFailure(
@@ -628,7 +697,9 @@ class IndexOrUpdateImagesUseCase:
             for plan, _ in encoded:
                 image = plan.candidate.image
                 try:
-                    thumbnails[image.id] = self._thumbnail_writer.write(image)
+                    thumbnails[image.id] = self._thumbnail_writer.write(
+                        image, _bytes_of(plan.candidate)
+                    )
                 except Exception as exc:
                     summary.thumbnail_failures.append(
                         IndexingFailure(path=str(image.display_path), error=exc)
@@ -824,6 +895,44 @@ class IndexOrUpdateImagesUseCase:
             return
 
         summary.positions_written += len(positions)
+
+
+def _timed(
+    candidates: Iterable[IndexCandidate], summary: IndexingSummary
+) -> Iterator[IndexCandidate]:
+    """Yield `candidates`, adding the wait for each to `candidate_wait_seconds`.
+
+    The time spent inside `next()` and nothing else: what the consumer
+    does with a candidate happens between two waits and is not counted.
+    """
+    iterator = iter(candidates)
+    while True:
+        started = time.perf_counter()
+        try:
+            candidate = next(iterator)
+        except StopIteration:
+            summary.candidate_wait_seconds += time.perf_counter() - started
+            return
+        summary.candidate_wait_seconds += time.perf_counter() - started
+        yield candidate
+
+
+def _bytes_of(candidate: IndexCandidate) -> bytes | None:
+    """The bytes the read-ahead read for this file, or `None` to read the file."""
+    return candidate.content.data if candidate.content is not None else None
+
+
+def _release(candidates: Iterable[IndexCandidate]) -> None:
+    """Give back the bytes of files the pipeline needs no more (RFC-045 section 5.5).
+
+    Called on every way a file leaves the pipeline: skipped, refreshed,
+    failed to hash, written in a batch, or left in a window a stop
+    abandoned. Releasing twice is harmless, so no path has to know whether
+    another one got there first.
+    """
+    for candidate in candidates:
+        if candidate.content is not None:
+            candidate.content.release()
 
 
 def windowed(

@@ -333,6 +333,51 @@ class Settings(BaseSettings):
         ge=1,
         description="Discovered files whose index metadata is read back per query",
     )
+    # RFC-045: a thread per job reads each file once, ahead of the pipeline,
+    # and hands the bytes to the hash, CLIP and the thumbnail. Four keys:
+    # the switch, the size of the queue -- which is also the job's metadata
+    # window while the switch is on, replacing `metadata_prefetch_size` --
+    # and two ceilings on the bytes held. The JPEG draft CLIP decodes with
+    # is deliberately not one of them: changing it changes the vectors.
+    indexing_read_ahead: bool = Field(
+        default=True,
+        description="Read files ahead of the indexing pipeline, in a thread",
+    )
+    """`false` is the pipeline as it was before RFC-045, whole: no thread, the
+    metadata window of `metadata_prefetch_size`, every file read from its path.
+    The emergency exit (section 5.7), for a machine where the thread does not
+    pay -- a fast SSD, or too little memory.
+    """
+    read_ahead_files: int = Field(
+        default=32,
+        ge=1,
+        description="Files the read-ahead keeps queued, and the job's metadata window",
+    )
+    """How far ahead of the pipeline the thread may get, in files (RFC-045 4.4).
+
+    Also the job's metadata window while the read-ahead is on: a window of 512
+    candidates would hold 512 files' bytes before the first decision, ~1.9 GB
+    of drone photos (section 3). The CLI with the read-ahead off and the
+    backfills keep `metadata_prefetch_size`.
+    """
+    read_ahead_bytes: int = Field(
+        default=512 * 1024 * 1024,
+        ge=1,
+        description="Most bytes the read-ahead may hold at once",
+    )
+    """The ceiling on the bytes read and not yet released (RFC-045 section 5.5).
+
+    The thread never waits for it to fall: a file that would cross it goes
+    without its bytes, and is read from its path, as before. With 32 files
+    ahead and 3.8 MB per photo the pipeline holds ~400 MB at worst, so this
+    seldom cuts anything.
+    """
+    read_ahead_max_file_bytes: int = Field(
+        default=64 * 1024 * 1024,
+        ge=1,
+        description="Largest file the read-ahead reads into memory",
+    )
+    """A 200 MB TIFF goes by its path, streamed, as before (RFC-045 5.1)."""
     # RFC-028 section 6 reads the EXIF capture date during the scan, for
     # every discovered file, including the ones the incremental check then
     # skips -- that is how an already-indexed photo gains a date without

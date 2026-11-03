@@ -37,6 +37,7 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
 from app.infrastructure.ai.clip_embedding_model import (
+    DRAFT_TARGET_EDGE,
     IMAGE_PROCESSOR_BACKEND,
     TEXT_PROMPT_TEMPLATE,
     ClipEmbeddingModel,
@@ -447,6 +448,148 @@ class TestImageEncoding:
         image = _image(jpeg_path)
 
         assert adapter.encode_image(image).values == adapter.encode_image(image).values
+
+
+def _jpeg(path: Path, size: tuple[int, int]) -> Path:
+    """A JPEG of `size` with content in it, so a reduction shows in the pixels."""
+    gradient = PILImage.linear_gradient("L").resize(size).convert("RGB")
+    gradient.save(path, "JPEG", quality=90)
+    return path
+
+
+class TestTheDraft:
+    """RFC-045 section 5.6: the JPEG decoder is asked for a reduced draft.
+
+    `draft("RGB", (1000, 1000))`: the largest DCT reduction that leaves both
+    sides at least 1,000 px, none when the shorter side is under 2,000.
+    """
+
+    def test_the_target_edge_is_the_measured_one(self) -> None:
+        assert DRAFT_TARGET_EDGE == 1000
+
+    def test_a_large_jpeg_is_decoded_at_half_size(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """2400 x 2000 -> 1200 x 1000: half is the largest reduction that fits.
+
+        RFC-045 section 9 asked for 2400 x 1600 -> 1200 x 800, which its own
+        rule does not give: 800 is under 1,000, and Pillow 12.3 leaves that
+        photo whole (section 14 of the RFC records the correction).
+        """
+        _adapter().encode_image(_image(_jpeg(tmp_path / "big.jpg", (2400, 2000))))
+
+        (received,) = stub_clip.processor.images
+        assert received.size == (1200, 1000)
+
+    def test_a_drone_photo_of_twelve_megapixels_is_decoded_at_half_size(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        _adapter().encode_image(_image(_jpeg(tmp_path / "dji.jpg", (4000, 3000))))
+
+        (received,) = stub_clip.processor.images
+        assert received.size == (2000, 1500)
+
+    @pytest.mark.parametrize("size", [(1600, 1200), (2400, 1600), (640, 480)])
+    def test_a_jpeg_under_two_thousand_pixels_is_decoded_exactly_as_before(
+        self, size: tuple[int, int], stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """Not reduced, so the pixels -- and the vector -- are the ones of today.
+
+        "Today" is a plain open and convert, which is what `_preprocess()`
+        did before RFC-045; the slow test compares the vectors themselves.
+        """
+        path = _jpeg(tmp_path / "small.jpg", size)
+        with PILImage.open(path) as opened:
+            today = opened.convert("RGB")
+
+        _adapter().encode_image(_image(path))
+
+        (received,) = stub_clip.processor.images
+        assert received.size == size
+        assert received.tobytes() == today.tobytes()
+
+    def test_the_first_frame_of_an_mpo_is_reduced(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        """How Pillow opens a DJI photo: a `JpegImageFile` of two frames."""
+        first = PILImage.linear_gradient("L").resize((4000, 3000)).convert("RGB")
+        second = PILImage.new("RGB", (640, 480), (1, 2, 3))
+        path = tmp_path / "dji.mpo"
+        first.save(path, "MPO", save_all=True, append_images=[second])
+        with PILImage.open(path) as opened:
+            assert opened.format == "MPO"
+            assert getattr(opened, "n_frames", 1) == 2
+
+        _adapter().encode_image(_image(path))
+
+        (received,) = stub_clip.processor.images
+        assert received.size == (2000, 1500)
+
+    def test_a_png_is_not_changed(self, stub_clip: StubLoads, tmp_path: Path) -> None:
+        path = tmp_path / "large.png"
+        PILImage.linear_gradient("L").resize((4000, 3000)).save(path, "PNG")
+        with PILImage.open(path) as opened:
+            today = opened.convert("RGB")
+
+        _adapter().encode_image(_image(path))
+
+        (received,) = stub_clip.processor.images
+        assert received.size == (4000, 3000)
+        assert received.tobytes() == today.tobytes()
+
+
+class TestTheBytesAlreadyRead:
+    """RFC-045 section 5.3: decoding the bytes is decoding the file."""
+
+    @pytest.mark.parametrize("size", [(4000, 3000), (120, 90)])
+    def test_the_bytes_give_the_pixels_the_file_gives(
+        self, size: tuple[int, int], stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        path = _jpeg(tmp_path / "photo.jpg", size)
+        adapter = _adapter()
+
+        from_file = adapter.encode_image(_image(path))
+        from_bytes = adapter.encode_image(_image(path), path.read_bytes())
+
+        first, second = stub_clip.processor.images
+        assert first.tobytes() == second.tobytes()
+        assert from_file.values == from_bytes.values
+
+    def test_with_bytes_the_file_is_never_opened(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        path = _jpeg(tmp_path / "photo.jpg", (120, 90))
+        data = path.read_bytes()
+        path.unlink()
+
+        result = _adapter().encode_image(_image(path), data)
+
+        assert len(result.values) == DIMENSION
+
+    def test_a_batch_pairs_each_image_with_its_bytes(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        paths = [
+            _jpeg(tmp_path / "a.jpg", (120, 90)),
+            _jpeg(tmp_path / "b.jpg", (90, 120)),
+        ]
+        images = [_image(path) for path in paths]
+        adapter = _adapter()
+
+        from_files = adapter.encode_images(images)
+        from_bytes = adapter.encode_images(images, [paths[0].read_bytes(), None])
+
+        assert [vector.values for vector in from_files] == [
+            vector.values for vector in from_bytes
+        ]
+
+    def test_a_batch_with_the_wrong_number_of_contents_is_refused(
+        self, stub_clip: StubLoads, tmp_path: Path
+    ) -> None:
+        image = _image(_jpeg(tmp_path / "a.jpg", (120, 90)))
+
+        with pytest.raises(ValueError, match="2 contents were given for 1 images"):
+            _adapter().encode_images([image], [None, None])
 
 
 class TestImageErrorsPropagate:

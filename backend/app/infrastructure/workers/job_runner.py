@@ -45,8 +45,10 @@ from app.application.use_cases.indexing_plan import IndexCandidate
 from app.domain.entities.device import Device
 from app.domain.entities.indexing_job import IndexingJob, JobStatus
 from app.domain.repositories.device_repository import DeviceRepository
+from app.domain.repositories.image_repository import ImageRepository
 from app.domain.repositories.indexing_job_repository import IndexingJobRepository
 from app.domain.services.device_locator import DeviceLocator
+from app.domain.services.indexing_observer import IndexingObserver
 from app.domain.value_objects.job_id import JobId
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
@@ -60,6 +62,7 @@ from app.infrastructure.process.supervision import (
 )
 from app.infrastructure.workers.indexing_worker import discovered_candidates
 from app.infrastructure.workers.job_progress_observer import JobProgressObserver
+from app.infrastructure.workers.read_ahead import ReadAheadCandidates, ReadAheadLimits
 
 logger = get_logger(__name__)
 
@@ -95,7 +98,14 @@ class JobRunner:
         warm_up: Callable[[], None] | None = None,
         excluded_directories: tuple[Path, ...] = (),
         extract_gps: bool = True,
+        read_ahead: ReadAheadLimits | None = None,
+        images: ImageRepository | None = None,
     ) -> None:
+        if read_ahead is not None and images is None:
+            raise ValueError(
+                "Reading ahead needs the image repository, for the snapshot of "
+                "the device's change signals"
+            )
         self._jobs = jobs
         self._devices = devices
         self._locator = locator
@@ -120,6 +130,21 @@ class JobRunner:
         See `FilesystemImageProvider`: without this, a job over a system
         disk would index the application's own thumbnails as photographs
         (RFC-030 section 7.1).
+        """
+        self._read_ahead = read_ahead
+        """Whether, and how far, each job reads its files ahead (RFC-045).
+
+        `None` is the pipeline of RFC-024, one thread, every file read from
+        its path -- what `INDEXING_READ_AHEAD=false` gives, and every test
+        written before RFC-045. Last in the signature with `images`, as
+        keywords, so that no caller's arguments move.
+        """
+        self._images = images
+        """Where the snapshot of a device's change signals is read from.
+
+        The repository the indexer writes through, on the same session:
+        the snapshot is read on this thread, before the reading thread
+        starts, and never from it (RFC-045 section 5.2).
         """
         self._warm_up = warm_up
         """Loads the model before the loop starts; see `run_forever()`.
@@ -365,19 +390,72 @@ class JobRunner:
                 lambda file_count: self._record_scan(device, mount, file_count)
             )
 
-        provider = FilesystemImageProvider(
-            mount,
-            self._supported_extensions,
-            extract_capture_date=self._extract_capture_date,
-            extract_gps=self._extract_gps,
-            scopes=job.scopes,
-            resume_after=_checkpoint_of(job),
-            observer=observer,
-            excluded_directories=self._excluded_directories,
+        def scan(scan_observer: IndexingObserver) -> Iterator[IndexCandidate]:
+            provider = FilesystemImageProvider(
+                mount,
+                self._supported_extensions,
+                extract_capture_date=self._extract_capture_date,
+                extract_gps=self._extract_gps,
+                scopes=job.scopes,
+                resume_after=_checkpoint_of(job),
+                observer=scan_observer,
+                excluded_directories=self._excluded_directories,
+            )
+            return self._candidates(provider, device, mount)
+
+        if self._read_ahead is None:
+            return self._indexer.execute(scan(observer), observer)
+        return self._index_reading_ahead(device, scan, observer, self._read_ahead)
+
+    def _index_reading_ahead(
+        self,
+        device: Device,
+        scan: Callable[[IndexingObserver], Iterator[IndexCandidate]],
+        observer: JobProgressObserver,
+        limits: ReadAheadLimits,
+    ) -> IndexingSummary:
+        """Run the pipeline over a scan that a second thread reads ahead (RFC-045).
+
+        **The snapshot first, here**, on the thread that owns the session:
+        one query for the size and mtime of every row of the device, which
+        the reading thread consults to read only the files the decision
+        will hash (section 5.2). The thread never queries.
+
+        **The scan is built in the thread**, with an observer that queues
+        its events; this thread hands them to `observer` as it takes them
+        out, so that every write the scan triggers -- the heartbeat of
+        `discovered()`, the device row of `listed()` -- happens on the
+        thread that owns the job's session (section 5.4).
+
+        The `with` block is what ends the thread, on every way out of the
+        pipeline: the end of the scan, a cancellation, an exception, an
+        interrupt (section 5.1).
+        """
+        assert self._images is not None
+        started = time.perf_counter()
+        signals = self._images.list_change_signals(device.id)
+        logger.info(
+            "Read the change signals of %d indexed files of device %s in %.2f s",
+            len(signals),
+            device.id,
+            time.perf_counter() - started,
         )
-        return self._indexer.execute(
-            self._candidates(provider, device, mount), observer
+
+        with ReadAheadCandidates(scan, observer, signals, limits) as candidates:
+            summary = self._indexer.execute(candidates, observer)
+        stats = candidates.stats
+        logger.info(
+            "Read ahead: %d files (%.1f MB), %d unchanged, %d too large, "
+            "%d over the budget, %d unreadable; at most %.1f MB held",
+            stats.read,
+            stats.bytes_read / 1e6,
+            stats.unchanged,
+            stats.too_large,
+            stats.over_budget,
+            stats.failed,
+            candidates.budget.peak / 1e6,
         )
+        return summary
 
     def _record_scan(self, device: Device, started_on: Path, file_count: int) -> None:
         """Write the size of the whole disk's listing, if the disk is still there.
@@ -531,6 +609,14 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
     and opens none -- at a logoff, a new connection is a new server process
     that cannot start, and takes the cluster down with it. Without the
     handler (the CLI), the wrapping changes nothing.
+
+    **This is where the read-ahead is switched on** (RFC-045 section 5.7):
+    with `indexing_read_ahead`, every job reads its files in a second
+    thread, `read_ahead_files` ahead, and the pipeline decides windows of
+    that size rather than of `metadata_prefetch_size` -- a window holds the
+    bytes of each of its files. The CLI composes its runner here too, so it
+    reads ahead as the executor does; the backfills compose their own and
+    do not.
     """
     from app.application.use_cases.thumbnail_writer import ThumbnailWriter
     from app.infrastructure.config.settings import settings
@@ -558,16 +644,31 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
     )
     from app.presentation.dependencies import get_embedding_model
 
+    read_ahead = (
+        ReadAheadLimits(
+            files=settings.read_ahead_files,
+            budget_bytes=settings.read_ahead_bytes,
+            max_file_bytes=settings.read_ahead_max_file_bytes,
+        )
+        if settings.indexing_read_ahead
+        else None
+    )
+    images = deferring(PostgresImageRepository(image_session))
+
     return JobRunner(
         jobs=deferring(PostgresIndexingJobRepository(job_session)),
         devices=deferring(PostgresDeviceRepository(job_session)),
         locator=MountedDeviceLocator(WindowsVolumeIdentityProvider()),
         indexer=IndexOrUpdateImagesUseCase(
-            repository=deferring(PostgresImageRepository(image_session)),
+            repository=images,
             embedding_model=get_embedding_model(),
             content_hasher=Sha256ContentHasher(),
             batch_size=settings.batch_size,
-            metadata_prefetch_size=settings.metadata_prefetch_size,
+            metadata_prefetch_size=(
+                read_ahead.files
+                if read_ahead is not None
+                else settings.metadata_prefetch_size
+            ),
             thumbnail_writer=ThumbnailWriter(
                 generator=PillowThumbnailGenerator(),
                 store=FilesystemThumbnailStore(settings.thumbnail_directory),
@@ -583,6 +684,8 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
         stale_timeout=settings.job_stale_timeout,
         max_attempts=settings.job_max_attempts,
         excluded_directories=(settings.thumbnail_directory,),
+        read_ahead=read_ahead,
+        images=images,
     )
 
 

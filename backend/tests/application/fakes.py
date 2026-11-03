@@ -17,6 +17,7 @@ from app.domain.services.thumbnail_generator_port import ThumbnailGeneratorPort
 from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 from app.domain.services.volume_catalog import VolumeCatalog
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId, VolumeIdentity, VolumeKind
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -47,6 +48,7 @@ from app.infrastructure.persistence.in_memory_device_repository import (
 )
 from app.infrastructure.persistence.in_memory_image_repository import (
     aggregate_positions,
+    change_signals_of,
     cosine_search,
     count_images_by_device,
     count_images_by_path_prefix,
@@ -76,6 +78,7 @@ class FakeImageRepository(ImageRepository):
         self.save_indexed_many_calls: list[list[IndexingRecord]] = []
         self.get_index_metadata_calls: list[ImageId] = []
         self.get_index_metadata_many_calls: list[Sequence[ImageId]] = []
+        self.list_change_signals_calls: list[DeviceId] = []
         self.update_index_metadata_calls: list[tuple[ImageId, IndexMetadata]] = []
         self.update_capture_date_calls: list[tuple[ImageId, CaptureDate]] = []
         self.update_capture_date_many_calls: list[dict[ImageId, CaptureDate]] = []
@@ -262,6 +265,11 @@ class FakeImageRepository(ImageRepository):
             thumbnail_path=self._thumbnails.get(image_id.value),
         )
 
+    def list_change_signals(self, device_id: DeviceId) -> dict[ImageId, ChangeSignals]:
+        """The shared snapshot, recorded so a test can see it was asked once."""
+        self.list_change_signals_calls.append(device_id)
+        return change_signals_of(self._images, self._metadata, device_id)
+
     def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
         self.update_index_metadata_calls.append((image_id, metadata))
         if any(image.id == image_id for image in self._images):
@@ -417,9 +425,14 @@ class RecordingThumbnailGenerator(ThumbnailGeneratorPort):
     def __init__(self, failing: frozenset[str] = frozenset()) -> None:
         self.failing = failing
         self.generated: list[tuple[Image, int]] = []
+        self.contents: list[bytes | None] = []
+        """The bytes each render was handed (RFC-045), in order; never decoded."""
 
-    def generate(self, image: Image, max_edge: int) -> bytes:
+    def generate(
+        self, image: Image, max_edge: int, content: bytes | None = None
+    ) -> bytes:
         self.generated.append((image, max_edge))
+        self.contents.append(content)
         if image.filename in self.failing:
             raise OSError(f"cannot decode {image.filename}")
         return f"thumbnail:{image.id}:{max_edge}".encode()

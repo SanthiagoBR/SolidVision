@@ -8,6 +8,11 @@ the fourth independent open per indexed image, after the content hash, the
 EXIF header and the model. What that costs is measured in
 `experiments/rfc-030-file-access/measure_thumbnail_cost.py`, against the
 inference it sits beside rather than against zero.
+
+Since RFC-045 the decode may come from bytes already in memory -- the ones
+the read-ahead read for the hash -- instead of from the file. Still a decode
+of its own; only the source of the bytes changes, and the thumbnail is the
+same, byte for byte.
 """
 
 from __future__ import annotations
@@ -45,7 +50,9 @@ _SIXTEEN_BIT_MODES = frozenset({"I;16", "I;16L", "I;16B", "I;16N"})
 class PillowThumbnailGenerator(ThumbnailGeneratorPort):
     """Decode, shrink, orient, flatten and encode one image as a JPEG."""
 
-    def generate(self, image: Image, max_edge: int) -> bytes:
+    def generate(
+        self, image: Image, max_edge: int, content: bytes | None = None
+    ) -> bytes:
         """Return JPEG bytes whose longer side is at most `max_edge` pixels.
 
         The order of the steps is the performance, and each one is there
@@ -73,11 +80,20 @@ class PillowThumbnailGenerator(ThumbnailGeneratorPort):
         A zero-byte or truncated file raises from the decoder, and that is
         the correct outcome: the caller reports a thumbnail failure and
         the image stays indexed without one.
+
+        `content` is the file's bytes when the caller already read them
+        (RFC-045 section 5.3); they are decoded instead of the file, which
+        is then not opened at all.
         """
         if max_edge < 1:
             raise ValueError(f"max_edge must be at least 1, got {max_edge}")
 
-        with PILImage.open(image.require_absolute_path().value) as opened:
+        source = (
+            io.BytesIO(content)
+            if content is not None
+            else image.require_absolute_path().value
+        )
+        with PILImage.open(source) as opened:
             opened.thumbnail((max_edge, max_edge))
             oriented = ImageOps.exif_transpose(opened)
             picture = _flatten(_to_eight_bit(oriented))

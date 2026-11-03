@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 
 from app.domain.entities.image import Image
 from app.domain.value_objects.capture_date import CaptureDate
+from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
@@ -241,6 +242,28 @@ class ImageRepository(ABC):
         "absent" (new file) from "present with `None` fields" (row exists,
         metadata never written) exactly as they do for the single-id
         version.
+        """
+
+    @abstractmethod
+    def list_change_signals(self, device_id: DeviceId) -> dict[ImageId, ChangeSignals]:
+        """Return the size and modification time of every row of one device.
+
+        The snapshot of RFC-045 section 5.2: read once per job, on the main
+        thread, before the read-ahead thread starts, so that the thread can
+        predict which files the incremental decision will ask the bytes of
+        without touching the database itself -- a session is not safe
+        across threads, and a second connection opened from another thread
+        is what RFC-036 section 7.5's `deferring()` exists to avoid.
+
+        **A prediction, not the decision.** The pipeline still reads the
+        metadata per window and decides with `plan_indexing()`. A snapshot
+        that is stale costs a read too many or a read by path, never a
+        wrong answer.
+
+        Every row of the device, with or without an embedding, and the
+        `None`s of a row that never had the two columns are kept as they
+        are: the decision treats them as changed, and so must the
+        prediction. Ids of other devices are absent.
         """
 
     @abstractmethod

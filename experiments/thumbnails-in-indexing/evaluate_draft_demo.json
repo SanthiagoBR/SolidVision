@@ -1,0 +1,30 @@
+{
+  "images": 45,
+  "queries": 25,
+  "rows": [
+    {
+      "variant": "atual",
+      "drafted": 0,
+      "strict_top_1": 0.64,
+      "recall_at_5": 0.84,
+      "contamination_at_5": 0.128,
+      "pairwise": 0.8042328042328042
+    },
+    {
+      "variant": "draft 1/2",
+      "drafted": 45,
+      "strict_top_1": 0.64,
+      "recall_at_5": 0.8,
+      "contamination_at_5": 0.128,
+      "pairwise": 0.7936507936507936
+    }
+  ],
+  "cosine_mean": 0.9822238683700562,
+  "cosine_min": 0.948059618473053,
+  "cosine_min_file": "images/aerial/urban/urban_residential_street_02.jpg",
+  "changed_queries": 13,
+  "pairwise_flips": {
+    "wrong->right": 0,
+    "right->wrong": 2
+  }
+}

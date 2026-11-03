@@ -52,7 +52,9 @@ class TestBatchEncoding:
         def __init__(self) -> None:
             self.calls: list[Image] = []
 
-        def encode_image(self, image: Image) -> EmbeddingVector:
+        def encode_image(
+            self, image: Image, content: bytes | None = None
+        ) -> EmbeddingVector:
             self.calls.append(image)
             return EmbeddingVector([float(len(image.filename))] * 4)
 
@@ -116,7 +118,9 @@ class TestBatchEncoding:
         """The caller owns isolation; swallowing here would hide which image."""
 
         class _Explodes(EmbeddingModelPort):
-            def encode_image(self, image: Image) -> EmbeddingVector:
+            def encode_image(
+                self, image: Image, content: bytes | None = None
+            ) -> EmbeddingVector:
                 raise RuntimeError(f"cannot encode {image.filename}")
 
             def encode_text(self, text: str) -> EmbeddingVector:

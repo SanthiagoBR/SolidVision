@@ -1,0 +1,64 @@
+{
+  "restart": {
+    "before": {
+      "revision": "c3f81a5e7d24",
+      "images": 45,
+      "indexing_jobs": 7,
+      "indexing_job_scopes": 7,
+      "devices": [
+        [
+          "DEMO",
+          "6ae4f42b-e2b8-5084-a467-4212da815dca",
+          "\\\\?\\Volume{1a2be007-0000-0000-0080-000000000000}\\"
+        ],
+        [
+          "C:",
+          "bcb6401f-50a4-5a5b-a86e-155a28b23803",
+          "\\\\?\\Volume{b0ceedad-f2bf-4c4b-ab96-bd0611a70aa7}\\"
+        ]
+      ]
+    },
+    "migration_seconds": 0.47531849999904807,
+    "after": {
+      "revision": "c3f81a5e7d24",
+      "images": 45,
+      "indexing_jobs": 7,
+      "indexing_job_scopes": 7,
+      "devices": [
+        [
+          "DEMO",
+          "6ae4f42b-e2b8-5084-a467-4212da815dca",
+          "\\\\?\\Volume{1a2be007-0000-0000-0080-000000000000}\\"
+        ],
+        [
+          "C:",
+          "bcb6401f-50a4-5a5b-a86e-155a28b23803",
+          "\\\\?\\Volume{b0ceedad-f2bf-4c4b-ab96-bd0611a70aa7}\\"
+        ]
+      ]
+    },
+    "demo_indexed_seconds": 2.232597000000169,
+    "reindexed": {
+      "revision": "c3f81a5e7d24",
+      "images": 45,
+      "indexing_jobs": 8,
+      "indexing_job_scopes": 8,
+      "devices": [
+        [
+          "DEMO",
+          "6ae4f42b-e2b8-5084-a467-4212da815dca",
+          "\\\\?\\Volume{1a2be007-0000-0000-0080-000000000000}\\"
+        ],
+        [
+          "C:",
+          "bcb6401f-50a4-5a5b-a86e-155a28b23803",
+          "\\\\?\\Volume{b0ceedad-f2bf-4c4b-ab96-bd0611a70aa7}\\"
+        ]
+      ]
+    },
+    "strict_top_1": 64.0,
+    "recall_at_5": 84.0,
+    "contamination_at_5": 12.8,
+    "pairwise": 80.42328042328042
+  }
+}

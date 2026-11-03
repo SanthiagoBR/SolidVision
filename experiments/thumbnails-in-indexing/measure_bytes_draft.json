@@ -1,0 +1,361 @@
+{
+  "arms": [
+    {
+      "arm": 0,
+      "mode": "serial",
+      "lookahead": 16,
+      "files": 192,
+      "failed": 1,
+      "thumbnail_failures": 0,
+      "megabytes": 749.5652370452881,
+      "elapsed_seconds": 116.17832760000601,
+      "steady_seconds_per_image": 0.5951505357952556,
+      "discovery_ms": 120.14403229143984,
+      "hashing_ms": 168.59929635090035,
+      "waiting_ms": 0.0,
+      "inference_ms": 231.99746718789052,
+      "thumbnail_ms": 83.92931145893574,
+      "held_peak_mb": 0.0,
+      "counters": {
+        "performance": 252.35551127457603,
+        "frequency": 991.0,
+        "defender": 8.389705895038754,
+        "available_mb": 660.991304347826,
+        "standby": 347493634.226087,
+        "mhz": 2500.8431167310487,
+        "samples": 115.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.6120179907892108,
+          "available_mb": 673.304347826087,
+          "mhz": 2544.539043896623
+        }
+      ],
+      "steady_waiting_ms": 0.0,
+      "drafted": 0,
+      "preprocessed": 0
+    },
+    {
+      "arm": 1,
+      "mode": "serial-draft",
+      "lookahead": 16,
+      "files": 192,
+      "failed": 0,
+      "thumbnail_failures": 0,
+      "megabytes": 745.8195524215698,
+      "elapsed_seconds": 96.93833530001575,
+      "steady_seconds_per_image": 0.5028809539772655,
+      "discovery_ms": 108.20653489554388,
+      "hashing_ms": 173.10313541565847,
+      "waiting_ms": 0.0,
+      "inference_ms": 143.25141041748185,
+      "thumbnail_ms": 79.93006822895646,
+      "held_peak_mb": 0.0,
+      "counters": {
+        "performance": 263.4931438748002,
+        "frequency": 991.0,
+        "defender": 3.3362158057917863,
+        "available_mb": 819.2395833333334,
+        "standby": 665949056.0,
+        "mhz": 2611.21705579927,
+        "samples": 96.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.5092768914473709,
+          "available_mb": 819.0909090909091,
+          "mhz": 2603.0565572338455
+        }
+      ],
+      "steady_waiting_ms": 0.0,
+      "drafted": 190,
+      "preprocessed": 192
+    },
+    {
+      "arm": 2,
+      "mode": "bytes",
+      "lookahead": 64,
+      "files": 192,
+      "failed": 0,
+      "thumbnail_failures": 0,
+      "megabytes": 726.168212890625,
+      "elapsed_seconds": 75.53271820000373,
+      "steady_seconds_per_image": 0.30466757031263114,
+      "discovery_ms": 118.61818124725687,
+      "hashing_ms": 165.81064531328593,
+      "waiting_ms": 102.90257031344177,
+      "inference_ms": 207.25837968802807,
+      "thumbnail_ms": 83.15508072973898,
+      "held_peak_mb": 286.5342826843262,
+      "counters": {
+        "performance": 240.35754611952493,
+        "frequency": 991.0,
+        "defender": 4.978105116661845,
+        "available_mb": 880.8533333333334,
+        "standby": 647645320.5333333,
+        "mhz": 2381.943282044492,
+        "samples": 75.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.2986577032895998,
+          "available_mb": 898.5681818181819,
+          "mhz": 2275.922648019747
+        }
+      ],
+      "steady_waiting_ms": 6.493167188637017,
+      "drafted": 0,
+      "preprocessed": 0
+    },
+    {
+      "arm": 3,
+      "mode": "bytes-draft",
+      "lookahead": 64,
+      "files": 192,
+      "failed": 0,
+      "thumbnail_failures": 0,
+      "megabytes": 742.8714246749878,
+      "elapsed_seconds": 65.98733309999807,
+      "steady_seconds_per_image": 0.2697561257809866,
+      "discovery_ms": 110.20053228639881,
+      "hashing_ms": 162.07079739554803,
+      "waiting_ms": 122.27659374881719,
+      "inference_ms": 142.49714062437607,
+      "thumbnail_ms": 78.83195520723044,
+      "held_peak_mb": 277.25472259521484,
+      "counters": {
+        "performance": 256.1450918479163,
+        "frequency": 991.0,
+        "defender": 4.324268387273076,
+        "available_mb": 906.5230769230769,
+        "standby": 773075448.1230769,
+        "mhz": 2538.397860212851,
+        "samples": 65.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.26648384802607133,
+          "available_mb": 882.375,
+          "mhz": 2463.690214996693
+        }
+      ],
+      "steady_waiting_ms": 47.72887421768246,
+      "drafted": 191,
+      "preprocessed": 192
+    },
+    {
+      "arm": 4,
+      "mode": "serial",
+      "lookahead": 16,
+      "files": 192,
+      "failed": 0,
+      "thumbnail_failures": 0,
+      "megabytes": 713.6216945648193,
+      "elapsed_seconds": 101.62897419999354,
+      "steady_seconds_per_image": 0.5218825374997157,
+      "discovery_ms": 108.21992708709634,
+      "hashing_ms": 161.46128541337626,
+      "waiting_ms": 0.0,
+      "inference_ms": 183.83116406251548,
+      "thumbnail_ms": 75.38846718762215,
+      "held_peak_mb": 0.0,
+      "counters": {
+        "performance": 263.67700272526423,
+        "frequency": 991.0,
+        "defender": 3.3482671555885055,
+        "available_mb": 1103.148514851485,
+        "standby": 884002248.2376238,
+        "mhz": 2613.0390970073686,
+        "samples": 101.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.5371012006576884,
+          "available_mb": 1096.6625,
+          "mhz": 2622.7113305489097
+        }
+      ],
+      "steady_waiting_ms": 0.0,
+      "drafted": 0,
+      "preprocessed": 0
+    },
+    {
+      "arm": 5,
+      "mode": "serial-draft",
+      "lookahead": 16,
+      "files": 192,
+      "failed": 0,
+      "thumbnail_failures": 0,
+      "megabytes": 738.733642578125,
+      "elapsed_seconds": 94.9392446000129,
+      "steady_seconds_per_image": 0.4917715295454069,
+      "discovery_ms": 108.09278489341523,
+      "hashing_ms": 163.9663213557772,
+      "waiting_ms": 0.0,
+      "inference_ms": 141.9762911455109,
+      "thumbnail_ms": 80.03963281195561,
+      "held_peak_mb": 0.0,
+      "counters": {
+        "performance": 265.1351959122786,
+        "frequency": 991.0,
+        "defender": 3.5388258538426136,
+        "available_mb": 1099.095744680851,
+        "standby": 995821873.0212766,
+        "mhz": 2627.4897914906815,
+        "samples": 94.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.49610991973704105,
+          "available_mb": 1095.6266666666668,
+          "mhz": 2637.880393529201
+        }
+      ],
+      "steady_waiting_ms": 0.0,
+      "drafted": 191,
+      "preprocessed": 192
+    },
+    {
+      "arm": 6,
+      "mode": "bytes",
+      "lookahead": 64,
+      "files": 192,
+      "failed": 1,
+      "thumbnail_failures": 0,
+      "megabytes": 743.4796304702759,
+      "elapsed_seconds": 91.75707089999923,
+      "steady_seconds_per_image": 0.3331528695312045,
+      "discovery_ms": 113.64431354286353,
+      "hashing_ms": 164.77720416726999,
+      "waiting_ms": 86.356094791275,
+      "inference_ms": 279.3902218742611,
+      "thumbnail_ms": 112.05878489545285,
+      "held_peak_mb": 380.6566581726074,
+      "counters": {
+        "performance": 198.71755293707116,
+        "frequency": 991.0,
+        "defender": 26.122930208185476,
+        "available_mb": 611.3736263736264,
+        "standby": 357822148.9230769,
+        "mhz": 1969.290949606375,
+        "samples": 91.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.4129778440788198,
+          "available_mb": 555.311475409836,
+          "mhz": 1809.7638478857805
+        }
+      ],
+      "steady_waiting_ms": 0.0020406241674209014,
+      "drafted": 0,
+      "preprocessed": 0
+    },
+    {
+      "arm": 7,
+      "mode": "bytes-draft",
+      "lookahead": 64,
+      "files": 192,
+      "failed": 0,
+      "thumbnail_failures": 0,
+      "megabytes": 754.2039413452148,
+      "elapsed_seconds": 81.04993660002947,
+      "steady_seconds_per_image": 0.34070746406223407,
+      "discovery_ms": 128.5938874986338,
+      "hashing_ms": 197.3042151030313,
+      "waiting_ms": 144.25084270775793,
+      "inference_ms": 180.01828958313126,
+      "thumbnail_ms": 97.76103906187927,
+      "held_peak_mb": 287.8000202178955,
+      "counters": {
+        "performance": 203.41794078265136,
+        "frequency": 991.0,
+        "defender": 5.59584277766319,
+        "available_mb": 611.075,
+        "standby": 444841369.6,
+        "mhz": 2015.871793156075,
+        "samples": 80.0
+      },
+      "timeline": [
+        {
+          "until": 160.0,
+          "seconds_per_image": 0.3257597539475108,
+          "available_mb": 571.5510204081633,
+          "mhz": 2025.1070146077143
+        }
+      ],
+      "steady_waiting_ms": 49.97104687481624,
+      "drafted": 191,
+      "preprocessed": 192
+    }
+  ],
+  "pooled": {
+    "serial": {
+      "seconds_per_image": 0.5585165366474856,
+      "arm_min": 0.5218825374997157,
+      "arm_max": 0.5951505357952556,
+      "discovery_ms": 114.18197968926809,
+      "hashing_ms": 165.0302908821383,
+      "steady_waiting_ms": 0.0,
+      "inference_ms": 207.91431562520302,
+      "thumbnail_ms": 79.65888932327894,
+      "mhz": 2556.941106869209,
+      "hours": 17.993696232475564
+    },
+    "serial-draft": {
+      "seconds_per_image": 0.4973262417613362,
+      "arm_min": 0.4917715295454069,
+      "arm_max": 0.5028809539772655,
+      "discovery_ms": 108.14965989447956,
+      "hashing_ms": 168.53472838571784,
+      "steady_waiting_ms": 0.0,
+      "inference_ms": 142.61385078149638,
+      "thumbnail_ms": 79.98485052045604,
+      "mhz": 2619.353423644976,
+      "hours": 16.022331901589315
+    },
+    "bytes/L64": {
+      "seconds_per_image": 0.3189102199219178,
+      "arm_min": 0.30466757031263114,
+      "arm_max": 0.3331528695312045,
+      "discovery_ms": 116.1312473950602,
+      "hashing_ms": 165.29392474027796,
+      "steady_waiting_ms": 3.247603906402219,
+      "inference_ms": 243.3243007811446,
+      "thumbnail_ms": 97.60693281259591,
+      "mhz": 2175.6171158254338,
+      "hours": 10.274312837989987
+    },
+    "bytes-draft/L64": {
+      "seconds_per_image": 0.30523179492161034,
+      "arm_min": 0.2697561257809866,
+      "arm_max": 0.34070746406223407,
+      "discovery_ms": 119.3972098925163,
+      "hashing_ms": 179.68750624928967,
+      "steady_waiting_ms": 48.84996054624935,
+      "inference_ms": 161.25771510375367,
+      "thumbnail_ms": 88.29649713455485,
+      "mhz": 2277.134826684463,
+      "hours": 9.83363577966758
+    }
+  },
+  "equivalence": {
+    "files": 8,
+    "bytes_vs_today_max_delta": 0.0,
+    "draft_path_vs_draft_bytes_max_delta": 0.0,
+    "draft_vs_today_cosine_mean": 0.9994280338287354,
+    "draft_vs_today_cosine_min": 0.9986830949783325,
+    "drafted": 8,
+    "thumbnails_identical": 8
+  },
+  "seed": 20261101,
+  "listed": 115981
+}

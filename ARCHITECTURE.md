@@ -757,7 +757,7 @@ Thumbnails are generated once during indexing and stored on disk (see `thumbnail
 RFC-030 built it, and settled what that paragraph left open:
 
 - **Where they live — and where they never do.** In `settings.thumbnail_directory`, an application cache (`%LOCALAPPDATA%\SolidVision\thumbnails` by default), one JPEG per image id, sharded by the id's first two hex digits. **Never inside a photo collection**: the system does not write to the collection, and a thumbnail kept beside its photo would go into the drawer with the disk — which is exactly when it is the only way to see the photo. Every scan skips the cache directory even when it lies under a scanned folder, so indexing a system disk does not index the thumbnails. `thumbnail_path` is stored relative to the cache, for the reason `relative_path` is relative to its device.
-- **When they are generated.** For every image the pipeline embeds, after inference and before the row is written, from a fresh decode of the file — the picture CLIP decodes never leaves its adapter. A thumbnail that fails to render is reported and never fails the image, which stays indexed and searchable without one. Skipped files are not rendered, so a re-scan stays a `stat` per file. Images indexed before RFC-030 get theirs from `python -m app.infrastructure.workers.thumbnail_backfill --root PATH`, which never loads the model.
+- **When they are generated.** For every image the pipeline embeds, after inference and before the row is written, from a fresh decode of the file — the picture CLIP decodes never leaves its adapter. Since RFC-045 that decode is of the bytes the read-ahead already read for the hash, so the file is not opened a fourth time; it is still a decode of its own. A thumbnail that fails to render is reported and never fails the image, which stays indexed and searchable without one. Skipped files are not rendered, so a re-scan stays a `stat` per file. Images indexed before RFC-030 get theirs from `python -m app.infrastructure.workers.thumbnail_backfill --root PATH`, which never loads the model.
 - **How they are served.** `GET /api/v1/images/{id}/thumbnail`, a controlled route rather than a `StaticFiles` mount: 404 when the image has no thumbnail (the UI shows a placeholder), served whether or not the photo's disk is plugged in.
 - **How they are cached.** `ETag: "<content_hash>"` and `Cache-Control: private, no-cache`. The image id is derived from the *path*, so a photo overwritten in place keeps its id, gets a new content hash and a new thumbnail in the same reprocessing, and must not be served from a client cache that never asks. `no-cache` stores the thumbnail and revalidates every use; a current copy costs a `304` decided from one metadata read, with no file touched. A year of `max-age` beside the `ETag` would have let the browser skip revalidation entirely and reintroduced the stale-thumbnail bug; `immutable` was rejected for the same reason. Rows indexed before RFC-024 have no content hash, and are served `no-store`.
 
@@ -951,6 +951,43 @@ Generate new embedding.
 This ordering keeps incremental indexing inexpensive for the common case (most files unchanged) and reserves hashing for files that are actually candidates for reprocessing. This dramatically reduces indexing time for large collections.
 
 The EXIF capture date (RFC-028) is read during the same scan, but it is **not** a step in this ladder and never triggers re-embedding: a different capture date on identical pixels is a metadata change. For files the ladder skips (unchanged, or mtime changed with identical content), the capture date is written only if the row has never been examined (`capture_source` NULL), in one bulk write per metadata-prefetch window. Files that are re-embedded have their capture date written with the rest of the row. The scan-time extraction can be switched off with `EXTRACT_CAPTURE_DATE=false`; rows then stay unexamined rather than being marked as having no date.
+
+## Reading Ahead (RFC-045)
+
+On an external hard disk the reads are half of a first indexing, and in the
+pipeline of RFC-024 they ran in series with the model. A job therefore reads
+its files in **one thread of its own**, ahead of the pipeline: discovery, the
+whole file in one read, and its SHA-256, in discovery order, at most
+`READ_AHEAD_FILES` ahead and `READ_AHEAD_BYTES` held. The bytes travel with the
+candidate (`IndexCandidate.content`); step 3 above takes its hash from them,
+and the model and the thumbnail decode them instead of opening the file again.
+Each consumer still decodes for itself.
+
+Four rules keep it from changing anything but the time:
+
+* **The ladder above still decides, on the pipeline's thread.** The reading
+  thread only *predicts* which files step 3 will hash, from a snapshot of the
+  device's stored size and mtime loaded once, on the main thread, before it
+  starts (`ImageRepository.list_change_signals()`). It reads nothing else, so
+  a re-scan of an indexed disk stays a `stat` per file; a wrong prediction
+  costs a read, never a wrong decision.
+* **The thread never touches the database.** The scan's progress events are
+  queued between the candidates and handed to the job's observer by the
+  pipeline's thread, which owns the session.
+* **Order is discovery order**, so the checkpoint rules below hold unchanged.
+* **The bytes are released** as soon as a file needs them no more (skipped,
+  refreshed, written), and a forgotten one is given back when it is
+  collected.
+
+While it is on, the job's metadata window is `READ_AHEAD_FILES` (32), not
+`METADATA_PREFETCH_SIZE`: a window holds the bytes of every file in it.
+`INDEXING_READ_AHEAD=false` is the pipeline of RFC-024, whole.
+
+**CLIP decodes JPEGs with `draft("RGB", (1000, 1000))`** (RFC-045): the
+largest DCT reduction that keeps both sides at least 1,000 px, none under
+2,000 px. It changes the vectors of large photos -- so, by the rule of the
+product, the migration that introduced it restarted the index from zero,
+keeping the devices. Any later change to the vectors needs the same.
 
 ## Resuming an Interrupted Job
 

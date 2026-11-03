@@ -49,16 +49,22 @@ class _RecordingModel(EmbeddingModelPort):
         self.single_calls: list[Image] = []
         self.batch_sizes: list[int] = []
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         self.single_calls.append(image)
         return self._delegate.encode_image(image)
 
     def encode_text(self, text: str) -> EmbeddingVector:
         return self._delegate.encode_text(text)
 
-    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+    def encode_images(
+        self,
+        images: Sequence[Image],
+        contents: Sequence[bytes | None] | None = None,
+    ) -> list[EmbeddingVector]:
         self.batch_sizes.append(len(images))
-        return super().encode_images(images)
+        return super().encode_images(images, contents)
 
 
 class _SingleImageOnlyModel(EmbeddingModelPort):
@@ -73,7 +79,9 @@ class _SingleImageOnlyModel(EmbeddingModelPort):
         self._delegate = FakeEmbeddingModel()
         self.single_calls: list[Image] = []
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         self.single_calls.append(image)
         return self._delegate.encode_image(image)
 
@@ -90,7 +98,9 @@ class _BatchFailsForFilename(EmbeddingModelPort):
         self.batch_sizes: list[int] = []
         self.single_calls: list[Image] = []
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         self.single_calls.append(image)
         if image.filename == self._failing:
             raise ValueError(f"cannot decode {image.filename}")
@@ -99,21 +109,31 @@ class _BatchFailsForFilename(EmbeddingModelPort):
     def encode_text(self, text: str) -> EmbeddingVector:
         return self._delegate.encode_text(text)
 
-    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+    def encode_images(
+        self,
+        images: Sequence[Image],
+        contents: Sequence[bytes | None] | None = None,
+    ) -> list[EmbeddingVector]:
         self.batch_sizes.append(len(images))
-        return super().encode_images(images)
+        return super().encode_images(images, contents)
 
 
 class _WrongLengthModel(EmbeddingModelPort):
     """Violates the port contract by returning the wrong number of vectors."""
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
         return EmbeddingVector([0.1] * 8)
 
     def encode_text(self, text: str) -> EmbeddingVector:
         return EmbeddingVector([0.1] * 8)
 
-    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+    def encode_images(
+        self,
+        images: Sequence[Image],
+        contents: Sequence[bytes | None] | None = None,
+    ) -> list[EmbeddingVector]:
         return [EmbeddingVector([0.1] * 8)]
 
 

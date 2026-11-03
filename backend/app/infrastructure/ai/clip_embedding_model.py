@@ -15,6 +15,7 @@ the lockfile, and so by the version of the code.
 
 from __future__ import annotations
 
+import io
 import threading
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -51,6 +52,21 @@ demo images their pixels differ by up to 0.015 (RFC-041 section 14). Every
 vector of the project came from `torchvision`'s, which the app never imports,
 so a tree without it would encode other vectors without a word. Asked for by
 name, and checked after the load: `transformers` falls back to PIL even then.
+"""
+
+
+DRAFT_TARGET_EDGE = 1000
+"""Fixed by RFC-045's measurement, not a tunable: another value, other vectors.
+
+Asked of the JPEG decoder before the decode (`draft("RGB", (1000, 1000))`):
+Pillow then picks the largest DCT reduction -- 1/2, 1/4 or 1/8 -- that leaves
+both sides at least this long, and none when the shorter side is under twice
+it. On the drone photos of 12 MP that is 1/2, which took preprocessing from
+163 to 94 ms; photos that are not reduced -- the small ones, every PNG and
+TIFF, the whole demo corpus -- give exactly the vector they gave before
+(RFC-045 section 2.2). Not in `Settings`, for the reason the text template
+and the processor backend are not: changing it changes every vector, and the
+index restarts from zero when vectors change (section 5.9).
 """
 
 
@@ -103,10 +119,16 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         self._load_lock = threading.Lock()
         """One load at a time; see `_ensure_loaded()`."""
 
-    def encode_image(self, image: Image) -> EmbeddingVector:
-        """Decode the image's pixels and return their CLIP embedding."""
+    def encode_image(
+        self, image: Image, content: bytes | None = None
+    ) -> EmbeddingVector:
+        """Decode the image's pixels and return their CLIP embedding.
+
+        From `content` when the caller already read the file (RFC-045
+        section 5.3), from the file otherwise; the vector is the same.
+        """
         model, processor = self._ensure_loaded()
-        pixel_values = self._preprocess(processor, image)
+        pixel_values = self._preprocess(processor, image, content)
 
         with torch.no_grad():
             features = model.get_image_features(
@@ -115,7 +137,11 @@ class ClipEmbeddingModel(EmbeddingModelPort):
 
         return self._to_embedding_vectors(features.pooler_output, expected_rows=1)[0]
 
-    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+    def encode_images(
+        self,
+        images: Sequence[Image],
+        contents: Sequence[bytes | None] | None = None,
+    ) -> list[EmbeddingVector]:
         """Encode several images in one forward pass (RFC-024 section 5).
 
         Overrides the port's per-image default because CLIP genuinely does
@@ -138,13 +164,25 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         caller retries the batch one image at a time to find out which file
         it was, and RFC-023 section 4's decision that this adapter swallows
         nothing still stands.
+
+        `contents` pairs each image with its bytes, or with `None` to read
+        the file (RFC-045 section 5.3), as the port describes.
         """
+        if contents is not None and len(contents) != len(images):
+            raise ValueError(
+                f"{len(contents)} contents were given for {len(images)} images"
+            )
         if not images:
             return []
 
+        sources = contents if contents is not None else [None] * len(images)
         model, processor = self._ensure_loaded()
         pixel_values = torch.cat(
-            [self._preprocess(processor, image) for image in images], dim=0
+            [
+                self._preprocess(processor, image, content)
+                for image, content in zip(images, sources, strict=True)
+            ],
+            dim=0,
         )
 
         with torch.no_grad():
@@ -154,7 +192,12 @@ class ClipEmbeddingModel(EmbeddingModelPort):
 
         return self._to_embedding_vectors(features.pooler_output, len(images))
 
-    def _preprocess(self, processor: ProcessorMixin, image: Image) -> torch.Tensor:
+    def _preprocess(
+        self,
+        processor: ProcessorMixin,
+        image: Image,
+        content: bytes | None = None,
+    ) -> torch.Tensor:
         """Reduce one file on disk to the fixed-size tensor the model consumes.
 
         CLIP was trained on 3-channel RGB. Converting explicitly here rather
@@ -169,8 +212,28 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         is the whole memory strategy: only the returned tensor -- fixed at
         the model's input resolution, regardless of the source photo -- is
         allowed to outlive one file.
+
+        **The bytes come from `content` when there are some** (RFC-045
+        section 5.3): the read-ahead read the file for its hash, and
+        decoding those bytes gives the same tensor as decoding the file.
+
+        **The decoder is asked for a reduced draft first**
+        (`DRAFT_TARGET_EDGE`, RFC-045 section 5.6), with no condition
+        around the call: it is a no-op for every format but JPEG, and for
+        a JPEG whose shorter side is under 2,000 px. An MPO -- how Pillow
+        opens a DJI photo -- is a `JpegImageFile`, and the draft applies to
+        its first frame, the one read here. `POST /images/search/by-image`
+        comes through this method too, so a query photo is reduced by the
+        same rule as the photos of the index. It has to be asked before
+        `convert()`, which is what decodes.
         """
-        with PILImage.open(image.require_absolute_path().value) as opened:
+        source = (
+            io.BytesIO(content)
+            if content is not None
+            else image.require_absolute_path().value
+        )
+        with PILImage.open(source) as opened:
+            opened.draft("RGB", (DRAFT_TARGET_EDGE, DRAFT_TARGET_EDGE))
             pixels = opened.convert("RGB")
             inputs: Mapping[str, torch.Tensor] = processor(
                 images=pixels, return_tensors="pt"
