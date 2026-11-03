@@ -30,6 +30,7 @@ from app.application.use_cases.list_device_folders import ListDeviceFoldersUseCa
 from app.application.use_cases.list_devices import ListDevicesUseCase
 from app.application.use_cases.list_indexing_jobs import ListIndexingJobsUseCase
 from app.application.use_cases.list_mounted_volumes import ListMountedVolumesUseCase
+from app.application.use_cases.purge_missing_images import PurgeMissingImagesUseCase
 from app.application.use_cases.register_device import RegisterDeviceUseCase
 from app.application.use_cases.rename_device import RenameDeviceUseCase
 from app.application.use_cases.resolve_image_location import (
@@ -522,6 +523,24 @@ def get_rename_device_use_case(
     return RenameDeviceUseCase(device_repository=device_repository, describer=describer)
 
 
+def get_purge_missing_images_use_case(
+    image_repository: ImageRepository = Depends(get_image_repository),
+    device_repository: DeviceRepository = Depends(get_device_repository),
+    job_repository: IndexingJobRepository = Depends(get_indexing_job_repository),
+    thumbnail_store: ThumbnailStorePort = Depends(get_thumbnail_store),
+) -> PurgeMissingImagesUseCase:
+    """Return the use case behind `DELETE /devices/{id}/missing-images` (RFC-046).
+
+    No locator and no catalogue: the purge needs nothing from the disk.
+    """
+    return PurgeMissingImagesUseCase(
+        image_repository=image_repository,
+        device_repository=device_repository,
+        job_repository=job_repository,
+        thumbnail_store=thumbnail_store,
+    )
+
+
 def get_list_device_folders_use_case(
     device_repository: DeviceRepository = Depends(get_device_repository),
     image_repository: ImageRepository = Depends(get_image_repository),
@@ -565,6 +584,7 @@ __all__ = [
     "get_list_devices_use_case",
     "get_list_indexing_jobs_use_case",
     "get_list_mounted_volumes_use_case",
+    "get_purge_missing_images_use_case",
     "get_register_device_use_case",
     "get_rename_device_use_case",
     "get_resolve_image_location_use_case",

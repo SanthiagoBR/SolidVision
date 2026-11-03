@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 from app.domain.entities.image import Image
 from app.domain.value_objects.capture_date import CaptureDate
@@ -11,6 +12,11 @@ from app.domain.value_objects.change_signals import ChangeSignals
 from app.domain.value_objects.device_id import DeviceId
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.image_id import ImageId
+from app.domain.value_objects.image_presence import (
+    MissingImages,
+    Presences,
+    PurgedImages,
+)
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
@@ -73,6 +79,9 @@ class ImageRepository(ABC):
         bytes no longer depicts the file -- and for the position (RFC-032):
         `latitude`, `longitude` and `position_source` come from the entity,
         `None` included, for the capture date's reason.
+
+        And the row is **unmarked** (RFC-046 section 5.1): a photo that was
+        just indexed exists, whatever an earlier scan failed to find.
         """
 
     @abstractmethod
@@ -120,6 +129,11 @@ class ImageRepository(ABC):
         - An image with no stored embedding never appears. It was never
           compared, and inventing a score for it would put unindexed
           files in front of indexed ones.
+        - **Nor does a marked image** (RFC-046 section 6): the last scan
+          of its disk did not find the file. The two conditions are one
+          rule -- *searchable* -- and every read that serves the
+          interface applies both: this one, the listing and its summary,
+          the two counts of excluded photos and the map.
         - At most `limit` hits come back, fewer when fewer images have
           embeddings, and `[]` when none do. A short result means the
           repository ran out of candidates, never that it ran out of
@@ -559,6 +573,75 @@ class ImageRepository(ABC):
         """
 
     @abstractmethod
+    def list_presence(self, device_id: DeviceId) -> Presences:
+        """Return the id, the path and the mark of every row of one device (RFC-046).
+
+        The sweep's read, at the end of a whole-disk job (section 5.5): a
+        query then, and not the snapshot of `list_change_signals()`, which
+        is from the start of the job, so that the rows the job itself
+        created are compared too.
+
+        Every row of the device -- with or without an embedding, marked or
+        not -- and nothing of any other device. No order: the caller looks
+        ids up. Named columns only; the vectors stay where they are.
+
+        **Streamed**, one query read in chunks: the caller consumes it
+        before writing anything, and never holds the whole device at once.
+        """
+
+    @abstractmethod
+    def mark_presence(
+        self,
+        missing: Collection[ImageId],
+        present: Collection[ImageId],
+        since: datetime.datetime,
+    ) -> None:
+        """Mark `missing` as not found since `since`, and unmark `present` (RFC-046).
+
+        **One transaction**, both writes or neither (section 5.5, step 4).
+        The section names the two halves `mark_missing()` and
+        `mark_present()`; they are one method so that they can be one
+        transaction, which a repository that commits per call could not
+        otherwise promise.
+
+        - A row of `missing` that is **already marked keeps its date**: the
+          card says since when the photos were not found, and a later scan
+          that misses them again does not make that sooner.
+        - A row of `present` loses its mark, whatever its date.
+        - Ids with no row are skipped silently, as by every bulk write
+          here. Empty collections write nothing.
+
+        The caller keeps the two sets disjoint; an id in both is refused
+        with `ValueError` rather than resolved by an order nobody chose.
+        """
+
+    @abstractmethod
+    def count_missing_by_device(self) -> dict[DeviceId, MissingImages]:
+        """Count the marked rows of every device, with the oldest mark, at once.
+
+        One `GROUP BY` for every device, for the reason `count_by_device()`
+        gives (RFC-031 section 4.3): `GET /devices` renders every disk. A
+        device with no marked row is **absent**, as `count_by_device()`
+        omits an empty one; callers read it with `.get()`.
+        """
+
+    @abstractmethod
+    def purge_missing(self, device_id: DeviceId) -> PurgedImages:
+        """Delete the marked rows of one device, and say what went (RFC-046 §5.7).
+
+        One `DELETE ... RETURNING thumbnail_path`, in one transaction:
+        every marked row of `device_id` and nothing else -- no visible row,
+        no row of another device. Returns how many rows went and the
+        thumbnail locations they held, for the store to delete **after**
+        the rows are gone: a thumbnail without a row is litter in the
+        cache, and a row without its thumbnail would be a row pointing at
+        nothing.
+
+        Irreversible, which is why the route that calls it refuses while
+        the disk has a job and the interface asks first with the number.
+        """
+
+    @abstractmethod
     def count_by_device(self) -> dict[DeviceId, int]:
         """Return how many images each device has, as one grouped read.
 
@@ -580,6 +663,11 @@ class ImageRepository(ABC):
         know"*, which is what sits beside `last_scan_file_count` in the
         response, and a row without an embedding is still a file this
         system knows about.
+
+        **Except a marked row** (RFC-046 section 6): a file the last scan
+        did not find is not one the system knows to be on the disk, and the
+        numerator of the percentage is what the search can find. The marked
+        rows are `count_missing_by_device()`'s.
         """
 
     @abstractmethod
@@ -625,4 +713,7 @@ class ImageRepository(ABC):
         reason `count_by_device()` omits an empty device: the names come
         from the caller, and inventing keys here would mean guessing
         them.
+
+        Marked rows are not counted (RFC-046 section 6), as in
+        `count_by_device()`.
         """

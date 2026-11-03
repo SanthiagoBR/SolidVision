@@ -23,6 +23,7 @@ RFC_029_REVISION = "e7a2c9b41f30"
 RFC_030_REVISION = "f4b9e2d7c615"
 RFC_032_REVISION = "6d77379a36a1"
 RFC_045_REVISION = "c3f81a5e7d24"
+RFC_046_REVISION = "d2a7e4c19b53"
 
 
 def _script_directory() -> ScriptDirectory:
@@ -85,6 +86,7 @@ def test_history_is_linear_from_base_to_head() -> None:
         )
 
     assert chain == [
+        RFC_046_REVISION,
         RFC_045_REVISION,
         RFC_032_REVISION,
         RFC_030_REVISION,
@@ -547,3 +549,31 @@ def test_rfc_045_migration_empties_the_index_and_the_jobs_and_keeps_the_devices(
         assert schema_change not in downgrade_source
     assert "op." not in downgrade_source
 
+
+def test_rfc_046_migration_follows_rfc_045() -> None:
+    assert _revision_after(RFC_045_REVISION).revision == RFC_046_REVISION
+
+
+def test_rfc_046_migration_adds_one_nullable_timestamptz_and_nothing_else() -> None:
+    """RFC-046 section 5.1: a date, not a boolean; no backfill, no index."""
+    upgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_045_REVISION).module.upgrade)
+    )
+
+    assert upgrade_source.count("op.") == 1
+    assert upgrade_source.count("op.add_column(") == 1
+    assert '"missing_since", sa.DateTime(timezone=True), nullable=True' in (
+        upgrade_source
+    )
+    assert "Boolean" not in upgrade_source
+    assert "create_index" not in upgrade_source
+    assert "execute" not in upgrade_source
+
+
+def test_rfc_046_migration_downgrade_drops_only_the_new_column() -> None:
+    downgrade_source = _statements_only(
+        inspect.getsource(_revision_after(RFC_045_REVISION).module.downgrade)
+    )
+
+    assert downgrade_source.count("op.") == 1
+    assert 'op.drop_column("images", "missing_since")' in downgrade_source

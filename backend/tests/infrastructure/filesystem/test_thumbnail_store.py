@@ -79,3 +79,46 @@ def test_a_location_that_escapes_the_cache_is_refused(tmp_path: Path) -> None:
 
     assert store.locate("../secret.txt") is None
     assert store.locate(str(secret)) is None
+
+
+class TestDelete:
+    """The purge's second step (RFC-046 section 5.7)."""
+
+    def test_the_thumbnail_is_removed(self, tmp_path: Path) -> None:
+        store = FilesystemThumbnailStore(tmp_path / "cache")
+        location = store.save(ImageId(uuid.uuid4()), b"jpeg bytes")
+
+        store.delete(location)
+
+        assert store.locate(location) is None
+
+    def test_nothing_there_is_not_an_error(self, tmp_path: Path) -> None:
+        store = FilesystemThumbnailStore(tmp_path / "cache")
+        location = store.save(ImageId(uuid.uuid4()), b"jpeg bytes")
+        store.delete(location)
+
+        store.delete(location)
+        store.delete("ab/never-written.jpg")
+
+    def test_a_location_that_escapes_the_cache_deletes_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        secret = tmp_path / "secret.jpg"
+        secret.write_bytes(b"not ours")
+        store = FilesystemThumbnailStore(tmp_path / "cache")
+        (tmp_path / "cache").mkdir()
+
+        store.delete("../secret.jpg")
+        store.delete(str(secret))
+
+        assert secret.read_bytes() == b"not ours"
+
+    def test_the_other_thumbnails_stay(self, tmp_path: Path) -> None:
+        store = FilesystemThumbnailStore(tmp_path / "cache")
+        kept = store.save(ImageId(uuid.uuid4()), b"kept")
+        gone = store.save(ImageId(uuid.uuid4()), b"gone")
+
+        store.delete(gone)
+
+        found = store.locate(kept)
+        assert found is not None and found.read_bytes() == b"kept"

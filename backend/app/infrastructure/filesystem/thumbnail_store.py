@@ -91,3 +91,15 @@ class FilesystemThumbnailStore(ThumbnailStorePort):
         if not candidate.is_file():
             return None
         return candidate
+
+    def delete(self, location: str) -> None:
+        """Remove the file behind `location`; nothing there, nothing done (RFC-046).
+
+        Found through `locate()`, so a location that resolves outside the
+        store's directory removes nothing, as it serves nothing. The shard
+        directory stays: it is one of 256, and the next thumbnail of an id
+        that starts the same way needs it again.
+        """
+        found = self.locate(location)
+        if found is not None:
+            found.unlink(missing_ok=True)

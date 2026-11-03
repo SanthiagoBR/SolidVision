@@ -17,10 +17,10 @@ last write read back. That works because the write happens at every batch
 and every window, which is exactly where RFC-029 section 8 says the flag
 should be observed, so the answer is never more than one batch old.
 
-And one relay that writes nothing here: the size of the listing of a whole
-disk, which `listed()` hands to whatever function the runner gave it --
-the runner knows the device and where it was mounted, and this object
-knows neither (RFC-039 section 4.1).
+And one relay that writes nothing here: the listing of a whole disk, which
+`listed()` hands to whatever function the runner gave it -- the runner
+knows the device and where it was mounted, and this object knows neither
+(RFC-039 section 4.1; since RFC-046 the listing itself, not its size).
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from app.domain.services.indexing_observer import IndexingObserver
 from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.indexing_progress import IndexingProgress
 from app.domain.value_objects.job_id import JobId
+from app.domain.value_objects.root_listing import RootListing
 from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -59,7 +60,7 @@ class JobProgressObserver(IndexingObserver):
         self._pipeline = IndexingProgress()
         self._checkpoint: ImagePath | None = None
         self._last_write = 0.0
-        self._on_listed: Callable[[int], None] | None = None
+        self._on_listed: Callable[[RootListing], None] | None = None
 
         self.cancelled = False
         """Whether the route asked this job to stop."""
@@ -91,19 +92,21 @@ class JobProgressObserver(IndexingObserver):
         if complete or self._heartbeat_is_due():
             self._write()
 
-    def relay_listing_to(self, record: Callable[[int], None]) -> None:
-        """Send the size of the whole disk's listing to `record`.
+    def relay_listing_to(self, record: Callable[[RootListing], None]) -> None:
+        """Send the whole disk's listing to `record`.
 
         Given by the runner once it has resolved the device and its mount
         point, which is after this object exists: the runner builds the
         observer first so that every way out of a run can read `lost`.
         Only a job without scopes is given one, and only such a job's scan
-        calls `listed()`.
+        calls `listed()`. The runner's `_record_scan()` writes the
+        denominator from it and keeps it for the sweep at the end of the
+        job (RFC-046 section 5.3).
         """
         self._on_listed = record
 
-    def listed(self, file_count: int) -> None:
-        """Pass the denominator on, and swallow whatever goes wrong with it.
+    def listed(self, listing: RootListing) -> None:
+        """Pass the listing on, and swallow whatever goes wrong with it.
 
         **Never raises**, for the reason `_write()` gives: this runs
         inside the discovery generator, and an exception there would close
@@ -116,7 +119,7 @@ class JobProgressObserver(IndexingObserver):
         if record is None:
             return
         try:
-            record(file_count)
+            record(listing)
         except Exception:
             logger.warning(
                 "Could not record the scan of job %s's device; the run continues",

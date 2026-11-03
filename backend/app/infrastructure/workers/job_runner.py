@@ -42,6 +42,7 @@ from app.application.use_cases.index_or_update_images import (
     IndexOrUpdateImagesUseCase,
 )
 from app.application.use_cases.indexing_plan import IndexCandidate
+from app.application.use_cases.sweep_missing_images import SweepMissingImagesUseCase
 from app.domain.entities.device import Device
 from app.domain.entities.indexing_job import IndexingJob, JobStatus
 from app.domain.repositories.device_repository import DeviceRepository
@@ -50,6 +51,8 @@ from app.domain.repositories.indexing_job_repository import IndexingJobRepositor
 from app.domain.services.device_locator import DeviceLocator
 from app.domain.services.indexing_observer import IndexingObserver
 from app.domain.value_objects.job_id import JobId
+from app.domain.value_objects.job_scope import JobScope
+from app.domain.value_objects.root_listing import RootListing
 from app.infrastructure.filesystem.filesystem_image_provider import (
     FilesystemImageProvider,
 )
@@ -60,15 +63,47 @@ from app.infrastructure.process.supervision import (
     refuse_to_start,
     stop_on_stdin_eof,
 )
-from app.infrastructure.workers.indexing_worker import discovered_candidates
+from app.infrastructure.workers.indexing_worker import (
+    discovered_candidates,
+    listed_identity,
+)
 from app.infrastructure.workers.job_progress_observer import JobProgressObserver
 from app.infrastructure.workers.read_ahead import ReadAheadCandidates, ReadAheadLimits
 
 logger = get_logger(__name__)
 
+SYSTEM_DIRECTORIES: tuple[str, ...] = ("$RECYCLE.BIN", "System Volume Information")
+"""The folders of a volume's root that no scan lists (RFC-046 section 5.6).
+
+The recycle bin, first: the Explorer deletes a photo by moving it there, and
+a scan of the whole disk then indexed it as a new photo -- 1,268 rows of `E:`
+on the development database, and the `$I...` index files, which carry the
+deleted file's extension, failing as photos (RFC-045 section 14.10). Excluded,
+a photo deleted by the Explorer leaves the search at the next scan, as one
+deleted for good; and restoring it puts it back where it was, where the next
+scan unmarks it. `System Volume Information` is the other folder Windows keeps
+at every volume's root, and it is not the user's either.
+
+Joined to the mount point per job. The exclusion compares paths, with the
+platform's case rule, so the `$Recycle.Bin` of `C:` is the same folder.
+"""
+
 
 def utc_now() -> datetime.datetime:
     return datetime.datetime.now(tz=datetime.UTC)
+
+
+class _KeptListing:
+    """The listing of the whole disk, kept by `_record_scan()` for the sweep.
+
+    One per job, filled from inside the scan and read once the pipeline has
+    ended. `mount` is where the disk was when it was listed: the sweep runs
+    only if it is still there (RFC-046 section 5.4).
+    """
+
+    def __init__(self) -> None:
+        self.listing: RootListing | None = None
+        self.mount: Path | None = None
 
 
 class JobRunner:
@@ -145,7 +180,14 @@ class JobRunner:
         The repository the indexer writes through, on the same session:
         the snapshot is read on this thread, before the reading thread
         starts, and never from it (RFC-045 section 5.2).
+
+        Since RFC-046 also where a job of the whole disk marks the photos it
+        did not find, at its end. Without it -- every test written before,
+        unless it asks -- no job sweeps.
         """
+        self._sweeper = (
+            SweepMissingImagesUseCase(images, clock) if images is not None else None
+        )
         self._warm_up = warm_up
         """Loads the model before the loop starts; see `run_forever()`.
 
@@ -280,14 +322,16 @@ class JobRunner:
         observer = JobProgressObserver(
             self._jobs, job.id, self._clock, self._heartbeat_interval
         )
+        kept = _KeptListing()
 
         try:
-            summary = self._index(job, observer)
+            summary = self._index(job, observer, kept)
         except KeyboardInterrupt:
             # An operator stopping the process is not a crash, so no
             # attempt is consumed -- otherwise three ordinary restarts
             # would permanently fail a job that never went wrong.
             logger.info("Job %s interrupted; returning it to the queue", job.id)
+            self._no_sweep(job, "the job was interrupted")
             self._interrupted = True
             return self._finish(job, lambda current: current.release(self._clock()))
         except Exception as error:
@@ -297,6 +341,7 @@ class JobRunner:
             # day the call moves out of the block.
             reason = str(error)
             logger.exception("Job %s failed", job.id)
+            self._no_sweep(job, "the job failed")
             return self._finish(
                 job, lambda current: current.fail(self._clock(), reason)
             )
@@ -306,6 +351,7 @@ class JobRunner:
             # working. Writing anything now would overwrite whatever that
             # worker has done since.
             logger.warning("Job %s was taken over; leaving it alone", job.id)
+            self._no_sweep(job, "the job was taken over by another executor")
             return None
 
         for failure in summary.failures:
@@ -317,9 +363,96 @@ class JobRunner:
         logger.info("%s", summary.format_report())
 
         if summary.stopped:
+            self._no_sweep(job, "the job was cancelled")
             return self._finish(job, lambda current: current.cancel(self._clock()))
 
+        self._sweep_missing(job, kept)
         return self._finish(job, self._completion_of(job))
+
+    # ------------------------------------------------------------------
+    # The photos no longer on the disk (RFC-046)
+
+    def _sweep_missing(self, job: IndexingJob, kept: _KeptListing) -> None:
+        """Mark the rows the listing did not find, and unmark the ones it did.
+
+        Here, after the pipeline ended and before the job is concluded, and
+        **only if four things hold** (RFC-046 section 5.4): the job is of
+        the whole disk; its listing was kept; the pipeline ended without an
+        exception, a cancellation or an interrupt, and the job is still this
+        runner's -- the early returns of `run_claimed()` see to that; and the
+        disk is **at the mount point it was listed at**. `_completion_of()`
+        only asks whether the disk is connected; for this, a disk back under
+        another letter is another disk, for `_record_scan()`'s reason. When
+        one fails, nothing is marked and an INFO line says which.
+
+        **A sweep that fails does not fail the job.** The indexing is done,
+        and the next job of the whole disk sweeps again; the error goes to
+        the log in ERROR, as `_record_scan()` does with the denominator.
+
+        No other writer can come between the listing and this: the runner
+        runs one job at a time, and the purge refuses a disk with a job.
+        """
+        if job.scopes:
+            self._no_sweep(job, "the job is of some folders")
+            return
+        if self._sweeper is None:
+            self._no_sweep(job, "this runner has no image repository")
+            return
+        listing = kept.listing
+        if listing is None:
+            self._no_sweep(job, "the listing of the disk was not kept")
+            return
+        device = self._devices.get(job.device_id)
+        mounted = self._locator.mount_point(device) if device is not None else None
+        if mounted is None or mounted != kept.mount:
+            self._no_sweep(
+                job,
+                f"the disk was listed at {kept.mount} and is now "
+                + (f"at {mounted}" if mounted is not None else "not connected"),
+            )
+            return
+
+        started = time.perf_counter()
+        try:
+            listed = {listed_identity(job.device_id, path)[1] for path in listing.files}
+            unreadable = tuple(JobScope(folder) for folder in listing.unreadable)
+            report = self._sweeper.execute(job.device_id, listed, unreadable)
+        except Exception:
+            logger.exception(
+                "The sweep of device %s failed; job %s is not failed by it",
+                job.device_id,
+                job.id,
+            )
+            return
+
+        logger.info(
+            "Device %s: %d photos marked as not found, %d found again, %d kept "
+            "visible by unreadable folders (%d listed, %.2f s)",
+            job.device_id,
+            report.marked,
+            report.unmarked,
+            report.protected,
+            listing.file_count,
+            time.perf_counter() - started,
+        )
+        for folder, protected in report.protected_by_folder:
+            logger.warning(
+                "Device %s: the folder %s could not be read; %d of its photos "
+                "stay visible",
+                job.device_id,
+                str(folder) or "(the root)",
+                protected,
+            )
+
+    def _no_sweep(self, job: IndexingJob, reason: str) -> None:
+        """Say, in INFO, which condition of the sweep failed (RFC-046 §5.4).
+
+        A job of some folders always says so, whatever else happened to it:
+        that is the first condition, and the one that settles it.
+        """
+        if job.scopes:
+            reason = "the job is of some folders"
+        logger.info("Job %s marks no photo as not found: %s", job.id, reason)
 
     def _completion_of(self, job: IndexingJob) -> Callable[[IndexingJob], IndexingJob]:
         """Decide between `completed` and `failed` by looking at the disk again.
@@ -353,7 +486,7 @@ class JobRunner:
         return decide
 
     def _index(
-        self, job: IndexingJob, observer: JobProgressObserver
+        self, job: IndexingJob, observer: JobProgressObserver, kept: _KeptListing
     ) -> IndexingSummary:
         """Build the pipeline for one job and run it.
 
@@ -384,11 +517,17 @@ class JobRunner:
 
         if not job.scopes:
             # The listing of the whole disk is its denominator (RFC-039
-            # section 4.1). A job of some folders records nothing: two
-            # folders are not the disk.
+            # section 4.1), and what the sweep compares the rows with at the
+            # end (RFC-046 section 5.3). A job of some folders records
+            # nothing: two folders are not the disk.
             observer.relay_listing_to(
-                lambda file_count: self._record_scan(device, mount, file_count)
+                lambda listing: self._record_scan(device, mount, listing, kept)
             )
+
+        # The thumbnail cache, and the system folders of this volume's root.
+        excluded = self._excluded_directories + tuple(
+            mount / name for name in SYSTEM_DIRECTORIES
+        )
 
         def scan(scan_observer: IndexingObserver) -> Iterator[IndexCandidate]:
             provider = FilesystemImageProvider(
@@ -399,7 +538,7 @@ class JobRunner:
                 scopes=job.scopes,
                 resume_after=_checkpoint_of(job),
                 observer=scan_observer,
-                excluded_directories=self._excluded_directories,
+                excluded_directories=excluded,
             )
             return self._candidates(provider, device, mount)
 
@@ -457,7 +596,13 @@ class JobRunner:
         )
         return summary
 
-    def _record_scan(self, device: Device, started_on: Path, file_count: int) -> None:
+    def _record_scan(
+        self,
+        device: Device,
+        started_on: Path,
+        listing: RootListing,
+        kept: _KeptListing,
+    ) -> None:
         """Write the size of the whole disk's listing, if the disk is still there.
 
         Called from inside the scan, when the listing of the root ends and
@@ -472,6 +617,11 @@ class JobRunner:
         of the device held here is from the start of the job, and a
         rename since then must stay (RFC-039 section 4.1). What it raises
         is the observer's to swallow, with a WARNING; the job goes on.
+
+        **The same check decides whether the listing is kept** for the
+        sweep at the end of the job (RFC-046 section 5.3), and it is kept
+        before the write: a denominator that could not be written is no
+        reason not to compare the rows.
         """
         mounted = self._locator.mount_point(device)
         if mounted != started_on:
@@ -483,9 +633,13 @@ class JobRunner:
                 f"at {mounted}" if mounted is not None else "not connected",
             )
             return
-        self._devices.record_scan(device.id, file_count, self._clock())
+        kept.listing = listing
+        kept.mount = started_on
+        self._devices.record_scan(device.id, listing.file_count, self._clock())
         logger.info(
-            "Device %s: the listing found %d supported files", device.id, file_count
+            "Device %s: the listing found %d supported files",
+            device.id,
+            listing.file_count,
         )
 
     def _candidates(

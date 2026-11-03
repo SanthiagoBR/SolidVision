@@ -91,6 +91,52 @@
   font-weight: var(--font-weight-medium);
 }
 
+/* The strip of photos a scan did not find (RFC-046), under its card and
+   joined to it: the card squares its lower corners, the strip has them. */
+.cardWithMissing {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.cardMissing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-12) var(--space-10)
+    calc(var(--space-12) + var(--size-dot) + var(--space-8));
+  border: 1px solid var(--color-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: var(--color-surface-muted);
+}
+
+.cardMissingText {
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
+}
+
+.cardMissingAction {
+  padding: var(--space-2) var(--space-10);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.cardMissingAction:hover:not(:disabled) {
+  border-color: var(--color-text-icon);
+}
+
+.cardMissingAction:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-icon);
+  cursor: default;
+}
+
 .bar {
   display: block;
   height: var(--size-bar);
@@ -331,6 +377,17 @@
 .dialogFooter {
   display: flex;
   justify-content: flex-end;
+}
+
+/* Two buttons side by side: the question before the purge (RFC-046). */
+.dialogActions {
+  gap: var(--space-8);
+}
+
+.dialogProblem {
+  margin: 0;
+  color: var(--color-warning-text);
+  font-size: var(--font-size-small);
 }
 
 .primary,

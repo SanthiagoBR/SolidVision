@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from typing import Any, cast
 
 from sqlalchemy import (
@@ -16,6 +17,7 @@ from sqlalchemy import (
     and_,
     bindparam,
     case,
+    delete,
     func,
     literal,
     or_,
@@ -42,6 +44,12 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.domain.value_objects.geo_circle import GeoCircle
 from app.domain.value_objects.image_id import ImageId
 from app.domain.value_objects.image_path import ImagePath
+from app.domain.value_objects.image_presence import (
+    ImagePresence,
+    MissingImages,
+    Presences,
+    PurgedImages,
+)
 from app.domain.value_objects.index_metadata import IndexMetadata
 from app.domain.value_objects.indexing_record import IndexingRecord
 from app.domain.value_objects.job_scope import JobScope
@@ -63,6 +71,14 @@ from app.infrastructure.database.models.image_model import (
     EMBEDDING_DIMENSION,
     ImageModel,
 )
+
+PRESENCE_CHUNK = 10_000
+"""How many ids one `UPDATE` of `mark_presence()` names at most, and how many
+rows `list_presence()` reads per fetch.
+
+Well under the 65,535 bind parameters one statement may carry, and large
+enough that a disk of 116,396 rows that lost every one is twelve statements.
+"""
 
 PGVECTOR_DEFAULT_EF_SEARCH = 40
 """`hnsw.ef_search` when nobody sets it: the most rows one HNSW scan returns.
@@ -219,6 +235,8 @@ class PostgresImageRepository(ImageRepository):
         model.file_modified_at = record.file_modified_at
         model.content_hash = record.content_hash
         model.thumbnail_path = record.thumbnail_path
+        # A photo that was just indexed exists (RFC-046 section 5.1).
+        model.missing_since = None
         return model
 
     def search_similar(
@@ -367,7 +385,7 @@ class PostgresImageRepository(ImageRepository):
         )
         statement = (
             select(*_ENTITY_COLUMNS, distance)
-            .where(ImageModel.embedding.is_not(None))
+            .where(*_searchable())
             .order_by(distance, ImageModel.id)
             .limit(limit)
         )
@@ -423,7 +441,7 @@ class PostgresImageRepository(ImageRepository):
         )
         statement = (
             select(*_ENTITY_COLUMNS)
-            .where(ImageModel.embedding.is_not(None))
+            .where(*_searchable())
             .order_by(date.nulls_last(), _path_in_c(), ImageModel.id)
             .limit(limit)
         )
@@ -454,9 +472,7 @@ class PostgresImageRepository(ImageRepository):
             func.min(ImageModel.captured_at).label("oldest"),
             func.max(ImageModel.captured_at).label("newest"),
         )
-        statement = statement.select_from(ImageModel).where(
-            ImageModel.embedding.is_not(None)
-        )
+        statement = statement.select_from(ImageModel).where(*_searchable())
         return cls._apply_filters(statement, filters)
 
     @staticmethod
@@ -516,10 +532,7 @@ class PostgresImageRepository(ImageRepository):
         statement = (
             select(func.count())
             .select_from(ImageModel)
-            .where(
-                ImageModel.embedding.is_not(None),
-                ImageModel.captured_at.is_(None),
-            )
+            .where(*_searchable(), ImageModel.captured_at.is_(None))
         )
         if filters.device_ids:
             statement = statement.where(_device_clause(filters))
@@ -543,10 +556,7 @@ class PostgresImageRepository(ImageRepository):
         statement = (
             select(func.count())
             .select_from(ImageModel)
-            .where(
-                ImageModel.embedding.is_not(None),
-                ImageModel.latitude.is_(None),
-            )
+            .where(*_searchable(), ImageModel.latitude.is_(None))
         )
         if filters.device_ids:
             statement = statement.where(_device_clause(filters))
@@ -616,7 +626,7 @@ class PostgresImageRepository(ImageRepository):
                 func.count().label("photos"),
             )
             .where(
-                ImageModel.embedding.is_not(None),
+                *_searchable(),
                 ImageModel.latitude.between(area.min_latitude, area.max_latitude),
                 ImageModel.longitude.between(area.min_longitude, area.max_longitude),
             )
@@ -878,6 +888,128 @@ class PostgresImageRepository(ImageRepository):
             self._session.rollback()
             raise
 
+    def list_presence(self, device_id: DeviceId) -> Presences:
+        """Three columns of every row of the device, in one query (RFC-046 §5.5).
+
+        Named columns, for the reason `list_change_signals()` gives: the
+        embedding of 116,396 rows stays where it is. The mark comes back as
+        a boolean computed by the server; the sweep needs whether, not when.
+
+        **Read through a server-side cursor**, `PRESENCE_CHUNK` rows at a
+        time (`yield_per`), and handed out as they arrive: the sweep keeps
+        only the rows it marks or unmarks.
+        """
+        statement = (
+            select(
+                ImageModel.id,
+                ImageModel.relative_path,
+                ImageModel.missing_since.is_not(None).label("missing"),
+            )
+            .where(ImageModel.device_id == device_id.value)
+            .execution_options(yield_per=PRESENCE_CHUNK)
+        )
+        for row in self._session.execute(statement):
+            yield ImagePresence(
+                image_id=ImageId(row.id),
+                relative_path=row.relative_path,
+                missing=bool(row.missing),
+            )
+
+    def mark_presence(
+        self,
+        missing: Collection[ImageId],
+        present: Collection[ImageId],
+        since: datetime.datetime,
+    ) -> None:
+        """Two `UPDATE`s by id, in chunks, and one commit (RFC-046 section 5.5).
+
+        **ORM-enabled `UPDATE`s, not Core ones.** The sessions are made with
+        `expire_on_commit=False`, so a row this session loaded before keeps
+        its old `missing_since` in the identity map; a later
+        `save_indexed()` setting it to `None` over a stale `None` would be no
+        change to the ORM, and the row would stay marked although it was just
+        indexed. The ORM form brings the objects in the session along.
+
+        Only rows not yet marked are marked -- `missing_since IS NULL` in the
+        `WHERE` -- so a row missed by two scans keeps the first date.
+
+        **In chunks of `PRESENCE_CHUNK` ids.** A reorganised disk can miss
+        every one of its rows at once, and an `IN` of 116,396 values is more
+        bind parameters than one statement may carry (65,535).
+        """
+        missing_ids = [image_id.value for image_id in missing]
+        present_ids = [image_id.value for image_id in present]
+        if set(missing_ids) & set(present_ids):
+            raise ValueError("An image cannot be both missing and present")
+        if not missing_ids and not present_ids:
+            return
+
+        try:
+            for chunk in _chunks(missing_ids, PRESENCE_CHUNK):
+                self._session.execute(
+                    update(ImageModel)
+                    .where(ImageModel.id.in_(chunk), ImageModel.missing_since.is_(None))
+                    .values(missing_since=since)
+                )
+            for chunk in _chunks(present_ids, PRESENCE_CHUNK):
+                self._session.execute(
+                    update(ImageModel)
+                    .where(
+                        ImageModel.id.in_(chunk), ImageModel.missing_since.is_not(None)
+                    )
+                    .values(missing_since=None)
+                )
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def count_missing_by_device(self) -> dict[DeviceId, MissingImages]:
+        """One `GROUP BY device_id` over the marked rows (RFC-046 section 5.8)."""
+        statement = (
+            select(
+                ImageModel.device_id,
+                func.count(),
+                func.min(ImageModel.missing_since),
+            )
+            .where(ImageModel.missing_since.is_not(None))
+            .group_by(ImageModel.device_id)
+        )
+        return {
+            DeviceId(device_id): MissingImages(count=int(total), since=oldest)
+            for device_id, total, oldest in self._session.execute(statement).all()
+            # A group exists only for marked rows, so its `min` is never NULL.
+            if oldest is not None
+        }
+
+    def purge_missing(self, device_id: DeviceId) -> PurgedImages:
+        """`DELETE ... RETURNING thumbnail_path`, and one commit (RFC-046 §5.7).
+
+        ORM-enabled, for `mark_presence()`'s reason: the objects of the
+        deleted rows leave the session with them, so that a `get()` on the
+        same session does not hand back a row that is gone.
+        """
+        statement = (
+            delete(ImageModel)
+            .where(
+                ImageModel.device_id == device_id.value,
+                ImageModel.missing_since.is_not(None),
+            )
+            .returning(ImageModel.thumbnail_path)
+        )
+        try:
+            locations = list(self._session.execute(statement).scalars())
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+        return PurgedImages(
+            count=len(locations),
+            thumbnail_paths=tuple(
+                location for location in locations if location is not None
+            ),
+        )
+
     def count_by_device(self) -> dict[DeviceId, int]:
         """One `GROUP BY device_id` for every device at once (RFC-031 section 4.3).
 
@@ -890,8 +1022,10 @@ class PostgresImageRepository(ImageRepository):
         from the result, which is the contract: callers read it with
         `.get(device_id, 0)`.
         """
-        statement = select(ImageModel.device_id, func.count()).group_by(
-            ImageModel.device_id
+        statement = (
+            select(ImageModel.device_id, func.count())
+            .where(_present())
+            .group_by(ImageModel.device_id)
         )
         return {
             DeviceId(device_id): int(total)
@@ -938,7 +1072,7 @@ class PostgresImageRepository(ImageRepository):
         cut = len(prefix) + 2 if parent.parts else 1
         folder = func.split_part(func.substr(ImageModel.relative_path, cut), "/", 1)
         statement = select(folder, func.count()).where(
-            ImageModel.device_id == device_id.value
+            ImageModel.device_id == device_id.value, _present()
         )
         if parent.parts:
             statement = statement.where(
@@ -1024,6 +1158,29 @@ def _after_clause(after: Image, order: ListingOrder) -> ColumnElement[bool]:
         and_(ImageModel.captured_at == captured, rest),
         ImageModel.captured_at.is_(None),
     )
+
+
+def _present() -> ColumnElement[bool]:
+    """`missing_since IS NULL`: the row's file was in the last scan (RFC-046)."""
+    return ImageModel.missing_since.is_(None)
+
+
+def _searchable() -> tuple[ColumnElement[bool], ...]:
+    """What a row needs to be shown at all: a vector, and its file on the disk.
+
+    The one place both conditions are written (RFC-046 section 6). The six
+    reads that serve the interface -- the search, the listing and its summary,
+    the two counts of excluded photos and the map -- call this, so that a new
+    read cannot remember one condition and forget the other. The two counts per
+    device and per folder take `_present()` alone: they count rows with or
+    without a vector, as they always did.
+    """
+    return (ImageModel.embedding.is_not(None), _present())
+
+
+def _chunks(values: list[uuid.UUID], size: int) -> Iterator[list[uuid.UUID]]:
+    for start in range(0, len(values), size):
+        yield values[start : start + size]
 
 
 def _device_clause(filters: SearchFilters) -> ColumnElement[bool]:
