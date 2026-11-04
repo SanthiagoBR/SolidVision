@@ -1,0 +1,167 @@
+{
+ "açude": [
+  "lago artificial",
+  "barragem",
+  "lago represado"
+ ],
+ "represa": [
+  "barragem",
+  "lago represado"
+ ],
+ "marina": [
+  "porto de iates",
+  "ancoradouro de iates",
+  "marina de barcos"
+ ],
+ "farol": [
+  "farol do mar",
+  "farol de ilha",
+  "farol na ilha",
+  "farol de costa",
+  "farol antigo",
+  "lighthouse",
+  "farol litorâneo",
+  "farol à beira-mar"
+ ],
+ "calçadão": [
+  "calçada ampla",
+  "passeio largo",
+  "calçada de pedestres",
+  "passeio de pedestres",
+  "calçada para pedestres"
+ ],
+ "várzea": [
+  "planície de inundação",
+  "planície alagada",
+  "baixada alagada"
+ ],
+ "ladeira": [
+  "rua em declive",
+  "rua inclinada",
+  "subida íngreme",
+  "rua íngreme"
+ ],
+ "capão": [
+  "pequeno bosque",
+  "mancha de árvores",
+  "bosque de árvores"
+ ],
+ "capões": [
+  "pequenos bosques",
+  "manchas de árvores"
+ ],
+ "parreiral": [
+  "videiras",
+  "parreira",
+  "uvas"
+ ],
+ "canavial": [
+  "cana de açúcar",
+  "cana-de-açúcar plantada"
+ ],
+ "estância": [
+  "rancho",
+  "fazenda de pecuária"
+ ],
+ "estâncias": [
+  "ranchos"
+ ],
+ "potreiros": [
+  "pastagens",
+  "pastos"
+ ],
+ "quintal": [
+  "jardim da casa",
+  "fundo da casa",
+  "área dos fundos"
+ ],
+ "conjunto habitacional": [
+  "conjunto de moradias",
+  "empreendimento habitacional",
+  "vila de casas"
+ ],
+ "estrada de terra": [
+  "estrada de cascalho",
+  "estrada não pavimentada"
+ ],
+ "estradas de terra": [
+  "estradas de cascalho",
+  "estradas não pavimentadas"
+ ],
+ "estaleiro": [
+  "estaleiro naval",
+  "estaleiro de navios",
+  "shipyard"
+ ],
+ "caiaque": [
+  "kayak",
+  "canoa"
+ ],
+ "balsa": [
+  "balsa de travessia",
+  "ferry",
+  "barca"
+ ],
+ "quiosque": [
+  "kiosk",
+  "quiosque de praia"
+ ],
+ "barranca": [
+  "barranco",
+  "barranca do rio"
+ ],
+ "cânion": [
+  "canyon",
+  "desfiladeiro"
+ ],
+ "lava": [
+  "lava vulcânica",
+  "lava de vulcão",
+  "lava derretida"
+ ],
+ "neblina": [
+  "nevoeiro",
+  "névoa"
+ ],
+ "galpões": [
+  "armazéns",
+  "barracões",
+  "sheds",
+  "galpões industriais"
+ ],
+ "lavoura": [
+  "campo cultivado",
+  "terra cultivada"
+ ],
+ "povoado": [
+  "vilarejo",
+  "pequena vila",
+  "aldeia"
+ ],
+ "prefeitura": [
+  "prédio da prefeitura",
+  "câmara municipal",
+  "prefeitura municipal"
+ ],
+ "painel solar": [
+  "placa solar",
+  "painel de energia solar",
+  "painel fotovoltaico",
+  "módulo solar"
+ ],
+ "aerogeradores": [
+  "turbinas eólicas",
+  "geradores eólicos"
+ ],
+ "armazém": [
+  "galpão de armazenamento",
+  "depósito de mercadorias"
+ ],
+ "bicicleta": [
+  "bike"
+ ],
+ "fonte": [
+  "fonte de água",
+  "fonte de praça"
+ ]
+}

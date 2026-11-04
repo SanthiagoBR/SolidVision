@@ -1,0 +1,1294 @@
+{
+ "before": "baseline-validation-20261103-132700.json",
+ "after": "baseline-validation-20261103-181000.json",
+ "queries": 178,
+ "criterion_1": {
+  "same_prompt": 178,
+  "not_translated": 178,
+  "same_ranks": true
+ },
+ "criterion_2": {
+  "pt": {
+   "queries": 178,
+   "changed": 38,
+   "up": 11,
+   "down": 5,
+   "same_rank": 22,
+   "unchanged_keep_their_rank": true,
+   "newly_translated": 4,
+   "changes": [
+    {
+     "query": "Vale com picos nevados e estrada no meio",
+     "before": "It's worth it with snowy peaks and road in the middle",
+     "after": "Mountain valley with snowy peaks and road in the middle",
+     "rank_before": 3,
+     "rank_after": 1
+    },
+    {
+     "query": "sítio arqueológico no topo de um morro",
+     "before": "archaeological site at the top of a hill",
+     "after": "small archaeological farm on the top of a hill",
+     "rank_before": 2,
+     "rank_after": 4
+    },
+    {
+     "query": "barcos no mar verde em ilhas de mata fechada",
+     "before": "Green sea boats on islands of closed forest",
+     "after": "Green sea boats in closed forest islands",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "torre de observação branca e vermelha no meio do mato",
+     "before": "white and red observation tower in the middle of the bush",
+     "after": "white and red observation tower in the middle of the vegetation",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "vale com neblina entre morros com riacho passando no meio",
+     "before": "valley with fog between hills with stream passing in the middle",
+     "after": "mountain valley with fog between hills with stream passing in the middle",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "prédio antigo de tijolos abandonado com mato na frente",
+     "before": "ancient brick building abandoned with forest in front",
+     "after": "ancient brick building abandoned with vegetation in front",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "estádio em construção com estrutura metálica e terra vermelha",
+     "before": "stadium under construction with metal structure and red earth",
+     "after": "sports stadium under construction with metal structure and red earth",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "porto com farol na ponta do quebra-mar",
+     "before": "port with lighthouse at the tip of the seabreak",
+     "after": "port with beach lighthouse at the tip of the sea",
+     "rank_before": 7,
+     "rank_after": 2
+    },
+    {
+     "query": "plantação de trigo colhido com uma estrada de terra",
+     "before": "wheat crop harvested with a dirt road",
+     "after": "wheat crop harvested with a beaten dirt road",
+     "rank_before": 2,
+     "rank_after": 2
+    },
+    {
+     "query": "casarão de tijolos com colunas brancas no meio da mata",
+     "before": "they will marry bricks with white pillars in the middle of the forest",
+     "after": "large brick house with white columns in the middle of the forest",
+     "rank_before": 62,
+     "rank_after": 2
+    },
+    {
+     "query": "ilha coberta de mato com recife em volta",
+     "before": "island covered in forest with reef around",
+     "after": "island covered with vegetation with reef around",
+     "rank_before": 5,
+     "rank_after": 10
+    },
+    {
+     "query": "ruínas de paredes de pedra num pasto verde",
+     "before": "stone walls ruins in a green pasture",
+     "after": "stone walls ruins in green pasture",
+     "rank_before": 10,
+     "rank_after": 10
+    },
+    {
+     "query": "riacho escuro no meio da mata",
+     "before": "Dark stream in the middle of the forest",
+     "after": "dark stream in the middle of the forest",
+     "rank_before": 2,
+     "rank_after": 2
+    },
+    {
+     "query": "telhado cor de rosa num casarão no meio das árvores",
+     "before": "pink roof in a house in the middle of the trees",
+     "after": "pink roof in a large house in the middle of the trees",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "carro abandonado com o vidro quebrado no meio do mato",
+     "before": "car abandoned with broken glass in the middle of the bush",
+     "after": "abandoned car with broken glass in the middle of the vegetation",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "cataratas grandes no meio da floresta com rio barrento",
+     "before": "large waterfalls in the middle of the forest with barren river",
+     "after": "large waterfalls in the middle of the forest with brown river",
+     "rank_before": 6,
+     "rank_after": 6
+    },
+    {
+     "query": "casarão branco no meio de pasto e floresta de pinheiros",
+     "before": "White wedding in the middle of pasture and pine forest",
+     "after": "large white house in the middle of pasture and pine forest",
+     "rank_before": 2,
+     "rank_after": 2
+    },
+    {
+     "query": "barco de passeio num rio ao lado de uma marina e a cidade",
+     "before": "Boat ride in a river next to a marina and the city",
+     "after": "Boat ride in a river next to a marina of yachts and the city",
+     "rank_before": 1,
+     "rank_after": 2
+    },
+    {
+     "query": "chalés de madeira numa encosta",
+     "before": "wooden chalets on a slope",
+     "after": "wooden chalets on a hillside",
+     "rank_before": 2,
+     "rank_after": 2
+    },
+    {
+     "query": "praia pequena de areia com ondas e mata na encosta",
+     "before": "small sandy beach with waves and kills on the slope",
+     "after": "small sandy beach with waves and forest on the hillside",
+     "rank_before": 2,
+     "rank_after": 2
+    },
+    {
+     "query": "estrada de terra numa colina seca ao pôr do sol",
+     "before": "dirt road on a dry hill at sunset",
+     "after": "dirt road hit on a dry hill at sunset",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "ponte velha sobre o leito de um rio seco com mato queimado",
+     "before": "Old bridge over the bed of a dry river with burnt bush",
+     "after": "Old bridge over the bed of a dry river with burnt vegetation",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "península com cidade antiga e calçadão na beira do mar",
+     "before": "peninsula with ancient city and sidewalk on the seafront",
+     "after": "peninsula with old town and wide sidewalk on the seafront",
+     "rank_before": 2,
+     "rank_after": 3
+    },
+    {
+     "query": "campos verdes divididos por cercas vivas vistos do helicóptero",
+     "before": "campos verdes divididos por cercas vivas vistos do helicóptero",
+     "after": "green fields divided by live fences seen from the helicopter",
+     "rank_before": 159,
+     "rank_after": 21
+    },
+    {
+     "query": "rio com corredeiras no meio da floresta",
+     "before": "river with slides in the middle of the forest",
+     "after": "river with white waters in the middle of the forest",
+     "rank_before": 24,
+     "rank_after": 8
+    },
+    {
+     "query": "farol na ponta de um quebra-mar num dia nublado",
+     "before": "Lightlight on the tip of a seabreaker on a cloudy day",
+     "after": "beach lighthouse at the tip of a seabreaker on a cloudy day",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "sítio arqueológico com ruínas entre árvores visto de cima",
+     "before": "archaeological site with ruins between trees seen from above",
+     "after": "small archaeological farm with ruins between trees seen from above",
+     "rank_before": 16,
+     "rank_after": 14
+    },
+    {
+     "query": "parque com mato e gramados com um estádio no fundo",
+     "before": "park with lawn and lawn with a stadium in the background",
+     "after": "park with vegetation and lawns with a sports stadium at the bottom",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "vila de pedra no meio do mato",
+     "before": "stone village in the middle of the forest",
+     "after": "stone village in the middle of the vegetation",
+     "rank_before": 36,
+     "rank_after": 24
+    },
+    {
+     "query": "capela de pedra com torre no alto de um morro",
+     "before": "stone chapel with tower on top of a hill",
+     "after": "Stone chapel with tower on top of a hill",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "morrinhos de terra laranja com uma estrada de terra",
+     "before": "orange earthenware with a dirt road",
+     "after": "orange earthenware with a beaten dirt road",
+     "rank_before": 3,
+     "rank_after": 7
+    },
+    {
+     "query": "floresta cortada por estradas de terra",
+     "before": "floresta cortada por estradas de terra",
+     "after": "forest cut by rough dirt roads",
+     "rank_before": 4,
+     "rank_after": 1
+    },
+    {
+     "query": "orla com prédios altos vista de longe num dia nublado",
+     "before": "edge with tall buildings far view on a cloudy day",
+     "after": "waterfront with tall buildings far view on a cloudy day",
+     "rank_before": 2,
+     "rank_after": 1
+    },
+    {
+     "query": "lava incandescente escorrendo de perto",
+     "before": "lava incandescente escorrendo de perto",
+     "after": "Incandescent lava running from close",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "balsa azul atracada num píer em rio barrento",
+     "before": "Blue raft docked in a cliff in barren river",
+     "after": "Blue raft docked on a pier in the brown river",
+     "rank_before": 3,
+     "rank_after": 1
+    },
+    {
+     "query": "capela pequena de pedra do lado de um estacionamento",
+     "before": "capela pequena de pedra do lado de um estacionamento",
+     "after": "small stone chapel next to a parking lot",
+     "rank_before": 207,
+     "rank_after": 1
+    },
+    {
+     "query": "parque com mato fechado e caminhos perto do mar",
+     "before": "park with closed forest and paths near the sea",
+     "after": "park with closed vegetation and paths near the sea",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "estrada de terra no meio de campos secos e floresta",
+     "before": "dirt road in the middle of dry fields and forest",
+     "after": "dirt road hit in the middle of dry fields and forest",
+     "rank_before": 3,
+     "rank_after": 3
+    }
+   ]
+  },
+  "sul": {
+   "queries": 23,
+   "changed": 15,
+   "up": 8,
+   "down": 2,
+   "same_rank": 5,
+   "unchanged_keep_their_rank": true,
+   "newly_translated": 0,
+   "changes": [
+    {
+     "query": "veleiro atracado num trapiche em água barrenta",
+     "before": "sailboat docked in a barren water trap",
+     "after": "sailboat docked in a pier in brown water",
+     "rank_before": 3,
+     "rank_after": 3
+    },
+    {
+     "query": "casarão branco no meio do potreiro e do pinheiral",
+     "before": "White wedding in the middle of the potter and the pine tree",
+     "after": "large white house in the middle of pasture and pine grove",
+     "rank_before": 16,
+     "rank_after": 3
+    },
+    {
+     "query": "prainha de areia com ondas e mato no costão",
+     "before": "sandstone with waves and I kill at the coast",
+     "after": "sandstone with waves and vegetation on the rocky coast",
+     "rank_before": 37,
+     "rank_after": 40
+    },
+    {
+     "query": "estância com galpões no fim da tarde",
+     "before": "station with sheds at the end of the afternoon",
+     "after": "cattle farm with sheds at the end of the afternoon",
+     "rank_before": 23,
+     "rank_after": 8
+    },
+    {
+     "query": "cascata com pedras cheias de limo no meio do mato",
+     "before": "waterfall with stones full of lime in the middle of the forest",
+     "after": "waterfall with stones full of lime in the middle of the vegetation",
+     "rank_before": 2,
+     "rank_after": 2
+    },
+    {
+     "query": "estrada de chão numa coxilha seca ao pôr do sol",
+     "before": "ground road in a dry coxilla at sunset",
+     "after": "dirt road hit on a dry hill at sunset",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "lagoa redonda escondida no meio do mato fechado",
+     "before": "Round pond hidden in the middle of the closed forest",
+     "after": "Round pond hidden in the middle of the closed vegetation",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "farol na ponta dos molhes num dia nublado",
+     "before": "Headlight on the tip of the wives on a cloudy day",
+     "after": "beach lighthouse at the tip of the rock piers on a cloudy day",
+     "rank_before": 3,
+     "rank_after": 1
+    },
+    {
+     "query": "coxilhas secas com terra alaranjada e uma estrada de chão",
+     "before": "dry shells with orange soil and a dirt road",
+     "after": "dry hills with orange earth and a beaten dirt road",
+     "rank_before": 3,
+     "rank_after": 1
+    },
+    {
+     "query": "balsa azul atracada num trapiche no rio barrento",
+     "before": "Blue raft docked in a trapiche in the barren river",
+     "after": "Blue raft docked on a pier in the brown river",
+     "rank_before": 2,
+     "rank_after": 1
+    },
+    {
+     "query": "chácara com grama cortada em listras e um açude redondo com árvores",
+     "before": "cup with grass cut into stripes and a round sour with trees",
+     "after": "small farm with grass cut into strips and a round reservoir with trees",
+     "rank_before": 40,
+     "rank_after": 2
+    },
+    {
+     "query": "casas com telhado de barro e uma sanga atravessando",
+     "before": "houses with mud roof and a blood running through",
+     "after": "houses with mud roof and a stream crossing",
+     "rank_before": 2,
+     "rank_after": 1
+    },
+    {
+     "query": "costão baixo com água verde-escura",
+     "before": "low coast with dark green water",
+     "after": "low rocky coast with dark green water",
+     "rank_before": 1,
+     "rank_after": 1
+    },
+    {
+     "query": "cidade de praia do lado dos cômoros de areia",
+     "before": "beach town next to the sand rooms",
+     "after": "beach town next to the sand dunes",
+     "rank_before": 7,
+     "rank_after": 5
+    },
+    {
+     "query": "estrada de chão no meio do campo seco e do mato",
+     "before": "ground road in the middle of the dry field and the forest",
+     "after": "dirt road hit in the middle of the dry field and vegetation",
+     "rank_before": 3,
+     "rank_after": 6
+    }
+   ]
+  }
+ },
+ "criterion_3": {
+  "en": {
+   "queries": 178,
+   "before": {
+    "R@1": 55.1,
+    "R@5": 83.7,
+    "R@10": 93.3,
+    "MRR": 67.9
+   },
+   "after": {
+    "R@1": 55.1,
+    "R@5": 83.7,
+    "R@10": 93.3,
+    "MRR": 67.9
+   },
+   "after_vs_before": {
+    "R@1": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "R@5": [
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "pt": {
+   "queries": 178,
+   "before": {
+    "R@1": 46.6,
+    "R@5": 78.1,
+    "R@10": 89.9,
+    "MRR": 60.5
+   },
+   "after": {
+    "R@1": 48.9,
+    "R@5": 78.7,
+    "R@10": 91.6,
+    "MRR": 62.4
+   },
+   "after_vs_before": {
+    "R@1": [
+     2.2,
+     0.0,
+     5.1
+    ],
+    "R@5": [
+     0.6,
+     -1.7,
+     2.8
+    ]
+   }
+  },
+  "pt (sul)": {
+   "queries": 23,
+   "before": {
+    "R@1": 47.8,
+    "R@5": 95.7,
+    "R@10": 95.7,
+    "MRR": 65.2
+   },
+   "after": {
+    "R@1": 52.2,
+    "R@5": 91.3,
+    "R@10": 95.7,
+    "MRR": 67.3
+   },
+   "after_vs_before": {
+    "R@1": [
+     4.3,
+     0.0,
+     13.0
+    ],
+    "R@5": [
+     -4.3,
+     -13.0,
+     0.0
+    ]
+   }
+  },
+  "sul": {
+   "queries": 23,
+   "before": {
+    "R@1": 30.4,
+    "R@5": 65.2,
+    "R@10": 73.9,
+    "MRR": 46.0
+   },
+   "after": {
+    "R@1": 47.8,
+    "R@5": 73.9,
+    "R@10": 87.0,
+    "MRR": 59.3
+   },
+   "after_vs_before": {
+    "R@1": [
+     17.4,
+     4.3,
+     34.8
+    ],
+    "R@5": [
+     8.7,
+     -8.7,
+     26.1
+    ]
+   }
+  },
+  "gaps": {
+   "pt vs en, before": {
+    "R@1": [
+     -8.4,
+     -13.5,
+     -3.9
+    ],
+    "R@5": [
+     -5.6,
+     -10.1,
+     -0.6
+    ]
+   },
+   "pt vs en, after": {
+    "R@1": [
+     -6.2,
+     -10.7,
+     -2.2
+    ],
+    "R@5": [
+     -5.1,
+     -9.6,
+     -0.6
+    ]
+   },
+   "sul vs pt (sul), before": {
+    "R@1": [
+     -17.4,
+     -34.8,
+     -4.3
+    ],
+    "R@5": [
+     -30.4,
+     -47.8,
+     -13.0
+    ]
+   },
+   "sul vs pt (sul), after": {
+    "R@1": [
+     -4.3,
+     -21.7,
+     8.7
+    ],
+    "R@5": [
+     -17.4,
+     -34.9,
+     0.0
+    ]
+   }
+  }
+ },
+ "criterion_4": {
+  "in_lexicon": 30,
+  "right": 30,
+  "translated_before": 8,
+  "english_unchanged": 30,
+  "words": [
+   {
+    "pt": "fazenda",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "fazenda",
+    "out": "farm",
+    "right": true,
+    "en": "farm",
+    "en_unchanged": true
+   },
+   {
+    "pt": "lago",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "lago",
+    "out": "lake",
+    "right": true,
+    "en": "lake",
+    "en_unchanged": true
+   },
+   {
+    "pt": "piscina",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "piscina",
+    "out": "pool",
+    "right": true,
+    "en": "pool",
+    "en_unchanged": true
+   },
+   {
+    "pt": "rio",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "rio",
+    "out": "river",
+    "right": true,
+    "en": "river",
+    "en_unchanged": true
+   },
+   {
+    "pt": "praia",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "praia",
+    "out": "beach",
+    "right": true,
+    "en": "beach",
+    "en_unchanged": true
+   },
+   {
+    "pt": "cidade",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "cidade",
+    "out": "city",
+    "right": true,
+    "en": "city",
+    "en_unchanged": true
+   },
+   {
+    "pt": "igreja",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "igreja",
+    "out": "church",
+    "right": true,
+    "en": "church",
+    "en_unchanged": true
+   },
+   {
+    "pt": "ponte",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "ponte",
+    "out": "bridge",
+    "right": true,
+    "en": "bridge",
+    "en_unchanged": true
+   },
+   {
+    "pt": "estrada",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "estrada",
+    "out": "road",
+    "right": true,
+    "en": "road",
+    "en_unchanged": true
+   },
+   {
+    "pt": "floresta",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "floresta",
+    "out": "forest",
+    "right": true,
+    "en": "forest",
+    "en_unchanged": true
+   },
+   {
+    "pt": "morro",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "colina",
+    "out": "hill",
+    "right": true,
+    "en": "hill",
+    "en_unchanged": true
+   },
+   {
+    "pt": "campo",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "campo",
+    "out": "field",
+    "right": true,
+    "en": "field",
+    "en_unchanged": true
+   },
+   {
+    "pt": "casa",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "casa",
+    "out": "home",
+    "right": true,
+    "en": "house",
+    "en_unchanged": true
+   },
+   {
+    "pt": "prédio",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "prédio",
+    "out": "building",
+    "right": true,
+    "en": "building",
+    "en_unchanged": true
+   },
+   {
+    "pt": "estádio",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "estádio esportivo",
+    "out": "sports stadium",
+    "right": true,
+    "en": "stadium",
+    "en_unchanged": true
+   },
+   {
+    "pt": "porto",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "porto",
+    "out": "port",
+    "right": true,
+    "en": "harbor",
+    "en_unchanged": true
+   },
+   {
+    "pt": "ilha",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "ilha",
+    "out": "island",
+    "right": true,
+    "en": "island",
+    "en_unchanged": true
+   },
+   {
+    "pt": "cachoeira",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "cachoeira",
+    "out": "waterfall",
+    "right": true,
+    "en": "waterfall",
+    "en_unchanged": true
+   },
+   {
+    "pt": "plantação",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "plantação",
+    "out": "planting",
+    "right": true,
+    "en": "plantation",
+    "en_unchanged": true
+   },
+   {
+    "pt": "represa",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "reservatório",
+    "out": "reservoir",
+    "right": true,
+    "en": "reservoir",
+    "en_unchanged": true
+   },
+   {
+    "pt": "galpão",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "galpão",
+    "out": "shed",
+    "right": true,
+    "en": "shed",
+    "en_unchanged": true
+   },
+   {
+    "pt": "estacionamento",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "estacionamento",
+    "out": "parking",
+    "right": true,
+    "en": "parking lot",
+    "en_unchanged": true
+   },
+   {
+    "pt": "rua",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "rua",
+    "out": "street",
+    "right": true,
+    "en": "street",
+    "en_unchanged": true
+   },
+   {
+    "pt": "avenida",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "avenida",
+    "out": "avenue",
+    "right": true,
+    "en": "avenue",
+    "en_unchanged": true
+   },
+   {
+    "pt": "mar",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "mar",
+    "out": "sea",
+    "right": true,
+    "en": "sea",
+    "en_unchanged": true
+   },
+   {
+    "pt": "montanha",
+    "in_lexicon": true,
+    "translated_before": true,
+    "sent": "montanha",
+    "out": "mountain",
+    "right": true,
+    "en": "mountain",
+    "en_unchanged": true
+   },
+   {
+    "pt": "deserto",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "deserto",
+    "out": "desert",
+    "right": true,
+    "en": "desert",
+    "en_unchanged": true
+   },
+   {
+    "pt": "neve",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "neve",
+    "out": "snow",
+    "right": true,
+    "en": "snow",
+    "en_unchanged": true
+   },
+   {
+    "pt": "escola",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "escola",
+    "out": "school",
+    "right": true,
+    "en": "school",
+    "en_unchanged": true
+   },
+   {
+    "pt": "usina",
+    "in_lexicon": true,
+    "translated_before": false,
+    "sent": "usina",
+    "out": "plant",
+    "right": true,
+    "en": "power plant",
+    "en_unchanged": true
+   }
+  ]
+ },
+ "criterion_5": {
+  "queries": 439,
+  "rounds": 200,
+  "median_ms": 0.1478,
+  "p95_ms": 0.3584,
+  "max_ms": 7.4687,
+  "langdetect_median_ms": 9.311,
+  "newly_translated": 4,
+  "marian_seconds_each": [
+   0.421,
+   0.212,
+   0.338,
+   0.321
+  ]
+ },
+ "rfc_035_reference": {
+  "portuguese": 25,
+  "touched": 14,
+  "prompt_changed": 9,
+  "queries": [
+   {
+    "query": "propriedade em encosta com piscina",
+    "sent": "propriedade em encosta de morro com piscina",
+    "before": "a photo of property on the slope with pool",
+    "after": "a photo of property on hillside with pool"
+   },
+   {
+    "query": "piscina em uma casa rural, nao um corpo d'agua natural ou artificial",
+    "sent": "piscina em uma casa rural, nao um corpo d'água natural ou artificial",
+    "before": "a photo of swimming pool in a rural house, not a natural or artificial body of water",
+    "after": "a photo of swimming pool in a rural house, not a natural or artificial body of water"
+   },
+   {
+    "query": "tanques artificiais de piscicultura em um vale",
+    "sent": "tanques artificiais de piscicultura em um vale montanhoso",
+    "before": "a photo of artificial fish tanks in a valley",
+    "after": "a photo of artificial fish tanks in a mountain valley"
+   },
+   {
+    "query": "galpao industrial ao lado de terras agricolas",
+    "sent": "galpão industrial ao lado de terras agrícolas",
+    "before": "a photo of Industrial shed next to agricultural land",
+    "after": "a photo of Industrial shed next to agricultural land"
+   },
+   {
+    "query": "galpao ao lado de uma rodovia, nao um galpao dentro de uma cidade",
+    "sent": "galpão ao lado de uma rodovia, nao um galpão dentro de uma cidade",
+    "before": "a photo of galpao next to a highway, not a galpao inside a city",
+    "after": "a photo of shed next to a highway, not a shed inside a city"
+   },
+   {
+    "query": "terreno de obra limpo com terra vermelha exposta",
+    "sent": "terreno de construção limpo com terra vermelha exposta",
+    "before": "a photo of clean work ground with exposed red earth",
+    "after": "a photo of clean construction land with exposed red land"
+   },
+   {
+    "query": "terreno de construcao recem limpo com terra vermelha em terracos",
+    "sent": "terreno de construção recem limpo com terra vermelha em terracos",
+    "before": "a photo of clean new building land with red land on terraces",
+    "after": "a photo of land of construction clean reme with red land on terracotta"
+   },
+   {
+    "query": "cruzamento na cidade com uma concessionaria de carros",
+    "sent": "cruzamento na cidade com uma concessionária de carros",
+    "before": "a photo of crossing in the city with a car dealership",
+    "after": "a photo of crossing in the city with a car dealership"
+   },
+   {
+    "query": "cobertura de concessionaria com carros a venda, nao um estacionamento em uma rua comum",
+    "sent": "cobertura de concessionária com carros a venda, nao um estacionamento em uma rua comum",
+    "before": "a photo of dealership coverage with cars for sale, not a parking lot on a common street",
+    "after": "a photo of dealership coverage with cars for sale, not a parking lot on a common street"
+   },
+   {
+    "query": "oficinas e pequenos comercios ao longo de uma rua comercial",
+    "sent": "oficinas e pequenos lojas ao longo de uma rua comercial",
+    "before": "a photo of workshops and small shops along a shopping street",
+    "after": "a photo of workshops and small shops along a shopping street"
+   },
+   {
+    "query": "rua residencial ladeada por casas",
+    "sent": "rua residencial ladeada por casas",
+    "before": "a photo of rua residencial ladeada por casas",
+    "after": "a photo of residential street flanked by houses"
+   },
+   {
+    "query": "vista geral de uma cidade em encosta com casas densas",
+    "sent": "vista geral de uma cidade em encosta de morro com casas densas",
+    "before": "a photo of overview of a city on the slope with dense houses",
+    "after": "a photo of overview of a city on hillside with dense houses"
+   },
+   {
+    "query": "vista ampla de drone de uma cidade em encosta com um grande complexo de predios",
+    "sent": "vista ampla de drone de uma cidade em encosta de morro com um grande complexo de prédios",
+    "before": "a photo of wide drone view of a city on the slope with a large complex of grounds",
+    "after": "a photo of wide drone view of a city on hillside with a large complex of buildings"
+   },
+   {
+    "query": "uma xicara de cafe de ceramica com pires",
+    "sent": "uma xícara de café de ceramica com pires",
+    "before": "a photo of a ceramic coffee teapot with pyres",
+    "after": "a photo of a cup of ceramic coffee with pyres"
+   }
+  ]
+ },
+ "risks": {
+  "false_portuguese": [
+   {
+    "query": "beach in Rio de Janeiro",
+    "sent": "beach in Rio de Janeiro",
+    "before": "beach in Rio de Janeiro",
+    "after": "beach in Rio de Janeiro"
+   },
+   {
+    "query": "aerial view of Rio de Janeiro",
+    "sent": "aerial view of Rio de Janeiro",
+    "before": "aerial view of Rio de Janeiro",
+    "after": "air view of Rio de Janeiro"
+   },
+   {
+    "query": "favela on a hill in Rio de Janeiro",
+    "sent": "favela on a hill in Rio de Janeiro",
+    "before": "favela on a hill in Rio de Janeiro",
+    "after": "favela on a hill in Rio de Janeiro"
+   },
+   {
+    "query": "skyline of Sao Paulo",
+    "sent": null,
+    "before": "skyline of Sao Paulo",
+    "after": "skyline of Sao Paulo"
+   },
+   {
+    "query": "Iguazu falls from above",
+    "sent": null,
+    "before": "Iguazu falls from above",
+    "after": "Iguazu falls from above"
+   },
+   {
+    "query": "Foz do Iguaçu seen from a drone",
+    "sent": "Foz do Iguaçu seen from a drone",
+    "before": "Foz do Iguaçu seen from a drone",
+    "after": "Foz do Iguaçu seen from a drone"
+   },
+   {
+    "query": "farm in Mato Grosso",
+    "sent": null,
+    "before": "farm in Mato Grosso",
+    "after": "farm in Mato Grosso"
+   },
+   {
+    "query": "Lagoa da Conceição seen from above",
+    "sent": "Lagoa da Conceição seen from above",
+    "before": "Lagoon of Conception seen from above",
+    "after": "Lagoon of Conception seen from above"
+   },
+   {
+    "query": "Praia do Rosa at sunset",
+    "sent": "Praia do Rosa at sunset",
+    "before": "Rosa beach at sunset",
+    "after": "Rosa beach at sunset"
+   },
+   {
+    "query": "Porto Alegre waterfront",
+    "sent": "Porto Alegre waterfront",
+    "before": "Porto Alegre waterfront",
+    "after": "Port Alegre waterfront"
+   },
+   {
+    "query": "Costa Rica beach",
+    "sent": null,
+    "before": "Costa Rica beach",
+    "after": "Costa Rica beach"
+   },
+   {
+    "query": "harbor of Porto",
+    "sent": "harbor of Porto",
+    "before": "harbor of Porto",
+    "after": "port port"
+   }
+  ],
+  "place_names": [
+   {
+    "query": "fazenda no Mato Grosso",
+    "sent": "fazenda no Mato Grosso",
+    "before": "farm in Mato Grosso",
+    "after": "farm in Mato Grosso"
+   },
+   {
+    "query": "praia em Capão da Canoa",
+    "sent": "praia em Capão da Canoa",
+    "before": "beach in Capão da Canoa",
+    "after": "beach in Capão da Canoa"
+   },
+   {
+    "query": "cataratas em Foz do Iguaçu",
+    "sent": "cataratas em Foz do Iguaçu",
+    "before": "falls in Iguaçu",
+    "after": "falls in Iguaçu"
+   },
+   {
+    "query": "Morro de São Paulo visto de cima",
+    "sent": "Colina de São Paulo visto de cima",
+    "before": "St. Paul's Death seen from above",
+    "after": "Hill of São Paulo seen from above"
+   },
+   {
+    "query": "Serra Gaúcha com vinhedos",
+    "sent": "Cadeia de montanhas Gaúcha com vinhedos",
+    "before": "Serra Gaucha with vineyards",
+    "after": "Chain of mountains Gaucha with vineyards"
+   },
+   {
+    "query": "Chapada Diamantina vista de cima",
+    "sent": "Planalto Diamantina vista de cima",
+    "before": "Diamond Chapada view from above",
+    "after": "Diamantine plateau top view"
+   },
+   {
+    "query": "Porto Alegre vista de cima",
+    "sent": "Porto Alegre vista de cima",
+    "before": "Porto Alegre view from above",
+    "after": "Porto Alegre view from above"
+   },
+   {
+    "query": "Rio Grande do Sul visto de cima",
+    "sent": "Rio Grande do Sul visto de cima",
+    "before": "Rio Grande do Sul seen from above",
+    "after": "Rio Grande do Sul seen from above"
+   },
+   {
+    "query": "praia em Porto Seguro",
+    "sent": "praia em Porto Seguro",
+    "before": "beach in Porto Seguro",
+    "after": "beach in Porto Seguro"
+   },
+   {
+    "query": "lagoa em Mato Grosso do Sul",
+    "sent": "lagoa em Mato Grosso do Sul",
+    "before": "ponds in Mato Grosso do Sul",
+    "after": "ponds in Mato Grosso do Sul"
+   }
+  ],
+  "outside_the_probe": [
+   {
+    "query": "estrada de terra perto do rio",
+    "sent": "estrada de terra batida perto do rio",
+    "before": "land road near the river",
+    "after": "land road hit near the river"
+   },
+   {
+    "query": "uma estrada de terra entre duas fazendas",
+    "sent": "uma estrada de terra batida entre duas fazendas",
+    "before": "a dirt road between two farms",
+    "after": "a dirt road hit between two farms"
+   },
+   {
+    "query": "estrada de terra com árvores dos dois lados",
+    "sent": "estrada de terra batida com árvores dos dois lados",
+    "before": "dirt road with trees on both sides",
+    "after": "dirt road hit with trees on both sides"
+   },
+   {
+    "query": "estrada de chão perto da lavoura",
+    "sent": "estrada de terra batida perto da lavoura",
+    "before": "road of ground near the crop",
+    "after": "land road hit near the crop"
+   },
+   {
+    "query": "sítio arqueológico",
+    "sent": "pequena fazenda arqueológico",
+    "before": "sítio arqueológico",
+    "after": "small archaeological farm"
+   },
+   {
+    "query": "sítio histórico no centro da cidade",
+    "sent": "pequena fazenda histórico no centro da cidade",
+    "before": "historical site in the city center",
+    "after": "small historic farm in the city center"
+   },
+   {
+    "query": "sítio com casa e pomar",
+    "sent": "pequena fazenda com casa e pomar de frutas",
+    "before": "home and orchard",
+    "after": "small farm with house and fruit orchard"
+   },
+   {
+    "query": "farol no alto do morro",
+    "sent": "farol de praia no alto do colina",
+    "before": "Headlight on the top of the hill",
+    "after": "beach lighthouse on the top of the hill"
+   },
+   {
+    "query": "farol branco e vermelho",
+    "sent": "farol de praia branco e vermelho",
+    "before": "White and red headlamp",
+    "after": "white and red beach lighthouse"
+   },
+   {
+    "query": "marina com veleiros",
+    "sent": "marina de iates com veleiros",
+    "before": "marina with sailboats",
+    "after": "yacht marina with sailboats"
+   },
+   {
+    "query": "barcos numa marina",
+    "sent": "barcos numa marina de iates",
+    "before": "boats in a marina",
+    "after": "boats in a yacht marina"
+   },
+   {
+    "query": "estádio de futebol lotado",
+    "sent": "estádio esportivo de futebol lotado",
+    "before": "estádio de futebol lotado",
+    "after": "sports stadium football crowded"
+   },
+   {
+    "query": "estádio vazio",
+    "sent": "estádio esportivo vazio",
+    "before": "estádio vazio",
+    "after": "empty sports stadium"
+   },
+   {
+    "query": "mato alto na beira da estrada",
+    "sent": "vegetação alto na beira da estrada",
+    "before": "high forest on the roadside",
+    "after": "high vegetation on the roadside"
+   },
+   {
+    "query": "casa no meio do mato",
+    "sent": "casa no meio do vegetação",
+    "before": "house in the middle of the bush",
+    "after": "house in the middle of the vegetation"
+   }
+  ]
+ },
+ "probe_summary": {
+  "forms": 410,
+  "by_origin": {
+   "geral": 373,
+   "sul": 37
+  },
+  "tambem_ingles": 18,
+  "failing": 113,
+  "failing_with_a_passing_troca": 113,
+  "failing_without_troca": [],
+  "names": [
+   "Mato Grosso",
+   "Foz do Iguaçu",
+   "Capão da Canoa"
+  ],
+  "names_not_kept": [],
+  "names_not_needed": [],
+  "trocas": 113,
+  "trocas_not_the_first_passing": [
+   "açude",
+   "represa",
+   "enseada",
+   "orla",
+   "foz",
+   "guarda-sol",
+   "guarda-sóis",
+   "duna",
+   "molhe",
+   "cômoro",
+   "vale",
+   "canavial",
+   "milharal",
+   "caixa d'água",
+   "estrada de terra",
+   "estradas de terra",
+   "potreiros",
+   "taipas",
+   "estrada de chão",
+   "estádio",
+   "feira",
+   "trilhos"
+  ],
+  "trocas_not_the_first_without_a_reason": [],
+  "trocas_not_needed": [],
+  "trocas_that_fail": [],
+  "trocas_broken_by_agreement": [
+   "potreiro",
+   "invernada",
+   "torre de transmissão",
+   "terreno baldio"
+  ],
+  "forms_broken_by_agreement": [
+   "balsa",
+   "quiosque",
+   "encosta do morro",
+   "arco-íris",
+   "fonte",
+   "capela",
+   "prefeitura",
+   "aerogeradores",
+   "estação"
+  ],
+  "trocas_with_agreement_checked": 113,
+  "dropped": [
+   "quadra",
+   "aterro",
+   "turva",
+   "cerca",
+   "depósito",
+   "fortaleza",
+   "pires",
+   "rotatória",
+   "quebra-mar",
+   "piquete",
+   "oficina",
+   "oficinas",
+   "curral",
+   "chiqueiro",
+   "chafariz",
+   "paralelepípedos",
+   "faixa de pedestres"
+  ],
+  "translations": 2956,
+  "seconds": 569.8
+ }
+}

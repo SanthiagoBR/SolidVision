@@ -244,6 +244,8 @@ Das 178, 15 acham a foto entre as 5 primeiras em inglês e não em português. A
 
 **Por cena** (recall@5 do atual, em português; o rótulo vem da primeira palavra de cena da consulta, §15): água 84,1% (44 consultas), construído 74,0% (104), campo 83,3% (30). Consultas que falam de água: 82,1% (78); as que não falam: 75,0% (100). A cena construída é a mais fraca, como o RFC-023 já tinha visto nas consultas de rua e de paisagem urbana.
 
+> **Nota (RFC-047, 2026-11-04): a linha de base do nível A mudou.** O [RFC-047](rfc-047-glossario-e-deteccao-na-traducao-das-consultas.md) pôs um léxico e marcadores de português antes do tradutor. Medido por este `measure_baseline.py`, na validação, com o checkpoint atual e o léxico final do RFC-047 (§17): português R@1 **49,4%** (era 46,6) e R@5 **79,2%** (era 78,1); termos do sul R@1 **43,5%** (era 30,4) e R@5 **78,3%** (era 65,2); inglês sem mudança (55,1% / 83,7%). A perda do português contra o inglês caiu para −5,6 [−10,1; −1,7] no R@1 e −4,5 [−9,0; 0,0] no R@5. São esses os números contra os quais o nível A se mede (`baseline-validation-20261104-001130.json`). Os ganhos na validação são otimistas pelo viés que o RFC-047 §4.4 descreve, e mais ainda porque a segunda rodada do léxico foi feita depois de ver a validação (RFC-047 §17.1); o teste continua fechado, e a avaliação final deste RFC já vai incluir aquele tradutor.
+
 ## 15. Correções feitas durante a implementação
 
 O texto acima fica como foi proposto. O que a implementação mudou ou mediu está aqui, com a seção de origem.
