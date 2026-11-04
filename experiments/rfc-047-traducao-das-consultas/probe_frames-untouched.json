@@ -1,0 +1,2808 @@
+[
+ {
+  "pt": "represa",
+  "troca": "barragem",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "recovery",
+   "vista de cima": "dam above view",
+   "frase 1": "dam near the river",
+   "frase 2": "dam with trees on both sides",
+   "frase 3": "view from above dam on a cloudy day",
+   "frase 4": "photo of dam next to a white house",
+   "frase 5": "dam in the middle of a green field"
+  }
+ },
+ {
+  "pt": "caiaque",
+  "troca": "kayak",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "kayak",
+   "vista de cima": "kayak view from above",
+   "frase 1": "kayak near the river",
+   "frase 2": "caiaque with trees on both sides",
+   "frase 3": "view from the top of the kayak on a cloudy day",
+   "frase 4": "kayak photo next to a white house",
+   "frase 5": "kayak in the middle of a green field"
+  }
+ },
+ {
+  "pt": "balsa",
+  "troca": "ferry",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "ferry",
+   "vista de cima": "ferry view from above",
+   "frase 1": "ferry near the river",
+   "frase 2": "ferry with trees on both sides",
+   "frase 3": "above-the-bow view on a cloudy day",
+   "frase 4": "ferry photo next to a white house",
+   "frase 5": "raft in the middle of a green field"
+  }
+ },
+ {
+  "pt": "quiosque",
+  "troca": "kiosk",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "kiosk",
+   "vista de cima": "top view kiosk",
+   "frase 1": "kiosk near the river",
+   "frase 2": "stand with trees on both sides",
+   "frase 3": "View from the top of the kiosk on a cloudy day",
+   "frase 4": "photo of kiosk next to a white house",
+   "frase 5": "kiosk in the middle of a green field"
+  }
+ },
+ {
+  "pt": "falésia",
+  "troca": "penhasco",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "sickle-",
+   "vista de cima": "cliff top view",
+   "frase 1": "cliff near the river",
+   "frase 2": "cliff with trees on both sides",
+   "frase 3": "view from above of cliff on a cloudy day",
+   "frase 4": "photo of cliff next to a white house",
+   "frase 5": "cliff in the middle of a green field"
+  }
+ },
+ {
+  "pt": "falésias",
+  "troca": "penhascos",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "sickles",
+   "vista de cima": "cliffs from above",
+   "frase 1": "cliffs near the river",
+   "frase 2": "cliffs with trees on both sides",
+   "frase 3": "view from above cliffs on a cloudy day",
+   "frase 4": "photo of cliffs next to a white house",
+   "frase 5": "cliffs in the middle of a green field"
+  }
+ },
+ {
+  "pt": "duna",
+  "troca": "duna arenosa",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima"
+  ],
+  "outs": {
+   "sozinha": "dune",
+   "vista de cima": "from a top view",
+   "frase 1": "dune near the river",
+   "frase 2": "dune with trees on both sides",
+   "frase 3": "view from the top of the dunes on a cloudy day",
+   "frase 4": "photo of dune next to a white house",
+   "frase 5": "dune in the middle of a green field"
+  }
+ },
+ {
+  "pt": "barranca",
+  "troca": "barranco",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "ravine",
+   "vista de cima": "top view ravine",
+   "frase 1": "ravine near the river",
+   "frase 2": "tree-barren on both sides",
+   "frase 3": "top view of the ravine on a cloudy day",
+   "frase 4": "photo of ravine next to a white house",
+   "frase 5": "ravine in the middle of a green field"
+  }
+ },
+ {
+  "pt": "neblina",
+  "troca": "nevoeiro",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "mist",
+   "vista de cima": "fog above",
+   "frase 1": "fog near the river",
+   "frase 2": "fog with trees on both sides",
+   "frase 3": "Overcast view on a cloudy day",
+   "frase 4": "fog photo next to a white house",
+   "frase 5": "fog in the middle of a green field"
+  }
+ },
+ {
+  "pt": "coqueiro",
+  "troca": "palmeira de coco",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "Coat",
+   "vista de cima": "coconut tree top view",
+   "frase 1": "coconut tree near the river",
+   "frase 2": "coconut tree with trees on both sides",
+   "frase 3": "view from the top of coconut tree on a cloudy day",
+   "frase 4": "photo of coconut tree next to a white house",
+   "frase 5": "coconut tree in the middle of a green field"
+  }
+ },
+ {
+  "pt": "coqueiros",
+  "troca": "palmeiras de coco",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "Peas",
+   "vista de cima": "coconut trees above",
+   "frase 1": "coconut trees near the river",
+   "frase 2": "coconut trees on both sides",
+   "frase 3": "view from the top of coconut trees on a cloudy day",
+   "frase 4": "photo of coconut trees next to a white house",
+   "frase 5": "coconut trees in the middle of a green field"
+  }
+ },
+ {
+  "pt": "pomar",
+  "troca": "pomar de frutas",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "apple",
+   "vista de cima": "top view orchard",
+   "frase 1": "orchard near the river",
+   "frase 2": "orchard with trees on both sides",
+   "frase 3": "view from the top of the orchard on a cloudy day",
+   "frase 4": "photo of orchard next to a white house",
+   "frase 5": "orchard in the middle of a green field"
+  }
+ },
+ {
+  "pt": "horta",
+  "troca": "horta de legumes",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "vegetable",
+   "vista de cima": "garden view from above",
+   "frase 1": "garden near the river",
+   "frase 2": "garden with trees on both sides",
+   "frase 3": "garden view on a cloudy day",
+   "frase 4": "garden photo next to a white house",
+   "frase 5": "garden in the middle of a green field"
+  }
+ },
+ {
+  "pt": "vinhedo",
+  "troca": "vinhedos",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "vine",
+   "vista de cima": "vineyard view from above",
+   "frase 1": "vineyard near the river",
+   "frase 2": "vineyard with trees on both sides",
+   "frase 3": "view from the top of the vineyard on a cloudy day",
+   "frase 4": "photo of vineyard next to a white house",
+   "frase 5": "vineyard in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cafezal",
+  "troca": "plantação de café",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "coffee",
+   "vista de cima": "Coffee top view",
+   "frase 1": "coffee by the river",
+   "frase 2": "coffee with trees on both sides",
+   "frase 3": "view from top of coffee shop on a cloudy day",
+   "frase 4": "photo of coffee next to a white house",
+   "frase 5": "coffee in the middle of a green field"
+  }
+ },
+ {
+  "pt": "lavoura",
+  "troca": "terra cultivada",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 1"
+  ],
+  "outs": {
+   "sozinha": "crop",
+   "vista de cima": "crop top view",
+   "frase 1": "Farm near the river",
+   "frase 2": "crop with trees on both sides",
+   "frase 3": "top view of the crop on a cloudy day",
+   "frase 4": "photo of cultivation next to a white house",
+   "frase 5": "crop in the middle of a green field"
+  }
+ },
+ {
+  "pt": "quintal",
+  "troca": "jardim da casa",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "quintal",
+   "vista de cima": "garden view from above",
+   "frase 1": "garden near the river",
+   "frase 2": "garden with trees on both sides",
+   "frase 3": "view from above garden on a cloudy day",
+   "frase 4": "photo of yard next to a white house",
+   "frase 5": "garden in the middle of a green field"
+  }
+ },
+ {
+  "pt": "prefeitura",
+  "troca": "prefeitura municipal",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 1"
+  ],
+  "outs": {
+   "sozinha": "City Hall",
+   "vista de cima": "City Hall View From Top",
+   "frase 1": "city near the river",
+   "frase 2": "City hall with trees on both sides",
+   "frase 3": "view from above city hall on a cloudy day",
+   "frase 4": "City Hall photo next to a white house",
+   "frase 5": "city hall in the middle of a green field"
+  }
+ },
+ {
+  "pt": "feira",
+  "troca": "feira de rua",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima"
+  ],
+  "outs": {
+   "sozinha": "Fair",
+   "vista de cima": "View from above",
+   "frase 1": "fair near the river",
+   "frase 2": "Fair with trees on both sides",
+   "frase 3": "view from the top of the fair on a cloudy day",
+   "frase 4": "photo of fair next to a white house",
+   "frase 5": "fair in the middle of a green field"
+  }
+ },
+ {
+  "pt": "painel solar",
+  "troca": "painel fotovoltaico",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "Solar panel",
+   "vista de cima": "Solar panel view from above",
+   "frase 1": "solar panel near the river",
+   "frase 2": "Solar panel with trees on both sides",
+   "frase 3": "Sun panel view on a cloudy day",
+   "frase 4": "photo of solar panel next to a white house",
+   "frase 5": "solar panel in the middle of a green field"
+  }
+ },
+ {
+  "pt": "armazém",
+  "troca": "galpão de armazenamento",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "warehouse",
+   "vista de cima": "store above view",
+   "frase 1": "warehouse near the river",
+   "frase 2": "warehouse with trees on both sides",
+   "frase 3": "storefront view on a cloudy day",
+   "frase 4": "photo of warehouse next to a white house",
+   "frase 5": "warehouse in the middle of a green field"
+  }
+ },
+ {
+  "pt": "canteiro de obras",
+  "troca": "local de construção",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima"
+  ],
+  "outs": {
+   "sozinha": "Building site",
+   "vista de cima": "Buildings building block from above",
+   "frase 1": "construction site near the river",
+   "frase 2": "construction site with trees on both sides",
+   "frase 3": "view from the top of the building site on a cloudy day",
+   "frase 4": "photo of construction site next to a white house",
+   "frase 5": "construction site in the middle of a green field"
+  }
+ },
+ {
+  "pt": "terreno baldio",
+  "troca": "terreno vazio",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima"
+  ],
+  "outs": {
+   "sozinha": "waste land",
+   "vista de cima": "ground floor top view",
+   "frase 1": "wasteland near the river",
+   "frase 2": "wasteland with trees on both sides",
+   "frase 3": "view from above of empty ground on a cloudy day",
+   "frase 4": "photo of wasteland next to a white house",
+   "frase 5": "wasteland in the middle of a green field"
+  }
+ },
+ {
+  "pt": "viaduto",
+  "troca": "ponte viaduto",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha"
+  ],
+  "outs": {
+   "sozinha": "viado",
+   "vista de cima": "viaduct view from above",
+   "frase 1": "viaduct near the river",
+   "frase 2": "viaduct with trees on both sides",
+   "frase 3": "View from above viaduct on a cloudy day",
+   "frase 4": "viaduct photo next to a white house",
+   "frase 5": "viaduct in the middle of a green field"
+  }
+ },
+ {
+  "pt": "marina de iates",
+  "troca": "porto de iates",
+  "right_without": 6,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "yacht marina",
+   "vista de cima": "marina yachts top view",
+   "frase 1": "marina yachts near the river",
+   "frase 2": "marina yachts with trees on both sides",
+   "frase 3": "Sea-view yachts on a cloudy day",
+   "frase 4": "photo of marina yachts next to a white house",
+   "frase 5": "marina yachts in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cascata",
+  "troca": "cachoeira",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "Fall",
+   "vista de cima": "waterfall view from above",
+   "frase 1": "waterfall near the river",
+   "frase 2": "waterfall with trees on both sides",
+   "frase 3": "Overfall view on a cloudy day",
+   "frase 4": "waterfall photo next to a white house",
+   "frase 5": "waterfall in the middle of a green field"
+  }
+ },
+ {
+  "pt": "morros",
+  "troca": "colinas",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "Livestock",
+   "vista de cima": "hills above",
+   "frase 1": "hills near the river",
+   "frase 2": "trees with trees on both sides",
+   "frase 3": "view from the top of the hills on a cloudy day",
+   "frase 4": "photo of hills next to a white house",
+   "frase 5": "hills in the middle of a green field"
+  }
+ },
+ {
+  "pt": "encostas",
+  "troca": "declives",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima"
+  ],
+  "outs": {
+   "sozinha": "backrests",
+   "vista de cima": "top view sides",
+   "frase 1": "slopes near the river",
+   "frase 2": "slopes with trees on both sides",
+   "frase 3": "view from the top of the slopes on a cloudy day",
+   "frase 4": "photo of slopes next to a white house",
+   "frase 5": "slopes in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cânion",
+  "troca": "canyon",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "canyon",
+   "vista de cima": "canyon view from above",
+   "frase 1": "canyon near the river",
+   "frase 2": "canion with trees on both sides",
+   "frase 3": "Canion view above on a cloudy day",
+   "frase 4": "photo of canyon next to a white house",
+   "frase 5": "canyon in the middle of a green field"
+  }
+ },
+ {
+  "pt": "lava",
+  "troca": "lava vulcânica",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 1",
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "lava",
+   "vista de cima": "lava view from above",
+   "frase 1": "wash near the river",
+   "frase 2": "wash with trees on both sides",
+   "frase 3": "view from top of lava on a cloudy day",
+   "frase 4": "lava photo next to a white house",
+   "frase 5": "lava in the middle of a green field"
+  }
+ },
+ {
+  "pt": "geleira",
+  "troca": "glaciar",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Ice cream",
+   "vista de cima": "glacier view from above",
+   "frase 1": "glacier near the river",
+   "frase 2": "glacier with trees on both sides",
+   "frase 3": "view from above of glacier on a cloudy day",
+   "frase 4": "photo of glacier next to a white house",
+   "frase 5": "ice cream in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cerros",
+  "troca": "colinas",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima",
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "Hill",
+   "vista de cima": "Top view",
+   "frase 1": "hills near the river",
+   "frase 2": "tree-trees on both sides",
+   "frase 3": "view from above of hills on a cloudy day",
+   "frase 4": "photo of hills next to a white house",
+   "frase 5": "hills in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estradas de terra",
+  "troca": "estradas de cascalho",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 1"
+  ],
+  "outs": {
+   "sozinha": "land roads",
+   "vista de cima": "earth roads view from above",
+   "frase 1": "land roads near the river",
+   "frase 2": "dirt roads with trees on both sides",
+   "frase 3": "view from above of dirt roads on a cloudy day",
+   "frase 4": "photo of dirt roads next to a white house",
+   "frase 5": "dirt roads in the middle of a green field"
+  }
+ },
+ {
+  "pt": "povoado",
+  "troca": "vilarejo",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "village",
+   "vista de cima": "village view from above",
+   "frase 1": "village near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "view from above village on a cloudy day",
+   "frase 4": "photo of village next to a white house",
+   "frase 5": "villaged in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estádio",
+  "troca": "estádio esportivo",
+  "right_without": 5,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima"
+  ],
+  "outs": {
+   "sozinha": "stage",
+   "vista de cima": "stage view from above",
+   "frase 1": "stadium near the river",
+   "frase 2": "stadium with trees on both sides",
+   "frase 3": "view from above the stadium on a cloudy day",
+   "frase 4": "Stadium photo next to a white house",
+   "frase 5": "stadium in the middle of a green field"
+  }
+ },
+ {
+  "pt": "ilhota",
+  "troca": "pequena ilha",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 2"
+  ],
+  "outs": {
+   "sozinha": "photo",
+   "vista de cima": "picture top view",
+   "frase 1": "island near the river",
+   "frase 2": "tree-like island on both sides",
+   "frase 3": "view from the top of the island on a cloudy day",
+   "frase 4": "photo of the island next to a white house",
+   "frase 5": "islet in the middle of a green field"
+  }
+ },
+ {
+  "pt": "marina",
+  "troca": "porto de iates",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "marine",
+   "vista de cima": "sea view from above",
+   "frase 1": "marina near the river",
+   "frase 2": "marina with trees on both sides",
+   "frase 3": "Sea view on a cloudy day",
+   "frase 4": "photo of marina next to a white house",
+   "frase 5": "marina in the middle of a green field"
+  }
+ },
+ {
+  "pt": "araucária",
+  "troca": "pinheiro",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2",
+   "frase 3",
+   "frase 4"
+  ],
+  "outs": {
+   "sozinha": "araucaria",
+   "vista de cima": "Araucaria from above",
+   "frase 1": "Araucaria near the river",
+   "frase 2": "tree-trees on both sides",
+   "frase 3": "view from the sky on a cloudy day",
+   "frase 4": "photo of peanut tree next to a white house",
+   "frase 5": "araucaria in the middle of a green field"
+  }
+ },
+ {
+  "pt": "canavial",
+  "troca": "cana de açúcar",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "Canavian",
+   "vista de cima": "Canavian top view",
+   "frase 1": "Cane by the river",
+   "frase 2": "Cane with trees on both sides",
+   "frase 3": "Canavial view from above on a cloudy day",
+   "frase 4": "photo of cane next to a white house",
+   "frase 5": "Cane in the middle of a green field"
+  }
+ },
+ {
+  "pt": "milharal",
+  "troca": "campo de milho",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima",
+   "frase 1",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "corn",
+   "vista de cima": "the skyline from above",
+   "frase 1": "By the river",
+   "frase 2": "corn with trees on both sides",
+   "frase 3": "View from the sky on a cloudy day",
+   "frase 4": "photo of cornfield next to a white house",
+   "frase 5": "corn in the middle of a green field"
+  }
+ },
+ {
+  "pt": "galinheiro",
+  "troca": "casa de galinhas",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 1",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "Hen",
+   "vista de cima": "Henhouse View from above",
+   "frase 1": "hen near the river",
+   "frase 2": "Henhouse with trees on both sides",
+   "frase 3": "Hen's view from above on a cloudy day",
+   "frase 4": "photo of hen next to a white house",
+   "frase 5": "henhouse in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estufas",
+  "troca": "estufas agrícolas",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "estufaus",
+   "vista de cima": "roof view",
+   "frase 1": "greenhouses near the river",
+   "frase 2": "greenhouses with trees on both sides",
+   "frase 3": "view from the top of the stoves on a cloudy day",
+   "frase 4": "photo of greenhouses next to a white house",
+   "frase 5": "greenhouses in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estrada de terra",
+  "troca": "estrada de cascalho",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1"
+  ],
+  "outs": {
+   "sozinha": "land road",
+   "vista de cima": "land road view from above",
+   "frase 1": "land road near the river",
+   "frase 2": "dirt road with trees on both sides",
+   "frase 3": "view from the top of the dirt road on a cloudy day",
+   "frase 4": "photo of dirt road next to a white house",
+   "frase 5": "dirt road in the middle of a green field"
+  }
+ },
+ {
+  "pt": "comércios",
+  "troca": "lojas",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "trade",
+   "vista de cima": "top view shops",
+   "frase 1": "shops near the river",
+   "frase 2": "trades with trees on both sides",
+   "frase 3": "view from above shops on a cloudy day",
+   "frase 4": "photo of shops next to a white house",
+   "frase 5": "trades in the middle of a green field"
+  }
+ },
+ {
+  "pt": "aerogeradores",
+  "troca": "turbinas eólicas",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 2",
+   "frase 3",
+   "frase 4"
+  ],
+  "outs": {
+   "sozinha": "Aerogenerators",
+   "vista de cima": "aerogenerators above",
+   "frase 1": "aerogenerators near the river",
+   "frase 2": "aero-generators with trees on both sides",
+   "frase 3": "view from above of aero-generators on a cloudy day",
+   "frase 4": "photo of aero-generators next to a white house",
+   "frase 5": "aerogenerators in the middle of a green field"
+  }
+ },
+ {
+  "pt": "lixão",
+  "troca": "aterro de lixo",
+  "right_without": 4,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima",
+   "frase 3",
+   "frase 4"
+  ],
+  "outs": {
+   "sozinha": "dump",
+   "vista de cima": "garbage view from above",
+   "frase 1": "dump near the river",
+   "frase 2": "dump with trees on both sides",
+   "frase 3": "View from the top of the trash on a cloudy day",
+   "frase 4": "photo of garbage next to a white house",
+   "frase 5": "dump in the middle of a green field"
+  }
+ },
+ {
+  "pt": "queda d'água",
+  "troca": "cachoeira",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "water",
+   "vista de cima": "water drop from top view",
+   "frase 1": "waterfall near the river",
+   "frase 2": "fall of water with trees on both sides",
+   "frase 3": "view from above of waterfall on a cloudy day",
+   "frase 4": "Waterfall photo next to a white house",
+   "frase 5": "fall of water in the middle of a green field"
+  }
+ },
+ {
+  "pt": "farol",
+  "troca": "lighthouse",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 2",
+   "frase 3"
+  ],
+  "outs": {
+   "sozinha": "Headlight",
+   "vista de cima": "Headlight from above",
+   "frase 1": "lighthouse near the river",
+   "frase 2": "Headlight with trees on both sides",
+   "frase 3": "light-signal view on a cloudy day",
+   "frase 4": "photo of lighthouse next to a white house",
+   "frase 5": "Lighthouse in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estaleiro",
+  "troca": "estaleiro naval",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "shipyard",
+   "vista de cima": "shipyard view from above",
+   "frase 1": "yard near the river",
+   "frase 2": "yard with trees on both sides",
+   "frase 3": "view from the top of the yard on a cloudy day",
+   "frase 4": "photo of shipyard next to a white house",
+   "frase 5": "yard in the middle of a green field"
+  }
+ },
+ {
+  "pt": "vale",
+  "troca": "vale montanhoso",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Okay.",
+   "vista de cima": "Val de vide de vide de top",
+   "frase 1": "valley near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "view from above the valley on a cloudy day",
+   "frase 4": "photo of valley next to a white house",
+   "frase 5": "is in the middle of a green field"
+  }
+ },
+ {
+  "pt": "nascer do sol",
+  "troca": "amanhecer",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "rise from the sun",
+   "vista de cima": "rise from the sun above",
+   "frase 1": "rise from the sun near the river",
+   "frase 2": "sunrise with trees on both sides",
+   "frase 3": "Sunrise view on a cloudy day",
+   "frase 4": "Sunrise photo next to a white house",
+   "frase 5": "rise from the sun in the middle of a green field"
+  }
+ },
+ {
+  "pt": "pasto",
+  "troca": "pastagem",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 3",
+   "frase 4"
+  ],
+  "outs": {
+   "sozinha": "grass",
+   "vista de cima": "grass above",
+   "frase 1": "pasture near the river",
+   "frase 2": "pasture with trees on both sides",
+   "frase 3": "over-the-top view of grass on a cloudy day",
+   "frase 4": "grass photo next to a white house",
+   "frase 5": "pasture in the middle of a green field"
+  }
+ },
+ {
+  "pt": "bois",
+  "troca": "gado",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 3",
+   "frase 4"
+  ],
+  "outs": {
+   "sozinha": "wood",
+   "vista de cima": "wood top view",
+   "frase 1": "oxen near the river",
+   "frase 2": "oxen with trees on both sides",
+   "frase 3": "view from the top of the wood on a cloudy day",
+   "frase 4": "photo of bois next to a white house",
+   "frase 5": "oxen in the middle of a green field"
+  }
+ },
+ {
+  "pt": "trilhos",
+  "troca": "linha férrea",
+  "right_without": 3,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima",
+   "frase 1",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "rail",
+   "vista de cima": "trails from above",
+   "frase 1": "trails near the river",
+   "frase 2": "rails with trees on both sides",
+   "frase 3": "view from the top of the tracks on a cloudy day",
+   "frase 4": "photo of trails next to a white house",
+   "frase 5": "trails in the middle of a green field"
+  }
+ },
+ {
+  "pt": "foz",
+  "troca": "estuário",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "yes",
+   "vista de cima": "was seen from above",
+   "frase 1": "near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "view from the top of the mouth on a cloudy day",
+   "frase 4": "photo of a mouth next to a white house",
+   "frase 5": "it's in the middle of a green field"
+  }
+ },
+ {
+  "pt": "morro",
+  "troca": "colina",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Death",
+   "vista de cima": "I'm dying from above.",
+   "frase 1": "I'm dying by the river",
+   "frase 2": "I'm dying with trees on both sides",
+   "frase 3": "view from the top of the hill on a cloudy day",
+   "frase 4": "photo of hill next to a white house",
+   "frase 5": "I die in the middle of a green field"
+  }
+ },
+ {
+  "pt": "pedreira",
+  "troca": "cava de pedra",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 2",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "stoneware",
+   "vista de cima": "stoneware top view",
+   "frase 1": "stone quarry near the river",
+   "frase 2": "stoneware with trees on both sides",
+   "frase 3": "view from the top of the quarry on a cloudy day",
+   "frase 4": "photo of brickwork next to a white house",
+   "frase 5": "stone in the middle of a green field"
+  }
+ },
+ {
+  "pt": "mata",
+  "troca": "floresta",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Kill",
+   "vista de cima": "kills view from above",
+   "frase 1": "kills near the river",
+   "frase 2": "kills with trees on both sides",
+   "frase 3": "view from the top of the forest on a cloudy day",
+   "frase 4": "photo of a forest next to a white house",
+   "frase 5": "kills in the middle of a green field"
+  }
+ },
+ {
+  "pt": "araucárias",
+  "troca": "pinheiros",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Peanut",
+   "vista de cima": "Araucarias from above",
+   "frase 1": "Araucaria near the river",
+   "frase 2": "Peacocks with trees on both sides",
+   "frase 3": "view from the skyscrapers on a cloudy day",
+   "frase 4": "photo of peanut trees next to a white house",
+   "frase 5": "peanut trees in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cerca viva",
+  "troca": "fileira de arbustos",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 1",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "search alive",
+   "vista de cima": "living fence view from above",
+   "frase 1": "live fence near the river",
+   "frase 2": "living fence with trees on both sides",
+   "frase 3": "view from above live fence on a cloudy day",
+   "frase 4": "photo of live fence next to a white house",
+   "frase 5": "live fence in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estrada de terra batida",
+  "troca": "estrada de cascalho",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "rough dirt road",
+   "vista de cima": "rough dirt road view from above",
+   "frase 1": "land road hit near the river",
+   "frase 2": "dirt road hit with trees on both sides",
+   "frase 3": "view from above of beaten dirt road on a cloudy day",
+   "frase 4": "road photo of beaten dirt next to a white house",
+   "frase 5": "dirt road hit in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estradas de terra batida",
+  "troca": "estradas de cascalho",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "rough dirt roads",
+   "vista de cima": "rough dirt roads view from above",
+   "frase 1": "dirt roads hit near the river",
+   "frase 2": "dirt roads hit with trees on both sides",
+   "frase 3": "view from above of beaten dirt roads on a cloudy day",
+   "frase 4": "photo of dirt roads beaten next to a white house",
+   "frase 5": "dirt roads hit in the middle of a green field"
+  }
+ },
+ {
+  "pt": "aerogerador",
+  "troca": "turbina eólica",
+  "right_without": 2,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "aero-generator",
+   "vista de cima": "aerogenerator top view",
+   "frase 1": "aeroger near the river",
+   "frase 2": "aeroger with trees on both sides",
+   "frase 3": "aero-generator view on a cloudy day",
+   "frase 4": "photo of a wind turbine next to a white house",
+   "frase 5": "aeroger in the middle of a green field"
+  }
+ },
+ {
+  "pt": "enseada",
+  "troca": "pequena baía",
+  "right_without": 1,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "coveted",
+   "vista de cima": "coveted top view",
+   "frase 1": "coveted near the river",
+   "frase 2": "coveted with trees on both sides",
+   "frase 3": "view from the top of the cove on a cloudy day",
+   "frase 4": "photo of cobblestone next to a white house",
+   "frase 5": "coveted in the middle of a green field"
+  }
+ },
+ {
+  "pt": "atracadouro",
+  "troca": "píer",
+  "right_without": 1,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "docking",
+   "vista de cima": "docking view from above",
+   "frase 1": "docking near the river",
+   "frase 2": "docking with trees on both sides",
+   "frase 3": "view from the top of the dock on a cloudy day",
+   "frase 4": "photo of docking near a white house",
+   "frase 5": "docking in the middle of a green field"
+  }
+ },
+ {
+  "pt": "terraplenagem",
+  "troca": "nivelamento de terreno",
+  "right_without": 1,
+  "contexts": 7,
+  "wrong_in": [
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "earth-moving",
+   "vista de cima": "earthenware top view",
+   "frase 1": "earthenware near the river",
+   "frase 2": "earthenware with trees on both sides",
+   "frase 3": "view from above of earthenware on a cloudy day",
+   "frase 4": "Earthquake photo next to a white house",
+   "frase 5": "earthenware in the middle of a green field"
+  }
+ },
+ {
+  "pt": "engarrafamento",
+  "troca": "congestionamento",
+  "right_without": 1,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "bottling",
+   "vista de cima": "bottle top view",
+   "frase 1": "bottling near the river",
+   "frase 2": "bottling with trees on both sides",
+   "frase 3": "top view of traffic jam on a cloudy day",
+   "frase 4": "bottle photo next to a white house",
+   "frase 5": "bottling in the middle of a green field"
+  }
+ },
+ {
+  "pt": "açude",
+  "troca": "barragem",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "acid",
+   "vista de cima": "acute view from above",
+   "frase 1": "acute near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "view from above of sour on a cloudy day",
+   "frase 4": "photo of audible next to a white house",
+   "frase 5": "azute in the middle of a green field"
+  }
+ },
+ {
+  "pt": "corredeira",
+  "troca": "águas brancas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Corridor",
+   "vista de cima": "sliding top view",
+   "frase 1": "Corridor near the river",
+   "frase 2": "Corridor with trees on both sides",
+   "frase 3": "View from the top of the slide on a cloudy day",
+   "frase 4": "photo of a slide next to a white house",
+   "frase 5": "slide in the middle of a green field"
+  }
+ },
+ {
+  "pt": "corredeiras",
+  "troca": "águas brancas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "rails",
+   "vista de cima": "slides from above",
+   "frase 1": "Corridors near the river",
+   "frase 2": "slides with trees on both sides",
+   "frase 3": "view from the top of the slides on a cloudy day",
+   "frase 4": "photo of slides next to a white house",
+   "frase 5": "runners in the middle of a green field"
+  }
+ },
+ {
+  "pt": "barrento",
+  "troca": "marrom",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "barren",
+   "vista de cima": "Barren top view",
+   "frase 1": "barren near the river",
+   "frase 2": "Barren with trees on both sides",
+   "frase 3": "a view from the top of the barren on a cloudy day",
+   "frase 4": "photo of a barren next to a white house",
+   "frase 5": "barren in the middle of a green field"
+  }
+ },
+ {
+  "pt": "barrenta",
+  "troca": "marrom",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "barrier",
+   "vista de cima": "barren top view",
+   "frase 1": "barrier near the river",
+   "frase 2": "barrier with trees on both sides",
+   "frase 3": "over-view of the barrier on a cloudy day",
+   "frase 4": "photo of barrier next to a white house",
+   "frase 5": "barren in the middle of a green field"
+  }
+ },
+ {
+  "pt": "orla",
+  "troca": "beira d'água",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "edge",
+   "vista de cima": "edge view from above",
+   "frase 1": "near the river",
+   "frase 2": "edge with trees on both sides",
+   "frase 3": "view from the top of the edge on a cloudy day",
+   "frase 4": "picture of edge next to a white house",
+   "frase 5": "edge in the middle of a green field"
+  }
+ },
+ {
+  "pt": "mangue",
+  "troca": "manguezal",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "mango",
+   "vista de cima": "mango view from above",
+   "frase 1": "mango near the river",
+   "frase 2": "mango with trees on both sides",
+   "frase 3": "Mango top view on a cloudy day",
+   "frase 4": "Mango photo next to a white house",
+   "frase 5": "mango in the middle of a green field"
+  }
+ },
+ {
+  "pt": "brejo",
+  "troca": "pântano",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "breeches",
+   "vista de cima": "breezy view from above",
+   "frase 1": "flock near the river",
+   "frase 2": "flock with trees on both sides",
+   "frase 3": "over-view of the herd on a cloudy day",
+   "frase 4": "photo of a herd next to a white house",
+   "frase 5": "awe in the middle of a green field"
+  }
+ },
+ {
+  "pt": "jangada",
+  "troca": "balsa de madeira",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Janada",
+   "vista de cima": "jangada view from above",
+   "frase 1": "Janada near the river",
+   "frase 2": "rowing with trees on both sides",
+   "frase 3": "Jangad view from above on a cloudy day",
+   "frase 4": "Janga photo next to a white house",
+   "frase 5": "rafting in the middle of a green field"
+  }
+ },
+ {
+  "pt": "guarda-sol",
+  "troca": "guarda-chuva de praia",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Sunscreen",
+   "vista de cima": "Sunscreen view from above",
+   "frase 1": "Sun umbrella near the river",
+   "frase 2": "Sun umbrella with trees on both sides",
+   "frase 3": "Sunscreen view on a cloudy day",
+   "frase 4": "Sunscreen photo next to a white house",
+   "frase 5": "Sun umbrella in the middle of a green field"
+  }
+ },
+ {
+  "pt": "guarda-sóis",
+  "troca": "guarda-chuvas de praia",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Soil storage",
+   "vista de cima": "upper view sunscreen",
+   "frase 1": "Soilguards near the river",
+   "frase 2": "Soil umbrellas with trees on both sides",
+   "frase 3": "Sunscreen view on a cloudy day",
+   "frase 4": "photo of sunscreen next to a white house",
+   "frase 5": "Soil-guards in the middle of a green field"
+  }
+ },
+ {
+  "pt": "sanga",
+  "troca": "córrego",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "blood",
+   "vista de cima": "bleeding from above",
+   "frase 1": "blood by the river",
+   "frase 2": "blood with trees on both sides",
+   "frase 3": "Bloody eye on a cloudy day",
+   "frase 4": "photo of blood next to a white house",
+   "frase 5": "blood in the middle of a green field"
+  }
+ },
+ {
+  "pt": "sangas",
+  "troca": "córregos",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "blood",
+   "vista de cima": "blood above",
+   "frase 1": "bloods near the river",
+   "frase 2": "bloodstains with trees on both sides",
+   "frase 3": "Bloods on a cloudy day",
+   "frase 4": "photo of bloodstains next to a white house",
+   "frase 5": "blood in the middle of a green field"
+  }
+ },
+ {
+  "pt": "banhado",
+  "troca": "pântano",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "bathed",
+   "vista de cima": "bathed view from above",
+   "frase 1": "bathed near the river",
+   "frase 2": "bathed with trees on both sides",
+   "frase 3": "view from above bathed on a cloudy day",
+   "frase 4": "bathed photo next to a white house",
+   "frase 5": "bathed in the middle of a green field"
+  }
+ },
+ {
+  "pt": "banhados",
+  "troca": "pântanos",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "bathed",
+   "vista de cima": "bathed view from above",
+   "frase 1": "bathed near the river",
+   "frase 2": "bathed with trees on both sides",
+   "frase 3": "view from the top of the baths on a cloudy day",
+   "frase 4": "photo of bathed next to a white house",
+   "frase 5": "bathed in the middle of a green field"
+  }
+ },
+ {
+  "pt": "várzea",
+  "troca": "planície de inundação",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "varzea",
+   "vista de cima": "Vandering view from above",
+   "frase 1": "varzea near the river",
+   "frase 2": "varzea with trees on both sides",
+   "frase 3": "view from above of the valley on a cloudy day",
+   "frase 4": "photo of a varzea next to a white house",
+   "frase 5": "varzea in the middle of a green field"
+  }
+ },
+ {
+  "pt": "trapiche",
+  "troca": "píer",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Trappies",
+   "vista de cima": "Trapped from the top view",
+   "frase 1": "Trapped near the river",
+   "frase 2": "Trapped with trees on both sides",
+   "frase 3": "Top view of a trapiche on a cloudy day",
+   "frase 4": "photo of trapiche next to a white house",
+   "frase 5": "trapiche in the middle of a green field"
+  }
+ },
+ {
+  "pt": "trapiches",
+  "troca": "píers",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Trapiche",
+   "vista de cima": "Trapiches from above",
+   "frase 1": "Trapiches near the river",
+   "frase 2": "Trappies with trees on both sides",
+   "frase 3": "view from above of trapiches on a cloudy day",
+   "frase 4": "photo of trapiches next to a white house",
+   "frase 5": "Trapiches in the middle of a green field"
+  }
+ },
+ {
+  "pt": "molhe",
+  "troca": "píer de rochas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "wet",
+   "vista de cima": "wet view from above",
+   "frase 1": "Wet near the river",
+   "frase 2": "Wet with trees on both sides",
+   "frase 3": "Wet top view on cloudy day",
+   "frase 4": "photo of wet next to a white house",
+   "frase 5": "wet in the middle of a green field"
+  }
+ },
+ {
+  "pt": "molhes",
+  "troca": "píeres de rochas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Women",
+   "vista de cima": "Moulds from above",
+   "frase 1": "Wetlands near the river",
+   "frase 2": "Wetlands with trees on both sides",
+   "frase 3": "view from above of the wives on a cloudy day",
+   "frase 4": "photo of wives next to a white house",
+   "frase 5": "wets in the middle of a green field"
+  }
+ },
+ {
+  "pt": "costão",
+  "troca": "costa rochosa",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "cost",
+   "vista de cima": "coast view from above",
+   "frase 1": "coast near the river",
+   "frase 2": "coast with trees on both sides",
+   "frase 3": "view from the coast on a cloudy day",
+   "frase 4": "coastal photo next to a white house",
+   "frase 5": "cost in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cômoro",
+  "troca": "duna arenosa",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "mood",
+   "vista de cima": "comfort view from above",
+   "frase 1": "a pleasant place near the river",
+   "frase 2": "love with trees on both sides",
+   "frase 3": "view from above of the mood on a cloudy day",
+   "frase 4": "photo of a room next to a white house",
+   "frase 5": "a room in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cômoros",
+  "troca": "dunas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "expenses",
+   "vista de cima": "view from above",
+   "frase 1": "near the river",
+   "frase 2": "rooms with trees on both sides",
+   "frase 3": "view from above of rooms on a cloudy day",
+   "frase 4": "photo of rooms next to a white house",
+   "frase 5": "rooms in the middle of a green field"
+  }
+ },
+ {
+  "pt": "serra",
+  "troca": "cadeia de montanhas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "saw",
+   "vista de cima": "saw from above",
+   "frase 1": "saw near the river",
+   "frase 2": "saw with trees on both sides",
+   "frase 3": "view from the top of the saw on a cloudy day",
+   "frase 4": "photo of saw next to a white house",
+   "frase 5": "saw in the middle of a green field"
+  }
+ },
+ {
+  "pt": "serras",
+  "troca": "cadeias de montanhas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "saws",
+   "vista de cima": "saws from above",
+   "frase 1": "saws near the river",
+   "frase 2": "saws with trees on both sides",
+   "frase 3": "view from the top of the saws on a cloudy day",
+   "frase 4": "photo of saws next to a white house",
+   "frase 5": "saws in the middle of a green field"
+  }
+ },
+ {
+  "pt": "chapada",
+  "troca": "planalto",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "plated",
+   "vista de cima": "high-rise view",
+   "frase 1": "high near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "Top view of the roof on a cloudy day",
+   "frase 4": "picture of stoned next to a white house",
+   "frase 5": "stoned in the middle of a green field"
+  }
+ },
+ {
+  "pt": "encosta",
+  "troca": "encosta de morro",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "lean",
+   "vista de cima": "top view on the side",
+   "frase 1": "lean near the river",
+   "frase 2": "leaning with trees on both sides",
+   "frase 3": "top-down view on a cloudy day",
+   "frase 4": "photo of a backside next to a white house",
+   "frase 5": "leaning in the middle of a green field"
+  }
+ },
+ {
+  "pt": "ladeira",
+  "troca": "rua íngreme",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Side",
+   "vista de cima": "top view hillside",
+   "frase 1": "hillside near the river",
+   "frase 2": "hillside with trees on both sides",
+   "frase 3": "view from the top of the hillside on a cloudy day",
+   "frase 4": "photo of hillside next to a white house",
+   "frase 5": "hillside in the middle of a green field"
+  }
+ },
+ {
+  "pt": "mato",
+  "troca": "vegetação",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "forest",
+   "vista de cima": "I'm killing my view from above.",
+   "frase 1": "I'm dead by the river",
+   "frase 2": "I'm going to kill you with trees on both sides.",
+   "frase 3": "view from the top of the forest on a cloudy day",
+   "frase 4": "photo of a forest next to a white house",
+   "frase 5": "I'm going to kill in the middle of a green field"
+  }
+ },
+ {
+  "pt": "coxilha",
+  "troca": "colina",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "shell",
+   "vista de cima": "upper-view spoon",
+   "frase 1": "snorkel near the river",
+   "frase 2": "coxilla with trees on both sides",
+   "frase 3": "Top of the coxilla view on a cloudy day",
+   "frase 4": "photo of a coxilla next to a white house",
+   "frase 5": "coxilla in the middle of a green field"
+  }
+ },
+ {
+  "pt": "coxilhas",
+  "troca": "colinas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "chickpeas",
+   "vista de cima": "upper-view balls",
+   "frase 1": "shells near the river",
+   "frase 2": "balls with trees on both sides",
+   "frase 3": "Eyes on the top of the balls on a cloudy day",
+   "frase 4": "photo of bubbles next to a white house",
+   "frase 5": "shells in the middle of a green field"
+  }
+ },
+ {
+  "pt": "capão",
+  "troca": "pequeno bosque",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "capon",
+   "vista de cima": "capon view from above",
+   "frase 1": "capon near the river",
+   "frase 2": "capon with trees on both sides",
+   "frase 3": "overcoat view on a cloudy day",
+   "frase 4": "photo of capon next to a white house",
+   "frase 5": "capon in the middle of a green field"
+  }
+ },
+ {
+  "pt": "capões",
+  "troca": "pequenos bosques",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Capons",
+   "vista de cima": "Capons View from Above",
+   "frase 1": "capons near the river",
+   "frase 2": "hoods with trees on both sides",
+   "frase 3": "over the head of the capons on a cloudy day",
+   "frase 4": "photo of capons next to a white house",
+   "frase 5": "capons in the middle of a green field"
+  }
+ },
+ {
+  "pt": "macega",
+  "troca": "capim alto",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "mace",
+   "vista de cima": "mace from above",
+   "frase 1": "mace near the river",
+   "frase 2": "mace with trees on both sides",
+   "frase 3": "top view of mace on a cloudy day",
+   "frase 4": "photo of macega next to a white house",
+   "frase 5": "mace in the middle of a green field"
+  }
+ },
+ {
+  "pt": "sítio",
+  "troca": "pequena fazenda",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "place",
+   "vista de cima": "top view",
+   "frase 1": "place near the river",
+   "frase 2": "place with trees on both sides",
+   "frase 3": "view from above on a cloudy day",
+   "frase 4": "photo of place next to a white house",
+   "frase 5": "place in the middle of a green field"
+  }
+ },
+ {
+  "pt": "roça",
+  "troca": "terra cultivada",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Sprinkle",
+   "vista de cima": "vista from above",
+   "frase 1": "roam near the river",
+   "frase 2": "rub with trees on both sides",
+   "frase 3": "a view from above of a rock on a cloudy day",
+   "frase 4": "photo of a rose next to a white house",
+   "frase 5": "roam in the middle of a green field"
+  }
+ },
+ {
+  "pt": "parreiral",
+  "troca": "videiras",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "parreir",
+   "vista de cima": "garden view from above",
+   "frase 1": "parreiral near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "view from above of the garden on a cloudy day",
+   "frase 4": "photo of a garden next to a white house",
+   "frase 5": "a green field in the middle of a green field"
+  }
+ },
+ {
+  "pt": "aviário",
+  "troca": "granja de frangos",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "avian",
+   "vista de cima": "bird view from above",
+   "frase 1": "bird near the river",
+   "frase 2": "bird with trees on both sides",
+   "frase 3": "bird's eye view on a cloudy day",
+   "frase 4": "bird photo next to a white house",
+   "frase 5": "bird in the middle of a green field"
+  }
+ },
+ {
+  "pt": "porteira",
+  "troca": "portão de fazenda",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "door",
+   "vista de cima": "top view door",
+   "frase 1": "doorway near the river",
+   "frase 2": "doorman with trees on both sides",
+   "frase 3": "top view of the doorman on a cloudy day",
+   "frase 4": "photo of doorman next to a white house",
+   "frase 5": "doorway in the middle of a green field"
+  }
+ },
+ {
+  "pt": "cata-vento",
+  "troca": "moinho de vento",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "windfall",
+   "vista de cima": "windfall view from above",
+   "frase 1": "cata-wind near the river",
+   "frase 2": "windfall with trees on both sides",
+   "frase 3": "view from the top of the windfall on a cloudy day",
+   "frase 4": "photo of windfall next to a white house",
+   "frase 5": "windfall in the middle of a green field"
+  }
+ },
+ {
+  "pt": "caixa d'água",
+  "troca": "tanque de água",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Water box",
+   "vista de cima": "Water box top view",
+   "frase 1": "Water box near the river",
+   "frase 2": "Water box with trees on both sides",
+   "frase 3": "top view of water box on a cloudy day",
+   "frase 4": "water box photo next to a white house",
+   "frase 5": "Water box in the middle of a green field"
+  }
+ },
+ {
+  "pt": "chácara",
+  "troca": "pequena fazenda",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "amber",
+   "vista de cima": "top view cup",
+   "frase 1": "cockpit near the river",
+   "frase 2": "tree-trees on both sides",
+   "frase 3": "top view of the cup on a cloudy day",
+   "frase 4": "photo of a cockpit next to a white house",
+   "frase 5": "a green field in the middle of a green field"
+  }
+ },
+ {
+  "pt": "chácaras",
+  "troca": "pequenas fazendas",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "ticks",
+   "vista de cima": "top view cocks",
+   "frase 1": "cocks near the river",
+   "frase 2": "tree-trees of both sides",
+   "frase 3": "top view of the cups on a cloudy day",
+   "frase 4": "photo of cockroaches next to a white house",
+   "frase 5": "cockroaches in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estância",
+  "troca": "rancho",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "office",
+   "vista de cima": "top view station",
+   "frase 1": "station near the river",
+   "frase 2": "station with trees on both sides",
+   "frase 3": "view from above of station on a cloudy day",
+   "frase 4": "stand photo next to a white house",
+   "frase 5": "station in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estâncias",
+  "troca": "ranchos",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "offices",
+   "vista de cima": "top view stations",
+   "frase 1": "stations near the river",
+   "frase 2": "stands with trees on both sides",
+   "frase 3": "view from above of stations on a cloudy day",
+   "frase 4": "photo of studios next to a white house",
+   "frase 5": "stations in the middle of a green field"
+  }
+ },
+ {
+  "pt": "potreiro",
+  "troca": "pastagem",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "may",
+   "vista de cima": "may have a view from above",
+   "frase 1": "Possibly near the river",
+   "frase 2": "Possibly with trees on both sides",
+   "frase 3": "view from the potter on a cloudy day",
+   "frase 4": "photo of a potter next to a white house",
+   "frase 5": "Possibly in the middle of a green field"
+  }
+ },
+ {
+  "pt": "potreiros",
+  "troca": "pastagens",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "may",
+   "vista de cima": "possibile views from above",
+   "frase 1": "Possibly near the river",
+   "frase 2": "with trees on both sides",
+   "frase 3": "view from above of potters on a cloudy day",
+   "frase 4": "photo of potters next to a white house",
+   "frase 5": "potions in the middle of a green field"
+  }
+ },
+ {
+  "pt": "invernada",
+  "troca": "pastagem",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "winter",
+   "vista de cima": "winter view from above",
+   "frase 1": "winter near the river",
+   "frase 2": "winter with trees on both sides",
+   "frase 3": "Overwinter view on a cloudy day",
+   "frase 4": "Winter photo next to a white house",
+   "frase 5": "winter in the middle of a green field"
+  }
+ },
+ {
+  "pt": "taipa",
+  "troca": "muro de terra",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "cut",
+   "vista de cima": "top view taipa",
+   "frase 1": "Taipa near the river",
+   "frase 2": "taipa with trees on both sides",
+   "frase 3": "Taipa view on a cloudy day",
+   "frase 4": "Taipa photo next to a white house",
+   "frase 5": "taipa in the middle of a green field"
+  }
+ },
+ {
+  "pt": "taipas",
+  "troca": "muros de terra",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Taipas",
+   "vista de cima": "Taipas from the top",
+   "frase 1": "Taipas near the river",
+   "frase 2": "Taipas with trees on both sides",
+   "frase 3": "view from above of taipas on a cloudy day",
+   "frase 4": "photo of taipas next to a white house",
+   "frase 5": "Taipas in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estrada de chão",
+  "troca": "estrada de cascalho",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "ground road",
+   "vista de cima": "ground road view from above",
+   "frase 1": "road of ground near the river",
+   "frase 2": "ground road with trees on both sides",
+   "frase 3": "view from the top of the road on a cloudy day",
+   "frase 4": "road photo of floor next to a white house",
+   "frase 5": "ground road in the middle of a green field"
+  }
+ },
+ {
+  "pt": "estrada de chão batido",
+  "troca": "estrada de cascalho",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "rough road ground",
+   "vista de cima": "floor road beaten view from above",
+   "frase 1": "road of beaten ground near the river",
+   "frase 2": "ground road beaten with trees on both sides",
+   "frase 3": "view from above of beaten ground road on a cloudy day",
+   "frase 4": "road photo of floor beaten next to a white house",
+   "frase 5": "ground road hit in the middle of a green field"
+  }
+ },
+ {
+  "pt": "casarão",
+  "troca": "casa grande",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "will marry",
+   "vista de cima": "They'll get married from above.",
+   "frase 1": "will marry near the river",
+   "frase 2": "They will marry trees on both sides",
+   "frase 3": "view from above of the wedding on a cloudy day",
+   "frase 4": "photo of married woman next to a white house",
+   "frase 5": "will marry in the middle of a green field"
+  }
+ },
+ {
+  "pt": "casarões",
+  "troca": "casas grandes",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "marriages",
+   "vista de cima": "weddings from above",
+   "frase 1": "marriages near the river",
+   "frase 2": "Marriages with trees on both sides",
+   "frase 3": "view from above weddings on a cloudy day",
+   "frase 4": "photo of weddings next to a white house",
+   "frase 5": "weddings in the middle of a green field"
+  }
+ },
+ {
+  "pt": "sobrado",
+  "troca": "casa de dois andares",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "leftover",
+   "vista de cima": "leftover view from above",
+   "frase 1": "left by the river",
+   "frase 2": "leftover with trees on both sides",
+   "frase 3": "Overview overover on a cloudy day",
+   "frase 4": "leftover photo next to a white house",
+   "frase 5": "left in the middle of a green field"
+  }
+ },
+ {
+  "pt": "loteamento",
+  "troca": "terreno dividido em lotes",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "lotion",
+   "vista de cima": "Top view lotion",
+   "frase 1": "lotion near the river",
+   "frase 2": "lotion with trees on both sides",
+   "frase 3": "top view of the lotion on a cloudy day",
+   "frase 4": "photo of lotion next to a white house",
+   "frase 5": "lotion in the middle of a green field"
+  }
+ },
+ {
+  "pt": "autódromo",
+  "troca": "pista de corrida",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "autodrome",
+   "vista de cima": "autodrome view from above",
+   "frase 1": "autodrome near the river",
+   "frase 2": "autodrome with trees on both sides",
+   "frase 3": "view from above the autodrome on a cloudy day",
+   "frase 4": "autodrome photo next to a white house",
+   "frase 5": "autodrome in the middle of a green field"
+  }
+ },
+ {
+  "pt": "obra",
+  "troca": "construção",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "work",
+   "vista de cima": "work view from above",
+   "frase 1": "work near the river",
+   "frase 2": "work with trees on both sides",
+   "frase 3": "view from the top of the work on a cloudy day",
+   "frase 4": "photo of the work next to a white house",
+   "frase 5": "work in the middle of a green field"
+  }
+ },
+ {
+  "pt": "mirante",
+  "troca": "ponto de observação",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Viewer",
+   "vista de cima": "Viewing from above",
+   "frase 1": "looking near the river",
+   "frase 2": "looking with trees on both sides",
+   "frase 3": "view from the top of the viewfinder on a cloudy day",
+   "frase 4": "photo of a viewer next to a white house",
+   "frase 5": "looking in the middle of a green field"
+  }
+ },
+ {
+  "pt": "trevo",
+  "troca": "interseção de rodovias",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Trevo",
+   "vista de cima": "dark view from above",
+   "frase 1": "Trevo near the river",
+   "frase 2": "Trevo with trees on both sides",
+   "frase 3": "view from the top of the tremor on a cloudy day",
+   "frase 4": "photo of trevo next to a white house",
+   "frase 5": "Trevo in the middle of a green field"
+  }
+ },
+ {
+  "pt": "heliponto",
+  "troca": "heliporto",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Helipon",
+   "vista de cima": "Helipon top view",
+   "frase 1": "Helipon near the river",
+   "frase 2": "Helipon with trees on both sides",
+   "frase 3": "Helipon view on a cloudy day",
+   "frase 4": "photo of helipon next to a white house",
+   "frase 5": "Helipon in the middle of a green field"
+  }
+ },
+ {
+  "pt": "rodoviária",
+  "troca": "terminal de ônibus",
+  "right_without": 0,
+  "contexts": 7,
+  "wrong_in": [
+   "sozinha",
+   "vista de cima",
+   "frase 1",
+   "frase 2",
+   "frase 3",
+   "frase 4",
+   "frase 5"
+  ],
+  "outs": {
+   "sozinha": "Road",
+   "vista de cima": "Highway view from above",
+   "frase 1": "road near the river",
+   "frase 2": "road with trees on both sides",
+   "frase 3": "view from above of road on a cloudy day",
+   "frase 4": "photo of roadside roadside white house",
+   "frase 5": "road in the middle of a green field"
+  }
+ }
+]

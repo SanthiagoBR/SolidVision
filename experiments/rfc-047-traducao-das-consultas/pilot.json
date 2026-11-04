@@ -1,0 +1,752 @@
+{
+ "queries": {
+  "pt": 178,
+  "en": 178,
+  "sul": 23
+ },
+ "detection": {
+  "pt": {
+   "labels": {
+    "pt": 174,
+    "es": 4
+   },
+   "misses": [
+    {
+     "text": "campos verdes divididos por cercas vivas vistos do helicóptero",
+     "detected": "es",
+     "top": [
+      "es",
+      0.608
+     ]
+    },
+    {
+     "text": "floresta cortada por estradas de terra",
+     "detected": "es",
+     "top": [
+      "es",
+      1.0
+     ]
+    },
+    {
+     "text": "lava incandescente escorrendo de perto",
+     "detected": "es",
+     "top": [
+      "es",
+      0.857
+     ]
+    },
+    {
+     "text": "capela pequena de pedra do lado de um estacionamento",
+     "detected": "es",
+     "top": [
+      "es",
+      0.857
+     ]
+    }
+   ],
+   "romance": 178
+  },
+  "en": {
+   "labels": {
+    "en": 177,
+    "ro": 1
+   },
+   "misses": [
+    {
+     "text": "colorful crop fields",
+     "detected": "ro",
+     "top": [
+      "ro",
+      1.0
+     ]
+    }
+   ],
+   "romance": 1
+  },
+  "sul": {
+   "labels": {
+    "pt": 23
+   },
+   "misses": [],
+   "romance": 23
+  },
+  "rfc_023_words": {
+   "fazenda": [
+    "tr",
+    0.714
+   ],
+   "lago": [
+    "tl",
+    1.0
+   ],
+   "piscina": [
+    "it",
+    1.0
+   ],
+   "farm": [
+    "sv",
+    1.0
+   ]
+  }
+ },
+ "english_through_marian": {
+  "queries": 178,
+  "changed": 41,
+  "seconds_per_query": 0.2865428438202022,
+  "changes": [
+   {
+    "in": "crowd seen from directly above wearing colorful t-shirts",
+    "out": "crowd see from directly above wearing colorful t-shirts"
+   },
+   {
+    "in": "giant soldier statue with the city in the background",
+    "out": "jant ganger statues with the city in the background"
+   },
+   {
+    "in": "canal with boats and white buildings seen from above",
+    "out": "channel with boats and white buildings see from above"
+   },
+   {
+    "in": "harbor with a lighthouse at the end of the breakwater",
+    "out": "port with a lighthouse at the end of the breakwater"
+   },
+   {
+    "in": "harvested wheat field with a dirt road",
+    "out": "harvested wheel field with a dirt road"
+   },
+   {
+    "in": "avenue with a line of white buses and palm trees",
+    "out": "avenue with a line of white nozzles and palm trees"
+   },
+   {
+    "in": "building rooftops seen from above on a diagonal street",
+    "out": "building rooftops see from above on a diagonal street"
+   },
+   {
+    "in": "ruins of a square fortress in the middle of gray ground",
+    "out": "bad of a square fortress in the middle of gray ground"
+   },
+   {
+    "in": "ruins of stone walls in a green pasture",
+    "out": "bad of stone walls in a green pasture"
+   },
+   {
+    "in": "stone ruins with a church next to them",
+    "out": "stone bad with a church next to them"
+   },
+   {
+    "in": "road on a narrow causeway crossing a large lake",
+    "out": "road on a narrow causeway crossing a wide lake"
+   },
+   {
+    "in": "tall buildings on a riverbank",
+    "out": "this is a riverbank building"
+   },
+   {
+    "in": "large waterfalls in the middle of the forest with a muddy river",
+    "out": "wide waterfalls in the middle of the forest with a muddy river"
+   },
+   {
+    "in": "neighborhood with low buildings and red roofs next to the highway",
+    "out": "nextborhood with low buildings and red roofs next to the highway"
+   },
+   {
+    "in": "canal with pool houses on one side and a track on the other",
+    "out": "channel with pool houses on one side and a track on the other"
+   },
+   {
+    "in": "wooden chalets on a hillside",
+    "out": "Wooden cottages on a hillside"
+   },
+   {
+    "in": "crowd in rows in a square",
+    "out": "crowd in rows in square"
+   },
+   {
+    "in": "ancient ruins on a dry headland with blue sea",
+    "out": "old bad on a dry headland with blue sea"
+   },
+   {
+    "in": "lit roundabout in an industrial park at night",
+    "out": "roundabout bed in an industrial park at night"
+   },
+   {
+    "in": "dirt road on a dry hill at sunset",
+    "out": "Drive where a dry hill is called"
+   },
+   {
+    "in": "neighborhood flooded by an overflowing river",
+    "out": "nextborhood flooded by an overflowing river"
+   },
+   {
+    "in": "roundabout lit up at night with a monument in the center",
+    "out": "roundabout bed up at night with a monument in the center"
+   },
+   {
+    "in": "large lake with a grassy point and mountains behind",
+    "out": "wide lake with a faty point and mountains below"
+   },
+   {
+    "in": "double waterfall falling from a moss-covered cliff",
+    "out": "double waterfall failure from a moss-covered cliff"
+   },
+   {
+    "in": "archaeological site with ruins among trees seen from above",
+    "out": "archaeological site with bad ones among trees see from above"
+   },
+   {
+    "in": "park with bush and lawns with a stadium in the background",
+    "out": "park with bush and laws with a stadium in the background"
+   },
+   {
+    "in": "shallow sea with sandbanks",
+    "out": "small sea with sandbanks"
+   },
+   {
+    "in": "colorful crop fields",
+    "out": "color crop fields"
+   },
+   {
+    "in": "small yellow church on a fenced lot",
+    "out": "small yellow church on a sliced lot"
+   },
+   {
+    "in": "waterfront with tall buildings seen from afar on a cloudy day",
+    "out": "waterfront with tall buildings see from afar on a cloudy day"
+   },
+   {
+    "in": "town of houses with clay tile roofs seen from above",
+    "out": "town of houses with clay tile roofs see from above"
+   },
+   {
+    "in": "neighborhood with debris and mud after a flood",
+    "out": "nextborhood with debris and mud after a flood"
+   },
+   {
+    "in": "city lit up at night with a straight avenue",
+    "out": "city bed up at night with a straight avenue"
+   },
+   {
+    "in": "farm with a striped lawn and a small round pond with trees",
+    "out": "farm with a striped lawn and a small round pont with trees"
+   },
+   {
+    "in": "oval lawn surrounded by trees seen from above",
+    "out": "oval lawn surrounded by trees see from above"
+   },
+   {
+    "in": "long boats tied up in front of dark sheds",
+    "out": "long boats tie up in front of dark sheds"
+   },
+   {
+    "in": "long sheds covered in snow",
+    "out": "long covered sheds in snow"
+   },
+   {
+    "in": "gray buildings with sports courts",
+    "out": "gray buildings with sports shorts"
+   },
+   {
+    "in": "stone village below huge rock walls",
+    "out": "stone village below hut rock walls"
+   },
+   {
+    "in": "waves breaking on a rock shelf by the sea",
+    "out": "waves breaking on a rock shell by the sea"
+   },
+   {
+    "in": "city full of tall buildings to the horizon seen from a plane",
+    "out": "city full of tall buildings to the horizon see from a plane"
+   }
+  ]
+ },
+ "substitution": [
+  {
+   "original": "casarão antigo perto da estrada",
+   "original_en": "Old married near the road",
+   "replaced": "casa grande antiga perto da estrada",
+   "replaced_en": "old big house near the road"
+  },
+  {
+   "original": "casarão amarelo com jardim",
+   "original_en": "will marry yellow with garden",
+   "replaced": "casa grande amarela com jardim",
+   "replaced_en": "large yellow house with garden"
+  },
+  {
+   "original": "terreno com mato alto",
+   "original_en": "terrain with high forest",
+   "replaced": "terreno com vegetação alta",
+   "replaced_en": "high vegetation terrain"
+  },
+  {
+   "original": "casa no meio do mato",
+   "original_en": "house in the middle of the bush",
+   "replaced": "casa no meio da vegetação",
+   "replaced_en": "house in the middle of the vegetation"
+  },
+  {
+   "original": "rio com corredeiras e pedras",
+   "original_en": "river with slides and stones",
+   "replaced": "rio com águas agitadas e pedras",
+   "replaced_en": "river with agitated waters and rocks"
+  },
+  {
+   "original": "trapiche de madeira no lago",
+   "original_en": "wooden trapiche in the lake",
+   "replaced": "píer de madeira no lago",
+   "replaced_en": "wood pier in the lake"
+  },
+  {
+   "original": "lagoa de água barrenta",
+   "original_en": "barren water pond",
+   "replaced": "lagoa de água marrom",
+   "replaced_en": "brown water pond"
+  },
+  {
+   "original": "rio barrento perto da ponte",
+   "original_en": "river barren near the bridge",
+   "replaced": "rio marrom perto da ponte",
+   "replaced_en": "brown river near the bridge"
+  },
+  {
+   "original": "chácara com um galpão à esquerda",
+   "original_en": "a log with a shed on the left",
+   "replaced": "sítio com um galpão à esquerda",
+   "replaced_en": "a place with a shed on the left"
+  },
+  {
+   "original": "chácara com piscina",
+   "original_en": "cabin with pool",
+   "replaced": "pequena fazenda com piscina",
+   "replaced_en": "small farm with pool"
+  }
+ ],
+ "short": {
+  "pairs": [
+   {
+    "pt": "fazenda",
+    "pt_detected": [
+     "tr",
+     0.714
+    ],
+    "pt_marian": "farm",
+    "en": "farm",
+    "en_detected": [
+     "sv",
+     1.0
+    ],
+    "en_marian": "Farm"
+   },
+   {
+    "pt": "lago",
+    "pt_detected": [
+     "tl",
+     1.0
+    ],
+    "pt_marian": "lake",
+    "en": "lake",
+    "en_detected": [
+     "sw",
+     1.0
+    ],
+    "en_marian": "Lake"
+   },
+   {
+    "pt": "piscina",
+    "pt_detected": [
+     "it",
+     1.0
+    ],
+    "pt_marian": "pool",
+    "en": "pool",
+    "en_detected": [
+     "et",
+     1.0
+    ],
+    "en_marian": "pool"
+   },
+   {
+    "pt": "rio",
+    "pt_detected": [
+     "it",
+     1.0
+    ],
+    "pt_marian": "river",
+    "en": "river",
+    "en_detected": [
+     "da",
+     0.857
+    ],
+    "en_marian": "river"
+   },
+   {
+    "pt": "praia",
+    "pt_detected": [
+     "lt",
+     1.0
+    ],
+    "pt_marian": "beach",
+    "en": "beach",
+    "en_detected": [
+     "en",
+     0.714
+    ],
+    "en_marian": "beach"
+   },
+   {
+    "pt": "cidade",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "city",
+    "en": "city",
+    "en_detected": [
+     "en",
+     1.0
+    ],
+    "en_marian": "city"
+   },
+   {
+    "pt": "igreja",
+    "pt_detected": [
+     "sl",
+     1.0
+    ],
+    "pt_marian": "church",
+    "en": "church",
+    "en_detected": [
+     "vi",
+     1.0
+    ],
+    "en_marian": "church"
+   },
+   {
+    "pt": "ponte",
+    "pt_detected": [
+     "es",
+     0.395
+    ],
+    "pt_marian": "bridge",
+    "en": "bridge",
+    "en_detected": [
+     "da",
+     1.0
+    ],
+    "en_marian": "bridge"
+   },
+   {
+    "pt": "estrada",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "road",
+    "en": "road",
+    "en_detected": [
+     "ro",
+     1.0
+    ],
+    "en_marian": "Road"
+   },
+   {
+    "pt": "floresta",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "forest",
+    "en": "forest",
+    "en_detected": [
+     "da",
+     1.0
+    ],
+    "en_marian": "forest"
+   },
+   {
+    "pt": "morro",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "Death",
+    "en": "hill",
+    "en_detected": [
+     "en",
+     1.0
+    ],
+    "en_marian": "hill"
+   },
+   {
+    "pt": "campo",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "field",
+    "en": "field",
+    "en_detected": [
+     "en",
+     0.571
+    ],
+    "en_marian": "field"
+   },
+   {
+    "pt": "casa",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "home",
+    "en": "house",
+    "en_detected": [
+     "en",
+     1.0
+    ],
+    "en_marian": "house"
+   },
+   {
+    "pt": "prédio",
+    "pt_detected": [
+     "fr",
+     1.0
+    ],
+    "pt_marian": "building",
+    "en": "building",
+    "en_detected": [
+     "en",
+     1.0
+    ],
+    "en_marian": "building"
+   },
+   {
+    "pt": "estádio",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "stage",
+    "en": "stadium",
+    "en_detected": [
+     "af",
+     0.571
+    ],
+    "en_marian": "stage"
+   },
+   {
+    "pt": "porto",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "port",
+    "en": "harbor",
+    "en_detected": [
+     "sv",
+     0.848
+    ],
+    "en_marian": "Harbor"
+   },
+   {
+    "pt": "ilha",
+    "pt_detected": [
+     "pt",
+     0.714
+    ],
+    "pt_marian": "island",
+    "en": "island",
+    "en_detected": [
+     "af",
+     0.857
+    ],
+    "en_marian": "Iceland"
+   },
+   {
+    "pt": "cachoeira",
+    "pt_detected": [
+     "cy",
+     1.0
+    ],
+    "pt_marian": "waterfall",
+    "en": "waterfall",
+    "en_detected": [
+     "af",
+     0.571
+    ],
+    "en_marian": "waterfall"
+   },
+   {
+    "pt": "plantação",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "planting",
+    "en": "plantation",
+    "en_detected": [
+     "fr",
+     1.0
+    ],
+    "en_marian": "planting"
+   },
+   {
+    "pt": "represa",
+    "pt_detected": [
+     "es",
+     0.968
+    ],
+    "pt_marian": "recovery",
+    "en": "reservoir",
+    "en_detected": [
+     "fr",
+     1.0
+    ],
+    "en_marian": "reservoir"
+   },
+   {
+    "pt": "galpão",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "shed",
+    "en": "shed",
+    "en_detected": [
+     "sq",
+     0.571
+    ],
+    "en_marian": "check"
+   },
+   {
+    "pt": "estacionamento",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "parking",
+    "en": "parking lot",
+    "en_detected": [
+     "tl",
+     1.0
+    ],
+    "en_marian": "lot parking lot"
+   },
+   {
+    "pt": "rua",
+    "pt_detected": [
+     "id",
+     0.857
+    ],
+    "pt_marian": "street",
+    "en": "street",
+    "en_detected": [
+     "af",
+     1.0
+    ],
+    "en_marian": "Street"
+   },
+   {
+    "pt": "avenida",
+    "pt_detected": [
+     "sv",
+     1.0
+    ],
+    "pt_marian": "avenue",
+    "en": "avenue",
+    "en_detected": [
+     "fr",
+     1.0
+    ],
+    "en_marian": "avenue"
+   },
+   {
+    "pt": "mar",
+    "pt_detected": [
+     "so",
+     1.0
+    ],
+    "pt_marian": "sea",
+    "en": "sea",
+    "en_detected": [
+     "et",
+     1.0
+    ],
+    "en_marian": "or"
+   },
+   {
+    "pt": "montanha",
+    "pt_detected": [
+     "pt",
+     1.0
+    ],
+    "pt_marian": "mountain",
+    "en": "mountain",
+    "en_detected": [
+     "fi",
+     1.0
+    ],
+    "en_marian": "mountain"
+   },
+   {
+    "pt": "deserto",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "desert",
+    "en": "desert",
+    "en_detected": [
+     "de",
+     1.0
+    ],
+    "en_marian": "desert"
+   },
+   {
+    "pt": "neve",
+    "pt_detected": [
+     "sl",
+     1.0
+    ],
+    "pt_marian": "snow",
+    "en": "snow",
+    "en_detected": [
+     "pl",
+     1.0
+    ],
+    "en_marian": "snow"
+   },
+   {
+    "pt": "escola",
+    "pt_detected": [
+     "es",
+     1.0
+    ],
+    "pt_marian": "school",
+    "en": "school",
+    "en_detected": [
+     "nl",
+     1.0
+    ],
+    "en_marian": "school"
+   },
+   {
+    "pt": "usina",
+    "pt_detected": [
+     "sw",
+     0.571
+    ],
+    "pt_marian": "plant",
+    "en": "power plant",
+    "en_detected": [
+     "pl",
+     1.0
+    ],
+    "en_marian": "power plant"
+   }
+  ],
+  "pt_not_detected": 22,
+  "en_not_detected": 24,
+  "en_not_detected_and_changed_by_marian": 6
+ }
+}

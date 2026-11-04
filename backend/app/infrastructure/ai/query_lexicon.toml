@@ -1,0 +1,2295 @@
+# The query lexicon of RFC-047: Portuguese forms of things seen in aerial
+# photos, each with the English its translation must produce.
+#
+# One form per entry, as typed: no plural or inflection rule, so the plural
+# that matters is an entry of its own. Matching ignores case and accents
+# ("galpao" is "galpão"), so a form needs no unaccented twin; what goes to
+# the translator is the accented form, or `troca` when there is one.
+#
+#   pt            the form
+#   en            what counts as a right translation: the translation of what
+#                 goes to Marian must contain one of these, as whole words
+#   troca         only when Marian gets the form wrong: the Portuguese sent
+#                 in its place. Every one is checked by the slow tests, and
+#                 chosen by experiments/rfc-047-traducao-das-consultas/
+#                 probe_lexicon.py
+#   origem        "geral" or "sul" (the south of Brazil)
+#   tambem_ingles true for a form that is an English word too ("hotel"):
+#                 it is then never a Portuguese marker (RFC-047 section 6)
+#
+# A new form goes through the probe and the slow tests. Nothing enters
+# because it failed on an evaluation query (RFC-047 section 4.4).
+
+# ---------------------------------------------------------------- água
+
+[[forma]]
+pt = "rio"
+en = ["river"]
+origem = "geral"
+
+[[forma]]
+pt = "rios"
+en = ["rivers"]
+origem = "geral"
+
+[[forma]]
+pt = "riacho"
+en = ["stream", "creek", "brook"]
+origem = "geral"
+
+[[forma]]
+pt = "córrego"
+en = ["stream", "creek", "brook"]
+origem = "geral"
+
+[[forma]]
+pt = "lago"
+en = ["lake"]
+origem = "geral"
+
+[[forma]]
+pt = "lagos"
+en = ["lakes"]
+origem = "geral"
+
+[[forma]]
+pt = "lagoa"
+en = ["lagoon", "pond", "lake"]
+origem = "geral"
+
+[[forma]]
+pt = "lagoas"
+en = ["lagoons", "ponds", "lakes"]
+origem = "geral"
+
+[[forma]]
+pt = "açude"
+en = ["pond", "reservoir", "dam", "weir"]
+troca = "barragem"
+origem = "geral"
+
+[[forma]]
+pt = "represa"
+en = ["reservoir", "dam"]
+troca = "barragem"
+origem = "geral"
+
+[[forma]]
+pt = "barragem"
+en = ["dam"]
+origem = "geral"
+
+[[forma]]
+pt = "reservatório"
+en = ["reservoir", "tank"]
+origem = "geral"
+
+[[forma]]
+pt = "tanque"
+en = ["tank", "pond"]
+origem = "geral"
+
+[[forma]]
+pt = "tanques"
+en = ["tanks", "ponds"]
+origem = "geral"
+
+[[forma]]
+pt = "cachoeira"
+en = ["waterfall"]
+origem = "geral"
+
+[[forma]]
+pt = "cachoeiras"
+en = ["waterfalls"]
+origem = "geral"
+
+[[forma]]
+pt = "cascata"
+en = ["waterfall", "cascade"]
+troca = "cachoeira"
+origem = "geral"
+
+[[forma]]
+pt = "queda d'água"
+en = ["waterfall", "waterfalls"]
+troca = "cachoeira"
+origem = "geral"
+
+[[forma]]
+pt = "corredeira"
+en = ["rapids", "rapid", "white water", "white waters", "whitewater"]
+troca = "águas brancas"
+origem = "geral"
+
+[[forma]]
+pt = "corredeiras"
+en = ["rapids", "white water", "white waters", "whitewater"]
+troca = "águas brancas"
+origem = "geral"
+
+[[forma]]
+pt = "nascente"
+en = ["spring", "source", "headwaters"]
+origem = "geral"
+
+[[forma]]
+pt = "água"
+en = ["water"]
+origem = "geral"
+
+[[forma]]
+pt = "corpo d'água"
+en = ["body of water", "water body"]
+origem = "geral"
+
+[[forma]]
+pt = "barrento"
+en = ["muddy", "brown"]
+troca = "marrom"
+origem = "geral"
+
+[[forma]]
+pt = "barrenta"
+en = ["muddy", "brown"]
+troca = "marrom"
+origem = "geral"
+
+[[forma]]
+pt = "mar"
+en = ["sea"]
+origem = "geral"
+
+[[forma]]
+pt = "oceano"
+en = ["ocean"]
+origem = "geral"
+
+[[forma]]
+pt = "praia"
+en = ["beach"]
+origem = "geral"
+
+[[forma]]
+pt = "praias"
+en = ["beaches"]
+origem = "geral"
+
+[[forma]]
+pt = "areia"
+en = ["sand"]
+origem = "geral"
+
+[[forma]]
+pt = "onda"
+en = ["wave"]
+origem = "geral"
+
+[[forma]]
+pt = "ondas"
+en = ["waves"]
+origem = "geral"
+
+[[forma]]
+pt = "baía"
+en = ["bay"]
+origem = "geral"
+
+[[forma]]
+pt = "enseada"
+en = ["cove", "inlet", "bay", "small bay"]
+troca = "pequena baía"
+origem = "geral"
+
+[[forma]]
+pt = "litoral"
+en = ["coast", "coastline", "shore", "seaside", "littoral", "coastal"]
+origem = "geral"
+
+[[forma]]
+pt = "orla"
+en = ["waterfront", "seafront", "shore", "shoreline", "beachfront", "seashore"]
+troca = "beira d'água"
+origem = "geral"
+
+[[forma]]
+pt = "beira-mar"
+en = ["seaside", "seafront", "waterfront", "beachfront", "sea", "seashore", "sea shore"]
+origem = "geral"
+
+[[forma]]
+pt = "ilha"
+en = ["island"]
+origem = "geral"
+
+[[forma]]
+pt = "ilhas"
+en = ["islands"]
+origem = "geral"
+
+[[forma]]
+pt = "ilhota"
+en = ["islet", "small island", "island"]
+troca = "pequena ilha"
+origem = "geral"
+
+[[forma]]
+pt = "península"
+en = ["peninsula"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "estuário"
+en = ["estuary"]
+origem = "geral"
+
+[[forma]]
+pt = "foz"
+en = ["mouth", "estuary"]
+troca = "estuário"
+origem = "geral"
+
+[[forma]]
+pt = "delta"
+en = ["delta"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "canal"
+en = ["canal", "channel"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "mangue"
+en = ["mangrove", "mangroves"]
+troca = "manguezal"
+origem = "geral"
+
+[[forma]]
+pt = "manguezal"
+en = ["mangrove", "mangroves", "mangrove swamp"]
+origem = "geral"
+
+[[forma]]
+pt = "pântano"
+en = ["swamp", "marsh"]
+origem = "geral"
+
+[[forma]]
+pt = "brejo"
+en = ["marsh", "swamp", "bog", "wetland"]
+troca = "pântano"
+origem = "geral"
+
+[[forma]]
+pt = "poço"
+en = ["well"]
+origem = "geral"
+
+[[forma]]
+pt = "cais"
+en = ["pier", "quay", "wharf", "dock", "docks", "wharves", "piers"]
+origem = "geral"
+
+[[forma]]
+pt = "píer"
+en = ["pier"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "marina"
+en = ["marina", "yacht marina", "marina yachts", "yacht port"]
+troca = "porto de iates"
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "porto"
+en = ["port", "harbor", "harbour"]
+origem = "geral"
+
+[[forma]]
+pt = "farol"
+en = ["lighthouse"]
+troca = "lighthouse"
+origem = "geral"
+
+[[forma]]
+pt = "estaleiro"
+en = ["shipyard"]
+troca = "estaleiro naval"
+origem = "geral"
+
+[[forma]]
+pt = "atracadouro"
+en = ["mooring", "dock", "pier", "berth", "jetty", "wharf"]
+troca = "píer"
+origem = "geral"
+
+[[forma]]
+pt = "navio"
+en = ["ship", "vessel"]
+origem = "geral"
+
+[[forma]]
+pt = "navios"
+en = ["ships", "vessels"]
+origem = "geral"
+
+[[forma]]
+pt = "barco"
+en = ["boat"]
+origem = "geral"
+
+[[forma]]
+pt = "barcos"
+en = ["boats", "vessels"]
+origem = "geral"
+
+[[forma]]
+pt = "lancha"
+en = ["motorboat", "speedboat", "boat", "launch"]
+origem = "geral"
+
+[[forma]]
+pt = "veleiro"
+en = ["sailboat", "sailing boat", "yacht", "sailing ship"]
+origem = "geral"
+
+[[forma]]
+pt = "canoa"
+en = ["canoe"]
+origem = "geral"
+
+[[forma]]
+pt = "caiaque"
+en = ["kayak"]
+troca = "kayak"
+origem = "geral"
+
+[[forma]]
+pt = "balsa"
+en = ["ferry", "raft", "barge"]
+troca = "ferry"
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "jangada"
+en = ["raft", "wooden raft"]
+troca = "balsa de madeira"
+origem = "geral"
+
+[[forma]]
+pt = "banhistas"
+en = ["bathers", "swimmers", "beachgoers"]
+origem = "geral"
+
+[[forma]]
+pt = "guarda-sol"
+en = ["umbrella", "parasol", "sunshade", "beach umbrella"]
+troca = "guarda-chuva de praia"
+origem = "geral"
+
+[[forma]]
+pt = "guarda-sóis"
+en = ["umbrellas", "parasols", "sunshades", "beach umbrellas"]
+troca = "guarda-chuvas de praia"
+origem = "geral"
+
+[[forma]]
+pt = "quiosque"
+en = ["kiosk"]
+troca = "kiosk"
+origem = "geral"
+
+[[forma]]
+pt = "falésia"
+en = ["cliff"]
+troca = "penhasco"
+origem = "geral"
+
+[[forma]]
+pt = "falésias"
+en = ["cliffs"]
+troca = "penhascos"
+origem = "geral"
+
+[[forma]]
+pt = "rochedo"
+en = ["rock", "cliff", "crag", "rocks"]
+origem = "geral"
+
+[[forma]]
+pt = "pedra"
+en = ["stone", "rock"]
+origem = "geral"
+
+[[forma]]
+pt = "pedras"
+en = ["stones", "rocks"]
+origem = "geral"
+
+[[forma]]
+pt = "rochas"
+en = ["rocks"]
+origem = "geral"
+
+[[forma]]
+pt = "duna"
+en = ["dune", "dunes", "sand dune", "sand dunes"]
+troca = "duna arenosa"
+origem = "geral"
+
+[[forma]]
+pt = "dunas"
+en = ["dunes"]
+origem = "geral"
+
+# ---------------------------------------------------------------- água, sul
+
+[[forma]]
+pt = "arroio"
+en = ["stream", "creek", "brook"]
+origem = "sul"
+
+[[forma]]
+pt = "arroios"
+en = ["streams", "creeks", "brooks"]
+origem = "sul"
+
+[[forma]]
+pt = "sanga"
+en = ["stream", "creek", "brook", "gully", "ditch"]
+troca = "córrego"
+origem = "sul"
+
+[[forma]]
+pt = "sangas"
+en = ["streams", "creeks", "brooks", "gullies", "ditches"]
+troca = "córregos"
+origem = "sul"
+
+[[forma]]
+pt = "banhado"
+en = ["wetland", "wetlands", "marsh", "swamp", "marshland"]
+troca = "pântano"
+origem = "sul"
+
+[[forma]]
+pt = "banhados"
+en = ["wetlands", "marshes", "swamps", "marshlands"]
+troca = "pântanos"
+origem = "sul"
+
+[[forma]]
+pt = "várzea"
+en = ["floodplain", "lowland", "lowlands", "meadow", "wetland", "flood plain"]
+troca = "planície de inundação"
+origem = "sul"
+
+[[forma]]
+pt = "trapiche"
+en = ["pier", "jetty", "wharf", "dock"]
+troca = "píer"
+origem = "sul"
+
+[[forma]]
+pt = "trapiches"
+en = ["piers", "jetties", "wharves", "docks"]
+troca = "píers"
+origem = "sul"
+
+[[forma]]
+pt = "molhe"
+en = ["breakwater", "jetty", "pier", "mole", "rock pier"]
+troca = "píer de rochas"
+origem = "sul"
+
+[[forma]]
+pt = "molhes"
+en = ["breakwaters", "breakwater", "jetties", "piers", "rock piers"]
+troca = "píeres de rochas"
+origem = "sul"
+
+[[forma]]
+pt = "costão"
+en = ["rocky shore", "rocky coast", "rocks", "rocky", "cliff", "cliffs"]
+troca = "costa rochosa"
+origem = "sul"
+
+[[forma]]
+pt = "cômoro"
+en = ["dune", "sand dune", "dunes", "sand dunes"]
+troca = "duna arenosa"
+origem = "sul"
+
+[[forma]]
+pt = "cômoros"
+en = ["dunes", "sand dunes"]
+troca = "dunas"
+origem = "sul"
+
+[[forma]]
+pt = "barranca"
+en = ["bank", "riverbank", "ravine", "embankment", "slope"]
+troca = "barranco"
+origem = "sul"
+
+# ---------------------------------------------------------------- relevo e vegetação
+
+[[forma]]
+pt = "morro"
+en = ["hill", "mount", "hillside"]
+troca = "colina"
+origem = "geral"
+
+[[forma]]
+pt = "morros"
+en = ["hills"]
+troca = "colinas"
+origem = "geral"
+
+[[forma]]
+pt = "colina"
+en = ["hill"]
+origem = "geral"
+
+[[forma]]
+pt = "colinas"
+en = ["hills"]
+origem = "geral"
+
+[[forma]]
+pt = "serra"
+en = ["mountain range", "mountains", "mountain", "range", "sierra", "ridge", "mountain chain", "chain of mountains"]
+troca = "cadeia de montanhas"
+origem = "geral"
+
+[[forma]]
+pt = "serras"
+en = ["mountains", "mountain ranges", "ranges", "ridges", "mountain chains", "chains of mountains"]
+troca = "cadeias de montanhas"
+origem = "geral"
+
+[[forma]]
+pt = "montanha"
+en = ["mountain"]
+origem = "geral"
+
+[[forma]]
+pt = "montanhas"
+en = ["mountains"]
+origem = "geral"
+
+[[forma]]
+pt = "monte"
+en = ["mount", "mountain", "hill"]
+origem = "geral"
+
+[[forma]]
+pt = "vale"
+en = ["valley", "vale", "mountain valley"]
+troca = "vale montanhoso"
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "vales"
+en = ["valleys"]
+origem = "geral"
+
+[[forma]]
+pt = "planície"
+en = ["plain", "plains"]
+origem = "geral"
+
+[[forma]]
+pt = "planalto"
+en = ["plateau", "highland", "highlands"]
+origem = "geral"
+
+[[forma]]
+pt = "chapada"
+en = ["plateau", "tableland", "mesa", "highland", "upland"]
+troca = "planalto"
+origem = "geral"
+
+[[forma]]
+pt = "encosta"
+en = ["slope", "hillside"]
+troca = "encosta de morro"
+origem = "geral"
+
+[[forma]]
+pt = "encostas"
+en = ["slopes", "hillsides"]
+troca = "declives"
+origem = "geral"
+
+# "encosta de morro" is the troca of "encosta"; typed, it is taken whole, and
+# so is "encosta do morro", which would otherwise go as "encosta de morro do
+# morro".
+
+[[forma]]
+pt = "encosta de morro"
+en = ["hillside", "slope"]
+origem = "geral"
+
+[[forma]]
+pt = "encosta do morro"
+en = ["hillside", "slope"]
+origem = "geral"
+
+[[forma]]
+pt = "ladeira"
+en = ["slope", "hill", "steep street", "uphill", "downhill"]
+troca = "rua íngreme"
+origem = "geral"
+
+[[forma]]
+pt = "barranco"
+en = ["bank", "riverbank", "ravine", "embankment", "cliff", "gully", "slope"]
+origem = "geral"
+
+[[forma]]
+pt = "penhasco"
+en = ["cliff"]
+origem = "geral"
+
+[[forma]]
+pt = "cânion"
+en = ["canyon"]
+troca = "canyon"
+origem = "geral"
+
+[[forma]]
+pt = "desfiladeiro"
+en = ["gorge", "canyon", "ravine", "pass"]
+origem = "geral"
+
+[[forma]]
+pt = "gruta"
+en = ["cave", "grotto"]
+origem = "geral"
+
+[[forma]]
+pt = "caverna"
+en = ["cave", "cavern"]
+origem = "geral"
+
+[[forma]]
+pt = "pedreira"
+en = ["quarry", "stone quarry"]
+troca = "cava de pedra"
+origem = "geral"
+
+[[forma]]
+pt = "deserto"
+en = ["desert"]
+origem = "geral"
+
+[[forma]]
+pt = "vulcão"
+en = ["volcano"]
+origem = "geral"
+
+[[forma]]
+pt = "cratera"
+en = ["crater"]
+origem = "geral"
+
+[[forma]]
+pt = "lava"
+en = ["lava", "volcanic lava"]
+troca = "lava vulcânica"
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "geleira"
+en = ["glacier"]
+troca = "glaciar"
+origem = "geral"
+
+[[forma]]
+pt = "neve"
+en = ["snow"]
+origem = "geral"
+
+[[forma]]
+pt = "gelo"
+en = ["ice"]
+origem = "geral"
+
+[[forma]]
+pt = "nuvens"
+en = ["clouds"]
+origem = "geral"
+
+[[forma]]
+pt = "neblina"
+en = ["fog", "mist", "haze"]
+troca = "nevoeiro"
+origem = "geral"
+
+[[forma]]
+pt = "névoa"
+en = ["fog", "mist", "haze"]
+origem = "geral"
+
+[[forma]]
+pt = "pôr do sol"
+en = ["sunset"]
+origem = "geral"
+
+[[forma]]
+pt = "nascer do sol"
+en = ["sunrise", "dawn", "rising sun"]
+troca = "amanhecer"
+origem = "geral"
+
+[[forma]]
+pt = "céu"
+en = ["sky"]
+origem = "geral"
+
+[[forma]]
+pt = "arco-íris"
+en = ["rainbow"]
+origem = "geral"
+
+[[forma]]
+pt = "floresta"
+en = ["forest"]
+origem = "geral"
+
+[[forma]]
+pt = "florestas"
+en = ["forests"]
+origem = "geral"
+
+[[forma]]
+pt = "mata"
+en = ["forest", "woods", "woodland", "jungle", "bush"]
+troca = "floresta"
+origem = "geral"
+
+[[forma]]
+pt = "mata atlântica"
+en = ["atlantic forest", "atlantic rainforest"]
+origem = "geral"
+
+[[forma]]
+pt = "mato"
+en = ["bush", "bushes", "brush", "scrub", "scrubland", "shrubs", "thicket", "undergrowth", "vegetation", "weeds", "woods"]
+troca = "vegetação"
+origem = "geral"
+
+[[forma]]
+pt = "bosque"
+en = ["grove", "woods", "wood", "woodland", "forest"]
+origem = "geral"
+
+[[forma]]
+pt = "vegetação"
+en = ["vegetation"]
+origem = "geral"
+
+[[forma]]
+pt = "arbustos"
+en = ["bushes", "shrubs"]
+origem = "geral"
+
+[[forma]]
+pt = "árvore"
+en = ["tree"]
+origem = "geral"
+
+[[forma]]
+pt = "árvores"
+en = ["trees"]
+origem = "geral"
+
+[[forma]]
+pt = "palmeira"
+en = ["palm", "palm tree"]
+origem = "geral"
+
+[[forma]]
+pt = "palmeiras"
+en = ["palms", "palm trees"]
+origem = "geral"
+
+[[forma]]
+pt = "coqueiro"
+en = ["coconut", "coconut tree", "coconut palm", "palm", "coconut palm tree"]
+troca = "palmeira de coco"
+origem = "geral"
+
+[[forma]]
+pt = "coqueiros"
+en = ["coconut", "coconut trees", "coconut palms", "palms", "coconut palm trees"]
+troca = "palmeiras de coco"
+origem = "geral"
+
+[[forma]]
+pt = "eucalipto"
+en = ["eucalyptus"]
+origem = "geral"
+
+[[forma]]
+pt = "eucaliptos"
+en = ["eucalyptus", "eucalyptuses", "eucalypts"]
+origem = "geral"
+
+[[forma]]
+pt = "pinheiro"
+en = ["pine", "pine tree"]
+origem = "geral"
+
+[[forma]]
+pt = "pinheiros"
+en = ["pines", "pine trees"]
+origem = "geral"
+
+[[forma]]
+pt = "araucária"
+en = ["araucaria", "pine", "monkey puzzle", "pine tree"]
+troca = "pinheiro"
+origem = "geral"
+
+[[forma]]
+pt = "araucárias"
+en = ["araucarias", "araucaria", "pines", "pine trees"]
+troca = "pinheiros"
+origem = "geral"
+
+[[forma]]
+pt = "figueira"
+en = ["fig tree", "fig"]
+origem = "geral"
+
+[[forma]]
+pt = "capim"
+en = ["grass"]
+origem = "geral"
+
+[[forma]]
+pt = "grama"
+en = ["grass", "lawn"]
+origem = "geral"
+
+[[forma]]
+pt = "gramado"
+en = ["lawn", "grass", "turf"]
+origem = "geral"
+
+# ---------------------------------------------------------------- relevo e vegetação, sul
+
+[[forma]]
+pt = "cerro"
+en = ["hill", "mount"]
+origem = "sul"
+
+[[forma]]
+pt = "cerros"
+en = ["hills"]
+troca = "colinas"
+origem = "sul"
+
+[[forma]]
+pt = "coxilha"
+en = ["hill", "hills", "rolling hills", "ridge"]
+troca = "colina"
+origem = "sul"
+
+[[forma]]
+pt = "coxilhas"
+en = ["hills", "rolling hills", "ridges"]
+troca = "colinas"
+origem = "sul"
+
+[[forma]]
+pt = "capão"
+en = ["grove", "copse", "woods", "woodland", "thicket", "clump of trees", "patch of woods", "group of trees", "small forest"]
+troca = "pequeno bosque"
+origem = "sul"
+
+[[forma]]
+pt = "capões"
+en = ["groves", "copses", "woods", "thickets", "groups of trees", "small forests"]
+troca = "pequenos bosques"
+origem = "sul"
+
+[[forma]]
+pt = "macega"
+en = ["scrub", "scrubland", "brush", "brushwood", "tall grass", "grass", "weeds", "bush", "thicket", "undergrowth", "high grass"]
+troca = "capim alto"
+origem = "sul"
+
+# ---------------------------------------------------------------- campo
+
+[[forma]]
+pt = "fazenda"
+en = ["farm", "ranch"]
+origem = "geral"
+
+[[forma]]
+pt = "fazendas"
+en = ["farms", "ranches"]
+origem = "geral"
+
+[[forma]]
+pt = "sítio"
+en = ["farm", "small farm", "smallholding", "homestead", "ranch", "country house"]
+troca = "pequena fazenda"
+origem = "geral"
+
+[[forma]]
+pt = "granja"
+en = ["farm", "poultry farm", "chicken farm", "grange"]
+origem = "geral"
+
+[[forma]]
+pt = "roça"
+en = ["field", "fields", "farm", "countryside", "plot", "crops", "smallholding", "crop", "cultivation", "cultivated land", "cultivated field"]
+troca = "terra cultivada"
+origem = "geral"
+
+[[forma]]
+pt = "propriedade rural"
+en = ["rural property", "farm", "country property", "rural estate"]
+origem = "geral"
+
+[[forma]]
+pt = "zona rural"
+en = ["countryside", "rural area", "rural zone", "rural"]
+origem = "geral"
+
+[[forma]]
+pt = "terras agrícolas"
+en = ["farmland", "farm land", "agricultural land", "agricultural lands"]
+origem = "geral"
+
+[[forma]]
+pt = "plantação"
+en = ["plantation", "crop", "crops", "field", "planting"]
+origem = "geral"
+
+[[forma]]
+pt = "plantações"
+en = ["plantations", "crops", "fields", "plantings"]
+origem = "geral"
+
+[[forma]]
+pt = "cultivo"
+en = ["cultivation", "crop", "crops", "farming", "growing"]
+origem = "geral"
+
+[[forma]]
+pt = "colheita"
+en = ["harvest"]
+origem = "geral"
+
+[[forma]]
+pt = "pasto"
+en = ["pasture", "grazing"]
+troca = "pastagem"
+origem = "geral"
+
+[[forma]]
+pt = "pastos"
+en = ["pastures"]
+origem = "geral"
+
+[[forma]]
+pt = "pastagem"
+en = ["pasture", "grassland", "grazing"]
+origem = "geral"
+
+[[forma]]
+pt = "campo"
+en = ["field", "countryside", "meadow", "grassland"]
+origem = "geral"
+
+[[forma]]
+pt = "campos"
+en = ["fields", "meadows", "grasslands"]
+origem = "geral"
+
+[[forma]]
+pt = "campo de futebol"
+en = ["soccer field", "football field", "soccer pitch", "football pitch", "football ground"]
+origem = "geral"
+
+[[forma]]
+pt = "pomar"
+en = ["orchard", "fruit orchard"]
+troca = "pomar de frutas"
+origem = "geral"
+
+[[forma]]
+pt = "horta"
+en = ["vegetable garden", "kitchen garden", "vegetable patch", "garden", "garden of vegetables"]
+troca = "horta de legumes"
+origem = "geral"
+
+[[forma]]
+pt = "vinhedo"
+en = ["vineyard", "vineyards"]
+troca = "vinhedos"
+origem = "geral"
+
+[[forma]]
+pt = "vinhedos"
+en = ["vineyards"]
+origem = "geral"
+
+[[forma]]
+pt = "parreiral"
+en = ["vineyard", "vines", "vine", "grapevines", "grapevine", "trellis", "grape grapevine", "grape vineyard"]
+troca = "videiras"
+origem = "geral"
+
+[[forma]]
+pt = "cafezal"
+en = ["coffee plantation", "coffee field", "coffee farm", "coffee"]
+troca = "plantação de café"
+origem = "geral"
+
+[[forma]]
+pt = "canavial"
+en = ["sugarcane", "sugar cane", "cane field", "canefield", "cane"]
+troca = "cana de açúcar"
+origem = "geral"
+
+[[forma]]
+pt = "milharal"
+en = ["cornfield", "corn field", "corn", "maize"]
+troca = "campo de milho"
+origem = "geral"
+
+[[forma]]
+pt = "arrozal"
+en = ["rice field", "rice paddy", "paddy", "rice"]
+origem = "geral"
+
+[[forma]]
+pt = "soja"
+en = ["soy", "soybean", "soybeans", "soya", "soya beans"]
+origem = "geral"
+
+[[forma]]
+pt = "milho"
+en = ["corn", "maize"]
+origem = "geral"
+
+[[forma]]
+pt = "trigo"
+en = ["wheat"]
+origem = "geral"
+
+[[forma]]
+pt = "arroz"
+en = ["rice"]
+origem = "geral"
+
+[[forma]]
+pt = "cana"
+en = ["cane", "sugarcane", "sugar cane"]
+origem = "geral"
+
+[[forma]]
+pt = "gado"
+en = ["cattle", "livestock"]
+origem = "geral"
+
+[[forma]]
+pt = "vacas"
+en = ["cows", "cattle"]
+origem = "geral"
+
+[[forma]]
+pt = "bois"
+en = ["oxen", "cattle", "bulls", "steers"]
+troca = "gado"
+origem = "geral"
+
+[[forma]]
+pt = "cavalos"
+en = ["horses"]
+origem = "geral"
+
+[[forma]]
+pt = "ovelhas"
+en = ["sheep"]
+origem = "geral"
+
+[[forma]]
+pt = "rebanho"
+en = ["herd", "flock", "herds", "flocks"]
+origem = "geral"
+
+[[forma]]
+pt = "celeiro"
+en = ["barn", "granary"]
+origem = "geral"
+
+[[forma]]
+pt = "estábulo"
+en = ["stable", "barn"]
+origem = "geral"
+
+[[forma]]
+pt = "galinheiro"
+en = ["chicken coop", "henhouse", "hen house", "chicken house", "coop"]
+troca = "casa de galinhas"
+origem = "geral"
+
+[[forma]]
+pt = "aviário"
+en = ["aviary", "poultry house", "poultry farm", "poultry shed", "chicken house", "chicken farm"]
+troca = "granja de frangos"
+origem = "geral"
+
+[[forma]]
+pt = "estufa"
+en = ["greenhouse"]
+origem = "geral"
+
+[[forma]]
+pt = "estufas"
+en = ["greenhouses", "agricultural greenhouses"]
+troca = "estufas agrícolas"
+origem = "geral"
+
+[[forma]]
+pt = "galpão"
+en = ["shed", "barn", "warehouse", "storehouse"]
+origem = "geral"
+
+[[forma]]
+pt = "silo"
+en = ["silo"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "silos"
+en = ["silos"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "porteira"
+en = ["gate", "farm gate", "cattle gate"]
+troca = "portão de fazenda"
+origem = "geral"
+
+[[forma]]
+pt = "cercas"
+en = ["fences"]
+origem = "geral"
+
+[[forma]]
+pt = "cerca viva"
+en = ["hedge", "hedgerow", "living fence", "row of shrubs", "row of bushes", "shrub row"]
+troca = "fileira de arbustos"
+origem = "geral"
+
+[[forma]]
+pt = "cercas vivas"
+en = ["hedges", "hedgerows", "living fences", "live fences"]
+origem = "geral"
+
+[[forma]]
+pt = "trator"
+en = ["tractor"]
+origem = "geral"
+
+[[forma]]
+pt = "colheitadeira"
+en = ["combine", "harvester", "combine harvester"]
+origem = "geral"
+
+[[forma]]
+pt = "pivô central"
+en = ["center pivot", "centre pivot", "central pivot", "pivot irrigation", "pivot"]
+origem = "geral"
+
+[[forma]]
+pt = "irrigação"
+en = ["irrigation"]
+origem = "geral"
+
+[[forma]]
+pt = "moinho"
+en = ["mill", "windmill"]
+origem = "geral"
+
+[[forma]]
+pt = "cata-vento"
+en = ["windmill", "wind pump", "wind vane", "weathervane", "weather vane", "pinwheel"]
+troca = "moinho de vento"
+origem = "geral"
+
+[[forma]]
+pt = "caixa d'água"
+en = ["water tank", "water tower", "water reservoir", "cistern"]
+troca = "tanque de água"
+origem = "geral"
+
+[[forma]]
+pt = "piscicultura"
+en = ["fish farming", "fish farm", "fish culture", "pisciculture"]
+origem = "geral"
+
+[[forma]]
+pt = "aquicultura"
+en = ["aquaculture"]
+origem = "geral"
+
+# ---------------------------------------------------------------- campo, sul
+
+[[forma]]
+pt = "chácara"
+en = ["small farm", "smallholding", "farm", "farmhouse", "country house", "ranch", "cottage"]
+troca = "pequena fazenda"
+origem = "sul"
+
+[[forma]]
+pt = "chácaras"
+en = ["small farms", "smallholdings", "farms", "farmhouses", "country houses", "ranches", "cottages"]
+troca = "pequenas fazendas"
+origem = "sul"
+
+[[forma]]
+pt = "estância"
+en = ["ranch", "estate", "farm", "cattle farm", "livestock farm"]
+troca = "rancho"
+origem = "sul"
+
+[[forma]]
+pt = "estâncias"
+en = ["ranches", "estates", "farms", "cattle farms", "livestock farms"]
+troca = "ranchos"
+origem = "sul"
+
+[[forma]]
+pt = "lavoura"
+en = ["crop", "crops", "cropland", "farmland", "field", "fields", "plantation", "farming", "cultivation", "tillage", "cultivated land", "cultivated field"]
+troca = "terra cultivada"
+origem = "sul"
+
+[[forma]]
+pt = "lavouras"
+en = ["crops", "croplands", "farmland", "fields", "plantations", "farming"]
+origem = "sul"
+
+[[forma]]
+pt = "potreiro"
+en = ["paddock", "pasture", "corral", "field", "grazing"]
+troca = "pastagem"
+origem = "sul"
+
+[[forma]]
+pt = "potreiros"
+en = ["paddocks", "pastures", "corrals", "fields", "fenced pastures"]
+troca = "pastagens"
+origem = "sul"
+
+[[forma]]
+pt = "invernada"
+en = ["pasture", "winter pasture", "paddock", "grazing"]
+troca = "pastagem"
+origem = "sul"
+
+[[forma]]
+pt = "taipa"
+en = ["levee", "dike", "dyke", "bund", "embankment", "rammed earth", "earth wall", "mud wall"]
+troca = "muro de terra"
+origem = "sul"
+
+[[forma]]
+pt = "taipas"
+en = ["levees", "dikes", "dykes", "bunds", "embankments", "rammed earth", "earth walls", "mud walls"]
+troca = "muros de terra"
+origem = "sul"
+
+[[forma]]
+pt = "cancha"
+en = ["court", "field", "pitch", "track", "ground"]
+origem = "sul"
+
+[[forma]]
+pt = "estrada de chão"
+en = ["dirt road", "unpaved road", "earth road", "gravel road", "dirt track", "country road", "road without asphalt"]
+troca = "estrada de cascalho"
+origem = "sul"
+
+[[forma]]
+pt = "estrada de chão batido"
+en = ["dirt road", "unpaved road", "earth road", "gravel road", "dirt track", "country road", "road without asphalt"]
+troca = "estrada de cascalho"
+origem = "sul"
+
+# ---------------------------------------------------------------- cidade e construção
+
+[[forma]]
+pt = "cidade"
+en = ["city", "town"]
+origem = "geral"
+
+[[forma]]
+pt = "cidades"
+en = ["cities", "towns"]
+origem = "geral"
+
+[[forma]]
+pt = "centro"
+en = ["downtown", "center", "centre", "city center", "city centre"]
+origem = "geral"
+
+[[forma]]
+pt = "bairro"
+en = ["neighborhood", "neighbourhood", "district", "quarter"]
+origem = "geral"
+
+[[forma]]
+pt = "bairros"
+en = ["neighborhoods", "neighbourhoods", "districts", "quarters"]
+origem = "geral"
+
+[[forma]]
+pt = "subúrbio"
+en = ["suburb", "suburbs", "outskirts", "suburban"]
+origem = "geral"
+
+[[forma]]
+pt = "vila"
+en = ["village", "town", "hamlet"]
+origem = "geral"
+
+[[forma]]
+pt = "aldeia"
+en = ["village"]
+origem = "geral"
+
+[[forma]]
+pt = "povoado"
+en = ["village", "settlement", "hamlet"]
+troca = "vilarejo"
+origem = "geral"
+
+[[forma]]
+pt = "favela"
+en = ["favela", "slum", "shantytown", "shanty town"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "prédio"
+en = ["building"]
+origem = "geral"
+
+[[forma]]
+pt = "prédios"
+en = ["buildings"]
+origem = "geral"
+
+[[forma]]
+pt = "edifício"
+en = ["building"]
+origem = "geral"
+
+[[forma]]
+pt = "edifícios"
+en = ["buildings"]
+origem = "geral"
+
+[[forma]]
+pt = "arranha-céu"
+en = ["skyscraper", "sky-scraper"]
+origem = "geral"
+
+[[forma]]
+pt = "arranha-céus"
+en = ["skyscrapers", "skyscraper", "sky-scraper"]
+origem = "geral"
+
+[[forma]]
+pt = "torre"
+en = ["tower"]
+origem = "geral"
+
+[[forma]]
+pt = "torres"
+en = ["towers"]
+origem = "geral"
+
+[[forma]]
+pt = "casa"
+en = ["house", "home"]
+origem = "geral"
+
+[[forma]]
+pt = "casas"
+en = ["houses", "homes"]
+origem = "geral"
+
+[[forma]]
+pt = "casarão"
+en = ["mansion", "large house", "big house", "manor", "manor house"]
+troca = "casa grande"
+origem = "geral"
+
+[[forma]]
+pt = "casarões"
+en = ["mansions", "large houses", "big houses", "manors"]
+troca = "casas grandes"
+origem = "geral"
+
+[[forma]]
+pt = "sobrado"
+en = ["townhouse", "two-story house", "two-storey house", "terraced house", "house"]
+troca = "casa de dois andares"
+origem = "geral"
+
+[[forma]]
+pt = "mansão"
+en = ["mansion"]
+origem = "geral"
+
+[[forma]]
+pt = "condomínio"
+en = ["condominium", "condo", "gated community", "housing complex", "residential complex"]
+origem = "geral"
+
+[[forma]]
+pt = "loteamento"
+en = ["subdivision", "allotment", "housing development", "development", "lots", "plots", "plot divided into lots", "plot of land divided into lots"]
+troca = "terreno dividido em lotes"
+origem = "geral"
+
+[[forma]]
+pt = "telhado"
+en = ["roof", "rooftop"]
+origem = "geral"
+
+[[forma]]
+pt = "telhados"
+en = ["roofs", "rooftops"]
+origem = "geral"
+
+[[forma]]
+pt = "terraço"
+en = ["terrace", "rooftop", "patio"]
+origem = "geral"
+
+[[forma]]
+pt = "quintal"
+en = ["backyard", "back yard", "yard", "garden", "garden of the house"]
+troca = "jardim da casa"
+origem = "geral"
+
+[[forma]]
+pt = "jardim"
+en = ["garden"]
+origem = "geral"
+
+[[forma]]
+pt = "muro"
+en = ["wall"]
+origem = "geral"
+
+[[forma]]
+pt = "muros"
+en = ["walls"]
+origem = "geral"
+
+[[forma]]
+pt = "portão"
+en = ["gate"]
+origem = "geral"
+
+[[forma]]
+pt = "garagem"
+en = ["garage"]
+origem = "geral"
+
+[[forma]]
+pt = "piscina"
+en = ["pool", "swimming pool"]
+origem = "geral"
+
+[[forma]]
+pt = "piscinas"
+en = ["pools", "swimming pools"]
+origem = "geral"
+
+[[forma]]
+pt = "quadras"
+en = ["courts", "blocks", "pitches"]
+origem = "geral"
+
+[[forma]]
+pt = "quadra de tênis"
+en = ["tennis court"]
+origem = "geral"
+
+[[forma]]
+pt = "estádio"
+en = ["stadium", "sports stadium"]
+troca = "estádio esportivo"
+origem = "geral"
+
+[[forma]]
+pt = "ginásio"
+en = ["gym", "gymnasium", "arena", "sports hall"]
+origem = "geral"
+
+[[forma]]
+pt = "autódromo"
+en = ["racetrack", "race track", "racecourse", "circuit", "speedway"]
+troca = "pista de corrida"
+origem = "geral"
+
+[[forma]]
+pt = "hipódromo"
+en = ["racecourse", "racetrack", "race track", "hippodrome"]
+origem = "geral"
+
+[[forma]]
+pt = "parque"
+en = ["park"]
+origem = "geral"
+
+[[forma]]
+pt = "parques"
+en = ["parks"]
+origem = "geral"
+
+[[forma]]
+pt = "praça"
+en = ["square", "plaza"]
+origem = "geral"
+
+[[forma]]
+pt = "praças"
+en = ["squares", "plazas"]
+origem = "geral"
+
+[[forma]]
+pt = "monumento"
+en = ["monument"]
+origem = "geral"
+
+[[forma]]
+pt = "estátua"
+en = ["statue"]
+origem = "geral"
+
+[[forma]]
+pt = "igreja"
+en = ["church"]
+origem = "geral"
+
+[[forma]]
+pt = "igrejas"
+en = ["churches"]
+origem = "geral"
+
+[[forma]]
+pt = "catedral"
+en = ["cathedral"]
+origem = "geral"
+
+[[forma]]
+pt = "capela"
+en = ["chapel"]
+origem = "geral"
+
+[[forma]]
+pt = "templo"
+en = ["temple"]
+origem = "geral"
+
+[[forma]]
+pt = "mosteiro"
+en = ["monastery"]
+origem = "geral"
+
+[[forma]]
+pt = "convento"
+en = ["convent"]
+origem = "geral"
+
+[[forma]]
+pt = "cemitério"
+en = ["cemetery", "graveyard"]
+origem = "geral"
+
+[[forma]]
+pt = "escola"
+en = ["school"]
+origem = "geral"
+
+[[forma]]
+pt = "universidade"
+en = ["university"]
+origem = "geral"
+
+[[forma]]
+pt = "hospital"
+en = ["hospital"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "hotel"
+en = ["hotel"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "prefeitura"
+en = ["city hall", "town hall", "municipality", "prefecture", "municipal town hall", "municipal city hall"]
+troca = "prefeitura municipal"
+origem = "geral"
+
+[[forma]]
+pt = "mercado"
+en = ["market"]
+origem = "geral"
+
+[[forma]]
+pt = "feira"
+en = ["fair", "market", "street market", "street fair"]
+troca = "feira de rua"
+origem = "geral"
+
+[[forma]]
+pt = "supermercado"
+en = ["supermarket"]
+origem = "geral"
+
+[[forma]]
+pt = "loja"
+en = ["shop", "store"]
+origem = "geral"
+
+[[forma]]
+pt = "lojas"
+en = ["shops", "stores"]
+origem = "geral"
+
+[[forma]]
+pt = "comércio"
+en = ["commerce", "trade", "retail", "shop", "shops", "store", "stores", "business"]
+origem = "geral"
+
+[[forma]]
+pt = "comércios"
+en = ["shops", "stores", "businesses"]
+troca = "lojas"
+origem = "geral"
+
+[[forma]]
+pt = "vitrine"
+en = ["shop window", "display window", "storefront", "window", "showcase", "windows"]
+origem = "geral"
+
+[[forma]]
+pt = "vitrines"
+en = ["shop windows", "display windows", "storefronts", "windows", "showcases"]
+origem = "geral"
+
+[[forma]]
+pt = "fachada"
+en = ["facade", "front", "frontage"]
+origem = "geral"
+
+[[forma]]
+pt = "fachadas"
+en = ["facades", "fronts", "frontages"]
+origem = "geral"
+
+[[forma]]
+pt = "concessionária"
+en = ["dealership", "car dealership", "dealer"]
+origem = "geral"
+
+[[forma]]
+pt = "posto de gasolina"
+en = ["gas station", "petrol station", "filling station", "service station"]
+origem = "geral"
+
+[[forma]]
+pt = "fábrica"
+en = ["factory", "plant", "mill"]
+origem = "geral"
+
+[[forma]]
+pt = "fábricas"
+en = ["factories", "plants", "mills"]
+origem = "geral"
+
+[[forma]]
+pt = "indústria"
+en = ["industry", "industrial", "factory", "plant"]
+origem = "geral"
+
+[[forma]]
+pt = "usina"
+en = ["plant", "power plant", "power station", "mill", "factory"]
+origem = "geral"
+
+[[forma]]
+pt = "usina hidrelétrica"
+en = ["hydroelectric", "hydroelectric plant", "hydroelectric power plant", "hydroelectric dam", "hydropower", "hydropower plant"]
+origem = "geral"
+
+[[forma]]
+pt = "usina solar"
+en = ["solar plant", "solar farm", "solar park", "solar power plant", "solar power station"]
+origem = "geral"
+
+[[forma]]
+pt = "painel solar"
+en = ["solar panel", "photovoltaic panel"]
+troca = "painel fotovoltaico"
+origem = "geral"
+
+[[forma]]
+pt = "painéis solares"
+en = ["solar panels"]
+origem = "geral"
+
+[[forma]]
+pt = "parque eólico"
+en = ["wind farm", "wind park", "wind power"]
+origem = "geral"
+
+[[forma]]
+pt = "turbina eólica"
+en = ["wind turbine"]
+origem = "geral"
+
+[[forma]]
+pt = "turbinas eólicas"
+en = ["wind turbines"]
+origem = "geral"
+
+[[forma]]
+pt = "aerogerador"
+en = ["wind turbine", "wind generator", "aerogenerator"]
+troca = "turbina eólica"
+origem = "geral"
+
+[[forma]]
+pt = "aerogeradores"
+en = ["wind turbines", "wind generators", "aerogenerators"]
+troca = "turbinas eólicas"
+origem = "geral"
+
+[[forma]]
+pt = "linha de transmissão"
+en = ["transmission line", "transmission lines", "power line", "power lines"]
+origem = "geral"
+
+[[forma]]
+pt = "torre de transmissão"
+en = ["transmission tower", "pylon", "power tower", "electricity pylon", "high voltage tower", "high-voltage tower"]
+origem = "geral"
+
+[[forma]]
+pt = "poste"
+en = ["pole", "post", "utility pole", "lamppost", "lamp post", "streetlight", "street light"]
+origem = "geral"
+
+[[forma]]
+pt = "postes"
+en = ["poles", "posts", "utility poles", "lampposts", "lamp posts", "streetlights", "street lights"]
+origem = "geral"
+
+[[forma]]
+pt = "antena"
+en = ["antenna", "aerial", "mast"]
+origem = "geral"
+
+[[forma]]
+pt = "armazém"
+en = ["warehouse", "storehouse", "storage", "store", "storage shed"]
+troca = "galpão de armazenamento"
+origem = "geral"
+
+[[forma]]
+pt = "obra"
+en = ["construction", "construction site", "building site"]
+troca = "construção"
+origem = "geral"
+
+[[forma]]
+pt = "obras"
+en = ["construction", "construction sites", "building sites", "works", "roadworks"]
+origem = "geral"
+
+[[forma]]
+pt = "construção"
+en = ["construction", "building", "construction site", "building site"]
+origem = "geral"
+
+[[forma]]
+pt = "canteiro de obras"
+en = ["construction site", "building site", "worksite", "construction yard"]
+troca = "local de construção"
+origem = "geral"
+
+[[forma]]
+pt = "terreno"
+en = ["land", "lot", "plot", "plot of land", "terrain", "ground", "site"]
+origem = "geral"
+
+[[forma]]
+pt = "terreno baldio"
+en = ["vacant lot", "empty lot", "vacant land", "vacant plot", "empty plot", "wasteland", "waste ground", "waste land", "vacant ground", "empty ground", "empty land"]
+troca = "terreno vazio"
+origem = "geral"
+
+[[forma]]
+pt = "terra vermelha"
+en = ["red earth", "red soil", "red dirt", "red land", "red clay"]
+origem = "geral"
+
+[[forma]]
+pt = "terraplenagem"
+en = ["earthworks", "earthwork", "earthmoving", "earth moving", "grading", "excavation", "leveling", "land leveling", "ground leveling", "leveling of land", "leveling of terrain"]
+troca = "nivelamento de terreno"
+origem = "geral"
+
+[[forma]]
+pt = "aterro sanitário"
+en = ["landfill", "sanitary landfill"]
+origem = "geral"
+
+[[forma]]
+pt = "lixão"
+en = ["dump", "dumpsite", "garbage dump", "rubbish dump", "trash dump", "landfill"]
+troca = "aterro de lixo"
+origem = "geral"
+
+[[forma]]
+pt = "estação de tratamento"
+en = ["treatment plant", "treatment station", "wastewater treatment", "sewage treatment"]
+origem = "geral"
+
+[[forma]]
+pt = "mina"
+en = ["mine"]
+origem = "geral"
+
+[[forma]]
+pt = "mineração"
+en = ["mining", "mine"]
+origem = "geral"
+
+[[forma]]
+pt = "ruína"
+en = ["ruin"]
+origem = "geral"
+
+[[forma]]
+pt = "ruínas"
+en = ["ruins"]
+origem = "geral"
+
+[[forma]]
+pt = "castelo"
+en = ["castle"]
+origem = "geral"
+
+[[forma]]
+pt = "mirante"
+en = ["lookout", "viewpoint", "view point", "overlook", "belvedere", "observation deck", "vantage point", "observation point"]
+troca = "ponto de observação"
+origem = "geral"
+
+[[forma]]
+pt = "trilha"
+en = ["trail", "path", "track", "footpath", "hiking trail"]
+origem = "geral"
+
+[[forma]]
+pt = "trilhas"
+en = ["trails", "paths", "tracks", "footpaths"]
+origem = "geral"
+
+# ---------------------------------------------------------------- vias e transporte
+
+[[forma]]
+pt = "rua"
+en = ["street"]
+origem = "geral"
+
+[[forma]]
+pt = "ruas"
+en = ["streets"]
+origem = "geral"
+
+[[forma]]
+pt = "avenida"
+en = ["avenue"]
+origem = "geral"
+
+[[forma]]
+pt = "avenidas"
+en = ["avenues"]
+origem = "geral"
+
+[[forma]]
+pt = "estrada"
+en = ["road"]
+origem = "geral"
+
+[[forma]]
+pt = "estradas"
+en = ["roads"]
+origem = "geral"
+
+[[forma]]
+pt = "rodovia"
+en = ["highway", "motorway", "freeway", "expressway", "road"]
+origem = "geral"
+
+[[forma]]
+pt = "rodovias"
+en = ["highways", "motorways", "freeways", "expressways", "roads"]
+origem = "geral"
+
+[[forma]]
+pt = "viaduto"
+en = ["viaduct", "overpass", "flyover", "viaduct bridge"]
+troca = "ponte viaduto"
+origem = "geral"
+
+[[forma]]
+pt = "ponte"
+en = ["bridge"]
+origem = "geral"
+
+[[forma]]
+pt = "pontes"
+en = ["bridges"]
+origem = "geral"
+
+[[forma]]
+pt = "túnel"
+en = ["tunnel"]
+origem = "geral"
+
+[[forma]]
+pt = "trevo"
+en = ["interchange", "junction", "cloverleaf", "clover leaf", "intersection", "intersection of roads", "intersection of highways"]
+troca = "interseção de rodovias"
+origem = "geral"
+
+[[forma]]
+pt = "cruzamento"
+en = ["intersection", "crossing", "crossroads", "junction"]
+origem = "geral"
+
+[[forma]]
+pt = "calçada"
+en = ["sidewalk", "pavement", "walkway", "footpath"]
+origem = "geral"
+
+[[forma]]
+pt = "calçadas"
+en = ["sidewalks", "pavements", "walkways", "footpaths"]
+origem = "geral"
+
+[[forma]]
+pt = "ciclovia"
+en = ["bike path", "bike lane", "bikeway", "cycle path", "cycle lane", "cycleway", "bicycle path", "bicycle lane"]
+origem = "geral"
+
+[[forma]]
+pt = "estacionamento"
+en = ["parking", "parking lot", "car park", "parking area"]
+origem = "geral"
+
+[[forma]]
+pt = "pedágio"
+en = ["toll", "toll plaza", "tollbooth", "toll booth", "toll gate"]
+origem = "geral"
+
+[[forma]]
+pt = "trânsito"
+en = ["traffic"]
+origem = "geral"
+
+[[forma]]
+pt = "engarrafamento"
+en = ["traffic jam", "jam", "congestion", "traffic"]
+troca = "congestionamento"
+origem = "geral"
+
+[[forma]]
+pt = "carro"
+en = ["car"]
+origem = "geral"
+
+[[forma]]
+pt = "carros"
+en = ["cars"]
+origem = "geral"
+
+[[forma]]
+pt = "caminhão"
+en = ["truck", "lorry"]
+origem = "geral"
+
+[[forma]]
+pt = "caminhões"
+en = ["trucks", "lorries"]
+origem = "geral"
+
+[[forma]]
+pt = "ônibus"
+en = ["bus", "buses"]
+origem = "geral"
+
+[[forma]]
+pt = "bicicletas"
+en = ["bicycles", "bikes"]
+origem = "geral"
+
+[[forma]]
+pt = "avião"
+en = ["airplane", "aeroplane", "plane", "aircraft"]
+origem = "geral"
+
+[[forma]]
+pt = "helicóptero"
+en = ["helicopter"]
+origem = "geral"
+
+[[forma]]
+pt = "aeroporto"
+en = ["airport"]
+origem = "geral"
+
+[[forma]]
+pt = "pista de pouso"
+en = ["runway", "airstrip", "landing strip"]
+origem = "geral"
+
+[[forma]]
+pt = "hangar"
+en = ["hangar"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "heliponto"
+en = ["helipad", "heliport"]
+troca = "heliporto"
+origem = "geral"
+
+[[forma]]
+pt = "rodoviária"
+en = ["bus station", "bus terminal"]
+troca = "terminal de ônibus"
+origem = "geral"
+
+[[forma]]
+pt = "estação"
+en = ["station"]
+origem = "geral"
+
+[[forma]]
+pt = "estação de trem"
+en = ["train station", "railway station", "railroad station"]
+origem = "geral"
+
+[[forma]]
+pt = "ferrovia"
+en = ["railway", "railroad", "rail"]
+origem = "geral"
+
+[[forma]]
+pt = "trilhos"
+en = ["tracks", "rails", "railway tracks", "railroad tracks", "train tracks", "rail", "railway", "railways", "railway line"]
+troca = "linha férrea"
+origem = "geral"
+
+[[forma]]
+pt = "trem"
+en = ["train"]
+origem = "geral"
+
+[[forma]]
+pt = "pessoas"
+en = ["people", "persons"]
+origem = "geral"
+
+[[forma]]
+pt = "multidão"
+en = ["crowd"]
+origem = "geral"
+
+[[forma]]
+pt = "pedestres"
+en = ["pedestrians", "pedestrian"]
+origem = "geral"
+
+# ---------------------------------------------------------------- dos prompts de referência do RFC-035
+
+[[forma]]
+pt = "gato"
+en = ["cat"]
+origem = "geral"
+
+[[forma]]
+pt = "cachorro"
+en = ["dog"]
+origem = "geral"
+
+[[forma]]
+pt = "xícara"
+en = ["cup"]
+origem = "geral"
+
+[[forma]]
+pt = "café"
+en = ["coffee", "cafe"]
+origem = "geral"
+tambem_ingles = true
+
+# ---------------------------------------------------------------- nomes próprios
+#
+# Place names that begin with a form the lexicon replaces. The longest match
+# takes them whole, so they go to Marian as typed: "fazenda no Mato Grosso"
+# is *farm in Mato Grosso*, and would be *farm in the Grosso Vegetation*
+# with "mato" replaced (RFC-047 section 11, risk 2). A name is the same in
+# both languages, so none of them is a Portuguese marker. Only names a troca
+# was measured to break are here: "Morro de São Paulo" is better with it
+# (*Hill of São Paulo* against *Death of São Paulo*).
+
+[[forma]]
+pt = "Mato Grosso"
+en = ["mato grosso"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "Foz do Iguaçu"
+en = ["foz do iguaçu"]
+origem = "geral"
+tambem_ingles = true
+
+[[forma]]
+pt = "Capão da Canoa"
+en = ["capão da canoa"]
+origem = "sul"
+tambem_ingles = true
+
+# Round 2 (RFC-047 section 17): forms that protect what a troca sends when it is typed, and the other sense of "sítio".
+
+[[forma]]
+pt = "marina de iates"
+en = ["yacht marina", "marina yachts", "yacht port"]
+troca = "porto de iates"
+origem = "geral"
+
+[[forma]]
+pt = "duna arenosa"
+en = ["sand dune", "sand dunes"]
+origem = "geral"
+
+[[forma]]
+pt = "vale montanhoso"
+en = ["mountain valley"]
+origem = "geral"
+
+[[forma]]
+pt = "pomar de frutas"
+en = ["fruit orchard"]
+origem = "geral"
+
+[[forma]]
+pt = "horta de legumes"
+en = ["vegetable garden", "garden of vegetables"]
+origem = "geral"
+
+[[forma]]
+pt = "estufas agrícolas"
+en = ["agricultural greenhouses"]
+origem = "geral"
+
+[[forma]]
+pt = "estádio esportivo"
+en = ["sports stadium"]
+origem = "geral"
+
+[[forma]]
+pt = "estádio de futebol"
+en = ["football stadium", "soccer stadium"]
+origem = "geral"
+
+[[forma]]
+pt = "feira de rua"
+en = ["street fair", "street market"]
+origem = "geral"
+
+[[forma]]
+pt = "ponte viaduto"
+en = ["viaduct bridge", "viaduct"]
+origem = "geral"
+
+[[forma]]
+pt = "sítio arqueológico"
+en = ["archaeological site", "archeological site"]
+origem = "geral"
+
+[[forma]]
+pt = "sítios arqueológicos"
+en = ["archaeological sites", "archeological sites"]
+origem = "geral"
+
+[[forma]]
+pt = "sítio histórico"
+en = ["historic site", "historical site"]
+origem = "geral"
+
+[[forma]]
+pt = "sítios históricos"
+en = ["historic sites", "historical sites"]
+origem = "geral"
+
+# Round 2 (RFC-047 section 17): forms that protect the troca that was typed.
+
+[[forma]]
+pt = "estaleiro naval"
+en = ["shipyard"]
+origem = "geral"
+
+[[forma]]
+pt = "prefeitura municipal"
+en = ["city hall", "town hall", "municipal town hall", "municipal city hall"]
+origem = "geral"
+
+[[forma]]
+pt = "balsa de madeira"
+en = ["wooden raft", "raft"]
+origem = "geral"
+
+[[forma]]
+pt = "lava vulcânica"
+en = ["volcanic lava", "volcano lava"]
+origem = "geral"

@@ -309,6 +309,8 @@ O template é exatamente `a photo of {query}`. Sem variante aérea (seção 3.3)
 
 O modo de falha é benigno em formato: uma consulta curta mal classificada nunca é detectada como `pt`, então ela passa adiante sem tradução em vez de ser traduzida errado. Uma consulta de uma palavra em português chega ao CLIP em português e se comporta como a coluna PT-bruto da seção 3.4 prevê. Construir um detector melhor está fora de escopo; `test_single_word_portuguese_is_a_known_detection_gap` fixa o comportamento para que adotar um depois seja uma mudança visível e deliberada.
 
+> **Nota (RFC-047, 2026-11-03).** A tabela acima deixa de valer para as formas do léxico de consultas (`query_lexicon.toml`): uma consulta é traduzida quando o `langdetect` diz `pt` **ou** quando tem um marcador de português — uma palavra funcional de uma lista fechada, ou uma forma do léxico. `fazenda`, `lago` e `piscina` passam a ser traduzidas. O teste virou `test_single_word_portuguese_outside_the_lexicon_is_a_known_detection_gap`, que afirma a falha para palavras fora do léxico (`janela`, `varanda`), e `test_single_word_portuguese_in_the_lexicon_is_translated` afirma o contrário para `fazenda`, `lago`, `piscina` e `morro`. É a mudança visível e deliberada que este parágrafo pediu. Ver [RFC-047](rfc-047-glossario-e-deteccao-na-traducao-das-consultas.md) §6 e §8.
+
 `langdetect` levanta `LangDetectException` sobre entrada sem características (strings vazias, apenas dígitos, pontuação). Isso é capturado e tratado como inglês — não há nada a traduzir, e reprovar uma consulta por isso seria absurdo.
 
 ### 7.2 Por que não `pipeline("translation")`
