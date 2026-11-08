@@ -1,6 +1,6 @@
 # RFC-047 — Glossário e Detecção de Idioma na Tradução das Consultas
 
-**Status:** Implementado em duas rodadas. A primeira (§15, §16) fez o léxico e provou cada troca sozinha e em "{forma} vista de cima"; a validação mostrou o que essa prova não via (trocas que acrescentam palavras, como "estrada de terra batida" → *dirt road hit*), e a segunda (§17) refez o léxico contra frases e o mediu de novo. Com o léxico final, **419 formas, 125 com troca**, a medição de §9, na validação do RFC-042, passa nos cinco critérios: as 178 consultas em inglês ficam com o mesmo prompt; das 31 consultas em português cujo prompt mudou, **10 sobem e 1 desce**; o recall@1 em português vai de **46,6% a 49,4%** (+2,8 [+0,6; +5,6]) e o recall@5 de **78,1% a 79,2%** (+1,1 [−1,1; +3,4]); as 30 palavras soltas do piloto chegam certas ao CLIP; o léxico e os marcadores custam **0,04 a 0,15 ms** por consulta. Nos termos do sul, o recall@1 vai de 30,4% a 43,5% e o @5 de 65,2% a 78,3% — um teto, por §4.4. **Os números da segunda rodada não são limpos**: ela foi feita depois de ver a validação (§17.1), e a comparação com a primeira está à parte, em §17.5. Fica de fora um risco medido e não corrigido (§17.6): os cinco empréstimos do inglês ("lighthouse", "kayak", "kiosk", "canyon", "ferry") foram provados em sete contextos, e só neles. As seções 1 a 14 são o rascunho como foi aprovado; o que a implementação mudou nelas está em §16 e §17
+**Status:** Implementado em duas rodadas. A primeira (§15, §16) fez o léxico e provou cada troca sozinha e em "{forma} vista de cima"; a validação mostrou o que essa prova não via (trocas que acrescentam palavras, como "estrada de terra batida" → *dirt road hit*), e a segunda (§17) refez o léxico contra frases e o mediu de novo. Com o léxico final, **419 formas, 125 com troca**, a medição de §9, na validação do RFC-042, passa nos cinco critérios: as 178 consultas em inglês ficam com o mesmo prompt; das 31 consultas em português cujo prompt mudou, **10 sobem e 1 desce**; o recall@1 em português vai de **46,6% a 49,4%** (+2,8 [+0,6; +5,6]) e o recall@5 de **78,1% a 79,2%** (+1,1 [−1,1; +3,4]); as 30 palavras soltas do piloto chegam certas ao CLIP; o léxico e os marcadores custam **0,04 a 0,15 ms** por consulta. Nos termos do sul, o recall@1 vai de 30,4% a 43,5% e o @5 de 65,2% a 78,3% — um teto, por §4.4. **Os números da segunda rodada não são limpos**: ela foi feita depois de ver a validação (§17.1), e a comparação com a primeira está à parte, em §17.5. Fica de fora um risco medido e não corrigido (§17.6): os cinco empréstimos do inglês ("lighthouse", "kayak", "kiosk", "canyon", "ferry") foram provados em sete contextos, e só neles. Em 2026-11-05 entraram mais quatro formas, a pedido do usuário e contra §4.4 (§18): o léxico tem hoje 423 formas, 129 com troca. As seções 1 a 14 são o rascunho como foi aprovado; o que a implementação mudou nelas está em §16, §17 e §18
 **Depende de:** RFC-023 (§7, o tradutor e a detecção de idioma; §22, a errata do `>>por<<`), RFC-035 (o tradutor é a entrada `translator` do lockfile, e §7.2 guarda os prompts de referência), RFC-042 (§14, a medição que achou a perda; o conjunto de avaliação congelado e `measure_baseline.py`, que medem este RFC)
 **Bloqueia:** nada. Vem antes do nível A do RFC-042: o adaptador do nível A ajusta o vetor da consulta que sai do tradutor, e convém que esse tradutor já seja o definitivo quando ele for treinado
 **Migration:** não. Só a consulta muda; os vetores das imagens, o banco e o índice ficam como estão
@@ -440,3 +440,80 @@ Uma troca é diferente das outras: a de "estrada de terra". O Marian acerta *dir
 **Rápidos**: `test_a_troca_typed_by_the_user_is_not_rewritten_again` (nenhuma troca é reescrita quando digitada) e `test_what_the_second_round_sends_for_what_the_first_got_wrong` (12 frases digitadas e o que o léxico manda ao Marian), sem modelo.
 
 **Lentos** (`test_query_lexicon_slow.py`, com as regras de `lexicon_frames.py`): para cada forma, a resposta nos sete contextos tem uma `en` e nenhuma palavra a mais; as formas com outro sentido o mantêm; a troca é necessária, isto é, a forma sem ela erra em algum contexto; cada nome de lugar é mantido e precisaria da sua linha; as 30 palavras inglesas do piloto ficam com o prompt. Passam, com `test_reference_embeddings_slow.py` e os `TestRealTranslation`, em **586 testes**, em 12 min, sobre o léxico final.
+
+## 18. Quatro formas pedidas depois do acervo real
+
+Em 2026-11-05, nesta máquina, em CPU. Os testes do RFC-042, o do Commons e o do acervo real, continuam fechados.
+
+### 18.1 O que entrou, e por que isto vai contra §4.4
+
+O RFC-042 ganhou um segundo conjunto de avaliação, feito com as fotos do acervo do próprio usuário:
+- uma foto por dia de voo, 295 no total;
+- 100 consultas na validação e 195 no teste;
+- os dados ficam fora do repositório.
+
+A validação desse conjunto mostrou o Marian errando palavras comuns nele: "rotatória" → *rotatorium*, "Galpões" → *Galpons*, "tanque de peixes" → *fish tank*. A pedido do usuário, as três entraram no léxico com o inglês que ele escolheu, e o plural "tanques de peixes" entrou com elas, pela regra do plural do léxico.
+
+**Isto vai contra §4.4** ("nenhuma forma entra no léxico por ter falhado numa consulta de avaliação"). Cada forma passou pela sonda de §17.2 como qualquer outra, mas o motivo de entrar foi a validação. Por isso os números de §18.3 são otimistas para as consultas que têm essas formas, e o número sem viés continua a ser o do teste do RFC-042.
+
+| forma | `en` | troca | contextos certos |
+| --- | --- | --- | --- |
+| tanque de peixes | artificial pond | lagoa artificial | 7 de 7 |
+| tanques de peixes | artificial ponds | lagoas artificiais | 7 de 7 |
+| rotatória | roundabout | roundabout | 7 de 7 |
+| galpões | warehouses | armazéns | 6 de 7 (§18.2) |
+
+O léxico vai de 419 a **423 formas**, e de 125 a **129 com troca**. "galpões" tinha saído na segunda rodada (§17.3, item 7) e volta com outra `en`: o usuário pediu *warehouses*, e não *sheds*.
+
+### 18.2 As candidatas
+
+As candidatas foram provadas com `probe_frames.py --candidates`, numa cópia do léxico com as formas novas; os arquivos dessa prova ficaram fora do git.
+
+- **"tanque de peixes"**: sem troca, dá *fish tank* (o aquário) nos sete contextos. As outras candidatas erram:
+  - "lago artificial" dá *artificial lake*;
+  - "tanque artificial", *artificial tank*;
+  - "lagoa de peixes", *fish pond*, que não é a `en` pedida;
+  - "açude artificial", *artificial acid*.
+
+  Passam "lagoa artificial" e "estanque artificial"; ficou a primeira, que é português. O plural se comporta igual.
+- **"rotatória"**: sem troca, dá *Rotary*, *rotator* ou *rotation*. Nenhuma troca em português passa:
+  - "rotunda", "rotonda" e "redondel" dão *round*;
+  - "rótula", *label*;
+  - "rotatória de trânsito", *traffic rotation*;
+  - "rotunda de trânsito", *traffic roundabout*, que acrescenta *traffic*.
+
+  "roundabout" passa nos sete contextos. É o sexto empréstimo do inglês, com o risco do item 1 de §17.6.
+- **"galpões"**: das 19 candidatas, nenhuma passa nos sete contextos.
+  - "armazéns" erra só em "{X} vista de cima": "armazéns vista de cima" é *storefront view*. "entrepôts", "magazzini" e "armazens" erram no mesmo contexto.
+  - "depósitos" é *deposits*; "barracões", *barracks*.
+  - As que acrescentam uma palavra ("armazéns grandes", "industriais", "de carga", "de estocagem") voltam com *large*, *industrial*, *cargo* ou *storage*.
+  - "armazéns," com vírgula passa nos sete, mas separa o adjetivo, que em português vem depois do substantivo: "armazéns, brancos perto da estrada" é *warehouses, whites near the road*, enquanto "armazéns brancos perto da estrada" é *White warehouses near the road*.
+
+  Ficou **"armazéns", com uma falha conhecida**. `KNOWN_MISSES`, em `lexicon_frames.py`, registra que "galpões" erra em "vista de cima", e por quê. O teste lento exige que os contextos errados sejam exatamente esses, e a sonda julga do mesmo jeito: se o Marian passar a acertar, a linha tem de sair. "galpões vista de cima" agora vai como *storefront view*; sem troca, ia como *roof view sheds*.
+
+### 18.3 Medição (post hoc)
+
+**Acervo real** (validação do RFC-042, 100 consultas × 295 fotos, em português; `archive-validation-20261105-230457.json` antes, `…-235713.json` depois):
+- 17 consultas mudaram de prompt: 15 sobem, 1 desce (do 1º ao 3º) e 1 fica.
+- R@1 vai de 18,0 a 18,0; R@5 de 46,0 a **49,0**; R@10 de 56,0 a **62,0**; MRR de 31,8 a 33,4.
+- O R@1 não muda porque uma consulta subiu ao 1º lugar e outra saiu dele.
+- As consultas não são citadas aqui, porque descrevem lugares particulares.
+
+**Commons** (validação do RFC-042, 178 consultas × 525 fotos; `baseline-validation-20261105-235938.json` contra `…-20261104-001130.json` de §17.5): três consultas mudaram de lugar, e todas as outras ficaram iguais, consulta a consulta.
+- "rotatória iluminada num parque industrial à noite": do 1º ao 2º lugar, com a tradução agora certa (*Rotatorial illuminated…* → *roundabout illuminated…*).
+- "galpões com telhado vermelho no meio de plantações": do 2º ao 1º (*red roofed sheds…* → *warehouses with red roof…*).
+- "estância com galpões no fim da tarde", variante do sul: do 5º ao 7º (*Ranch with sheds…* → *Ranch with warehouses…*). Numa estância, *sheds* era a palavra melhor: o galpão do campo é um barracão, e a `en` escolhida é a de um galpão de empresa.
+
+No Commons, em português, o R@1 fica em 49,4 e o R@5 em 79,2. Nos termos do sul, o R@1 fica em 43,5 e o R@5 vai de 78,3 a **73,9**. O inglês não muda.
+
+### 18.4 O que continua errado
+
+1. "galpões vista de cima" dá *storefront view* (§18.2).
+2. "galpões" vira *warehouses* também onde o galpão é rural (§18.3, "estância com galpões").
+3. "comércio" → *trade* ("Fachada de comércio" → *Trade fair*) foi visto na mesma validação e não entrou.
+
+### 18.5 Testes
+
+- `probe_frames.py` sobre o léxico inteiro: 420 formas (sem os 3 nomes), nenhuma reprovada, em `probe_frames.json`.
+- `test_query_lexicon_slow.py` com `test_query_translator.py`: 690 testes, em 14 min.
+- `test_reference_embeddings_slow.py`: 7 testes. Os prompts de referência do RFC-035 não têm nenhuma das formas novas.

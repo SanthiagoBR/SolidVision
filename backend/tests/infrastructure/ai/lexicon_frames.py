@@ -73,6 +73,16 @@ English word they must keep. "sítio" is a small farm in the south and a *site*
 elsewhere; a `troca` toward the farm must not turn an archaeological site into
 a farm."""
 
+KNOWN_MISSES: dict[str, dict[str, str]] = {
+    "galpões": {
+        "vista de cima": "'armazéns vista de cima' is *storefront view*; no troca"
+        " tried is right there and in the six other contexts (RFC-047 section 18)",
+    },
+}
+"""Contexts where a form is known to come back wrong, and why. The test
+expects exactly these to be wrong, so a miss that Marian starts getting
+right has to leave this list too."""
+
 
 def plain(text: str) -> str:
     """Casefolded, without accents or punctuation."""

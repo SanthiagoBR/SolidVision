@@ -1,14 +1,14 @@
 {
  "summary": {
-  "forms": 416,
-  "with_troca": 125,
-  "pass": 416,
+  "forms": 420,
+  "with_troca": 129,
+  "pass": 420,
   "fail": 0,
   "fail_with_troca": [],
   "fail_without_troca": [],
   "fail_not_typed_again": [],
-  "translations": 4014,
-  "seconds": 0.3
+  "translations": 2899,
+  "seconds": 628.5
  },
  "dropped_in_round_2": {
   "calçadão": "'calçada ampla' e 'calçada larga' viram *wide-story view* e *wide-scale photo* em frase; nenhuma outra candidata acerta",
@@ -968,6 +968,140 @@
     "sent": "tanques no meio de um campo verde",
     "out": "tanks in the middle of a green field",
     "found": "tanks",
+    "extras": [],
+    "ok": true
+   },
+   "other_senses": [],
+   "typed_again": true,
+   "passes": true
+  },
+  {
+   "pt": "tanque de peixes",
+   "troca": "lagoa artificial",
+   "en": [
+    "artificial pond"
+   ],
+   "origem": "geral",
+   "sozinha": {
+    "typed": "tanque de peixes",
+    "sent": "lagoa artificial",
+    "out": "artificial pond",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "vista de cima": {
+    "typed": "tanque de peixes vista de cima",
+    "sent": "lagoa artificial vista de cima",
+    "out": "artificial pond view from above",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "frase 1": {
+    "typed": "tanque de peixes perto do rio",
+    "sent": "lagoa artificial perto do rio",
+    "out": "artificial pond near the river",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "frase 2": {
+    "typed": "tanque de peixes com árvores dos dois lados",
+    "sent": "lagoa artificial com árvores dos dois lados",
+    "out": "artificial pond with trees on both sides",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "frase 3": {
+    "typed": "vista de cima de tanque de peixes num dia nublado",
+    "sent": "vista de cima de lagoa artificial num dia nublado",
+    "out": "view from above of artificial pond on a cloudy day",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "frase 4": {
+    "typed": "foto de tanque de peixes ao lado de uma casa branca",
+    "sent": "foto de lagoa artificial ao lado de uma casa branca",
+    "out": "photo of artificial pond next to a white house",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "frase 5": {
+    "typed": "tanque de peixes no meio de um campo verde",
+    "sent": "lagoa artificial no meio de um campo verde",
+    "out": "artificial pond in the middle of a green field",
+    "found": "artificial pond",
+    "extras": [],
+    "ok": true
+   },
+   "other_senses": [],
+   "typed_again": true,
+   "passes": true
+  },
+  {
+   "pt": "tanques de peixes",
+   "troca": "lagoas artificiais",
+   "en": [
+    "artificial ponds"
+   ],
+   "origem": "geral",
+   "sozinha": {
+    "typed": "tanques de peixes",
+    "sent": "lagoas artificiais",
+    "out": "artificial ponds",
+    "found": "artificial ponds",
+    "extras": [],
+    "ok": true
+   },
+   "vista de cima": {
+    "typed": "tanques de peixes vista de cima",
+    "sent": "lagoas artificiais vista de cima",
+    "out": "artificial ponds top view",
+    "found": "artificial ponds",
+    "extras": [],
+    "ok": true
+   },
+   "frase 1": {
+    "typed": "tanques de peixes perto do rio",
+    "sent": "lagoas artificiais perto do rio",
+    "out": "artificial ponds near the river",
+    "found": "artificial ponds",
+    "extras": [],
+    "ok": true
+   },
+   "frase 2": {
+    "typed": "tanques de peixes com árvores dos dois lados",
+    "sent": "lagoas artificiais com árvores dos dois lados",
+    "out": "artificial ponds with trees on both sides",
+    "found": "artificial ponds",
+    "extras": [],
+    "ok": true
+   },
+   "frase 3": {
+    "typed": "vista de cima de tanques de peixes num dia nublado",
+    "sent": "vista de cima de lagoas artificiais num dia nublado",
+    "out": "view from above of artificial ponds on a cloudy day",
+    "found": "artificial ponds",
+    "extras": [],
+    "ok": true
+   },
+   "frase 4": {
+    "typed": "foto de tanques de peixes ao lado de uma casa branca",
+    "sent": "foto de lagoas artificiais ao lado de uma casa branca",
+    "out": "photo of artificial ponds next to a white house",
+    "found": "artificial ponds",
+    "extras": [],
+    "ok": true
+   },
+   "frase 5": {
+    "typed": "tanques de peixes no meio de um campo verde",
+    "sent": "lagoas artificiais no meio de um campo verde",
+    "out": "artificial ponds in the middle of a green field",
+    "found": "artificial ponds",
     "extras": [],
     "ok": true
    },
@@ -14491,6 +14625,76 @@
    "passes": true
   },
   {
+   "pt": "galpões",
+   "troca": "armazéns",
+   "en": [
+    "warehouses"
+   ],
+   "origem": "geral",
+   "sozinha": {
+    "typed": "galpões",
+    "sent": "armazéns",
+    "out": "warehouses",
+    "found": "warehouses",
+    "extras": [],
+    "ok": true
+   },
+   "vista de cima": {
+    "typed": "galpões vista de cima",
+    "sent": "armazéns vista de cima",
+    "out": "storefront view",
+    "found": null,
+    "extras": [
+     "storefront"
+    ],
+    "ok": false,
+    "known_miss": true
+   },
+   "frase 1": {
+    "typed": "galpões perto do rio",
+    "sent": "armazéns perto do rio",
+    "out": "warehouses near the river",
+    "found": "warehouses",
+    "extras": [],
+    "ok": true
+   },
+   "frase 2": {
+    "typed": "galpões com árvores dos dois lados",
+    "sent": "armazéns com árvores dos dois lados",
+    "out": "warehouses with trees on both sides",
+    "found": "warehouses",
+    "extras": [],
+    "ok": true
+   },
+   "frase 3": {
+    "typed": "vista de cima de galpões num dia nublado",
+    "sent": "vista de cima de armazéns num dia nublado",
+    "out": "view from above of warehouses on a cloudy day",
+    "found": "warehouses",
+    "extras": [],
+    "ok": true
+   },
+   "frase 4": {
+    "typed": "foto de galpões ao lado de uma casa branca",
+    "sent": "foto de armazéns ao lado de uma casa branca",
+    "out": "photo of warehouses next to a white house",
+    "found": "warehouses",
+    "extras": [],
+    "ok": true
+   },
+   "frase 5": {
+    "typed": "galpões no meio de um campo verde",
+    "sent": "armazéns no meio de um campo verde",
+    "out": "warehouses in the middle of a green field",
+    "found": "warehouses",
+    "extras": [],
+    "ok": true
+   },
+   "other_senses": [],
+   "typed_again": true,
+   "passes": true
+  },
+  {
    "pt": "silo",
    "troca": null,
    "en": [
@@ -25221,6 +25425,73 @@
     "sent": "interseção de rodovias no meio de um campo verde",
     "out": "intersection of roads in the middle of a green field",
     "found": "intersection of roads",
+    "extras": [],
+    "ok": true
+   },
+   "other_senses": [],
+   "typed_again": true,
+   "passes": true
+  },
+  {
+   "pt": "rotatória",
+   "troca": "roundabout",
+   "en": [
+    "roundabout"
+   ],
+   "origem": "geral",
+   "sozinha": {
+    "typed": "rotatória",
+    "sent": "roundabout",
+    "out": "roundabout",
+    "found": "roundabout",
+    "extras": [],
+    "ok": true
+   },
+   "vista de cima": {
+    "typed": "rotatória vista de cima",
+    "sent": "roundabout vista de cima",
+    "out": "roundabout view from above",
+    "found": "roundabout",
+    "extras": [],
+    "ok": true
+   },
+   "frase 1": {
+    "typed": "rotatória perto do rio",
+    "sent": "roundabout perto do rio",
+    "out": "roundabout near the river",
+    "found": "roundabout",
+    "extras": [],
+    "ok": true
+   },
+   "frase 2": {
+    "typed": "rotatória com árvores dos dois lados",
+    "sent": "roundabout com árvores dos dois lados",
+    "out": "roundabout with trees on both sides",
+    "found": "roundabout",
+    "extras": [],
+    "ok": true
+   },
+   "frase 3": {
+    "typed": "vista de cima de rotatória num dia nublado",
+    "sent": "vista de cima de roundabout num dia nublado",
+    "out": "Roundabout top view on a cloudy day",
+    "found": "roundabout",
+    "extras": [],
+    "ok": true
+   },
+   "frase 4": {
+    "typed": "foto de rotatória ao lado de uma casa branca",
+    "sent": "foto de roundabout ao lado de uma casa branca",
+    "out": "roundabout photo next to a white house",
+    "found": "roundabout",
+    "extras": [],
+    "ok": true
+   },
+   "frase 5": {
+    "typed": "rotatória no meio de um campo verde",
+    "sent": "roundabout no meio de um campo verde",
+    "out": "roundabout in the middle of a green field",
+    "found": "roundabout",
     "extras": [],
     "ok": true
    },
