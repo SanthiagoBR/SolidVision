@@ -40,6 +40,7 @@ sys.path[:0] = [str(REPOSITORY / "backend")]
 
 from tests.infrastructure.ai.lexicon_frames import (  # noqa: E402
     CONTEXTS,
+    KNOWN_MISSES,
     OTHER_SENSES,
     judge,
 )
@@ -135,8 +136,12 @@ def trial(
         )
     result["other_senses"] = senses
     result["typed_again"] = lexicon.rewrite(form.sent) == form.sent
+    # As the slow test: right everywhere but the known misses, which stay wrong.
+    misses = KNOWN_MISSES.get(form.pt, {})
+    for name in misses:
+        result[name]["known_miss"] = True
     result["passes"] = (
-        all(result[name]["ok"] for name in CONTEXTS)
+        all(result[name]["ok"] == (name not in misses) for name in CONTEXTS)
         and all(s["ok"] for s in senses)
         and result["typed_again"]
     )

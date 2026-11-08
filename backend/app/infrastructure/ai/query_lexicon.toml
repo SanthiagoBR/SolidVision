@@ -18,7 +18,8 @@
 #                 it is then never a Portuguese marker (RFC-047 section 6)
 #
 # A new form goes through the probe and the slow tests. Nothing enters
-# because it failed on an evaluation query (RFC-047 section 4.4).
+# because it failed on an evaluation query (RFC-047 section 4.4), except the
+# four forms the user asked for in section 18.
 
 # ---------------------------------------------------------------- água
 
@@ -92,6 +93,24 @@ origem = "geral"
 [[forma]]
 pt = "tanques"
 en = ["tanks", "ponds"]
+origem = "geral"
+
+# "tanque de peixes" and "rotatória" came in on 2026-11-05 at the user's
+# request, after the validation of RFC-042's real-archive set showed them
+# wrong (*fish tank*, *rotatorium*): against section 4.4, so that set's
+# validation is optimistic for them (RFC-047 section 18). Each passes the
+# probe.
+
+[[forma]]
+pt = "tanque de peixes"
+en = ["artificial pond"]
+troca = "lagoa artificial"
+origem = "geral"
+
+[[forma]]
+pt = "tanques de peixes"
+en = ["artificial ponds"]
+troca = "lagoas artificiais"
 origem = "geral"
 
 [[forma]]
@@ -1173,6 +1192,16 @@ pt = "galpão"
 en = ["shed", "barn", "warehouse", "storehouse"]
 origem = "geral"
 
+# Added on 2026-11-05, against section 4.4 (see "tanque de peixes"); round 2
+# had dropped it. Left alone, Marian gives *Galpons* or *ramparts*. No troca
+# is right in all seven contexts: "armazéns vista de cima" is *storefront
+# view*, the one known miss in `lexicon_frames.KNOWN_MISSES`.
+[[forma]]
+pt = "galpões"
+en = ["warehouses"]
+troca = "armazéns"
+origem = "geral"
+
 [[forma]]
 pt = "silo"
 en = ["silo"]
@@ -1996,6 +2025,15 @@ origem = "geral"
 pt = "trevo"
 en = ["interchange", "junction", "cloverleaf", "clover leaf", "intersection", "intersection of roads", "intersection of highways"]
 troca = "interseção de rodovias"
+origem = "geral"
+
+# See "tanque de peixes": added on 2026-11-05, against section 4.4. No
+# Portuguese troca passes (rotunda, rótula, rotatória de trânsito); Marian
+# keeps the English word in all seven contexts.
+[[forma]]
+pt = "rotatória"
+en = ["roundabout"]
+troca = "roundabout"
 origem = "geral"
 
 [[forma]]
