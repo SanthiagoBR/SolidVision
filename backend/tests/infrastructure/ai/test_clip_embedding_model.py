@@ -21,6 +21,7 @@ import time
 import uuid
 import weakref
 import zlib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -44,6 +45,7 @@ from app.infrastructure.ai.clip_embedding_model import (
     image_processor_backend,
 )
 from app.infrastructure.ai.model_runtime import ModelUnavailableError
+from app.infrastructure.ai.query_adapter import QueryAdapter
 from app.infrastructure.ai.query_translator import QueryTranslator
 
 DIMENSION = 512
@@ -107,6 +109,7 @@ class StubProcessor:
     def __init__(self) -> None:
         self.images: list[PILImage.Image] = []
         self.texts: list[str] = []
+        self.text_options: dict[str, Any] = {}
         self.image_processor: object = StubTorchvisionImageProcessor()
 
     def __call__(
@@ -120,6 +123,7 @@ class StubProcessor:
             return {"pixel_values": _fingerprint_tensor(images)}
         assert text is not None
         self.texts.extend(text)
+        self.text_options = kwargs
         return {"input_ids": torch.ones(1, 7, dtype=torch.long)}
 
 
@@ -224,11 +228,15 @@ def _install(monkeypatch: pytest.MonkeyPatch, stubs: StubLoads) -> None:
     monkeypatch.setattr(PROCESSOR_TARGET, load_processor)
 
 
-def _adapter(translator: QueryTranslator | None = None) -> ClipEmbeddingModel:
+def _adapter(
+    translator: QueryTranslator | None = None,
+    query_adapter: Callable[[], QueryAdapter] | None = None,
+) -> ClipEmbeddingModel:
     return ClipEmbeddingModel(
         lambda: MODEL_DIRECTORY,
         translator=translator or RecordingTranslator(),
         device=torch.device("cpu"),
+        query_adapter=query_adapter,
     )
 
 
@@ -669,6 +677,75 @@ class TestTextEncoding:
 
     def test_build_prompt_applies_the_template(self, stub_clip: StubLoads) -> None:
         assert _adapter().build_prompt("a lake") == "a photo of a lake"
+
+    def test_a_prompt_longer_than_clip_reads_is_truncated(
+        self, stub_clip: StubLoads
+    ) -> None:
+        """CLIP has 77 positions; past them the real model raises, so the
+        tokenizer is asked to cut (the real cut is pinned in the slow test)."""
+        _adapter().encode_text("a lake")
+
+        assert stub_clip.processor.text_options.get("truncation") is True
+
+
+def _random_matrix() -> torch.Tensor:
+    generator = torch.Generator().manual_seed(7)
+    return 0.1 * torch.randn(DIMENSION, DIMENSION, generator=generator)
+
+
+class TestTheQueryAdapter:
+    """RFC-042 level A: the matrix moves the query's vector and nothing else."""
+
+    def test_a_query_goes_through_the_adapter_after_normalization(
+        self, stub_clip: StubLoads
+    ) -> None:
+        matrix = _random_matrix()
+        plain = _adapter().encode_text("a lake")
+
+        adapted = _adapter(query_adapter=lambda: QueryAdapter(matrix, {})).encode_text(
+            "a lake"
+        )
+
+        t = torch.tensor([plain.values], dtype=torch.float32)
+        expected = torch.nn.functional.normalize(t + t @ matrix.T, dim=-1)[0]
+        assert adapted.values == pytest.approx(expected.tolist(), abs=1e-6)
+        assert adapted.values != pytest.approx(plain.values, abs=1e-3)
+
+    def test_the_photos_are_never_adapted(
+        self, stub_clip: StubLoads, jpeg_path: Path
+    ) -> None:
+        """`A` was trained on text: the index's vectors, and a picture used
+        as the query, stay CLIP's own."""
+        plain = _adapter()
+        adapted = _adapter(query_adapter=lambda: QueryAdapter(_random_matrix(), {}))
+        image = _image(jpeg_path)
+
+        assert adapted.encode_image(image) == plain.encode_image(image)
+        assert adapted.encode_images([image]) == plain.encode_images([image])
+
+    def test_the_adapter_is_read_on_the_first_load_and_not_before(
+        self, stub_clip: StubLoads
+    ) -> None:
+        reads: list[int] = []
+
+        def source() -> QueryAdapter:
+            reads.append(1)
+            return QueryAdapter(_random_matrix(), {})
+
+        model = _adapter(query_adapter=source)
+        assert reads == []
+        model.encode_text("a lake")
+        model.encode_text("a pond")
+
+        assert reads == [1]
+
+    def test_an_adapter_of_another_dimension_fails_the_load(
+        self, stub_clip: StubLoads
+    ) -> None:
+        model = _adapter(query_adapter=lambda: QueryAdapter(torch.zeros(4, 4), {}))
+
+        with pytest.raises(ModelUnavailableError):
+            model.encode_text("a lake")
 
 
 class TestTranslationRouting:

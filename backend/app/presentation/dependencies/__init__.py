@@ -159,6 +159,7 @@ def get_embedding_model() -> EmbeddingModelPort:
 def _build_embedding_model() -> EmbeddingModelPort:
     from app.infrastructure.ai.clip_embedding_model import ClipEmbeddingModel
     from app.infrastructure.ai.device import resolve_device
+    from app.infrastructure.ai.query_adapter import QueryAdapter
     from app.infrastructure.ai.query_translator import MarianQueryTranslator
 
     runtime = default_runtime()
@@ -167,6 +168,7 @@ def _build_embedding_model() -> EmbeddingModelPort:
         runtime.loader(CLIP),
         translator=MarianQueryTranslator(runtime.loader(TRANSLATOR), device=device),
         device=device,
+        query_adapter=QueryAdapter.load,
     )
 
 

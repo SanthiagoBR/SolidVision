@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import io
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import torch
@@ -30,6 +30,7 @@ from app.domain.services.embedding_model_port import EmbeddingModelPort
 from app.domain.value_objects.embedding_vector import EmbeddingVector
 from app.infrastructure.ai.device import resolve_device
 from app.infrastructure.ai.model_runtime import ModelDirectory, load_failed
+from app.infrastructure.ai.query_adapter import QueryAdapter
 from app.infrastructure.ai.query_translator import QueryTranslator
 from app.infrastructure.config.settings import settings
 from app.infrastructure.logging.logger import get_logger
@@ -100,6 +101,11 @@ class ClipEmbeddingModel(EmbeddingModelPort):
     generic `except` here would only hide which file failed and why. The one
     exception is the load itself, which becomes a `ModelUnavailableError`:
     a line for the user, and the traceback for the log.
+
+    `query_adapter`, when given, is RFC-042's level A matrix. It is called on
+    the first load too, and only `encode_text()` applies what it returns.
+    Without it, a query's vector is CLIP's own, which is what the experiments
+    and the reference vectors of RFC-035 compare against.
     """
 
     def __init__(
@@ -108,11 +114,14 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         translator: QueryTranslator,
         expected_dimension: int | None = None,
         device: torch.device | None = None,
+        query_adapter: Callable[[], QueryAdapter] | None = None,
     ) -> None:
         self._model_directory = model_directory
         self._expected_dimension = expected_dimension or settings.embedding_dimension
         self._device = device if device is not None else resolve_device()
         self._translator = translator
+        self._query_adapter_source = query_adapter
+        self._query_adapter: QueryAdapter | None = None
         self._loaded_from: Path | None = None
         self._model: CLIPModel | None = None
         self._processor: ProcessorMixin | None = None
@@ -242,19 +251,30 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         return inputs["pixel_values"]
 
     def encode_text(self, text: str) -> EmbeddingVector:
-        """Encode a user query into the same space `encode_image` writes into."""
+        """Encode a user query into the same space `encode_image` writes into.
+
+        CLIP reads at most 77 tokens. A longer prompt -- a long query, or a
+        translation where Marian repeats itself -- is cut to that length
+        instead of failing the search.
+
+        With a query adapter, the normalized vector goes through it last
+        (RFC-042 level A). The photos' vectors are never adapted.
+        """
         model, processor = self._ensure_loaded()
 
         inputs = processor(
             text=[self.build_prompt(text)],
             return_tensors="pt",
             padding=True,
+            truncation=True,
         )
 
         with torch.no_grad():
             features = model.get_text_features(**self._to_device(inputs))
 
-        return self._to_embedding_vectors(features.pooler_output, expected_rows=1)[0]
+        return self._to_embedding_vectors(
+            features.pooler_output, expected_rows=1, adapter=self._query_adapter
+        )[0]
 
     def build_prompt(self, text: str) -> str:
         """Return the exact English string handed to CLIP's text encoder.
@@ -324,6 +344,14 @@ class ClipEmbeddingModel(EmbeddingModelPort):
                     f"{IMAGE_PROCESSOR_BACKEND}: is the torchvision package missing? "
                     "Its vectors would not be the index's (RFC-041 section 5.5)."
                 )
+            if self._query_adapter_source is not None:
+                adapter = self._query_adapter_source()
+                if adapter.dimension != self._expected_dimension:
+                    raise RuntimeError(
+                        f"The query adapter is {adapter.dimension}-dimensional,"
+                        f" and the vectors are {self._expected_dimension}"
+                    )
+                self._query_adapter = adapter
         except Exception as error:
             raise load_failed(directory) from error
         self._loaded_from = directory
@@ -333,7 +361,10 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         return {key: value.to(self._device) for key, value in inputs.items()}
 
     def _to_embedding_vectors(
-        self, features: torch.Tensor, expected_rows: int
+        self,
+        features: torch.Tensor,
+        expected_rows: int,
+        adapter: QueryAdapter | None = None,
     ) -> list[EmbeddingVector]:
         """Validate, L2-normalize, and lift CLIP features into the domain type.
 
@@ -380,4 +411,6 @@ class ClipEmbeddingModel(EmbeddingModelPort):
             )
 
         normalized = torch.nn.functional.normalize(features, p=2.0, dim=-1)
+        if adapter is not None:
+            normalized = adapter.apply(normalized)
         return [EmbeddingVector(row) for row in normalized.detach().cpu().tolist()]

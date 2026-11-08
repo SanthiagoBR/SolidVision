@@ -129,6 +129,19 @@ class TestRealCheckpointContract:
         norm = math.sqrt(sum(value * value for value in embedding.values))
         assert norm == pytest.approx(1.0, abs=1e-5)
 
+    def test_a_query_longer_than_77_tokens_is_cut_instead_of_failing(
+        self, clip: ClipEmbeddingModel
+    ) -> None:
+        """Past 77 tokens the text tower raised and the search failed. Now the
+        prompt is cut: what comes after the cut changes nothing."""
+        long_query = " ".join(["a house with a red roof next to a road"] * 12)
+
+        cut = clip.encode_text(long_query)
+        longer = clip.encode_text(long_query + " and a river far behind")
+
+        assert len(cut.values) == 512
+        assert cut.values == longer.values
+
     def test_image_embeddings_are_unit_norm(
         self, clip: ClipEmbeddingModel, tmp_path: Path
     ) -> None:

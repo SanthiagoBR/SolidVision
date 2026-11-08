@@ -1,10 +1,10 @@
 # RFC-042 — Fine-tuning do CLIP
 
-**Status:** Em implementação. A porta de entrada de §3.1 foi medida (§14): nenhum checkpoint aéreo supera o atual, e o treino próprio segue. As fotos do Commons estão baixadas e o conjunto de §5.1.2 está congelado; faltam as legendas de treino e o treino (§15)
+**Status:** Nível A implementado e no produto (§16). A porta de entrada de §3.1 foi medida (§14): nenhum checkpoint aéreo supera o atual. O nível A foi treinado em fotos do acervo real e medido num conjunto de consultas escritas só pelo usuário e no teste fechado do acervo; o produto aplica a matriz em cada busca por texto, sem reindexar. Os níveis B e C não foram começados
 **Depende de:** RFC-023 (o adaptador de embedding, o benchmark do bake-off e [§18](rfc-023-adaptador-de-embedding-clip.md#18-fine-tuning-e-trabalho-futuro), que adiou este assunto), RFC-025 (a busca semântica e a linha de base de [§11.2](rfc-025-busca-semantica.md)), RFC-035 (o lockfile de modelos, por onde um checkpoint novo entra)
 **Bloqueia:** nada
 **Migration:** não, se a dimensão do vetor continuar 512. Sim, se mudar (§9)
-**Medição:** `experiments/rfc-042-fine-tuning/measure_baseline.py` (o `.json`, com o rank de cada consulta e cada tradução, fica fora do git), rodado em 2026-11-02 nesta máquina, em CPU, na divisão de validação de `eval_set.jsonl` (§14)
+**Medição:** `experiments/rfc-042-fine-tuning/measure_baseline.py` (o `.json`, com o rank de cada consulta e cada tradução, fica fora do git), rodado em 2026-11-02 nesta máquina, em CPU, na divisão de validação de `eval_set.jsonl` (§14). O nível A: `train_adapter.py` e `measure_archive.py`, de 2026-11-05 a 2026-11-07, na mesma máquina, em CPU (§16)
 
 > **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir*. Os números sem marca vêm de outros RFCs e dizem de qual. As estimativas de tempo de treino, de volume de dados e de ganho esperado de §4, §6 e §7 são regras gerais de adaptação de domínio do CLIP, e não foram medidas neste projeto. Este RFC não afirma que o fine-tuning vai melhorar a busca. Ele define como saber se melhorou.
 
@@ -257,3 +257,121 @@ O texto acima fica como foi proposto. O que a implementação mudou ou mediu est
 5. **§5.1.2: 525 fotos, cada consulta revisada à mão.** Uma foto por série (autor e dia), e nenhuma de série que tenha legenda de treino, para que o mesmo voo não apareça dos dois lados. O Claude escreveu os rascunhos das consultas em português a partir das fotos, e o usuário corrigiu cada um na página de revisão: 14 escritas do zero e 511 a partir de rascunho, das quais 359 aprovadas sem mudança (70,3%) e 152 editadas. Os rascunhos refeitos olhando as fotos de novo tiveram 61 de 65 aprovados. 66 consultas têm uma variante com termos do sul do Brasil, para medir o tradutor nesse vocabulário. As versões em inglês (§5.2: "nos dois idiomas") foram escritas pelo Claude a partir do português e conferidas por amostra.
 6. **§4.6: as divisões estão congeladas em `eval_set.jsonl`** por `freeze_eval_set.py`. Um terço das consultas é validação (178) e o resto é teste (347), sorteados pela ordem `spread` do coletor dentro de cada estrato (tipo de cena e presença da variante do sul). Validação e teste usam a mesma galeria, as 525 fotos. O teste só abre com `--open-test`, e a primeira abertura fica registrada. O tipo de cena é um rótulo grosso, para ler resultados em separado, e não uma verdade: a primeira palavra da consulta que nomeia uma cena decide (água, construído, campo).
 7. **§5.1.3, o conjunto de regressão, ainda não existe.** Ele não pesa na decisão de §3.1, que não treina nada, mas é pré-requisito do critério de §5.3 para qualquer nível.
+8. **§5.1.2: o conjunto que decide passou a ser o acervo real do usuário** (§16.1). O usuário achou as fotos do Commons diferentes das suas, que são oblíquas próximas de propriedades em Santa Catarina. O conjunto do Commons seguiu como verificação de regressão em fotos aéreas, e o teste dele (347 consultas) continua fechado.
+9. **§5.1.3: o conjunto de regressão existe.** São 1.000 fotos da validação do COCO 2017, com as cinco legendas de cada uma (`fetch_coco.py`), usadas só para medir (§16.2).
+10. **§5.3: a margem foi fixada antes da medição, como uma regra** (§16.4): o R@5 e o MRR sobem com o intervalo acima de zero no conjunto escrito só pelo usuário, e o COCO não cai mais que ~1 ponto.
+11. **§4.2 e §4.3: os pares de treino são do acervo real**, e não do Commons: 7.302 buscas escritas pelo Claude para 2.434 fotos de drone do usuário, de 2018 (§16.2).
+12. **§8: o nível A não entra pelo lockfile.** A matriz fica no código, ao lado do léxico do RFC-047 (§16.5).
+
+## 16. Nível A: o acervo real, o treino e a entrada no produto
+
+As fotos do acervo e as consultas sobre elas mostram lugares privados. Ficam fora do repositório, numa pasta do usuário, e este texto registra só contagens e números. Os scripts estão em `experiments/rfc-042-fine-tuning/`.
+
+### 16.1 O conjunto de decisão: o acervo real
+
+- **As fotos.** Uma foto por dia de voo do HD do usuário, de 2010 em diante e fora de 2018, o ano do treino (`sample_archive.py`), em miniaturas de 1.600 px. São 300 fotos. Quatro foram tiradas do chão e uma ficou sem consulta, e as cinco ficaram de fora.
+- **As consultas, 295 em português.** O usuário escreveu 32 do zero. As outras são rascunhos que o Claude escreveu olhando as fotos, na sessão, e que o usuário revisou: 117 aprovados como estavam e 146 editados. A origem fica registrada em cada consulta.
+- **O congelamento** (`freeze_archive_set.py`). Um terço vai para a validação (100) e o resto para o teste (195). O sorteio é feito dentro de cada estrato de origem × "a até 300 m de uma foto de treino" (8 fotos na validação e 15 no teste estão nessa distância). Validação e teste compartilham uma galeria, as 295 fotos.
+- **A linha de base do produto, na validação:** R@1 18,0%, R@5 46,0%, R@10 56,0%, MRR 31,8%. Depois das quatro formas do RFC-047 §18, ficou em R@1 18,0%, R@5 49,0% e R@10 62,0%.
+
+### 16.2 Os dados de treino e a regressão
+
+- **Fotos.** O usuário separou todo o ano de 2018: 2.474 fotos de drone. As 44 de celular ficaram de fora. Foram usadas em miniaturas de 768 px (`archive_training.py`).
+- **Buscas.** O Claude (Sonnet 5.5, pela API de lotes) escreveu, para cada foto, três buscas em português: uma curta, uma média e uma longa, com medianas de 4, 10 e 16 palavras.
+  - O prompt pede palavras do dia a dia, "no fundo" em vez de "ao fundo" e nada de direita e esquerda. Foi assim que o usuário corrigiu os rascunhos de §15.5.
+  - O Claude pulou 39 fotos, tiradas do chão, e uma resposta veio com erro. Ficaram 7.302 pares em 2.434 fotos.
+  - Custo: US$ 4,03.
+- **Como entram no treino.** Cada busca passa pelo tradutor e pelo template do produto, como uma busca de verdade. Em cada época, o treino sorteia uma das três buscas de cada foto.
+- **Procedência (§4.4).** As fotos são do próprio usuário, e os textos foram escritos pelo Claude. Nada disso sai da máquina; só a matriz treinada sai (§16.5).
+- **Regressão (§5.1.3).** O conjunto é o COCO de §15.9: 5.000 legendas escritas por pessoas, cada uma buscada contra as 1.000 fotos.
+
+### 16.3 O treino e a escolha, na validação
+
+A matriz é treinada com a perda contrastiva simétrica, temperatura 100, lotes de 256, sobre os vetores das fotos e das buscas guardados em cache. Leva cerca de 1 s em CPU.
+
+- **Os parâmetros iniciais decoraram o treino** (20 épocas, taxa de aprendizado 1e-3, decaimento de pesos 1e-3). A matriz saiu com norma 8,25, e tudo piorou:
+  - acervo, R@1: 18,0 → 14,0%;
+  - Commons em português, R@1: 49,4 → 42,1% (−7,3 [−14,0; −1,1]);
+  - COCO, R@1: 58,5 → 52,9% (−5,6 [−6,6; −4,6]).
+- **Uma grade de 18 configurações**, escolhida na validação do acervo e portanto depois de ver os números: épocas 1, 3 ou 10; taxa 1e-4, 3e-4 ou 1e-3; decaimento 1e-3 ou 1e-1.
+  - O R@1 do acervo variou de −1,0 a +7,0 pontos, e o do COCO, de −3,4 a −0,2.
+  - A escolhida foi **10 épocas, taxa 1e-4 e decaimento 1e-3**, com norma 1,41.
+
+| Validação | Produto | Matriz | Diferença [IC 95%] |
+|---|---|---|---|
+| Acervo, R@1 (100) | 18,0% | 25,0% | +7,0 [0,0; +15,0] |
+| Acervo, R@5 | 49,0% | 53,0% | +4,0 [−3,0; +11,0] |
+| Commons pt, R@1 (178) | 49,4% | 50,6% | +1,1 [−2,8; +5,1] |
+| Commons pt, R@5 | 79,2% | 80,9% | +1,7 [−2,2; +5,6] |
+| Commons en, R@5 | 83,7% | 86,5% | +2,8 [−1,7; +7,3] |
+| COCO, R@1 (5.000) | 58,5% | 57,9% | −0,6 [−1,2; 0,0] |
+| COCO, R@5 | 85,1% | 84,3% | −0,7 [−1,2; −0,3] |
+
+**A suspeita.** Na validação do acervo, as 11 consultas do usuário se moveram assim: 2 subiram, 8 caíram, e o R@5 foi de 45,5% para 18,2%. Os rascunhos do Claude tiveram 48 subindo e 18 caindo (Fisher, p ≈ 0,004). As legendas do COCO, escritas por pessoas, também caíram um pouco. A hipótese era que a matriz tivesse aprendido o jeito de escrever do modelo, que escreveu as buscas de treino e os rascunhos, e não o do usuário. Com essas 11 consultas, o conjunto não servia para decidir.
+
+### 16.4 O conjunto só do usuário e o teste
+
+**A regra, fixada antes da medição** (a margem de §5.3):
+- a matriz já escolhida é medida uma única vez, sem nenhum ajuste, num conjunto novo de consultas escritas só pelo usuário;
+- é aceita se o R@5 e o MRR sobem, com o intervalo acima de zero, e o COCO não cai mais que ~1 ponto;
+- se for aceita, o teste do acervo é aberto uma única vez.
+
+**O conjunto.** São 80 dias de voo novos, fora dos 300 de §16.1 e de 2018. O usuário escreveu as consultas do zero, sem rascunho: 78, porque duas fotos ficaram sem consulta. A galeria é a dessas 78 fotos, e sete delas estão a até 300 m de uma foto de treino. Congelado inteiro como teste (`freeze_archive_set.py --one-split test`).
+
+| Só do usuário (78 × 78) | Produto | Matriz | Diferença [IC 95%] |
+|---|---|---|---|
+| R@1 | 28,2% | 32,1% | +3,8 [−2,6; +10,3] |
+| R@5 | 50,0% | **60,3%** | **+10,3 [+2,6; +17,9]** |
+| R@10 | 69,2% | 73,1% | +3,8 |
+| MRR | 40,8% | 44,0% | +3,2 [−1,2; +8,0] |
+
+- 34 consultas subiram, 19 caíram e 25 ficaram onde estavam.
+- Longe das fotos de treino (71 consultas), o R@5 sobe +11,3 [+2,8; +19,7]: o ganho não vem de reconhecer lugares do treino.
+- **A regra foi lida como cumprida pelo R@5.** O MRR subiu, mas o intervalo dele cruza zero. A ferramenta de medição só dá intervalo para R@1 e R@5; o do MRR foi calculado depois, pelo mesmo bootstrap pareado. Numa leitura estrita, que exija intervalo acima de zero também no MRR, a regra não passa.
+
+| Teste do acervo, aberto uma vez (195 × 295) | Produto | Matriz | Diferença [IC 95%] |
+|---|---|---|---|
+| R@1 | 21,0% | 26,7% | +5,6 [+1,5; +10,3] |
+| R@5 | 45,1% | 50,3% | +5,1 [0,0; +10,8] |
+| R@10 | 56,9% | 63,1% | +6,2 |
+| MRR | 32,4% | 38,4% | +6,0 [+3,0; +9,2] |
+
+- No teste, 107 consultas subiram e 41 caíram.
+- Por origem, o R@5:
+  - rascunhos aprovados (77): +6,5 [0,0; +13,0];
+  - rascunhos editados (97): +7,2 [−1,0; +15,5];
+  - consultas do usuário (21): 6 subiram e 8 caíram, −9,5 [−28,6; +9,5].
+
+**As consultas do usuário, todas juntas** (uma leitura feita depois de ver os números):
+- As 32 escritas antes de existir qualquer rascunho (11 da validação e 21 do teste) tiveram 8 subindo e 16 caindo. Ano e câmera não explicam a diferença em relação às 78 novas.
+- Juntando as consultas do usuário que nunca serviram para escolher nada (as 78 novas e as 21 do teste): R@5 +6,1 [−1,0; +13,1], MRR +3,2 [−0,9; +7,4], 40 subindo e 27 caindo.
+- **Leitura:** o ganho é claro no conjunto e nos rascunhos. No que o usuário digita, é menor e incerto, provavelmente positivo.
+
+**O benchmark do RFC-023 (§5.1.1)**, as 25 consultas contra as 45 fotos, ranqueadas contra os vetores de referência do RFC-035:
+- R@5: 84,0 → 88,0%;
+- top-1 estrito: 64,0 → 68,0%;
+- ordem entre a foto certa e a quase-certa: 80,4 → 77,8%;
+- quase-certas entre as 5 primeiras: 12,8 → 11,2%.
+
+Para "a rural property with a lake", `lake_property_01` caiu do 4º para o 13º lugar. O teste de ponta a ponta que exigia essa foto entre as 5 primeiras (`test_a_full_sentence_portuguese_query_finds_the_same_images`) passou a exigir o que diz checar, que o tradutor está na busca: o português e o inglês trazem as mesmas 5 fotos. A consulta mandada sem tradução divide só 3 das 5 com a inglesa, e a sobreposição de 3 que o teste aceitava antes não pegaria esse caso.
+
+**§5.2.** A matriz move pouco cada consulta. O cosseno mediano entre o vetor do CLIP e o ajustado é 0,972 nas 78 consultas do usuário (mínimo 0,945) e 0,965 nas 295 do acervo (mínimo 0,934). Ela acrescenta uma mediana de 62 µs por busca (p95 139 µs), contra 170 a 220 ms de uma busca inteira no app.
+
+**A decisão.** Em 2026-11-07, o usuário testou o app de desenvolvimento com e sem a matriz e decidiu levá-la ao produto.
+
+### 16.5 A entrada no produto (correções de §8)
+
+1. **§8.2: não é uma entrada do lockfile.** A matriz (512 × 512, float32, 1 MB) fica em `backend/app/infrastructure/ai/query_adapter.safetensors`, ao lado do léxico. É versionada com o código e lida como dado do pacote (`query_adapter.py`). O lockfile do RFC-035 só conhece modelos baixados do Hugging Face, e não se quis publicar uma matriz tirada das fotos do usuário. O cabeçalho do arquivo registra:
+   - o repositório e a revisão do CLIP. Com outro CLIP, a carga recusa a matriz;
+   - o sha256 do léxico. Com outro léxico, um teste falha;
+   - os hiperparâmetros, o número de pares e o sha256 da própria matriz.
+
+   O cabeçalho não tem nenhum caminho nem consulta. `export_adapter.py` grava o arquivo a partir de um treino.
+2. **§8.1:** o arquivo é safetensors, como pedido. Não há fusão de LoRA no nível A.
+3. **§8.3:** a procedência é a de §16.2: as fotos são do usuário e os textos foram escritos pelo Claude. A matriz é distribuída com o app.
+4. **§8.4, determinismo.** O teste de referência do RFC-035 compara o caminho inteiro do app com o vetor gravado passado pela matriz, uma linha por vez, como numa busca, bit a bit. O arquivo gravado não é reescrito, como no RFC-047 §8. `scripts/check_package.py` faz o mesmo.
+5. **Onde a matriz entra.** `ClipEmbeddingModel.encode_text` calcula `normalize(t + A t)` depois da normalização. Os vetores das imagens, a busca por foto e "semelhantes" não passam pela matriz. Não há migration nem reindexação (§9).
+6. **O que a matriz amarra.** Ela foi treinada com as traduções do léxico e do tradutor de hoje.
+   - Mudar qualquer um dos dois faz `test_it_was_trained_with_this_lexicon` falhar até que a matriz seja treinada de novo (`train_adapter.py`), medida (validação do acervo e COCO) e gravada (`export_adapter.py`).
+   - Trocar o CLIP (níveis B e C) invalida a matriz.
+   - Os conjuntos limpos já foram gastos: o teste do acervo está aberto e o conjunto do usuário foi medido. Um novo treino com a mesma receita é conferido na validação e no COCO. Uma receita nova precisa de um conjunto limpo novo.
