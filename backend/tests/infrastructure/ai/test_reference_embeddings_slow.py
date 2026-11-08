@@ -21,6 +21,11 @@ still compared, which proves the encoder; the prompt of each query is
 compared with the recorded one only where RFC-047 does not touch it, and
 with `CHANGED_BY_RFC_047` where it does.
 
+RFC-042 level A moved every query's vector on purpose too, and again the file
+is not rewritten. A recorded prompt, encoded without the adapter, is compared
+with the recorded vector. The app's whole path is compared with the recorded
+vector put through the shipped adapter, one row at a time, as the app does.
+
 Exact on the machine that wrote the file; within `TOLERANCE` on any other,
 because nothing in `torch` promises the same bits across processors or
 thread counts (section 7.3). Marked `slow`, and skipped without
@@ -52,6 +57,7 @@ from app.infrastructure.ai.clip_embedding_model import (
     ClipEmbeddingModel,
 )
 from app.infrastructure.ai.model_runtime import CLIP, default_runtime, read_lockfile
+from app.infrastructure.ai.query_adapter import QueryAdapter
 from app.infrastructure.ai.query_translator import QueryTranslator, marian_input
 from dataset_tools.manifest import DEMO_CORPUS_ROOT
 
@@ -266,7 +272,9 @@ def test_the_recorded_prompts_land_on_the_same_vectors(reference: Any) -> None:
 def test_the_untouched_queries_land_on_the_same_vectors(
     clip: ClipEmbeddingModel, reference: Any
 ) -> None:
-    """The whole path, translator included, where RFC-047 changed nothing."""
+    """The whole path, translator and adapter included, where RFC-047 changed
+    nothing. The recorded vector goes through the adapter one row at a time,
+    as a search does: a batch could take another kernel and other bits."""
     rows = [
         index
         for index, query in enumerate(reference["queries"])
@@ -275,5 +283,12 @@ def test_the_untouched_queries_land_on_the_same_vectors(
     found = vectors(
         [clip.encode_text(str(reference["queries"][index])) for index in rows]
     )
+    adapter = QueryAdapter.load()
+    expected = np.concatenate(
+        [
+            adapter.apply(torch.from_numpy(reference["query_vectors"][[index]])).numpy()
+            for index in rows
+        ]
+    )
 
-    compare(found, reference["query_vectors"][rows], reference)
+    compare(found, expected, reference)

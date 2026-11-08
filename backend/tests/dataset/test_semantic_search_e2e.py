@@ -524,8 +524,11 @@ def test_a_full_sentence_portuguese_query_finds_the_same_images(
         search_use_case.execute(english, limit=5)
     )
 
-    assert "images/aerial/rural/lake_property_01.jpg" in portuguese_hits
-    # Not an identical ranking -- the translation is a different English
-    # string ("Rural property with a lake") and CLIP is entitled to score
-    # it differently. Overlap is the claim: the query was understood.
-    assert len(set(portuguese_hits) & set(english_hits)) >= 3
+    # The claim is the wiring, not which photo comes first. This test used
+    # to require lake_property_01 in the five; RFC-042 level A moved it from
+    # 4th to 13th for this query (RFC-042 section 16.4), and which photo
+    # wins is the model's noise, which this module does not pin. Since
+    # RFC-047 the translator sends exactly the English query, so the two
+    # pages are one page. The query sent as typed, untranslated, shares
+    # only three of the five photos: an overlap would not catch it.
+    assert portuguese_hits == english_hits

@@ -508,8 +508,21 @@ def check_vectors_here(reference: Path, images: Path) -> int:
         )
         raise PackageError(f"query {first} translates to {prompts[first]!r}")
     print(f"the prompts: {len(prompts)} equal, the translations included")
+    # RFC-042 level A: the app's queries go through the shipped adapter, so
+    # the recorded vectors do too, one row at a time as a search does.
+    import torch
+
+    from app.infrastructure.ai.query_adapter import QueryAdapter
+
+    adapter = QueryAdapter.load()
+    expected = np.concatenate(
+        [
+            adapter.apply(torch.from_numpy(data["query_vectors"][[index]])).numpy()
+            for index in range(len(queries))
+        ]
+    )
     found = vectors(model.encode_text(query) for query in queries)
-    print(f"the queries: {compare_rows(found, data['query_vectors'], exact)}")
+    print(f"the queries: {compare_rows(found, expected, exact)}")
     return 0
 
 
