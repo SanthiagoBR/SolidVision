@@ -8,6 +8,7 @@ comes back unchanged.
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -137,6 +138,34 @@ def test_the_commands_exit_code_is_runs_exit_code(
     use(monkeypatch, FakeCluster(started_here=True))
 
     assert cli.main(child("import sys; sys.exit(7)")) == 7
+
+
+@pytest.mark.skipif(
+    sys.prefix == sys.base_prefix, reason="the suite is not running in a venv"
+)
+def test_a_bare_python_is_the_venvs_on_the_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RFC-048 section 17.12: in an activated venv, `run -- python ...` ran
+    the base interpreter, which Windows finds first beside the running one,
+    and none of the venv's packages came with it."""
+    use(monkeypatch, FakeCluster(started_here=True))
+    venv_scripts = str(Path(sys.executable).parent)
+    monkeypatch.setenv("PATH", venv_scripts + ";" + os.environ["PATH"])
+
+    in_the_venv = "import sys; sys.exit(0 if sys.prefix != sys.base_prefix else 9)"
+    assert cli.main(["run", "--", "python", "-c", in_the_venv]) == 0
+
+
+def test_a_program_is_found_on_the_path_with_its_extension(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """As a terminal finds `npm`: `npm.cmd`, by `PATHEXT`."""
+    use(monkeypatch, FakeCluster(started_here=True))
+    (tmp_path / "sv-probe.cmd").write_text("@exit /b 5\r\n")
+    monkeypatch.setenv("PATH", str(tmp_path) + ";" + os.environ["PATH"])
+
+    assert cli.main(["run", "--", "sv-probe"]) == 5
 
 
 def test_run_stops_the_cluster_it_started(monkeypatch: pytest.MonkeyPatch) -> None:
