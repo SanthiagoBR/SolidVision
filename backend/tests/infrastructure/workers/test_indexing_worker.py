@@ -632,6 +632,17 @@ class TestErrorIsolationUnderBatching:
 class TestCommandLineEntryPoint:
     """RFC-024 section 12."""
 
+    @pytest.fixture(autouse=True)
+    def _models_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """`run()` checks that the models are on disk first (RFC-035 section
+        6.1), and `main()` turns their absence into exit code 78. The model
+        here is a fake, so the check is too: without this, the class passed
+        only where `runtime\\models` exists (RFC-048 section 17)."""
+        monkeypatch.setattr(
+            "app.infrastructure.ai.model_runtime.ModelRuntime.check_presence",
+            lambda runtime: None,
+        )
+
     def test_the_root_argument_is_required(self) -> None:
         """No default, so the command can never wander into real photos."""
         with pytest.raises(SystemExit):

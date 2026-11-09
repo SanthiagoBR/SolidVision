@@ -143,9 +143,14 @@ def test_the_index_and_the_jobs_go_and_the_devices_stay(
             assert count(db, "images") == 0
             assert count(db, "indexing_jobs") == 0
             assert count(db, "indexing_job_scopes") == 0
-            assert db.execute(
-                text("SELECT id, label, volume_identity FROM devices")
-            ).all() == [(device.id.value, "HD2", device.volume_identity.value)]
+            # As tuples: a `Row` and a tuple compare equal, but `mypy` with
+            # SQLAlchemy 2.0 says their types never overlap (RFC-048 section 8).
+            assert [
+                tuple(row)
+                for row in db.execute(
+                    text("SELECT id, label, volume_identity FROM devices")
+                ).all()
+            ] == [(device.id.value, "HD2", device.volume_identity.value)]
             assert _revision(db) == RFC_045
 
             migrate(db, BEFORE_RFC_045, down=True)

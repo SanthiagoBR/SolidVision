@@ -158,6 +158,16 @@ Segue o [roadmap do frontend](ROADMAP-frontend.md): um RFC curto por etapa, do 0
 > - Na validação, o ganho parecia vir só de a matriz ter aprendido o jeito de escrever do Claude, porque as 11 consultas do usuário caíam (2 subindo, 8 caindo). Um conjunto novo, de 78 consultas escritas só por ele, mostrou ganho, com o intervalo acima de zero. Mesmo assim, as 32 consultas dele escritas antes de existir rascunho continuam caindo, e o ganho no que ele digita é menor e menos certo que nos rascunhos.
 > - No benchmark de demonstração, o R@5 sobe de 84% para 88%, mas "a rural property with a lake" manda a foto do lago do 4º para o 13º lugar. Um teste exigia aquela foto, e passou a exigir o que diz checar: que o tradutor está na busca.
 
+## CI/CD
+
+Segue o [roadmap de CI/CD](ROADMAP-ci-cd.md): sete RFCs curtos, do 048 ao 054, até um push conferido por uma máquina que não é a de ninguém e uma tag que produz um rascunho de release.
+
+| # | RFC | Entrega | Status |
+|---|---|---|---|
+| 048 | [As Conferências num Comando Só, com as Versões Fixadas](rfc-048-conferencias-num-comando-so.md) | `python scripts/check.py`: as nove conferências numa ordem fixa — o ambiente, `ruff --no-fix`, `black`, `mypy`, `eslint`, `tsc`, `prettier`, `vitest` e o `pytest` por último, depois de uma conexão de teste com o banco e com `WARM_UP_MODELS=false` —, com grupos para o CI, parando na primeira falha ou, com `--keep-going`, resumindo todas. A etapa `env` confere o Python 3.12.9 e cada pacote do venv contra os dois lockfiles. `scripts/python-dev-win-64.lock`, as ferramentas e o fecho delas, escrito pelo mesmo `--lock`, sem nenhum pacote do lockfile do runtime; `scripts/make_venv.py`, um venv só dos dois, sem resolver nada. O `frontend/.gitattributes` commitado. Num clone novo, sem `.env` e sem modelos: o venv em 390,3 s, o comando inteiro em 524,4 s frio e 241,7 s quente, o `mypy` com zero erros, e cada um dos nove defeitos plantados vermelho na etapa dele; com o banco parado, 3,8 s até a falha | ✅ |
+
+> **O que o RFC-048 mediu e não esperava** ([§17](rfc-048-conferencias-num-comando-so.md#17-correções-feitas-durante-a-implementação)). Instalar os dois lockfiles numa chamada só falhava: o `pip` junta as opções dos arquivos em ordem, e o `--only-binary :all:` do lockfile das ferramentas apagava o `--no-binary langdetect` do outro. E 13 testes da suíte padrão, que trocam o modelo por um dublê, só passavam numa máquina com `runtime\models`, porque o código confere a presença dos arquivos antes de usar o dublê — o primeiro clone sem os modelos os achou. O venv desta máquina divergia do lockfile em 36 pacotes, o `torch` entre eles, e os vetores dos dois venvs são iguais bit a bit.
+
 ---
 
 ## Como ler estes documentos

@@ -53,6 +53,18 @@ def _image(
     )
 
 
+@pytest.fixture(autouse=True)
+def _models_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`_search()` checks that the models are on disk before it composes
+    anything (RFC-035 section 6.1). The model here is a fake, so the check is
+    too: without this, the file passed only where `runtime\\models` exists,
+    and failed in a fresh clone (RFC-048 section 17)."""
+    monkeypatch.setattr(
+        "app.infrastructure.ai.model_runtime.ModelRuntime.check_presence",
+        lambda runtime: None,
+    )
+
+
 def _wire(
     monkeypatch: pytest.MonkeyPatch,
     repository: FakeImageRepository,

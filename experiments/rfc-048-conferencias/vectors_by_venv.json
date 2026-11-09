@@ -1,0 +1,39 @@
+{
+  "a": {
+    "python": "3.12.5",
+    "processor": "Intel64 Family 6 Model 126 Stepping 5, GenuineIntel",
+    "threads": 4,
+    "torch": "2.14.0+cpu",
+    "transformers": "5.17.0",
+    "numpy": "2.5.3"
+  },
+  "b": {
+    "python": "3.12.9",
+    "processor": "Intel64 Family 6 Model 126 Stepping 5, GenuineIntel",
+    "threads": 4,
+    "torch": "2.13.0+cpu",
+    "transformers": "5.15.0",
+    "numpy": "2.5.2"
+  },
+  "image_vectors": {
+    "rows": 45,
+    "rows_bit_equal_a_b": 45,
+    "max_abs_a_b": 0.0,
+    "max_abs_a_reference": 1.2218952178955078e-06,
+    "max_abs_b_reference": 1.2218952178955078e-06
+  },
+  "image_vectors_batched": {
+    "rows": 45,
+    "rows_bit_equal_a_b": 45,
+    "max_abs_a_b": 0.0,
+    "max_abs_a_reference": 1.2032687664031982e-06,
+    "max_abs_b_reference": 1.2032687664031982e-06
+  },
+  "query_vectors": {
+    "rows": 50,
+    "rows_bit_equal_a_b": 50,
+    "max_abs_a_b": 0.0,
+    "max_abs_a_reference": 6.854534149169922e-07,
+    "max_abs_b_reference": 6.854534149169922e-07
+  }
+}

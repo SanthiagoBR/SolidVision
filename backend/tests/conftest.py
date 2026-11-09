@@ -161,8 +161,9 @@ def empty_db_session(db_session: Session) -> Session:
     write lock on every existing row for the duration of the test and does
     not protect against a *concurrent* writer -- another process would
     block, and its rows would appear if it committed first. That is
-    acceptable because the suite runs in one process: `requirements.txt`
-    pins `pytest` and `pytest-mock` and no `pytest-xdist`. A dedicated
+    acceptable because the suite runs in one process: the tools' lockfile,
+    `scripts/python-dev-win-64.lock`, pins `pytest` and no `pytest-xdist`
+    (RFC-048 section 14). A dedicated
     test database would remove the caveat and is future work: the engine
     is a module-level singleton built from the settings at
     import time, there is one `.env` and one `POSTGRES_DB` in
