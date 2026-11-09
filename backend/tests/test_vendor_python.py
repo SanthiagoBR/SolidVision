@@ -56,6 +56,14 @@ def locked(vendor: ModuleType) -> dict[str, str]:
     return {entry.name: entry.version for entry in vendor.read_lock(vendor.LOCKFILE)}
 
 
+@pytest.fixture(scope="module")
+def dev_locked(vendor: ModuleType) -> dict[str, str]:
+    """The same, of the tools' lockfile (RFC-048 section 5)."""
+    return {
+        entry.name: entry.version for entry in vendor.read_lock(vendor.DEV_LOCKFILE)
+    }
+
+
 # --------------------------------------------------------------------------
 # The lockfile (section 5.2)
 # --------------------------------------------------------------------------
@@ -135,6 +143,128 @@ def test_every_line_has_a_sha256_and_the_header_the_two_indexes(
         "--extra-index-url https://download.pytorch.org/whl/cpu",
     ]
     assert "--only-binary :all:" in options
+
+
+# --------------------------------------------------------------------------
+# The tools' lockfile (RFC-048 section 5)
+# --------------------------------------------------------------------------
+
+
+def test_no_package_is_in_both_lockfiles(
+    locked: dict[str, str], dev_locked: dict[str, str]
+) -> None:
+    """Installed together with `--no-deps`, a package in both would get the
+    version of whichever file came last, without an error (section 2.7)."""
+    assert set(locked) & set(dev_locked) == set()
+
+
+def test_the_five_tools_are_in_the_tools_lockfile(dev_locked: dict[str, str]) -> None:
+    assert {"pytest", "pytest-cov", "black", "ruff", "mypy"} <= set(dev_locked)
+    assert "pip" not in dev_locked
+    assert "pytest-mock" not in dev_locked, "no test uses it (section 2.6)"
+
+
+def test_every_line_of_the_tools_lockfile_has_a_sha256_and_the_two_indexes(
+    vendor: ModuleType,
+) -> None:
+    lines = vendor.DEV_LOCKFILE.read_text(encoding="utf-8").splitlines()
+    packages = [line for line in lines if line and not line.startswith(("#", "-"))]
+    options = [line for line in lines if line.startswith("-")]
+
+    assert packages and all(" --hash=sha256:" in line for line in packages)
+    assert all(len(line.rsplit(":", 1)[1]) == 64 for line in packages)
+    assert all("===" in line for line in packages)
+    assert options[:2] == [
+        "--index-url https://pypi.org/simple",
+        "--extra-index-url https://download.pytorch.org/whl/cpu",
+    ]
+    assert "--only-binary :all:" in options
+
+
+def test_the_two_lockfiles_carry_the_same_options(vendor: ModuleType) -> None:
+    """`make_venv.py` installs both in one call, and `pip` merges their
+    options in order: a tools' `--only-binary :all:` read last took the
+    runtime's `--no-binary langdetect` away, and no `langdetect` was found
+    (RFC-048 section 17)."""
+
+    def options(lockfile: Path) -> list[str]:
+        lines = lockfile.read_text(encoding="utf-8").splitlines()
+        return [line for line in lines if line.startswith("-")]
+
+    assert options(vendor.DEV_LOCKFILE) == options(vendor.LOCKFILE)
+    assert "--no-binary langdetect" in options(vendor.DEV_LOCKFILE)
+
+
+def test_every_version_of_the_tools_lockfile_is_the_venvs(
+    vendor: ModuleType, dev_locked: dict[str, str]
+) -> None:
+    venv = vendor.venv_versions()
+
+    differ = {
+        name: (version, venv.get(name))
+        for name, version in dev_locked.items()
+        if venv.get(name) != version
+    }
+    assert differ == {}
+
+
+def test_the_tools_part_of_the_requirements(vendor: ModuleType) -> None:
+    requirements = (
+        "# Runtime\nfastapi\n\n"
+        "# Testing dependencies for unit tests\npytest\npytest-cov  # coverage\n"
+        "# Development\nmypy\n"
+    )
+
+    assert vendor.dev_requirements(requirements) == ["pytest", "pytest-cov", "mypy"]
+    assert vendor.dev_requirements(vendor.REQUIREMENTS.read_text(encoding="utf-8")) == [
+        "pytest",
+        "pytest-cov",
+        "black",
+        "ruff",
+        "mypy",
+    ]
+
+
+def test_the_tools_closure_may_reach_a_tool_but_not_pip(vendor: ModuleType) -> None:
+    venv = {"pytest": "9.1.1", "pip": "24.3.1"}
+
+    vendor.check_against_venv({"pytest": "9.1.1"}, venv, refused=vendor.NEVER_LOCKED)
+    with pytest.raises(vendor.VendorError, match="pip is a tool"):
+        vendor.check_against_venv({"pip": "24.3.1"}, venv, refused=("pip",))
+
+
+def test_a_package_the_runtime_pins_stays_there_at_its_version(
+    vendor: ModuleType,
+) -> None:
+    runtime = [
+        vendor.Locked("click", "8.4.2", "a" * 64),
+        vendor.Locked("numpy", "2.5.2", "b" * 64),
+    ]
+
+    shared = vendor.split_shared({"click": "8.4.2", "black": "26.5.1"}, runtime)
+
+    assert shared == ("click",)
+    with pytest.raises(vendor.VendorError, match="click resolved to 8.5.0"):
+        vendor.split_shared({"click": "8.5.0"}, runtime)
+
+
+def test_a_venv_is_held_against_both_lockfiles(vendor: ModuleType) -> None:
+    locks = {
+        "python-win-64.lock": [
+            vendor.Locked("torch", "2.13.0+cpu", "a" * 64),
+            vendor.Locked("six", "1.17.0", "b" * 64),
+        ],
+        "python-dev-win-64.lock": [vendor.Locked("mypy", "2.3.1", "c" * 64)],
+    }
+    installed = {"torch": "2.14.0+cpu", "mypy": "2.3.1", "psutil": "7.0.0"}
+
+    report = vendor.compare_venv_with_locks(installed, locks)
+
+    assert report.problems == (
+        "six 1.17.0 is in python-win-64.lock and not installed",
+        "torch is 2.14.0+cpu, python-win-64.lock says 2.13.0+cpu",
+    )
+    assert report.extra == ("psutil 7.0.0",)
 
 
 def test_the_lockfile_is_read_as_the_script_writes_it(vendor: ModuleType) -> None:

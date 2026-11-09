@@ -82,16 +82,16 @@ O mapa mostra os tiles do OpenStreetMap quando há rede, com a atribuição na t
 
 ## Como rodar
 
-Requer Python 3.12 e Windows. Os comandos abaixo partem da raiz do repositório, no PowerShell.
+Requer o Python 3.12.9 e Windows. Os comandos abaixo partem da raiz do repositório, no PowerShell.
 
 ### 1. Ambiente Python
+O ambiente virtual se monta só dos dois lockfiles, `scripts/python-win-64.lock` (o runtime, o mesmo do instalador) e `scripts/python-dev-win-64.lock` (as ferramentas), sem resolver nada ([RFC-048](docs/rfcs/rfc-048-conferencias-num-comando-so.md)). Chame o Python 3.12.9 pelo caminho, porque o `py -3.12` pode escolher outro 3.12:
 ```powershell
-py -3.12 -m venv .venv
+C:\<pasta do Python 3.12.9>\python.exe scripts/make_venv.py
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r backend/requirements.txt
 Copy-Item .env.example .env
 ```
+O `make_venv.py` recusa outro Python e uma pasta que já exista: ele nunca apaga nem mistura um ambiente virtual.
 
 ### 2. Modelos de IA (uma vez por cópia do repositório)
 Os modelos ficam em `runtime/models`, fora do git, e são conferidos por `sha256`:
@@ -161,18 +161,25 @@ cd frontend
 npm run dist        # o build, a montagem, as conferências e o NSIS: release\SolidVision-Setup-0.1.0.exe
 npm run dist:dir    # o mesmo até a pasta release\win-unpacked, sem o NSIS
 ```
-A montagem fica em `%LOCALAPPDATA%\SolidVision-build\resources`, e as conferências do `scripts/check_package.py` param o build se o pacote não for o que a suíte testou: os vetores do CLIP calculados pelo Python do pacote, bit a bit contra os de referência, as DLLs de cada binário, o orçamento de caminho e o que vai no `app.asar`. O primeiro build precisa de rede, para o electron-builder baixar o NSIS. Mudar uma dependência do Python é mudar o ambiente virtual e o lockfile juntos: `python scripts/vendor_python.py --lock` recusa uma versão diferente da do ambiente virtual.
+A montagem fica em `%LOCALAPPDATA%\SolidVision-build\resources`, e as conferências do `scripts/check_package.py` param o build se o pacote não for o que a suíte testou: os vetores do CLIP calculados pelo Python do pacote, bit a bit contra os de referência, as DLLs de cada binário, o orçamento de caminho e o que vai no `app.asar`. O primeiro build precisa de rede, para o electron-builder baixar o NSIS. Mudar uma dependência do Python é mudar o ambiente virtual e os dois lockfiles juntos, no mesmo commit: `python scripts/vendor_python.py --lock` reescreve os dois e recusa uma versão diferente da do ambiente virtual.
 
 ### Verificações de qualidade
+Um comando roda todas, na ordem, e para na primeira que falhar ([RFC-048](docs/rfcs/rfc-048-conferencias-num-comando-so.md)):
 ```powershell
-ruff check backend
-black --check backend
-mypy backend
-pytest
-cd frontend; npm test; npm run lint; npm run typecheck; npm run format:check
+python scripts/check.py                 # tudo: env, ruff, black, mypy, eslint, tsc, prettier, vitest, pytest
+python scripts/check.py python          # ruff, black e mypy
+python scripts/check.py frontend        # eslint, tsc, prettier e vitest
+python scripts/check.py mypy pytest     # só as etapas pedidas
+python scripts/check.py --keep-going    # tudo, sem parar, com as falhas no resumo
 ```
-O `pytest` confere que o `frontend/src/api/openapi.json` é o que a API produz, e o `npm test` confere que os tipos são os que esse arquivo gera: quem muda uma rota roda `npm run api:types`.
-Com `WARM_UP_MODELS=true` no `.env` (o padrão do `.env.example`), um teste que confere que resolver o modelo não baixa nada falha. Rode com `WARM_UP_MODELS=false` para a suíte inteira passar.
+A etapa `env` vem antes de todas: confere o Python 3.12.9 e cada pacote do ambiente virtual contra os dois lockfiles, e o Node do `frontend/.node-version`. O ruff e o black conferem `backend` e `scripts`.
+
+O `pytest` precisa de um banco. O comando não sobe nenhum: antes da suíte, abre uma conexão de teste e, se o banco não responder, falha ali, em segundos. Com o Docker de pé, basta o comando. Sem ele, rode as conferências dentro do cluster embarcado, que o `run --` sobe e para:
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.infrastructure.database.embedded run -- python scripts/check.py
+```
+O `pytest` roda com `WARM_UP_MODELS=false`, por cima do `.env`. Ele confere que o `frontend/src/api/openapi.json` é o que a API produz, e o `npm test` confere que os tipos são os que esse arquivo gera: quem muda uma rota roda `npm run api:types`.
 
 ---
 

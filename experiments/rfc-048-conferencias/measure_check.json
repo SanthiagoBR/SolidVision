@@ -1,0 +1,225 @@
+{
+  "rfc": "048",
+  "date": "2026-11-08",
+  "machine": "NVMe, Windows 11 (the RFC-048 pilot's)",
+  "work": "C:\\Users\\sandr\\AppData\\Local\\Temp\\solidvision-rfc048-sgcm8ert",
+  "clone": {
+    "commit": "9d8e55a9cf7244d0c34beae86f3d0fe80f84a5c7",
+    "s": 4.9,
+    "crlf_files_frontend": 0,
+    "crlf_files_backend": 409,
+    "env_file": false,
+    "runtime_models": false
+  },
+  "make_venv": {
+    "python": "3.12.9",
+    "pip_cache": "cold (empty PIP_CACHE_DIR)",
+    "s": 390.3,
+    "said": [
+      "C:\\Users\\sandr\\AppData\\Local\\Temp\\solidvision-rfc048-sgcm8ert\\clone\\.venv: Python 3.12.9, the 71 packages of the lockfiles, in 390 s"
+    ]
+  },
+  "npm_ci": {
+    "s": 35.2,
+    "node": "v24.15.0",
+    "npm_cache": "this machine's, warm"
+  },
+  "vendor_postgres": {
+    "s": 24.7
+  },
+  "whole": {
+    "exit": 0,
+    "wall_s": 524.4,
+    "mypy_cache": "cold (a fresh clone)",
+    "steps": {
+      "env": {
+        "passed": true,
+        "s": 0.7
+      },
+      "ruff": {
+        "passed": true,
+        "s": 4.0
+      },
+      "black": {
+        "passed": true,
+        "s": 12.5
+      },
+      "mypy": {
+        "passed": true,
+        "s": 230.8
+      },
+      "eslint": {
+        "passed": true,
+        "s": 19.6
+      },
+      "tsc": {
+        "passed": true,
+        "s": 11.0
+      },
+      "prettier": {
+        "passed": true,
+        "s": 5.7
+      },
+      "vitest": {
+        "passed": true,
+        "s": 11.9
+      },
+      "pytest": {
+        "passed": true,
+        "s": 203.7
+      }
+    },
+    "first_red": null,
+    "pytest": {
+      "counts": "3540 passed, 686 deselected, 45 warnings",
+      "s": 195.08
+    },
+    "suite_started": true
+  },
+  "whole_warm": {
+    "exit": 0,
+    "wall_s": 241.7,
+    "steps": {
+      "env": {
+        "passed": true,
+        "s": 0.5
+      },
+      "ruff": {
+        "passed": true,
+        "s": 1.9
+      },
+      "black": {
+        "passed": true,
+        "s": 1.8
+      },
+      "mypy": {
+        "passed": true,
+        "s": 6.6
+      },
+      "eslint": {
+        "passed": true,
+        "s": 15.9
+      },
+      "tsc": {
+        "passed": true,
+        "s": 11.4
+      },
+      "prettier": {
+        "passed": true,
+        "s": 6.2
+      },
+      "vitest": {
+        "passed": true,
+        "s": 11.2
+      },
+      "pytest": {
+        "passed": true,
+        "s": 181.3
+      }
+    },
+    "first_red": null,
+    "pytest": {
+      "counts": "3540 passed, 686 deselected, 45 warnings",
+      "s": 173.52
+    },
+    "suite_started": true
+  },
+  "defects": [
+    {
+      "step": "env",
+      "defect": "sqlalchemy 2.1.1 installed over the lockfile's 2.0.51",
+      "exit": 1,
+      "first_red": "env",
+      "as_expected": true,
+      "wall_s": 1.0,
+      "pytest": null
+    },
+    {
+      "step": "ruff",
+      "defect": "an unused `import json`, in backend/app/.../device_id.py",
+      "exit": 1,
+      "first_red": "ruff",
+      "as_expected": true,
+      "wall_s": 1.7,
+      "pytest": null
+    },
+    {
+      "step": "black",
+      "defect": "`PLANTED = {  'a':1 }` at the end of scripts/pe_imports.py",
+      "exit": 1,
+      "first_red": "black",
+      "as_expected": true,
+      "wall_s": 2.7,
+      "pytest": null
+    },
+    {
+      "step": "mypy",
+      "defect": "a function annotated `-> int` returning a str, in backend/app",
+      "exit": 1,
+      "first_red": "mypy",
+      "as_expected": true,
+      "wall_s": 13.9,
+      "pytest": null
+    },
+    {
+      "step": "eslint",
+      "defect": "useState inside an `if`, in frontend/src/planted.tsx",
+      "exit": 1,
+      "first_red": "eslint",
+      "as_expected": true,
+      "wall_s": 30.5,
+      "pytest": null
+    },
+    {
+      "step": "tsc",
+      "defect": "shout(42) where shout takes a string, in frontend/src/planted.ts",
+      "exit": 1,
+      "first_red": "tsc",
+      "as_expected": true,
+      "wall_s": 34.2,
+      "pytest": null
+    },
+    {
+      "step": "prettier",
+      "defect": "frontend/src/main.tsx rewritten with CRLF",
+      "exit": 1,
+      "first_red": "prettier",
+      "as_expected": true,
+      "wall_s": 39.9,
+      "pytest": null
+    },
+    {
+      "step": "vitest",
+      "defect": "expect(1 + 1).toBe(3), in frontend/src/planted.test.ts",
+      "exit": 1,
+      "first_red": "vitest",
+      "as_expected": true,
+      "wall_s": 46.7,
+      "pytest": null
+    },
+    {
+      "step": "pytest",
+      "defect": "assert 1 + 1 == 3, in backend/tests/domain/test_image_id.py",
+      "exit": 1,
+      "first_red": "pytest",
+      "as_expected": true,
+      "wall_s": 242.2,
+      "pytest": {
+        "counts": "1 failed, 3540 passed, 686 deselected, 45 warnings",
+        "s": 173.92
+      }
+    }
+  ],
+  "database_stopped": {
+    "exit": 1,
+    "first_red": "pytest",
+    "wall_s": 3.8,
+    "suite_started": false,
+    "said": [
+      "pytest: the configuration's database does not answer (DATABASE_SOURCE=embedded).",
+      "  (psycopg.OperationalError) The embedded cluster in C:\\Users\\sandr\\AppData\\Local\\Temp\\solidvision-rfc048-sgcm8ert\\cluster\\16\\data is not ready to be connected to: stopped. Start it with `python -m app.infrastructure.database.embedded start`.",
+      "  python -m app.infrastructure.database.embedded run -- python scripts/check.py"
+    ],
+    "under_30_s": true
+  }
+}

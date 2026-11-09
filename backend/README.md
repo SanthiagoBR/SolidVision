@@ -5,48 +5,44 @@ This directory contains the initial backend structure for SolidVision.
 It follows the Clean Architecture layout described in the project documentation and contains only placeholder modules and package scaffolding.
 
 ## Python version
-This project targets Python 3.12.
+Python 3.12.9: the embedded Python of the installer (RFC-041), and the one the
+checks run on (RFC-048).
 
-## Create a virtual environment
-```bash
-python -m venv .venv
-```
-
-## Activate the environment
-On Windows PowerShell:
+## Create the virtual environment
+From the repository root, with Python 3.12.9 called by its path:
 ```powershell
+C:\<Python 3.12.9>\python.exe scripts/make_venv.py
 .\.venv\Scripts\Activate.ps1
 ```
+`make_venv.py` installs `scripts/python-win-64.lock` (the runtime, the same
+the installer carries) and `scripts/python-dev-win-64.lock` (the tools), with
+`--no-deps --require-hashes`: nothing is resolved. It refuses another Python
+and a folder that exists. `backend/requirements.txt` is the list of names
+`python scripts/vendor_python.py --lock` resolves: changing a dependency is
+changing the venv and running `--lock`, both lockfiles in the same commit.
 
-On Bash:
-```bash
-source .venv/bin/activate
+## Ruff, Black, MyPy and Pytest
+All four run through one command, with the frontend's checks, in a fixed
+order, stopping at the first failure:
+```powershell
+python scripts/check.py                # everything
+python scripts/check.py python         # ruff --no-fix, black --check, mypy
+python scripts/check.py mypy pytest    # the steps named
+python scripts/check.py --keep-going   # everything, the failures in the summary
 ```
+Ruff and Black check `backend` and `scripts`, and `experiments/` stays as it
+was measured. MyPy checks the `files` of `pyproject.toml`. A first `env` step
+holds the venv against both lockfiles, package by package.
 
-## Install dependencies
-```bash
-pip install -r backend/requirements.txt
+Pytest needs a database, and the command starts none: it opens one test
+connection before the suite, and fails there, in seconds, if nothing
+answers. With Docker up, the command is enough. Without it, run the checks
+inside the embedded cluster:
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.infrastructure.database.embedded run -- python scripts/check.py
 ```
-
-## Run Ruff
-```bash
-ruff check backend
-```
-
-## Run Black
-```bash
-black backend
-```
-
-## Run MyPy
-```bash
-mypy backend
-```
-
-## Run Pytest
-```bash
-pytest backend/tests
-```
+Pytest gets `WARM_UP_MODELS=false`, above the `.env`.
 
 ## Configuration and user directories (RFC-034)
 

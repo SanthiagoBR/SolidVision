@@ -58,9 +58,18 @@ def recorder(monkeypatch: pytest.MonkeyPatch) -> Iterator[RecordingEmbeddingMode
     Patched on the dependencies module rather than injected, because
     warm-up is not a request and has no `Depends` graph to override: the
     lifespan hook imports the provider and calls it.
+
+    The warm-up checks that the models are on disk before it calls the
+    provider (RFC-035 section 6.1), so the check is replaced too: without
+    it, a fresh clone with no `runtime\\models` never reached the recorder
+    (RFC-048 section 17).
     """
     model = RecordingEmbeddingModel()
     monkeypatch.setattr(dependencies_module, "get_embedding_model", lambda: model)
+    monkeypatch.setattr(
+        "app.infrastructure.ai.model_runtime.ModelRuntime.check_presence",
+        lambda runtime: None,
+    )
     yield model
 
 
