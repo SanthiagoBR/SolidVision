@@ -10,8 +10,9 @@ the last job's `completed_at`.
 The logs need a token, even on a public repository (the API answers 403
 without one): with `GITHUB_TOKEN` set, each job's log is read too, and from
 it check.py's summary (each step, passed or FAILED, and its seconds), the
-`env` step's problems, vitest's count, and what each cache step did. Without
-a token, only the times.
+`env` step's problems, vitest's count, and what each cache step did; and
+the repository's cache entries, with their sizes. Without a token, only the
+times.
 
 Adds the branches to measure_ci.json beside this file (a branch read again
 replaces its entry), and prints the log.
@@ -242,6 +243,22 @@ def describe(branch: str, runs: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def read_caches() -> list[dict[str, Any]]:
+    """The repository's cache entries as they are now: the size on the
+    runner of what section 4.4 keeps (the listing needs the token)."""
+    listed = api("actions/caches?per_page=100&sort=created_at&direction=asc")
+    return [
+        {
+            "key": cache["key"],
+            "ref": cache["ref"],
+            "mb": round(cache["size_in_bytes"] / 2**20, 1),
+            "created_at": cache["created_at"],
+            "last_accessed_at": cache["last_accessed_at"],
+        }
+        for cache in listed["actions_caches"]
+    ]
+
+
 def main() -> None:
     branches = sys.argv[1:]
     if not branches:
@@ -262,6 +279,10 @@ def main() -> None:
         runs = read_branch(branch)
         result["branches"][branch] = runs
         print("\n".join(describe(branch, runs)), flush=True)
+    if TOKEN:
+        result["caches"] = read_caches()
+        for cache in result["caches"]:
+            print(f"cache {cache['mb']:>7} MB  {cache['ref']}  {cache['key'][:60]}")
     OUT.write_text(
         json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )

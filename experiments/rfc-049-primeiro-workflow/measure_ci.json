@@ -1,0 +1,3336 @@
+{
+  "repository": "SanthiagoBR/SolidVision",
+  "workflow": "ci.yml",
+  "read_at": "2026-11-09 17:01",
+  "logs": true,
+  "branches": {
+    "medicao/rfc-049-quente": [
+      {
+        "id": 42686077969,
+        "sha": "7584447",
+        "message": "Implementa RFC-049: o primeiro workflow, frontend e análise estática",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-09T19:43:30Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129393150635,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000002",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:43:32Z",
+            "started_at": "2026-11-09T19:43:34Z",
+            "completed_at": "2026-11-09T19:46:55Z",
+            "queued_s": 2.0,
+            "s": 201.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 6.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 43.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 70.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 24.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 48.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "black",
+                  "passed",
+                  4.6
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  43.4
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7584447e34a4d61d98382f2ea4ccc795e7999df0, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7584447e34a4d61d98382f2ea4ccc795e7999df0"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129393151417,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000003",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:43:32Z",
+            "started_at": "2026-11-09T19:43:34Z",
+            "completed_at": "2026-11-09T19:44:45Z",
+            "queued_s": 2.0,
+            "s": 71.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 47.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 17.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  5.1
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.7
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.4
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  4.2
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache saved with the key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 205.0,
+        "made_the_venv": true
+      },
+      {
+        "id": 42688049968,
+        "sha": "1562657",
+        "message": "medição RFC-049: execução quente 1/3 (commit vazio)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-09T19:55:55Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129400078993,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000024",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:55:56Z",
+            "started_at": "2026-11-09T19:55:58Z",
+            "completed_at": "2026-11-09T19:57:23Z",
+            "queued_s": 2.0,
+            "s": 85.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 8.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 46.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 15.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.3
+                ],
+                [
+                  "black",
+                  "passed",
+                  5.1
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  1.3
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache Size: ~241 MB (252221998 B)",
+                "Cache restored from key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache Size: ~13 MB (13625379 B)",
+                "Cache restored from key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7584447e34a4d61d98382f2ea4ccc795e7999df0",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-15626575ef7d0bed03d80c7051677d9e1a0d6b68"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129400079304,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000025",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:55:56Z",
+            "started_at": "2026-11-09T19:55:58Z",
+            "completed_at": "2026-11-09T19:56:32Z",
+            "queued_s": 2.0,
+            "s": 34.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 4.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 8.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 17.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  5.3
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.9
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.5
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  4.4
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache Size: ~70 MB (73165339 B)",
+                "Cache restored from key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 88.0,
+        "made_the_venv": false
+      },
+      {
+        "id": 42688306836,
+        "sha": "1313aae",
+        "message": "medição RFC-049: execução quente 2/3 (commit vazio)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-09T19:57:32Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129400978054,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000026",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:57:33Z",
+            "started_at": "2026-11-09T19:57:35Z",
+            "completed_at": "2026-11-09T19:59:11Z",
+            "queued_s": 2.0,
+            "s": 96.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 53.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 15.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 9.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "black",
+                  "passed",
+                  6.8
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  1.7
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache Size: ~241 MB (252221998 B)",
+                "Cache restored from key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache Size: ~13 MB (13686854 B)",
+                "Cache restored from key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-15626575ef7d0bed03d80c7051677d9e1a0d6b68",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-1313aae76cb97ef7afab87488d0b7be110d60ab4"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129400978492,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000027",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:57:33Z",
+            "started_at": "2026-11-09T19:57:35Z",
+            "completed_at": "2026-11-09T19:58:05Z",
+            "queued_s": 2.0,
+            "s": 30.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 4.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 5.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 13.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  4.0
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.0
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  1.9
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  3.3
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache Size: ~70 MB (73165339 B)",
+                "Cache restored from key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 99.0,
+        "made_the_venv": false
+      },
+      {
+        "id": 42688636314,
+        "sha": "8b1c32f",
+        "message": "medição RFC-049: execução quente 3/3 (commit vazio)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-09T19:59:40Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129402153868,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000028",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:59:41Z",
+            "started_at": "2026-11-09T19:59:43Z",
+            "completed_at": "2026-11-09T20:01:06Z",
+            "queued_s": 2.0,
+            "s": 83.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 6.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 49.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 12.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  1.1
+                ],
+                [
+                  "black",
+                  "passed",
+                  3.9
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  1.0
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache Size: ~241 MB (252221998 B)",
+                "Cache restored from key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache Size: ~13 MB (13696745 B)",
+                "Cache restored from key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-1313aae76cb97ef7afab87488d0b7be110d60ab4",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-8b1c32f475e7260ef210ab48569ca7d5a67b3aa6"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129402154372,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000029",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:59:41Z",
+            "started_at": "2026-11-09T19:59:43Z",
+            "completed_at": "2026-11-09T20:00:17Z",
+            "queued_s": 2.0,
+            "s": 34.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 17.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  5.5
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  5.1
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.5
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  4.3
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache Size: ~70 MB (73165339 B)",
+                "Cache restored from key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 86.0,
+        "made_the_venv": false
+      }
+    ],
+    "medicao/rfc-049-controle": [
+      {
+        "id": 42686976310,
+        "sha": "b7f68c6",
+        "message": "medição RFC-049: sem a correção de §5 (controle)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "frontend",
+            "id": 129396287508,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000021",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:50:18Z",
+            "queued_s": 2.0,
+            "s": 67.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 42.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "failure",
+                "s": 14.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  4.2
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  3.9
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  1.9
+                ],
+                [
+                  "vitest",
+                  "FAILED",
+                  3.4
+                ]
+              ],
+              "verdict": "FAILED: vitest",
+              "env": [],
+              "vitest": {
+                "Test Files": "1 failed | 35 passed (36)",
+                "Tests": "1 failed | 377 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64"
+              ],
+              "failing": [
+                "× is SolidVision-build\\resources under LOCALAPPDATA, outside the repository 8ms",
+                "FAIL  scripts/electron-builder-config.test.mjs > the montagem's place (section 7.2) > is SolidVision-build\\resources under LOCALAPPDATA, outside the repository"
+              ],
+              "first_red": "vitest"
+            }
+          },
+          {
+            "name": "estatico",
+            "id": 129396287768,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000019",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:52:50Z",
+            "queued_s": 2.0,
+            "s": 219.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 6.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 50.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 80.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 11.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 61.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "black",
+                  "passed",
+                  5.7
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  54.5
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-b7f68c622d6115fc62c9eca8faf2169cafbe6b4b, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-b7f68c622d6115fc62c9eca8faf2169cafbe6b4b"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 222.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-env": [
+      {
+        "id": 42686975219,
+        "sha": "334f50f",
+        "message": "medição RFC-049, env 1/2: o lockfile das ferramentas fora da chave do venv",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "frontend",
+            "id": 129396283959,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000014",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:50:24Z",
+            "queued_s": 2.0,
+            "s": 73.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 48.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 17.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  5.3
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.9
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.5
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  4.3
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache saved with the key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "estatico",
+            "id": 129396284356,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000015",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:12Z",
+            "completed_at": "2026-11-09T19:53:23Z",
+            "queued_s": 3.0,
+            "s": 251.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 58.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 84.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 13.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 78.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 1.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "black",
+                  "passed",
+                  7.6
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  69.3
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-77ecc06cea33128caef3d273286559ce95579893344ebb86b3ae9c827e334363",
+                "Cache saved with key: venv-3.12.9-77ecc06cea33128caef3d273286559ce95579893344ebb86b3ae9c827e334363",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-334f50f3fd9a655997dd44c81328c901746e6a46, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-334f50f3fd9a655997dd44c81328c901746e6a46"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 255.0,
+        "made_the_venv": true
+      },
+      {
+        "id": 42687769299,
+        "sha": "ac405c9",
+        "message": "medição RFC-049, env 2/2: o pytest 9.1.0 no lockfile, o venv guardado com o 9.1.1",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:54:09Z",
+        "jobs": [
+          {
+            "name": "frontend",
+            "id": 129399089692,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000022",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:54:10Z",
+            "started_at": "2026-11-09T19:54:12Z",
+            "completed_at": "2026-11-09T19:54:51Z",
+            "queued_s": 2.0,
+            "s": 39.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 4.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 12.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 17.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  5.7
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.9
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.5
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  4.3
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache Size: ~70 MB (73166171 B)",
+                "Cache restored from key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "estatico",
+            "id": 129399090088,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000023",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:54:10Z",
+            "started_at": "2026-11-09T19:54:12Z",
+            "completed_at": "2026-11-09T19:55:13Z",
+            "queued_s": 2.0,
+            "s": 61.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 5.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 40.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 9.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "failure",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "FAILED",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "not run",
+                  0.0
+                ],
+                [
+                  "black",
+                  "not run",
+                  0.0
+                ],
+                [
+                  "mypy",
+                  "not run",
+                  0.0
+                ]
+              ],
+              "verdict": "FAILED: env",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1",
+                "env: pytest is 9.1.1, python-dev-win-64.lock says 9.1.0"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache Size: ~241 MB (252253099 B)",
+                "Cache restored from key: venv-3.12.9-77ecc06cea33128caef3d273286559ce95579893344ebb86b3ae9c827e334363",
+                "Cache not found for input keys: mypy-b7a03921586121e4eca2ba82cf8ddb65256a637774a8cba4ed2db4530e1aa37d-ac405c9ac87fd88948a3bbbdf9f1e190fa629364, mypy-b7a03921586121e4eca2ba82cf8ddb65256a637774a8cba4ed2db4530e1aa37d-",
+                "[warning]Path Validation Error: Path(s) specified in the action for caching do(es) not exist, hence no cache is being saved."
+              ],
+              "first_red": "env"
+            }
+          }
+        ],
+        "push_to_result_s": 64.0,
+        "made_the_venv": false
+      }
+    ],
+    "medicao/rfc-049-ruff": [
+      {
+        "id": 42686973694,
+        "sha": "edc309e",
+        "message": "medição RFC-049: um import sem uso em backend/app (ruff)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:07Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129396275040,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000004",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:10Z",
+            "completed_at": "2026-11-09T19:51:32Z",
+            "queued_s": 2.0,
+            "s": 142.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 8.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 47.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 71.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 9.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "failure",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "FAILED",
+                  0.1
+                ],
+                [
+                  "black",
+                  "not run",
+                  0.0
+                ],
+                [
+                  "mypy",
+                  "not run",
+                  0.0
+                ]
+              ],
+              "verdict": "FAILED: ruff",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-edc309e02328b218d5b17f6d3431fea6d4f70989, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "[warning]Path Validation Error: Path(s) specified in the action for caching do(es) not exist, hence no cache is being saved."
+              ],
+              "first_red": "ruff"
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129396275807,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000005",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:10Z",
+            "completed_at": "2026-11-09T19:50:23Z",
+            "queued_s": 2.0,
+            "s": 73.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 48.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 16.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  5.2
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.8
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.4
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  4.1
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache saved with the key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 145.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-black": [
+      {
+        "id": 42686976042,
+        "sha": "8faed12",
+        "message": "medição RFC-049: uma linha mal formatada em scripts/ (black)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129396286572,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000017",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:52:23Z",
+            "queued_s": 2.0,
+            "s": 192.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 11.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 55.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 99.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 10.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "failure",
+                "s": 8.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 1.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "black",
+                  "FAILED",
+                  7.4
+                ],
+                [
+                  "mypy",
+                  "not run",
+                  0.0
+                ]
+              ],
+              "verdict": "FAILED: black",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-8faed12fb2077c787a43f9d46b8e66d5fec2b8ba, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "[warning]Path Validation Error: Path(s) specified in the action for caching do(es) not exist, hence no cache is being saved."
+              ],
+              "first_red": "black"
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129396287107,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000020",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:50:20Z",
+            "queued_s": 2.0,
+            "s": 69.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 46.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 14.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  4.6
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  4.1
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  2.1
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  3.6
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache saved with the key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 195.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-mypy": [
+      {
+        "id": 42686975504,
+        "sha": "265de47",
+        "message": "medição RFC-049: um str devolvido onde a assinatura diz int (mypy)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129396281631,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000012",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:53:20Z",
+            "queued_s": 2.0,
+            "s": 249.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 56.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 88.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 12.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "failure",
+                "s": 77.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "black",
+                  "passed",
+                  7.8
+                ],
+                [
+                  "mypy",
+                  "FAILED",
+                  68.1
+                ]
+              ],
+              "verdict": "FAILED: mypy",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-265de474607a7b470dddb6b38e920d943dc6645b, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-265de474607a7b470dddb6b38e920d943dc6645b"
+              ],
+              "first_red": "mypy"
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129396282304,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000013",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:50:10Z",
+            "queued_s": 2.0,
+            "s": 59.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 39.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "success",
+                "s": 13.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  4.0
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  3.7
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  1.9
+                ],
+                [
+                  "vitest",
+                  "passed",
+                  3.2
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [],
+              "vitest": {
+                "Test Files": "36 passed (36)",
+                "Tests": "378 passed (378)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64",
+                "Cache saved with the key: node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 252.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-eslint": [
+      {
+        "id": 42686974927,
+        "sha": "3e70150",
+        "message": "medição RFC-049: um hook do React dentro de um if (eslint)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "estatico",
+            "id": 129396278669,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000008",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:10Z",
+            "completed_at": "2026-11-09T19:52:41Z",
+            "queued_s": 2.0,
+            "s": 211.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 8.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 48.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 76.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 10.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 60.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "black",
+                  "passed",
+                  5.5
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  53.9
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-3e70150a8004a70061439eb78e8634fa85faa5b0, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-3e70150a8004a70061439eb78e8634fa85faa5b0"
+              ],
+              "first_red": null
+            }
+          },
+          {
+            "name": "frontend",
+            "id": 129396279219,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000009",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:10Z",
+            "completed_at": "2026-11-09T19:50:08Z",
+            "queued_s": 2.0,
+            "s": 58.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 47.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "failure",
+                "s": 5.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "FAILED",
+                  5.3
+                ],
+                [
+                  "tsc",
+                  "not run",
+                  0.0
+                ],
+                [
+                  "prettier",
+                  "not run",
+                  0.0
+                ],
+                [
+                  "vitest",
+                  "not run",
+                  0.0
+                ]
+              ],
+              "verdict": "FAILED: eslint",
+              "env": [],
+              "vitest": {},
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64"
+              ],
+              "first_red": "eslint"
+            }
+          }
+        ],
+        "push_to_result_s": 213.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-tsc": [
+      {
+        "id": 42686974684,
+        "sha": "7cb9b11",
+        "message": "medição RFC-049: um number onde a função pede string (tsc)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "frontend",
+            "id": 129396277520,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000006",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:10Z",
+            "completed_at": "2026-11-09T19:50:00Z",
+            "queued_s": 2.0,
+            "s": 50.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 38.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "failure",
+                "s": 7.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  4.0
+                ],
+                [
+                  "tsc",
+                  "FAILED",
+                  2.5
+                ],
+                [
+                  "prettier",
+                  "not run",
+                  0.0
+                ],
+                [
+                  "vitest",
+                  "not run",
+                  0.0
+                ]
+              ],
+              "verdict": "FAILED: tsc",
+              "env": [],
+              "vitest": {},
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64"
+              ],
+              "first_red": "tsc"
+            }
+          },
+          {
+            "name": "estatico",
+            "id": 129396278097,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000007",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:10Z",
+            "completed_at": "2026-11-09T19:53:19Z",
+            "queued_s": 2.0,
+            "s": 249.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 8.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 53.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 90.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 13.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 74.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 3.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.2
+                ],
+                [
+                  "black",
+                  "passed",
+                  7.4
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  65.4
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7cb9b115924c5f6e4e7b04486b13f0a41d632c42, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7cb9b115924c5f6e4e7b04486b13f0a41d632c42"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 251.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-prettier": [
+      {
+        "id": 42686976538,
+        "sha": "194f6ef",
+        "message": "medição RFC-049: uma constante mal formatada (prettier)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:08Z",
+        "jobs": [
+          {
+            "name": "frontend",
+            "id": 129396287034,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000016",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:50:07Z",
+            "queued_s": 2.0,
+            "s": 56.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 39.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "failure",
+                "s": 9.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  3.9
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  3.6
+                ],
+                [
+                  "prettier",
+                  "FAILED",
+                  1.8
+                ],
+                [
+                  "vitest",
+                  "not run",
+                  0.0
+                ]
+              ],
+              "verdict": "FAILED: prettier",
+              "env": [],
+              "vitest": {},
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64"
+              ],
+              "first_red": "prettier"
+            }
+          },
+          {
+            "name": "estatico",
+            "id": 129396287355,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000018",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:09Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:52:31Z",
+            "queued_s": 2.0,
+            "s": 200.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 44.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 75.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 10.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 55.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "black",
+                  "passed",
+                  5.2
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  49.8
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-194f6efb47a2e79d88a596c9e123ddb355ebcb01, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-194f6efb47a2e79d88a596c9e123ddb355ebcb01"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 203.0,
+        "made_the_venv": true
+      }
+    ],
+    "medicao/rfc-049-vitest": [
+      {
+        "id": 42686974165,
+        "sha": "5f5368c",
+        "message": "medição RFC-049: um expect que não vale (vitest)",
+        "event": "push",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-11-09T19:49:07Z",
+        "jobs": [
+          {
+            "name": "frontend",
+            "id": 129396279268,
+            "conclusion": "failure",
+            "runner": "GitHub Actions 1000000010",
+            "labels": [
+              "ubuntu-24.04"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:50:08Z",
+            "queued_s": 3.0,
+            "s": 57.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run npm ci",
+                "conclusion": "success",
+                "s": 37.0
+              },
+              {
+                "name": "Run python3 scripts/check.py frontend",
+                "conclusion": "failure",
+                "s": 13.0
+              },
+              {
+                "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "conclusion": "skipped",
+                "s": 0.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 0.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.0
+                ],
+                [
+                  "eslint",
+                  "passed",
+                  4.0
+                ],
+                [
+                  "tsc",
+                  "passed",
+                  3.6
+                ],
+                [
+                  "prettier",
+                  "passed",
+                  1.9
+                ],
+                [
+                  "vitest",
+                  "FAILED",
+                  3.2
+                ]
+              ],
+              "verdict": "FAILED: vitest",
+              "env": [],
+              "vitest": {
+                "Test Files": "1 failed | 36 passed (37)",
+                "Tests": "1 failed | 378 passed (379)"
+              },
+              "caches": [
+                "Found in cache @ /opt/hostedtoolcache/node/24.22.2/x64"
+              ],
+              "failing": [
+                "× is planted 5ms",
+                "FAIL  src/planted.test.ts > is planted"
+              ],
+              "first_red": "vitest"
+            }
+          },
+          {
+            "name": "estatico",
+            "id": 129396279733,
+            "conclusion": "success",
+            "runner": "GitHub Actions 1000000011",
+            "labels": [
+              "windows-2025"
+            ],
+            "created_at": "2026-11-09T19:49:08Z",
+            "started_at": "2026-11-09T19:49:11Z",
+            "completed_at": "2026-11-09T19:52:57Z",
+            "queued_s": 3.0,
+            "s": 226.0,
+            "steps": [
+              {
+                "name": "Set up job",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 7.0
+              },
+              {
+                "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 57.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run python scripts/make_venv.py",
+                "conclusion": "success",
+                "s": 80.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 11.0
+              },
+              {
+                "name": "Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Run .\\.venv\\Scripts\\python.exe scripts/check.py python",
+                "conclusion": "success",
+                "s": 60.0
+              },
+              {
+                "name": "Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+                "conclusion": "success",
+                "s": 1.0
+              },
+              {
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "conclusion": "success",
+                "s": 2.0
+              },
+              {
+                "name": "Complete job",
+                "conclusion": "success",
+                "s": 0.0
+              }
+            ],
+            "log": {
+              "summary": [
+                [
+                  "env",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "ruff",
+                  "passed",
+                  0.1
+                ],
+                [
+                  "black",
+                  "passed",
+                  5.4
+                ],
+                [
+                  "mypy",
+                  "passed",
+                  53.9
+                ]
+              ],
+              "verdict": "every step passed",
+              "env": [
+                "env: in no lockfile, and allowed: pip 24.3.1"
+              ],
+              "vitest": {},
+              "caches": [
+                "Successfully set up CPython (3.12.9)",
+                "Cache not found for input keys: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache saved with key: venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+                "Cache not found for input keys: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-5f5368c221c7d3add2b653b7d7be503f175965ea, mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-",
+                "Cache saved with key: mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-5f5368c221c7d3add2b653b7d7be503f175965ea"
+              ],
+              "first_red": null
+            }
+          }
+        ],
+        "push_to_result_s": 230.0,
+        "made_the_venv": true
+      }
+    ]
+  },
+  "caches": [
+    {
+      "key": "node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6",
+      "ref": "refs/heads/medicao/rfc-049-quente",
+      "mb": 69.8,
+      "created_at": "2026-11-09T19:44:44.059876Z",
+      "last_accessed_at": "2026-11-09T19:59:48.413868Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-quente",
+      "mb": 240.5,
+      "created_at": "2026-11-09T19:46:00.316151Z",
+      "last_accessed_at": "2026-11-09T20:00:41.094004Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7584447e34a4d61d98382f2ea4ccc795e7999df0",
+      "ref": "refs/heads/medicao/rfc-049-quente",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:46:52.021840Z",
+      "last_accessed_at": "2026-11-09T19:57:10.176952Z"
+    },
+    {
+      "key": "node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6",
+      "ref": "refs/heads/medicao/rfc-049-mypy",
+      "mb": 69.8,
+      "created_at": "2026-11-09T19:50:08.590847Z",
+      "last_accessed_at": "2026-11-09T19:50:08.590847Z"
+    },
+    {
+      "key": "node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6",
+      "ref": "refs/heads/medicao/rfc-049-black",
+      "mb": 69.8,
+      "created_at": "2026-11-09T19:50:18.339192Z",
+      "last_accessed_at": "2026-11-09T19:50:18.339192Z"
+    },
+    {
+      "key": "node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6",
+      "ref": "refs/heads/medicao/rfc-049-ruff",
+      "mb": 69.8,
+      "created_at": "2026-11-09T19:50:21.236634Z",
+      "last_accessed_at": "2026-11-09T19:50:21.236634Z"
+    },
+    {
+      "key": "node-cache-Linux-x64-npm-f722a98803e567e9fb0df9025738dfcf5c36e3a563b21dfd83da7baa991c34e6",
+      "ref": "refs/heads/medicao/rfc-049-env",
+      "mb": 69.8,
+      "created_at": "2026-11-09T19:50:22.525331Z",
+      "last_accessed_at": "2026-11-09T19:54:19.014329Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-ruff",
+      "mb": 240.5,
+      "created_at": "2026-11-09T19:51:26.873333Z",
+      "last_accessed_at": "2026-11-09T19:51:26.873333Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-prettier",
+      "mb": 240.5,
+      "created_at": "2026-11-09T19:51:30.520551Z",
+      "last_accessed_at": "2026-11-09T19:51:30.520551Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-eslint",
+      "mb": 240.6,
+      "created_at": "2026-11-09T19:51:35.064046Z",
+      "last_accessed_at": "2026-11-09T19:51:35.064046Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-controle",
+      "mb": 240.5,
+      "created_at": "2026-11-09T19:51:41.477592Z",
+      "last_accessed_at": "2026-11-09T19:51:41.477592Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-vitest",
+      "mb": 240.5,
+      "created_at": "2026-11-09T19:51:49.499008Z",
+      "last_accessed_at": "2026-11-09T19:51:49.499008Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-mypy",
+      "mb": 240.6,
+      "created_at": "2026-11-09T19:51:56.694243Z",
+      "last_accessed_at": "2026-11-09T19:51:56.694243Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-tsc",
+      "mb": 240.6,
+      "created_at": "2026-11-09T19:51:57.006742Z",
+      "last_accessed_at": "2026-11-09T19:51:57.006742Z"
+    },
+    {
+      "key": "venv-3.12.9-77ecc06cea33128caef3d273286559ce95579893344ebb86b3ae9c827e334363",
+      "ref": "refs/heads/medicao/rfc-049-env",
+      "mb": 240.6,
+      "created_at": "2026-11-09T19:51:58.155790Z",
+      "last_accessed_at": "2026-11-09T19:54:59.454836Z"
+    },
+    {
+      "key": "venv-3.12.9-05eabeacf4013465519d6bcfc69a278afbb1f9b1aa24d25e3d656714bb90565c",
+      "ref": "refs/heads/medicao/rfc-049-black",
+      "mb": 240.6,
+      "created_at": "2026-11-09T19:52:09.280666Z",
+      "last_accessed_at": "2026-11-09T19:52:09.280666Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-194f6efb47a2e79d88a596c9e123ddb355ebcb01",
+      "ref": "refs/heads/medicao/rfc-049-prettier",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:52:28.385082Z",
+      "last_accessed_at": "2026-11-09T19:52:28.385082Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-3e70150a8004a70061439eb78e8634fa85faa5b0",
+      "ref": "refs/heads/medicao/rfc-049-eslint",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:52:37.462659Z",
+      "last_accessed_at": "2026-11-09T19:52:37.462659Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-b7f68c622d6115fc62c9eca8faf2169cafbe6b4b",
+      "ref": "refs/heads/medicao/rfc-049-controle",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:52:45.983339Z",
+      "last_accessed_at": "2026-11-09T19:52:45.983339Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-5f5368c221c7d3add2b653b7d7be503f175965ea",
+      "ref": "refs/heads/medicao/rfc-049-vitest",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:52:52.863407Z",
+      "last_accessed_at": "2026-11-09T19:52:52.863407Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-7cb9b115924c5f6e4e7b04486b13f0a41d632c42",
+      "ref": "refs/heads/medicao/rfc-049-tsc",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:53:14.305963Z",
+      "last_accessed_at": "2026-11-09T19:53:14.305963Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-265de474607a7b470dddb6b38e920d943dc6645b",
+      "ref": "refs/heads/medicao/rfc-049-mypy",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:53:16.433854Z",
+      "last_accessed_at": "2026-11-09T19:53:16.433854Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-334f50f3fd9a655997dd44c81328c901746e6a46",
+      "ref": "refs/heads/medicao/rfc-049-env",
+      "mb": 13.0,
+      "created_at": "2026-11-09T19:53:19.339419Z",
+      "last_accessed_at": "2026-11-09T19:53:19.339419Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-15626575ef7d0bed03d80c7051677d9e1a0d6b68",
+      "ref": "refs/heads/medicao/rfc-049-quente",
+      "mb": 13.1,
+      "created_at": "2026-11-09T19:57:19.993071Z",
+      "last_accessed_at": "2026-11-09T19:58:54.589681Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-1313aae76cb97ef7afab87488d0b7be110d60ab4",
+      "ref": "refs/heads/medicao/rfc-049-quente",
+      "mb": 13.1,
+      "created_at": "2026-11-09T19:59:06.471054Z",
+      "last_accessed_at": "2026-11-09T20:00:52.823152Z"
+    },
+    {
+      "key": "mypy-7026cd96e55a38feac079f43567d34f0d75f26aed93d8f8151f54800c506d67e-8b1c32f475e7260ef210ab48569ca7d5a67b3aa6",
+      "ref": "refs/heads/medicao/rfc-049-quente",
+      "mb": 13.1,
+      "created_at": "2026-11-09T20:01:02.584Z",
+      "last_accessed_at": "2026-11-09T20:01:02.584Z"
+    }
+  ]
+}

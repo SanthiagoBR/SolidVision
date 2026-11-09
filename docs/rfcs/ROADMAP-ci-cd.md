@@ -68,11 +68,11 @@ Um item que **não** atrapalha: o teste que falha com `WARM_UP_MODELS=true` no `
 |---|---|---|---|
 | D1 | Onde roda | **GitHub Actions** | O remote já é o GitHub, e o repositório público não paga minutos, Windows incluído. Não há servidor para manter |
 | D2 | O runner do backend e do instalador | **`windows-2025`**, com a imagem fixada, nunca `windows-latest` | O produto é só Windows, e 28 arquivos de teste têm ramos por plataforma. **Rejeitado: Linux com o Windows simulado**, que testaria os dublês e não o produto. Uma imagem `-latest` muda sozinha, como a tag `pg16` que o [RFC-033a](rfc-033a-linha-de-base-do-postgres-embarcado.md) recusou |
-| D3 | O runner do frontend | **`ubuntu-24.04`** | O `vitest`, o `eslint` e o `tsc` não tocam API do Windows, e o runner Linux sobe mais rápido. Se algum teste presumir caminhos do Windows, o job vai para o `windows-2025` (medido no RFC-049) |
+| D3 | O runner do frontend | **`ubuntu-24.04`** | O `vitest`, o `eslint` e o `tsc` não tocam API do Windows, e o runner Linux sobe mais rápido. Se algum teste presumir caminhos do Windows, o job vai para o `windows-2025` (medido no RFC-049) → **Fica no `ubuntu-24.04`.** Um teste presumia o Windows sem precisar dele, e foi corrigido no teste; no Linux, passam os mesmos 378 testes ([RFC-049 §5 e §14.4](rfc-049-primeiro-workflow.md#144-o-frontend-no-linux)). A regra ficou assim: um teste que presume o Windows sem precisar dele é corrigido no teste, e só um teste que precisa de uma API do Windows leva o job para lá |
 | D4 | O banco no CI | **O Postgres embarcado**, materializado do `postgres-win-64.lock` e guardado em cache pelo hash do lockfile | No GitHub Actions, *service containers* só existem em runner Linux. E o embarcado é a versão que vai no instalador. O Docker continua sendo o banco do dia a dia |
 | D5 | As versões do Python no CI | **Python 3.12.9**, o venv montado do `python-win-64.lock`, mais um lockfile novo para as ferramentas de desenvolvimento | O CI confere as versões que vão para o usuário, e não as de um venv que derivou. O 3.12.9 é o do pacote ([RFC-041 §2.8](rfc-041-empacotamento-e-instalador.md)), e o black roda nele |
 | D6 | O que roda quando | **A cada push e PR:** análise estática, suíte padrão, frontend. **À noite e sob demanda:** `embedded` e `slow`. **Numa tag:** instalador, teste de fumaça e rascunho de release | O que leva minutos roda sempre. O que baixa 1 GB ou leva 40 min roda quando vale a pena |
-| D7 | A branch padrão | **A decidir pelo usuário.** Recomendação: levar a `frontend` para a `main` antes do RFC-051 | O `schedule` só roda na branch padrão, e a `main` está 70 commits atrás. A outra saída é trocar a branch padrão do repositório |
+| D7 | A branch padrão | **A decidir pelo usuário.** Recomendação: levar a `frontend` para a `main` antes do RFC-051 | O `schedule` só roda na branch padrão, e a `main` está 70 commits atrás (72 no piloto do RFC-049). E, sem o workflow na `main`, toda branch nova começa com os caches frios ([RFC-049 §4.4](rfc-049-primeiro-workflow.md#44-o-que-fica-guardado-entre-execuções)). A outra saída é trocar a branch padrão do repositório |
 | D8 | Quem publica a release | **Uma pessoa.** O CI cria o rascunho | O instalador não é assinado ([RFC-041 §7.5](rfc-041-empacotamento-e-instalador.md#75-sem-assinatura-o-smartscreen)), e publicar é uma ação para fora que não se desfaz por completo |
 
 ---
@@ -110,11 +110,13 @@ As conferências que levam segundos, a cada push. É o primeiro sinal verde no G
 - Permissões mínimas: `contents: read`.
 
 **Critérios de pronto**
-- Do push ao resultado dos dois jobs, com cache quente: `TBM` min. O alvo, escrito antes do número, é 10 min.
-- Os defeitos plantados do RFC-048, um por commit numa branch de teste, deixam o job certo vermelho.
-- O frontend no Linux dá o mesmo número de testes do `npm test` local, no mesmo commit. Se não der, a diferença é explicada, ou o job vai para o Windows (D3).
+- Do push ao resultado dos dois jobs, com cache quente: `TBM` min → **1,5 min: 88 s, a mediana de três execuções; com os caches frios, 205 s** ([RFC-049 §14.2](rfc-049-primeiro-workflow.md#142-do-push-ao-resultado)). O alvo, escrito antes do número, é 10 min.
+- Os defeitos plantados do RFC-048, um por commit numa branch de teste, deixam o job certo vermelho. → **Oito, um por branch, e cada um deixou vermelho o job certo, e só ele, com a primeira etapa vermelha na etapa do defeito** (RFC-049 §14.3).
+- O frontend no Linux dá o mesmo número de testes do `npm test` local, no mesmo commit. Se não der, a diferença é explicada, ou o job vai para o Windows (D3). → **378 de 378.** Sem a correção do teste do `stagingDirectory`, 1 falha, a que a leitura previa (RFC-049 §14.4).
 
 **Tamanho estimado:** meio dia.
+
+**Implementado em 09/11/2026.** O que o RFC mudou neste escopo está no [§13 dele](rfc-049-primeiro-workflow.md#13-o-que-isto-muda-no-roadmap-e-o-que-passa-adiante): o `ELECTRON_SKIP_BINARY_DOWNLOAD=1` saiu, porque não faz nada no Electron 44; o cache do `pip` deu lugar ao do venv inteiro, salvo logo depois do `make_venv.py`, e o `.mypy_cache` também é guardado; o D3 ganhou a distinção entre um teste que presume o Windows e um que precisa dele; e os defeitos plantados são oito, sem o do `pytest`, com o do Prettier numa formatação, porque um CRLF não chega a um commit. A medição achou o caso frio em cerca de 4 min, e não 13, e o `setup-python` como o passo mais longo do job quente: ele baixa o 3.12.9 a cada execução, de 40 a 58 s. Isso passa para o RFC-050 ([§15.2](rfc-049-primeiro-workflow.md#152-o-setup-python-é-o-passo-mais-longo-do-job-quente)).
 
 ---
 
