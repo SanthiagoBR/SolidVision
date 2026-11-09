@@ -1,10 +1,10 @@
 # RFC-049 — O Primeiro Workflow: Frontend e Análise Estática
 
-**Status:** Proposto
+**Status:** Implementado, como está, com as correções de §15. A medição de §14, no GitHub Actions, em 09/11/2026, em dez branches feitas do commit `7584447`: do push ao resultado dos dois jobs, com os caches quentes, **1,5 min** (88 s, a mediana de 86, 88 e 99 s), contra o alvo de 10 min; com os caches frios, 205 s. Os **oito defeitos plantados** deixaram vermelho o job deles, e só o dele, cada um com a primeira etapa vermelha na etapa do defeito. O frontend no Ubuntu deu **378 testes em 36 arquivos, todos passando**, os mesmos do Windows; sem a correção de §5, **1 falha**, a do `stagingDirectory`, e 377 passando, como §2.3 previa. No runner, restaurar o venv levou de 9 a 15 s, e montá-lo, de 70 a 99 s: a decisão 8 fica. O cache do `mypy` serve ao checkout novo (1,0 a 1,7 s, contra 43 a 69 s frio). O caso frio leva cerca de 4 min no runner, e não os 13 que §4.1 estimou com os tempos desta máquina (§15.1), e o passo mais longo do job quente é o `setup-python`, que baixa o 3.12.9 a cada execução (§15.2). As seções 1 a 13 são o rascunho como foi aprovado
 **Depende de:** RFC-048 (o `check.py` e os grupos dele, o `make_venv.py`, os dois lockfiles e o `frontend/.gitattributes`), [roadmap de CI/CD](ROADMAP-ci-cd.md) (D1, D2, D3, D5 e D6)
 **Bloqueia:** RFC-050, que acrescenta o job `backend` a este workflow e monta o venv pelo mesmo passo; RFC-052, que monta o venv do mesmo jeito para o build
 **Migration:** nenhuma
-**Medição:** o piloto de §2, nesta máquina (NVMe, Windows 11, Intel Model 126, 8 threads), em 09/11/2026, sobre o commit `8556d61`. A parte do venv saiu do `experiments/rfc-049-primeiro-workflow/pilot_venv_cache.py` (+ `.json`). A da implementação, `experiments/rfc-049-primeiro-workflow/measure_ci.py` (+ `.json`; o `.log`, fora do git), que lê as execuções do workflow pela API do GitHub (§8)
+**Medição:** o piloto de §2, nesta máquina (NVMe, Windows 11, Intel Model 126, 8 threads), em 09/11/2026, sobre o commit `8556d61`. A parte do venv saiu do `experiments/rfc-049-primeiro-workflow/pilot_venv_cache.py` (+ `.json`). A da implementação, `experiments/rfc-049-primeiro-workflow/measure_ci.py` (+ `.json`; o `.log`, fora do git), que lê as execuções do workflow pela API do GitHub (§8), rodado em 09/11/2026 sobre as dez branches de medição (§14)
 
 > **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir*, e vira número quando a implementação o escrever de volta, ao lado da frase. Os números sem marca vêm do piloto de §2 ou de outros RFCs, e dizem de qual.
 
@@ -281,9 +281,9 @@ O teste não usa um parser de YAML. O PyYAML está no venv, porque o `transforme
 
 | critério | o número |
 |---|---|
-| **Do push ao resultado dos dois jobs, com os caches quentes** | `TBM` min, do `created_at` da execução ao `completed_at` do último job. É a mediana de três execuções seguidas, de commits vazios, numa branch cujo cache já foi aquecido. O alvo, escrito antes do número, é **10 min**. Sem ser critério, vêm junto a primeira execução, com os caches frios, e o tempo de cada passo. Entre eles, o `setup-python` e os tempos de restaurar o venv, de montá-lo com o `make_venv.py` e de salvá-lo. É a comparação de §2.4 feita no runner: se lá restaurar o venv custar mais que montá-lo, a decisão 8 se inverte |
-| **Um defeito plantado por etapa, uma branch por defeito** | Cada defeito deixa vermelho o job dele, e só o dele, e a primeira etapa vermelha do `check.py` é a do defeito. Testado, e não presumido: `TBM` de 8 |
-| **O frontend no Linux dá os testes do Windows** | O mesmo número de testes passando que o `npm test` local, no mesmo commit: `TBM`. Antes, numa branch de controle sem a correção de §5, o que §2.3 prevê: um teste falhando, o do `stagingDirectory`, e o resto passando: `TBM`. Se aparecer outra diferença, ela é explicada, ou o job vai para o `windows-2025` (D3) |
+| **Do push ao resultado dos dois jobs, com os caches quentes** | `TBM` min → **1,5 min: 88 s, a mediana de 86, 88 e 99 s** (§14.2), do `created_at` da execução ao `completed_at` do último job. É a mediana de três execuções seguidas, de commits vazios, numa branch cujo cache já foi aquecido. O alvo, escrito antes do número, é **10 min**. Sem ser critério, vêm junto a primeira execução, com os caches frios, e o tempo de cada passo. Entre eles, o `setup-python` e os tempos de restaurar o venv, de montá-lo com o `make_venv.py` e de salvá-lo. É a comparação de §2.4 feita no runner: se lá restaurar o venv custar mais que montá-lo, a decisão 8 se inverte |
+| **Um defeito plantado por etapa, uma branch por defeito** | Cada defeito deixa vermelho o job dele, e só o dele, e a primeira etapa vermelha do `check.py` é a do defeito. Testado, e não presumido: `TBM` de 8 → **8 de 8** (§14.3) |
+| **O frontend no Linux dá os testes do Windows** | O mesmo número de testes passando que o `npm test` local, no mesmo commit: `TBM` → **378 de 378, em 36 arquivos, nos dois** (§14.4). Antes, numa branch de controle sem a correção de §5, o que §2.3 prevê: um teste falhando, o do `stagingDirectory`, e o resto passando: `TBM` → **1 falha, a do `stagingDirectory`, e 377 passando** (§14.4). Se aparecer outra diferença, ela é explicada, ou o job vai para o `windows-2025` (D3) |
 
 Os defeitos plantados. O do `pytest` não entra, porque o `pytest` é do RFC-050:
 
@@ -348,3 +348,103 @@ Cada branch nasce do commit da implementação e, como §4.4 explica, começa fr
 **Para quem mexer nas actions.** O commit muda à mão, e o teste de §6 recusa uma tag.
 
 **Tamanho estimado:** meio dia, como no roadmap, mais a espera das execuções de §8.
+
+## 14. Validação
+
+### 14.1 Onde e como
+
+No GitHub Actions do `SanthiagoBR/SolidVision`, em 09/11/2026, das 16h43 às 17h01 (horário de Brasília). O commit da implementação, `7584447`, foi para dez branches de medição, `medicao/rfc-049-*`, apagadas no fim. Cada uma começou fria, porque a `main` não tem o workflow (§4.4). O `measure_ci.py` leu as execuções pela API, e os logs dos jobs com o token do usuário: sem token, a API responde 403 aos logs, mesmo num repositório público.
+
+A ordem foi esta. Primeiro a branch `quente`, sozinha, com o commit da implementação, para ver o workflow funcionar antes de abrir as outras. Depois as nove de uma vez, o controle e os oito defeitos: 18 jobs juntos, e nenhum esperou mais de 3 s na fila. Depois o segundo push da `env`. Por último, os três commits vazios da `quente`, cada um depois de a execução anterior terminar, para que um não cancelasse o outro (§4.1). Antes do primeiro push, cada defeito foi ensaiado nesta máquina com o `check.py` do grupo dele, e cada um parou na etapa dele.
+
+### 14.2 Do push ao resultado
+
+Na branch `quente`. A primeira execução é a fria: o commit da implementação, sem venv, sem `.mypy_cache` e sem o cache do npm. As três seguintes são de commits vazios.
+
+| passo | frio | quente (as três) |
+|---|---|---|
+| `setup-python` | 43 s | 46, 53 e 49 s |
+| Restaurar o venv | 1 s, sem achar | 15, 15 e 12 s |
+| `make_venv.py` | 70 s | pulado |
+| Salvar o venv | 24 s | pulado |
+| Restaurar o `.mypy_cache` | 1 s, sem achar | 2, 1 e 1 s |
+| `check.py python` | 48 s, o `mypy` em 43,4 s | 7, 9 e 7 s, o `mypy` em 1,3, 1,7 e 1,0 s |
+| Salvar o `.mypy_cache` | 3 s | 2, 2 e 2 s |
+| **O job `estatico`** | **201 s** | **85, 96 e 83 s** |
+| `npm ci` | 47 s | 8, 5 e 7 s |
+| `check.py frontend` | 17 s | 17, 13 e 17 s |
+| **O job `frontend`** | **71 s** | **34, 30 e 34 s** |
+| **Do push ao resultado** | **205 s** | **88, 99 e 86 s. A mediana: 88 s** |
+
+O alvo era 10 min. O `estatico` é o job mais lento nos dois casos, e o `setup-python` é mais da metade dele quente (§15.2).
+
+**As dez execuções frias.** Cada branch teve uma, a do primeiro push. Nelas, o `make_venv.py` levou de 70 a 99 s (mediana 80 s); salvar o venv, de 9 a 24 s (mediana 11 s); o `mypy` com o cache vazio, de 43,4 a 69,3 s (mediana 54,2 s, nas oito em que ele rodou); e o `npm ci` sem o cache do npm, de 37 a 48 s (mediana 44 s). O job `estatico` frio, nas sete em que passou, levou de 200 a 251 s (mediana 219 s). Do push ao resultado, a mais lenta das dez levou 255 s.
+
+**A decisão 8 fica.** No runner, restaurar o venv levou de 9 a 15 s nas quatro vezes em que o achou (mediana 13,5 s), e montá-lo, de 70 a 99 s. É a comparação de §2.4 feita no runner, e ela vai para o mesmo lado, com uma diferença menor (§15.1).
+
+**O cache do `mypy` serve ao checkout novo**, o risco de §10. Cada execução quente restaurou, pelo prefixo, a entrada do commit anterior, e o `mypy` levou de 1,0 a 1,7 s, contra 43,4 s na execução fria da mesma branch.
+
+### 14.3 Os oito defeitos plantados
+
+Cada um numa branch feita de `7584447`, num commit só. O da `env` foi em dois pushes, como §8 descreve. O primeiro tirou o `python-dev-win-64.lock` da chave do venv, e a execução, verde, salvou o venv nessa chave. O segundo pôs no lockfile o `pytest` 9.1.0, com o hash do wheel do 9.1.0, e o venv restaurado tinha o 9.1.1.
+
+| etapa | defeito | job vermelho | o outro job | a primeira etapa vermelha | o job vermelho, do início ao fim |
+|---|---|---|---|---|---|
+| `env` | O `pytest` 9.1.0 no lockfile, e o 9.1.1 no venv guardado | `estatico` | verde | **`env`**: *"pytest is 9.1.1, python-dev-win-64.lock says 9.1.0"* | 61 s |
+| `ruff` | Um `import json` sem uso em `backend/app/domain/value_objects/place.py` | `estatico` | verde | **`ruff`** | 142 s |
+| `black` | `PLANTED = {  'a':1 }` no fim de `scripts/export_openapi.py` | `estatico` | verde | **`black`** | 192 s |
+| `mypy` | Uma função `-> int` que devolve `"planted"`, no mesmo `place.py` | `estatico` | verde | **`mypy`** | 249 s |
+| `eslint` | Um `useState` dentro de um `if`, num componente novo, `frontend/src/Planted.tsx` | `frontend` | verde | **`eslint`** | 58 s |
+| `tsc` | `shout(42)`, onde `shout` pede um `string`, num arquivo novo de `frontend/src` | `frontend` | verde | **`tsc`** | 50 s |
+| `prettier` | `export const planted   =   { a:1 }`, num arquivo novo de `frontend/src` | `frontend` | verde | **`prettier`** | 56 s |
+| `vitest` | `expect(1 + 1).toBe(3)` num teste novo | `frontend` | verde | **`vitest`**: 1 falha e 378 passando, em 37 arquivos | 57 s |
+
+**8 de 8.** Os tempos do `estatico` vermelho incluem montar o venv, porque cada branch começou fria. O da `env` é o único com o venv restaurado: a etapa levou 0,1 s até a falha.
+
+### 14.4 O frontend no Linux
+
+| commit | `npm test` nesta máquina (Windows 11, Node 24.15.0) | `check.py frontend` no `ubuntu-24.04` (Node 24.22.2) |
+|---|---|---|
+| `7584447`, com a correção de §5 | 378 passando, em 36 arquivos | **378 passando, em 36 arquivos**, em todas as execuções sem defeito plantado no frontend: as quatro da `quente`, as duas da `env` e as do `ruff`, do `black` e do `mypy` |
+| O controle: `7584447` com o teste de antes de §5 | 378 passando | **1 falha e 377 passando**. A falha: *"is SolidVision-build\resources under LOCALAPPDATA, outside the repository"* |
+
+As duas linhas são o que §2.3 previu pela leitura. No controle, o teste da raiz de dados passou sem conferir nada, como lá se dizia; com a correção, ele passa conferindo. Nenhuma outra diferença apareceu, e o job do frontend fica no Linux (D3, §5).
+
+### 14.5 Os caches no runner
+
+| cache | por entrada, no runner | nesta máquina (§4.4) |
+|---|---|---|
+| O venv | 240,5 MB | 239,0 MB |
+| O `.mypy_cache` | 13,0 MB | 14,3 MB |
+| Os pacotes do npm | 69,8 MB | — |
+
+As dez branches de medição deixaram 26 entradas, 2,9 GB dos 10 GB do repositório: um venv por branch, porque o escopo do cache é a branch (§4.4). Elas saem sozinhas depois de 7 dias sem acesso. Nas cinco branches em que o job `frontend` falhou, o `setup-node` não salvou o cache do npm (§15.3).
+
+## 15. Correções feitas durante a implementação
+
+### 15.1 O caso frio leva 4 min, e não 13
+
+§4.1 estimou o `estatico` frio em perto de 13 min, com os tempos desta máquina: 349 s para montar o venv, 180 s para empacotá-lo e 248 s para o grupo `python` com o `mypy` do zero. No runner, montar o venv levou 80 s, salvá-lo, 11 s, e o `mypy` frio, 54,2 s (as medianas de §14.2), e o job inteiro, de 200 a 251 s. Passo a passo, o runner foi de 4 a 16 vezes mais rápido que esta máquina. Os tempos desta máquina não servem de estimativa para o runner.
+
+Nenhuma decisão muda. O `timeout-minutes: 30` do `estatico` fica com folga de sete vezes, e não de duas. Uma branch nova dá o primeiro resultado em cerca de 4 min. E a decisão 8 fica (§14.2), com uma vantagem menor que a do piloto: guardar o venv poupa cerca de 70 s por execução no runner, e não os 240 s que §2.4 sugeria.
+
+### 15.2 O `setup-python` é o passo mais longo do job quente
+
+Nenhum número do rascunho o previa. A imagem `windows-2025` traz o Python 3.12.10, e não o 3.12.9. A cada execução, o `setup-python` baixa o 3.12.9 do `actions/python-versions`, apaga o 3.12.10 da imagem, com os registros dele, e instala o 3.12.9. Nas catorze execuções, isso levou de 40 a 58 s (mediana 49,5 s): mais da metade do job `estatico` quente, que leva de 83 a 96 s.
+
+Fica assim neste RFC. O alvo de 10 min está cumprido com folga, e o risco de §10 sobre o `setup-python` era outro: o 3.12.9 deixar de ser publicado. Passa para o RFC-050, cuja *composite action* monta o venv: guardar também o Python base, ou trocar o `setup-python` pelo pacote do NuGet do RFC-048 §17.4, pouparia perto de 45 s em cada execução de cada job Windows. Qualquer troca tem de deixar o Python base sempre na mesma pasta, porque o venv restaurado o procura pelo caminho (§10).
+
+### 15.3 O cache do npm não é salvo quando o job `frontend` falha
+
+O `setup-node` salva o cache do npm num passo do fim do job, e esse passo só roda quando o job passou. Nas cinco branches em que o frontend falhou, nenhuma entrada do npm foi salva (§14.5). Enquanto nenhuma execução do frontend de uma branch tiver passado, cada execução nela faz o `npm ci` frio: de 37 a 48 s, contra 5 a 12 s quente. É o comportamento que §4.4 evitou para o venv com as duas metades do `actions/cache`.
+
+Fica assim: o custo é de cerca de 35 s, só numa branch nova cujo frontend ainda não passou. Separar o cache do npm em `restore` e `save` acrescentaria dois passos e uma chave escrita à mão.
+
+### 15.4 O teste do YAML confere um pouco mais que §6
+
+§6 lista quatro conferências. Duas ficaram um pouco maiores, cada acréscimo com o defeito dele testado:
+
+- a das actions recusa também uma action de fora da organização `actions` e uma action em dois commits, porque §4.5 diz as duas coisas (a decisão 5, e o `cache/restore` e o `cache/save` no mesmo commit);
+- a do Python recusa também um `python-version:` que não leia o `PYTHON_VERSION` do job, porque §4.3 diz que o `setup-python` o lê.
+
+O `test_ci_workflow.py` tem 12 testes: as quatro conferências no arquivo de verdade, os quatro defeitos de §9, os três dos acréscimos e um job que pede `pull-requests: write`.
