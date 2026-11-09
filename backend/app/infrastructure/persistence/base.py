@@ -1,4 +1,4 @@
-"""Shared SQLAlchemy declarative base for the persistence infrastructure."""
+"""Base declarativa SQLAlchemy compartilhada da infraestrutura de persistência."""
 
 from __future__ import annotations
 
@@ -15,6 +15,6 @@ naming_convention = {
 
 
 class Base(DeclarativeBase):
-    """Base class for all future ORM models in the project."""
+    """Classe base de todos os modelos ORM futuros do projeto."""
 
     metadata = MetaData(naming_convention=naming_convention)

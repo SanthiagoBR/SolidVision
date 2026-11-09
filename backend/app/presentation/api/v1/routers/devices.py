@@ -1,34 +1,34 @@
-r"""HTTP entry points for devices, volumes and their folders (RFC-031).
+r"""Pontos de entrada HTTP para dispositivos, volumes e as suas pastas (RFC-031).
 
-Six routes -- the sixth, the purge of the photos a scan no longer found, is
-RFC-046's -- and the thing they have in common is what they refuse to
-take: **no route in this module accepts a file path, in a body, a query
-string, a header or a URL segment.** The property RFC-030 section 5.1
-established for `/reveal` survives a route whose entire purpose is to let
-a user add a disk, because the direction is inverted -- the server
-enumerates the volumes and mints an opaque identity for each one, and the
-client hands one back. A client never composes a location, and an
-identity it invented resolves to nothing, which is exactly what a path it
-invented would not (RFC-031 section 5.1).
+Seis rotas -- a sexta, a remoção das fotos que um scan não achou mais, é do
+RFC-046 -- e o que elas têm em comum é o que se recusam a receber: **nenhuma
+rota deste módulo aceita um caminho de arquivo, num corpo, numa query string,
+num header ou num segmento de URL.** A propriedade que o RFC-030 §5.1
+estabeleceu para o `/reveal` sobrevive a uma rota cujo propósito inteiro é
+deixar o usuário acrescentar um disco, porque a direção é invertida -- o
+servidor enumera os volumes e cunha uma identidade opaca para cada um, e o
+cliente devolve uma. Um cliente nunca compõe uma localização, e uma identidade
+que ele inventou não resolve para nada, que é justamente o que um caminho
+inventado por ele não faria (RFC-031 §5.1).
 
-`?path=` on the folder listing is the apparent exception and is not one.
-It is a **device-relative scope**, refused by `JobScope` before anything
-is opened -- no `..`, no drive anchor, no UNC share -- and then resolved
-by the locator, which confirms the result is still inside the device
-after NTFS junctions have been followed. It is the same validation `POST
-/api/v1/jobs` applies, and it has to be: what this route returns is
-literally what the client sends back as `scopes[]`.
+`?path=` na listagem de pastas é a exceção aparente, e não é uma. É um **escopo
+relativo ao dispositivo**, recusado pelo `JobScope` antes de qualquer coisa ser
+aberta -- nada de `..`, de âncora de unidade, de compartilhamento UNC -- e
+depois resolvido pelo locator, que confirma que o resultado ainda está dentro do
+dispositivo depois de seguidas as junctions do NTFS. É a mesma validação que o
+`POST /api/v1/jobs` aplica, e tem de ser: o que esta rota retorna é literalmente
+o que o cliente devolve como `scopes[]`.
 
-Synchronous `def`, not `async def`, for the reason RFC-026 section 9
-gives and `jobs.py` documents: everything below this line is a blocking
-DBAPI call or a blocking filesystem read, and an `async def` would run it
-on the event loop and stall every concurrent request, `/health` included.
+`def` síncrono, não `async def`, pela razão que o RFC-026 §9 dá e o `jobs.py`
+documenta: tudo abaixo desta linha é uma chamada DBAPI bloqueante ou uma leitura
+bloqueante do sistema de arquivos, e um `async def` a rodaria no event loop e
+travaria toda requisição concorrente, `/health` inclusive.
 
-No `try/except` anywhere. A device that does not exist, a disk in a
-drawer, an unknown volume kind and a folder that is not there are domain
-errors, and `error_handlers.py` turns each into 404, 409, 400 and 400
-without any function here knowing those numbers. RFC-031 adds no new
-error base.
+Nenhum `try/except` em lugar nenhum. Um dispositivo que não existe, um disco na
+gaveta, um tipo de volume desconhecido e uma pasta que não está lá são erros de
+domínio, e o `error_handlers.py` transforma cada um em 404, 409, 400 e 400 sem
+que nenhuma função aqui conheça esses números. O RFC-031 não acrescenta nenhuma
+base de erro nova.
 """
 
 from __future__ import annotations
@@ -78,24 +78,23 @@ logger = get_logger(__name__)
 def list_devices(
     use_case: ListDevicesUseCase = Depends(get_list_devices_use_case),
 ) -> DeviceListSchema:
-    """Return every disk the system knows, connected or in a drawer.
+    """Retorna todo disco que o sistema conhece, conectado ou na gaveta.
 
-    `connected` and `mount_point` describe **this instant** and are
-    resolved per request from a single enumeration of the mounted
-    volumes, however many devices there are. That bound is the design
-    (RFC-031 section 4.1): the obvious implementation asks the locator
-    once per device, which is right for a page of search hits and is N
-    enumerations of the same filesystem here.
+    `connected` e `mount_point` descrevem **este instante** e são resolvidos
+    por requisição a partir de uma única enumeração dos volumes montados,
+    quantos dispositivos houver. Esse limite é o desenho (RFC-031 §4.1): a
+    implementação óbvia pergunta ao locator uma vez por dispositivo, o que é
+    certo para uma página de resultados de busca e aqui são N enumerações do
+    mesmo sistema de arquivos.
 
-    `connected: false` is a normal answer, not a failure. The row exists,
-    every photo on that disk is still searchable, and its thumbnails are
-    still served (RFC-030 section 4.1) -- what the user is missing is the
-    bytes.
+    `connected: false` é uma resposta normal, não uma falha. A linha existe,
+    toda foto daquele disco continua buscável, e as suas thumbnails continuam
+    servidas (RFC-030 §4.1) -- o que falta ao usuário são os bytes.
 
-    No `percent_indexed`. The response carries `indexed_images`,
-    `last_scan_file_count` and `last_scan_at` separately, so that nobody
-    can render the ratio without having the scan date in hand
-    (ARCHITECTURE.md section 15, RFC-031 section 4.2).
+    Nada de `percent_indexed`. A resposta traz `indexed_images`,
+    `last_scan_file_count` e `last_scan_at` separados, para que ninguém consiga
+    desenhar a razão sem ter a data do scan em mãos (ARCHITECTURE.md §15,
+    RFC-031 §4.2).
     """
     return DeviceListSchema.from_summaries(use_case.execute())
 
@@ -109,23 +108,22 @@ def list_devices(
 def list_volumes(
     use_case: ListMountedVolumesUseCase = Depends(get_list_mounted_volumes_use_case),
 ) -> VolumeListSchema:
-    """Answer *what is plugged in, and what of it do we already know?*
+    """Responde *o que está plugado, e o que disso já conhecemos?*
 
-    The question that precedes registering a disk, and the reason the
-    registration below never needs a path: this hands the client an
-    opaque identity for each volume, and the client hands one back.
+    A pergunta que precede o cadastro de um disco, e a razão de o cadastro
+    abaixo nunca precisar de um caminho: isto entrega ao cliente uma
+    identidade opaca para cada volume, e o cliente devolve uma.
 
-    **Deliberately the expensive route of the five.** Each volume costs
-    an extra platform call for its label and capacity, and reading a
-    capacity can spin up an external disk that had parked its heads. That
-    is why `VolumeCatalog` has two methods and why `GET /devices` above
-    uses the cheap one -- folding the detail into the enumeration would
-    put this cost in front of every search in the product (RFC-031
-    section 4.1).
+    **Deliberadamente a rota cara das cinco.** Cada volume custa uma chamada
+    extra à plataforma pelo rótulo e pela capacidade, e ler uma capacidade pode
+    fazer girar um disco externo que tinha estacionado as cabeças. É por isso
+    que o `VolumeCatalog` tem dois métodos e que o `GET /devices` acima usa o
+    barato -- juntar o detalhe à enumeração poria esse custo na frente de toda
+    busca do produto (RFC-031 §4.1).
 
-    Volumes the platform refuses to describe are skipped, not reported as
-    errors: an empty optical drive is no reason to stop listing the disks
-    that answered (RFC-027 section 7).
+    Volumes que a plataforma se recusa a descrever são pulados, não informados
+    como erros: um drive óptico vazio não é razão para parar de listar os discos
+    que responderam (RFC-027 §7).
     """
     return VolumeListSchema.from_cataloged(use_case.execute())
 
@@ -152,42 +150,41 @@ def register_device(
     use_case: RegisterDeviceUseCase = Depends(get_register_device_use_case),
     describer: DescribeDevicesUseCase = Depends(get_describe_devices_use_case),
 ) -> DeviceDetailSchema:
-    r"""Register the volume with this identity, or return the device it already is.
+    r"""Cadastra o volume com esta identidade, ou retorna o dispositivo que ele já é.
 
-    **201 the first time, 200 the second, and the difference is
-    load-bearing.** `DeviceId` is `uuid5` over the volume identity, so
-    registering a known disk lands on the existing row: nothing was
-    created, and a client counting creations would be counting wrong. It
-    is not a 409 either -- a conflict describes a request the current
-    state refuses, and this one is not refused, it is already satisfied
-    (RFC-031 section 6.1). The use case reports which happened; this
-    function only chooses the number.
+    **201 na primeira vez, 200 na segunda, e a diferença importa.** `DeviceId`
+    é `uuid5` sobre a identidade do volume, então cadastrar um disco conhecido
+    cai na linha existente: nada foi criado, e um cliente que contasse criações
+    contaria errado. Também não é um 409 -- um conflito descreve um pedido que o
+    estado atual recusa, e este não é recusado, já está satisfeito
+    (RFC-031 §6.1). O caso de uso informa o que aconteceu; esta função só
+    escolhe o número.
 
-    A `label` sent on a second registration **is** applied. `save()` is
-    an upsert by design, and the alternative -- ignoring it in silence --
-    would leave a user renaming a disk with no effect.
+    Um `label` enviado num segundo cadastro **é** aplicado. `save()` é um
+    upsert por desenho, e a alternativa -- ignorá-lo em silêncio -- deixaria um
+    usuário renomeando um disco sem efeito.
 
-    **Neither `response` nor `describer` is client input.** FastAPI
-    injects the first so the status can be lowered to 200 and resolves
-    the second as a dependency; nothing a client sends can reach either.
-    The signature test asserts the parameter list is exactly these four
-    names, so a path parameter added later has nowhere to hide.
+    **Nem `response` nem `describer` são entrada do cliente.** O FastAPI
+    injeta o primeiro para que o status possa baixar para 200 e resolve o
+    segundo como dependência; nada que um cliente envia alcança nenhum dos
+    dois. O teste de assinatura afirma que a lista de parâmetros é exatamente
+    esses quatro nomes, então um parâmetro de caminho acrescentado depois não
+    tem onde se esconder.
 
-    The `describer` is composed here rather than inside the registration
-    for the reason the search route composes `SearchImagesUseCase` with
-    `ResolveImageLocationUseCase`: resolving where a disk is mounted and
-    how much of it is indexed is not registering it, and the CLI path
-    through `RegisterDeviceUseCase.register()` must stay free of both.
-    It is what makes this response say `connected: true` with a real
-    mount point, rather than reporting a disk the server has this
-    instant found mounted as absent.
+    O `describer` é composto aqui, e não dentro do cadastro, pela razão por que
+    a rota de busca compõe `SearchImagesUseCase` com
+    `ResolveImageLocationUseCase`: resolver onde um disco está montado e quanto
+    dele está indexado não é cadastrá-lo, e o caminho da CLI por
+    `RegisterDeviceUseCase.register()` tem de ficar livre dos dois. É o que faz
+    esta resposta dizer `connected: true` com um ponto de montagem real, em vez
+    de informar como ausente um disco que o servidor acabou de achar montado.
 
-    An identity nobody is holding is a 409 naming what to do about it --
-    plug the disk in -- and **nothing is written**. An invented identity
-    is not a location: it is looked up in a mapping the server produced
-    seconds ago, and what is not in it does not exist. A path, by
-    contrast, *is* a location whether or not anyone meant it to be, which
-    is the whole of RFC-031 section 5.1.
+    Uma identidade que ninguém detém é um 409 dizendo o que fazer a respeito --
+    plugar o disco -- e **nada é escrito**. Uma identidade inventada não é uma
+    localização: é procurada num mapeamento que o servidor produziu segundos
+    atrás, e o que não está nele não existe. Um caminho, ao contrário, *é* uma
+    localização, quer alguém tenha querido isso ou não, que é todo o RFC-031
+    §5.1.
     """
     logger.info("device registration requested: kind=%s", request.volume_kind)
     registered = use_case.execute(
@@ -215,25 +212,23 @@ def rename_device(
     request: RenameDeviceRequestSchema,
     use_case: RenameDeviceUseCase = Depends(get_rename_device_use_case),
 ) -> DeviceDetailSchema:
-    """Change the disk's label. Nothing else about a device is editable.
+    """Muda o rótulo do disco. Nada mais de um dispositivo é editável.
 
-    **Works with the disk in a drawer**, and that is the whole point of
-    the rename requiring no bytes: a name is a fact about our table, and
-    RFC-027 section 2.3 is explicit that an unplugged disk is a device
-    the system knows perfectly well. The response still *reports*
-    whether the disk is here, and reporting `false` is as successful an
-    outcome as reporting `true`.
+    **Funciona com o disco na gaveta**, e essa é toda a razão de o renomear
+    não exigir bytes: um nome é um fato da nossa tabela, e o RFC-027 §2.3 é
+    explícito em que um disco desplugado é um dispositivo que o sistema
+    conhece perfeitamente. A resposta ainda *informa* se o disco está aqui, e
+    informar `false` é um desfecho tão bem-sucedido quanto informar `true`.
 
-    A body carrying anything but `label` is a **422**, not a quietly
-    ignored field. `last_scan_file_count` is the plausible thing to send
-    and the exact thing that must not be writable: it is the declared
-    denominator of "% indexed", so an editable one is an invented number
-    with the appearance of a measurement (RFC-031 section 7).
+    Um corpo que traga qualquer coisa além de `label` é um **422**, não um
+    campo ignorado em silêncio. `last_scan_file_count` é a coisa plausível de
+    enviar e exatamente a que não pode ser gravável: é o denominador declarado
+    do "% indexado", então um editável é um número inventado com aparência de
+    medição (RFC-031 §7).
 
-    The response is the shape `GET /devices` returns, resolved the same
-    way, so a client can drop it straight into the row it renamed rather
-    than re-reading the list to learn whether anything else about the
-    disk still holds.
+    A resposta tem o formato que o `GET /devices` retorna, resolvido do mesmo
+    jeito, para que um cliente possa colocá-la direto na linha que renomeou em
+    vez de reler a lista para saber se mais alguma coisa do disco ainda vale.
     """
     logger.info("rename requested for device %s", device_id)
     return DeviceDetailSchema.from_summary(
@@ -265,33 +260,30 @@ def list_device_folders(
     ),
     use_case: ListDeviceFoldersUseCase = Depends(get_list_device_folders_use_case),
 ) -> FolderListSchema:
-    """Return the folders directly inside `path`, each with its indexing state.
+    """Retorna as pastas logo dentro de `path`, cada uma com o seu estado de indexação.
 
-    **One level per request.** Not a flat first level, which would turn
-    "index the wedding" into "index all of 2018" -- five hours of
-    inference to reach three hundred photos -- and not the whole tree,
-    which costs the size of the disk every time the screen opens
-    (RFC-031 section 8.1).
+    **Um nível por requisição.** Não um primeiro nível achatado, que
+    transformaria "indexar o casamento" em "indexar todo 2018" -- cinco horas
+    de inferência para chegar a trezentas fotos -- nem a árvore inteira, que
+    custa o tamanho do disco toda vez que a tela abre (RFC-031 §8.1).
 
-    **The paths that come back are the filesystem's spelling, not the
-    one that was asked for.** A request for `?path=FOTOS/2018` against a
-    folder called `Fotos/2018` answers `"path": "Fotos/2018"`, because
-    that is the string the client will send in `scopes[]` and `POST
-    /jobs` compares path parts exactly.
+    **Os caminhos que voltam têm a grafia do sistema de arquivos, não a que
+    foi pedida.** Uma requisição de `?path=FOTOS/2018` contra uma pasta chamada
+    `Fotos/2018` responde `"path": "Fotos/2018"`, porque esse é o texto que o
+    cliente vai enviar em `scopes[]`, e o `POST /jobs` compara as partes do
+    caminho exatamente.
 
-    **Requires the disk to be plugged in: 409, naming it.** Unlike the
-    rename above, this one needs bytes, and *which disk to plug in* is
-    more useful than being told a folder is not there.
+    **Exige o disco plugado: 409, dizendo qual.** Ao contrário do renomear
+    acima, este precisa de bytes, e *qual disco plugar* é mais útil do que
+    ouvir que uma pasta não está lá.
 
-    No count of files on the disk and no percentage per folder. There is
-    no denominator, and getting one means walking the subtree -- the read
-    RFC-029 section 7.2 measured as dominant on a cold mechanical disk.
-    `indexed_images` is exact and is what to render (RFC-031 section
-    2.3).
+    Nenhuma contagem de arquivos no disco e nenhuma porcentagem por pasta. Não
+    há denominador, e obter um significa percorrer a subárvore -- a leitura que
+    o RFC-029 §7.2 mediu como dominante num disco mecânico frio.
+    `indexed_images` é exato e é o que desenhar (RFC-031 §2.3).
 
-    Not paginated. A folder with thousands of subfolders returns all of
-    them; the debt is declared in RFC-031 section 8.3 and measured before
-    it is paid.
+    Sem paginação. Uma pasta com milhares de subpastas retorna todas; a dívida
+    está declarada no RFC-031 §8.3 e será medida antes de ser paga.
     """
     return FolderListSchema.from_domain(use_case.execute(DeviceId(device_id), path))
 
@@ -310,23 +302,22 @@ def purge_missing_images(
     device_id: UUID,
     use_case: PurgeMissingImagesUseCase = Depends(get_purge_missing_images_use_case),
 ) -> PurgedImagesSchema:
-    """Delete the photos of this disk that a scan marked as not found (RFC-046).
+    """Apaga as fotos deste disco que um scan marcou como não achadas (RFC-046).
 
-    **The one route that deletes rows of the index**, and only these: the
-    ones a scan of the whole disk did not find, and that are hidden from
-    every read since. The rows go in one transaction, and only then their
-    thumbnails, from the application's own cache. **Irreversible**, which is
-    why the interface asks first, with the number.
+    **A única rota que apaga linhas do índice**, e só estas: as que um scan do
+    disco inteiro não achou, e que estão escondidas de toda leitura desde
+    então. As linhas saem numa transação, e só depois as suas thumbnails, do
+    cache do próprio aplicativo. **Irreversível**, e é por isso que a interface
+    pergunta antes, com o número.
 
-    **409 while the disk has a job**, pending or running: the job ends by
-    unmarking the photos it found again, and this would delete them first.
-    The request is legitimate and the state does not allow it -- RFC-030's
-    409.
+    **409 enquanto o disco tem um job**, pendente ou rodando: o job termina
+    desmarcando as fotos que achou de novo, e isto as apagaria antes. O pedido
+    é legítimo e o estado não o permite -- o 409 do RFC-030.
 
-    **The disk does not have to be connected.** The marks came from a scan
-    that was checked when it ran, and forgetting what is no longer on a disk
-    needs nothing from the disk. Nothing in the user's file system is
-    touched, so none of RFC-030's guards apply.
+    **O disco não precisa estar conectado.** As marcas vieram de um scan que foi
+    verificado quando rodou, e esquecer o que não está mais num disco não
+    precisa de nada do disco. Nada no sistema de arquivos do usuário é tocado,
+    então nenhuma das guardas do RFC-030 se aplica.
     """
     logger.info("purge of missing images requested for device %s", device_id)
     purged = use_case.execute(DeviceId(device_id))

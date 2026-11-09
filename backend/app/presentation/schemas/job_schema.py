@@ -1,10 +1,10 @@
-"""Request and response shapes for the indexing-job API (RFC-029 section 7).
+"""Formatos de requisição e de resposta da API de jobs de indexação (RFC-029 §7).
 
-The response publishes a job's progress and nothing about the machine it
-runs on: no mount point, no drive letter, no absolute path. Every path
-here is device-relative, which is the form RFC-027 made the only durable
-one -- and also the only one that does not tell a client where the
-server's files live.
+A resposta publica o progresso de um job e nada sobre a máquina em que ele
+roda: nenhum ponto de montagem, nenhuma letra de unidade, nenhum caminho
+absoluto. Todo caminho aqui é relativo ao dispositivo, a forma que o RFC-027
+tornou a única durável -- e também a única que não diz a um cliente onde
+ficam os arquivos do servidor.
 """
 
 from __future__ import annotations
@@ -18,18 +18,18 @@ from app.domain.entities.indexing_job import IndexingJob, JobStatus
 
 
 class CreateJobRequestSchema(BaseModel):
-    """What a client sends to ask for an indexing run.
+    """O que um cliente envia para pedir uma rodada de indexação.
 
-    `scopes` are folders relative to the device's mount point, and an
-    empty list means the whole device -- which is what zero scope rows
-    already mean in the schema (RFC-029 section 5.2).
+    `scopes` são pastas relativas ao ponto de montagem do dispositivo, e uma
+    lista vazia quer dizer o dispositivo inteiro -- que é o que zero linhas
+    de escopo já querem dizer no schema (RFC-029 §5.2).
 
-    They are plain strings rather than a validated type here on purpose.
-    What makes a scope legal -- relative, no `..`, no UNC share, and a
-    folder that is actually on that disk -- is a domain rule plus a
-    filesystem question, and answering either in Presentation would put
-    business logic in the wrong layer and produce a 422 where a 400 with
-    a readable message belongs.
+    São strings simples, e não um tipo validado, aqui de propósito. O que
+    torna um escopo válido -- relativo, sem `..`, sem compartilhamento UNC, e
+    uma pasta que de fato está naquele disco -- é uma regra de domínio mais
+    uma pergunta ao sistema de arquivos, e responder a qualquer uma das duas
+    na Apresentação poria regra de negócio na camada errada e produziria um
+    422 onde cabe um 400 com uma mensagem legível.
     """
 
     device_id: UUID = Field(description="The device to index")
@@ -45,7 +45,7 @@ class CreateJobRequestSchema(BaseModel):
 
 
 class JobSchema(BaseModel):
-    """One indexing job, as a client polling it sees it."""
+    """Um job de indexação, como o vê um cliente que o consulta."""
 
     id: UUID = Field(description="Identifier of this job")
     device_id: UUID = Field(description="The device being indexed")
@@ -119,13 +119,13 @@ class JobSchema(BaseModel):
 
     @classmethod
     def from_domain(cls, job: IndexingJob) -> JobSchema:
-        """Shape a domain job for the wire.
+        """Monta um job do domínio para a resposta.
 
-        A classmethod here rather than `from_attributes`, following
-        `SearchResponseSchema.from_hits`: the entity nests its counters in
-        `IndexingProgress` and its scopes in value objects, and spelling
-        the mapping out is what keeps the wire shape a decision rather
-        than a reflection of whatever the entity happens to look like.
+        Um classmethod aqui, e não `from_attributes`, seguindo
+        `SearchResponseSchema.from_hits`: a entidade aninha os contadores em
+        `IndexingProgress` e os escopos em value objects, e escrever o
+        mapeamento por extenso é o que mantém o formato da resposta como uma
+        decisão, e não um reflexo da cara que a entidade calhe de ter.
         """
         return cls(
             id=job.id.value,
@@ -152,7 +152,7 @@ class JobSchema(BaseModel):
 
 
 class JobListSchema(BaseModel):
-    """A page of jobs, newest first."""
+    """Uma página de jobs, os mais novos primeiro."""
 
     jobs: list[JobSchema] = Field(description="Matching jobs, most recent first")
 

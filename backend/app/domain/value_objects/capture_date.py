@@ -1,13 +1,12 @@
-"""An examined capture date: the value and where it came from (RFC-028).
+"""Uma data de captura examinada: o valor e de onde ele veio (RFC-028).
 
-`captured_at` and `capture_source` are two columns and two fields on
-`Image`, but they are one fact, and the rules that bind them are the kind
-that break silently when each half is written on its own: a date with no
-source, a source claiming EXIF with no date, or a date carrying a time
-zone the file never recorded. This value object is where those rules are
-enforced once, and it is what the extraction produces and what the
-repository port accepts when it writes a date without touching anything
-else.
+`captured_at` e `capture_source` são duas colunas e dois campos de `Image`,
+mas são um fato só, e as regras que os amarram são do tipo que quebra em
+silêncio quando cada metade é escrita por conta própria: uma data sem fonte,
+uma fonte que diz EXIF sem data, ou uma data com um fuso horário que o
+arquivo nunca gravou. Este value object é onde essas regras são aplicadas
+uma vez, e é o que a extração produz e o que a porta do repositório aceita
+quando escreve uma data sem tocar em mais nada.
 """
 
 from __future__ import annotations
@@ -21,22 +20,22 @@ from app.domain.value_objects.capture_source import CaptureSource
 
 @dataclass(frozen=True)
 class CaptureDate:
-    """The outcome of examining one file for when it was taken.
+    """O resultado de examinar um arquivo para saber quando ele foi tirado.
 
-    Always the result of an examination. "Never examined" is not a
-    `CaptureDate` at all -- it is the *absence* of one, `None` wherever a
-    `CaptureDate | None` is expected -- and that asymmetry is the NULL /
-    `'unknown'` distinction of RFC-028 section 4.2 expressed as a type.
+    Sempre o resultado de um exame. "Nunca examinada" não é um `CaptureDate`
+    -- é a *ausência* de um, `None` onde se espera um `CaptureDate | None` --
+    e essa assimetria é a distinção entre NULL e `'unknown'` do RFC-028 §4.2
+    expressa como tipo.
     """
 
     captured_at: datetime.datetime | None
-    """The camera's local wall-clock time, with no time zone. Never aware.
+    """A hora local do relógio da câmera, sem fuso horário. Nunca aware.
 
-    EXIF `DateTimeOriginal` is `YYYY:MM:DD HH:MM:SS` and nothing else: a
-    reading of the camera clock, not an instant. Attaching any zone -- UTC,
-    or the zone of the machine that happened to run the scan -- invents
-    information the file does not contain and moves New Year's Eve shots
-    across the year boundary (RFC-028 section 5).
+    O EXIF `DateTimeOriginal` é `YYYY:MM:DD HH:MM:SS` e mais nada: uma
+    leitura do relógio da câmera, e não um instante. Anexar qualquer fuso --
+    UTC, ou o fuso da máquina que por acaso rodou o scan -- inventa uma
+    informação que o arquivo não contém e leva as fotos da virada do ano para
+    o outro lado da fronteira entre os anos (RFC-028 §5).
     """
 
     source: CaptureSource
@@ -46,26 +45,26 @@ class CaptureDate:
 
     @classmethod
     def unknown(cls) -> CaptureDate:
-        """The file was examined and holds no usable date."""
+        """O arquivo foi examinado e não tem data utilizável."""
         return cls(captured_at=None, source=CaptureSource.UNKNOWN)
 
 
 def validate_capture_fields(
     captured_at: datetime.datetime | None, source: CaptureSource | None
 ) -> None:
-    """Enforce the pairing rules for a capture date held as two loose fields.
+    """Aplica as regras de pareamento de uma data de captura guardada em dois campos.
 
-    Shared by `CaptureDate` and `Image`, which stores the two halves
-    separately because they are two columns. `source is None` is legal
-    here and nowhere in `CaptureDate`: on `Image` it means the row was
-    never examined, and then there can be no date either.
+    Compartilhada por `CaptureDate` e `Image`, que guarda as duas metades
+    separadas porque são duas colunas. `source is None` é válido aqui e em
+    nenhum lugar de `CaptureDate`: em `Image`, quer dizer que a linha nunca
+    foi examinada, e então também não pode haver data.
 
-    The time-zone check is the one with teeth. A zone-aware value compared
-    with a `TIMESTAMP WITHOUT TIME ZONE` column fails inside PostgreSQL,
-    and compared with a naive value in Python raises `TypeError` -- two
-    different failures for the same call, which is what the shared
-    repository contract test exists to rule out. Rejecting it at
-    construction makes both impossible.
+    A verificação do fuso horário é a que tem dentes. Um valor aware
+    comparado com uma coluna `TIMESTAMP WITHOUT TIME ZONE` falha dentro do
+    PostgreSQL, e comparado com um valor naive no Python levanta `TypeError`
+    -- duas falhas diferentes para a mesma chamada, que é o que o teste de
+    contrato compartilhado do repositório existe para descartar. Recusá-lo na
+    construção torna as duas impossíveis.
     """
     if captured_at is not None and captured_at.tzinfo is not None:
         raise InvalidCaptureDateError(

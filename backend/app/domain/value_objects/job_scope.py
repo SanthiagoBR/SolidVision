@@ -1,18 +1,18 @@
-"""The folder an indexing job is restricted to, and how several combine.
+"""A pasta a que um job de indexação se restringe, e como várias se combinam.
 
-A scope is a path *relative to a device's mount point*, which is the only
-form that survives the disk being unplugged and coming back as another
-drive letter (RFC-027 section 4). Everything here exists to keep it that
-way: an absolute path, a drive anchor, a UNC share and a `..` component
-are all refused at construction rather than sanitised, because each of
-them is a request to index something outside the device the job names.
+Um escopo é um caminho *relativo ao ponto de montagem de um dispositivo*, que
+é a única forma que sobrevive ao disco ser desplugado e voltar com outra
+letra de unidade (RFC-027 §4). Tudo aqui existe para mantê-lo assim: um
+caminho absoluto, uma âncora de unidade, um compartilhamento UNC e um
+componente `..` são todos recusados na construção, e não higienizados,
+porque cada um deles é um pedido para indexar algo fora do dispositivo que o
+job nomeia.
 
-**Scopes are held as `parts`, not as a string.** Ordering and containment
-are the two operations this module performs, and both are tuple
-operations on parts: `("2018",)` contains `("2018", "junho")` because it
-is a prefix of it. Doing the same on text would make `2018` look like a
-prefix of `2018b`, which is a different folder (RFC-029 section 10, and
-section 4.4 of the RFC-029 build prompt).
+**Os escopos são guardados como `parts`, e não como string.** Ordenação e
+contenção são as duas operações que este módulo faz, e as duas são operações
+de tupla sobre as partes: `("2018",)` contém `("2018", "junho")` porque é um
+prefixo dela. Fazer o mesmo com texto faria `2018` parecer prefixo de
+`2018b`, que é outra pasta (RFC-029 §10, e §4.4 do build prompt do RFC-029).
 """
 
 from __future__ import annotations
@@ -25,12 +25,13 @@ from app.domain.exceptions import InvalidJobScopeError
 
 @dataclass(frozen=True)
 class JobScope:
-    """One folder within a device, as a device-relative path.
+    """Uma pasta dentro de um dispositivo, como caminho relativo ao dispositivo.
 
-    The empty scope -- no parts at all -- means *the whole device*, which
-    is what RFC-029 section 5.2 stores as zero scope rows. `""` and `"."`
-    both normalise to it, so a client that sends either gets the whole
-    disk and is told so by the normalised scopes echoed back in the 202.
+    O escopo vazio -- sem parte nenhuma -- quer dizer *o dispositivo
+    inteiro*, que é o que o RFC-029 §5.2 grava como zero linhas de escopo.
+    `""` e `"."` se normalizam os dois para ele, então um cliente que manda
+    qualquer um dos dois recebe o disco inteiro, e fica sabendo disso pelos
+    escopos normalizados devolvidos no 202.
     """
 
     parts: tuple[str, ...]
@@ -40,21 +41,21 @@ class JobScope:
 
     @staticmethod
     def _normalize(value: str | PurePath | tuple[str, ...]) -> tuple[str, ...]:
-        """Validate and split a scope, refusing everything that escapes.
+        """Valida e divide um escopo, recusando tudo o que escapa.
 
-        The checks run in this order because the order is the guarantee.
-        `..` is rejected **before** anything is resolved: resolving first
-        and checking afterwards is how a scope that escapes gets one
-        chance to be read as a real path, and it also means the refusal
-        would depend on the folder existing. A scope that escapes is
-        invalid whether or not the disk is plugged in.
+        As verificações rodam nesta ordem porque a ordem é a garantia. `..` é
+        recusado **antes** de qualquer coisa ser resolvida: resolver primeiro
+        e verificar depois é como um escopo que escapa ganha uma chance de ser
+        lido como caminho real, e isso também faria a recusa depender de a
+        pasta existir. Um escopo que escapa é inválido esteja o disco plugado
+        ou não.
 
-        Both path flavours are consulted for the anchor test. Windows
-        alone would miss nothing today, but POSIX is what catches a bare
-        leading `/` in a way that does not depend on the platform running
-        this process -- and the Domain has no business knowing which one
-        that is (RFC-029 section 4.1 of the build prompt: nothing outside
-        the volume adapter depends on Windows).
+        Os dois sabores de caminho são consultados no teste de âncora. Só o
+        Windows não deixaria passar nada hoje, mas é o POSIX que pega uma `/`
+        solta no início de um jeito que não depende da plataforma que roda
+        este processo -- e o Domain não tem nada que saber qual é (RFC-029
+        §4.1 do build prompt: nada fora do adaptador de volumes depende do
+        Windows).
         """
         if isinstance(value, tuple):
             text = "/".join(value)
@@ -67,11 +68,12 @@ class JobScope:
                 "Scope must be a string, a PurePath, or a tuple of parts"
             )
 
-        # Separators are normalised first so that the anchor tests below
-        # see the same string the caller meant. A Windows client sends
-        # `2018\junho`; refusing it for "containing a backslash" would be
-        # pedantry, while reading it as a single part named `2018\junho`
-        # would be worse -- it would pass every check and match nothing.
+        # Os separadores são normalizados primeiro, para que os testes de
+        # âncora abaixo vejam a mesma string que o chamador quis dizer. Um
+        # cliente Windows manda `2018\junho`; recusá-lo por "conter uma barra
+        # invertida" seria pedantismo, e lê-lo como uma parte só chamada
+        # `2018\junho` seria pior -- passaria em toda verificação e não
+        # casaria com nada.
         text = text.replace("\\", "/").strip()
 
         if PureWindowsPath(text).anchor or PurePosixPath(text).anchor:
@@ -88,70 +90,71 @@ class JobScope:
                 "walks out of the device is not a scope of that device."
             )
 
-        # `PurePosixPath` has already dropped `.` and collapsed repeated
-        # separators, so what is left is either the real parts or nothing
-        # at all -- and nothing at all is the whole device, not an error.
+        # `PurePosixPath` já descartou `.` e juntou separadores repetidos,
+        # então o que sobra são as partes reais ou nada -- e nada é o
+        # dispositivo inteiro, e não um erro.
         return parts
 
     def __str__(self) -> str:
-        """Render as the device-relative path, `""` for the whole device."""
+        """Escreve como o caminho relativo ao dispositivo, `""` para o inteiro."""
         return "/".join(self.parts)
 
     @property
     def is_whole_device(self) -> bool:
-        """Whether this scope covers everything on the device."""
+        """Se este escopo cobre tudo no dispositivo."""
         return not self.parts
 
     def contains(self, other: JobScope) -> bool:
-        """Whether every file under `other` is also under this scope.
+        """Se todo arquivo abaixo de `other` também está abaixo deste escopo.
 
-        True for a scope and itself, which is what makes the absorption in
-        `normalize_scopes()` idempotent. The whole-device scope contains
-        everything, including itself, by the same prefix rule -- an empty
-        tuple is a prefix of every tuple.
+        Verdadeiro para um escopo e ele mesmo, o que torna idempotente a
+        absorção em `normalize_scopes()`. O escopo do dispositivo inteiro
+        contém tudo, inclusive ele mesmo, pela mesma regra de prefixo -- uma
+        tupla vazia é prefixo de toda tupla.
         """
         return other.parts[: len(self.parts)] == self.parts
 
 
 def normalize_scopes(scopes: tuple[JobScope, ...]) -> tuple[JobScope, ...]:
-    """Absorb contained scopes and return what will actually be walked.
+    """Absorve os escopos contidos e devolve o que de fato será percorrido.
 
-    `["2018/", "2018/junho"]` becomes `["2018"]`: the second is inside the
-    first, and walking both would discover every file under `2018/junho`
-    twice -- paying for two `stat`s and two EXIF reads per file, and, far
-    worse, producing a discovery order in which a path appears twice. The
-    checkpoint of RFC-029 section 10 is a *position* in that order, and a
-    position is only meaningful in a sequence that visits each file once.
+    `["2018/", "2018/junho"]` vira `["2018"]`: o segundo está dentro do
+    primeiro, e percorrer os dois descobriria todo arquivo abaixo de
+    `2018/junho` duas vezes -- pagando dois `stat` e duas leituras de EXIF
+    por arquivo e, muito pior, produzindo uma ordem de descoberta em que um
+    caminho aparece duas vezes. O checkpoint do RFC-029 §10 é uma *posição*
+    nessa ordem, e uma posição só tem sentido numa sequência que visita cada
+    arquivo uma vez.
 
-    The result is what the 202 echoes back, so a client that asked for two
-    overlapping folders can see the one job it actually got.
+    O resultado é o que o 202 devolve, para que um cliente que pediu duas
+    pastas sobrepostas possa ver o job único que de fato recebeu.
 
-    **Order is not the discovery order**, and must not be mistaken for it.
-    The parts tuples are sorted here so the result is deterministic and
-    stable to compare in a test, but the sequence the scan walks is
-    established by `FilesystemImageProvider`, which sorts with the running
-    platform's own path ordering -- case-insensitively on Windows, where
-    `a b` sorts before `B`. Sorting here with a rule the filesystem does
-    not share would put the boundary between two scopes in a different
-    place than the scan does, and the resume comparison spans those
-    boundaries.
+    **A ordem não é a ordem de descoberta**, e não pode ser confundida com
+    ela. As tuplas de partes são ordenadas aqui para que o resultado seja
+    determinístico e estável de comparar num teste, mas a sequência que o
+    scan percorre é estabelecida por `FilesystemImageProvider`, que ordena
+    com a ordenação de caminhos da própria plataforma em que roda -- sem
+    diferenciar maiúsculas de minúsculas no Windows, onde `a b` vem antes de
+    `B`. Ordenar aqui com uma regra que o sistema de arquivos não compartilha
+    poria a fronteira entre dois escopos num lugar diferente do que o scan
+    põe, e a comparação da retomada atravessa essas fronteiras.
 
-    Duplicates fall out for free: a scope contains itself, so the second
-    copy is absorbed by the first.
+    Duplicatas saem de graça: um escopo contém a si mesmo, então a segunda
+    cópia é absorvida pela primeira.
     """
     if any(scope.is_whole_device for scope in scopes):
-        # Zero rows already means "the whole device" (RFC-029 section
-        # 5.2), so an explicit whole-device scope collapses to that form
-        # rather than being stored as a row meaning the same thing. It
-        # absorbs every other scope on the way.
+        # Zero linhas já quer dizer "o dispositivo inteiro" (RFC-029 §5.2),
+        # então um escopo explícito do dispositivo inteiro se reduz a essa
+        # forma, em vez de ser gravado como uma linha que quer dizer a mesma
+        # coisa. No caminho, ele absorve todos os outros escopos.
         return ()
 
     ordered = sorted(set(scopes), key=lambda scope: scope.parts)
     kept: list[JobScope] = []
     for scope in ordered:
-        # Sorted by parts, so any scope that contains `scope` is already
-        # in `kept` and is the last one that could: a container is a
-        # prefix, and a prefix sorts before what it contains.
+        # Ordenados por partes, então qualquer escopo que contenha `scope` já
+        # está em `kept` e é o último que poderia contê-lo: um contêiner é um
+        # prefixo, e um prefixo vem antes do que ele contém.
         if kept and kept[-1].contains(scope):
             continue
         kept.append(scope)

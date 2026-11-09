@@ -1,16 +1,16 @@
-"""Semantic search from the command line, composed over `SearchImagesUseCase`.
+"""Busca semântica pela linha de comando, composta sobre `SearchImagesUseCase`.
 
-There is no non-HTTP entry point for search today (RFC-025/RFC-026 shipped it
-only as a FastAPI route). This module composes the same use case the API
-uses, the way `job_runner.build_runner()` already composes it for indexing:
-`PostgresImageRepository` over a fresh session, and the process-wide CLIP
-adapter from `app.presentation.dependencies.get_embedding_model()`.
+Hoje não há entrada para a busca fora do HTTP (o RFC-025/RFC-026 a entregou só
+como rota do FastAPI). Este módulo compõe o mesmo caso de uso que a API usa, do
+jeito que `job_runner.build_runner()` já o compõe para a indexação: o
+`PostgresImageRepository` sobre uma sessão nova, e o adaptador CLIP do
+processo, de `app.presentation.dependencies.get_embedding_model()`.
 
-Two queries: text (`run()`) and a picture (`run_image()`), which ranks the
-index against the picture's own CLIP embedding. Either can be narrowed to a
-circle -- `--near LAT LON --radius METRES` -- with the API's rules for
-`near_lat`/`near_lon`/`radius_m` (RFC-032 section 6), and every hit is
-printed with where it was taken.
+Duas consultas: texto (`run()`) e uma imagem (`run_image()`), que ranqueia o
+índice contra o embedding CLIP da própria imagem. As duas podem ser
+restringidas a um círculo -- `--near LAT LON --radius METRES` -- com as regras
+da API para `near_lat`/`near_lon`/`radius_m` (RFC-032 §6), e todo resultado é
+impresso com o lugar onde foi tirado.
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ from app.domain.value_objects.position import Position
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHits
 
-# Refusals of the request itself, which the person typing can fix: printed
-# as their message, not as a traceback. Anything else -- a database that is
-# down, an embedding of the wrong size -- is a fault, and keeps its traceback.
+# Recusas do próprio pedido, que quem digita consegue corrigir: impressas como
+# a mensagem delas, e não como traceback. Todo o resto -- um banco fora do ar,
+# um embedding do tamanho errado -- é uma falha, e mantém o traceback.
 _REQUEST_REFUSALS = (
     EmptySearchQueryError,
     InvalidSearchLimitError,
@@ -42,17 +42,17 @@ _REQUEST_REFUSALS = (
 
 
 def format_position(image: Image) -> str:
-    """Where `image` was taken, as `lat, lon` -- or why that is not known.
+    """Onde `image` foi tirada, como `lat, lon` -- ou por que isso não se sabe.
 
-    Six decimal places (~0.1 m) in `lat, lon` order: the form a map's search
-    box accepts pasted as is. It is the aircraft's position, not the ground
-    it photographed (RFC-032 section 2.2).
+    Seis casas decimais (~0,1 m) na ordem `lat, lon`: a forma que a caixa de
+    busca de um mapa aceita colada como está. É a posição da aeronave, e não a
+    do chão que ela fotografou (RFC-032 §2.2).
 
-    The two ways of having no position are worded apart because they call
-    for different actions. Never examined (`position_source` is `None`) means
-    the image was indexed before RFC-032, and `exif_backfill` will read it;
-    examined and `unknown` means the file has no usable GPS, and nothing
-    will.
+    As duas maneiras de não ter posição têm textos diferentes porque pedem
+    ações diferentes. Nunca examinada (`position_source` é `None`) quer dizer
+    que a imagem foi indexada antes do RFC-032, e o `exif_backfill` vai lê-la;
+    examinada e `unknown` quer dizer que o arquivo não tem GPS utilizável, e
+    nada vai.
     """
     position = image.position
     if position is not None:
@@ -63,10 +63,10 @@ def format_position(image: Image) -> str:
 
 
 def format_hits(hits: SearchHits) -> str:
-    """Render ranked hits as one line per result, most similar first.
+    """Escreve os resultados ranqueados, um por linha, do mais parecido.
 
-    A pure function so the output format can be tested without a database
-    or a model -- `run()` is the only caller that needs either.
+    Uma função pura, para que o formato da saída possa ser testado sem banco
+    nem modelo -- `run()` é o único chamador que precisa de um deles.
     """
     if not hits:
         return "No results."
@@ -78,11 +78,11 @@ def format_hits(hits: SearchHits) -> str:
 
 
 def format_hidden_by_unknown_position(count: int) -> str:
-    """Say how many images a circle could not consider for having no position.
+    """Diz quantas imagens um círculo não pôde considerar por não terem posição.
 
-    The CLI's `excluded_unknown_position` (RFC-032 section 6.2): without it
-    an empty page reads as "no photo was taken here" when the truth may be
-    "these photos were never placed anywhere".
+    O `excluded_unknown_position` da CLI (RFC-032 §6.2): sem ele, uma página
+    vazia se lê como "nenhuma foto foi tirada aqui", quando a verdade pode ser
+    "estas fotos nunca foram postas em lugar nenhum".
     """
     noun = "image has" if count == 1 else "images have"
     return (
@@ -94,18 +94,18 @@ def format_hidden_by_unknown_position(count: int) -> str:
 def search_filters(
     near: Sequence[float] | None, radius_m: float | None
 ) -> SearchFilters | None:
-    """`--near LAT LON` and `--radius METRES` as a filter -- both, or neither.
+    """`--near LAT LON` e `--radius METRES` como filtro -- os dois, ou nenhum.
 
-    `None` when neither was given: no filter at all, which is exactly the
-    search this module ran before RFC-032. Half a circle is refused rather
-    than completed with a default radius, for the reason the API refuses it
-    (RFC-032 section 6): the radius is the part of the question the drone's
-    offset makes critical, and only the person asking knows it.
+    `None` quando nenhum foi dado: filtro nenhum, que é exatamente a busca que
+    este módulo fazia antes do RFC-032. Meio círculo é recusado, em vez de
+    completado com um raio padrão, pela razão por que a API o recusa (RFC-032
+    §6): o raio é a parte da pergunta que o deslocamento do drone torna
+    crítica, e só quem pergunta a conhece.
 
-    Called before the model is loaded or the database is opened, so a
-    malformed circle costs nothing. The radius floor (`settings.min_radius_m`)
-    is not checked here: it is Application policy, and the use case applies
-    it with the message that explains it.
+    Chamado antes de o modelo ser carregado ou de o banco ser aberto, então um
+    círculo malformado não custa nada. O piso do raio (`settings.min_radius_m`)
+    não é checado aqui: é política da Application, e o caso de uso o aplica com
+    a mensagem que o explica.
     """
     if near is None and radius_m is None:
         return None
@@ -128,7 +128,7 @@ def run(
     near: Sequence[float] | None = None,
     radius_m: float | None = None,
 ) -> None:
-    """Search the index for `query` and print the ranked results."""
+    """Busca `query` no índice e imprime os resultados ranqueados."""
     _search(query, limit, search_filters(near, radius_m))
 
 
@@ -138,16 +138,16 @@ def run_image(
     near: Sequence[float] | None = None,
     radius_m: float | None = None,
 ) -> None:
-    """Find the indexed images that look most like the picture at `path`.
+    """Acha as imagens indexadas mais parecidas com a imagem em `path`.
 
-    The query is the picture itself, encoded by CLIP's image encoder, so a
-    photo of a printed photo -- or any copy -- can find its original
-    without anyone describing it in words. Crop away whatever is not the
-    picture before querying (a table, a hand, a frame): CLIP sees the whole
-    file, and the background is part of what it compares.
+    A consulta é a própria imagem, codificada pelo encoder de imagem do CLIP,
+    então a foto de uma foto impressa -- ou qualquer cópia -- consegue achar o
+    original sem que ninguém o descreva em palavras. Corte tudo o que não é a
+    imagem antes de consultar (uma mesa, uma mão, uma moldura): o CLIP vê o
+    arquivo inteiro, e o fundo é parte do que ele compara.
 
-    A missing file is refused before the model is loaded or the database
-    is opened, so the error names the path rather than a decoder.
+    Um arquivo ausente é recusado antes de o modelo ser carregado ou de o banco
+    ser aberto, para que o erro nomeie o caminho, e não um decodificador.
     """
     if not path.is_file():
         raise SystemExit(f"No image file at {path}")
@@ -157,23 +157,24 @@ def run_image(
 def _search(
     query: str | Image, limit: int | None, filters: SearchFilters | None
 ) -> None:
-    """Compose the use case the way the API does, run one query, print the page.
+    """Compõe o caso de uso como a API faz, roda uma consulta, imprime a página.
 
-    Function-local imports for the same reason `indexing_worker.run()` uses
-    them: importing this module must not drag SQLAlchemy or the CLIP
-    adapter into an import graph that a test of `app.cli.__main__`'s
-    argument parsing does not need to pay for.
+    Imports locais à função pela mesma razão por que `indexing_worker.run()`
+    os usa: importar este módulo não pode arrastar o SQLAlchemy ou o adaptador
+    CLIP para um grafo de imports que um teste da leitura de argumentos de
+    `app.cli.__main__` não precisa pagar.
 
-    `min_radius_m` is injected from settings as
-    `get_search_images_use_case()` injects it, so a circle the API would
-    refuse is refused here too. The count of images the circle could not
-    consider is printed only when it is not zero; without a circle the use
-    case does not even ask the repository for it.
+    `min_radius_m` é injetado da configuração como
+    `get_search_images_use_case()` o injeta, então um círculo que a API
+    recusaria é recusado aqui também. A contagem de imagens que o círculo não
+    pôde considerar só é impressa quando não é zero; sem círculo, o caso de uso
+    nem a pede ao repositório.
 
-    Both models are checked for presence first, before `torch` is imported
-    or the database is opened (RFC-035 section 6.1). A model that cannot be
-    loaded, here or on the load, raises `ModelUnavailableError`, which
-    `app.cli.__main__` prints as one line with exit code 78 (RFC-036 6.1).
+    A presença dos dois modelos é checada primeiro, antes de importar o
+    `torch` ou abrir o banco (RFC-035 §6.1). Um modelo que não pode ser
+    carregado, aqui ou na carga, levanta `ModelUnavailableError`, que
+    `app.cli.__main__` imprime numa linha, com código de saída 78 (RFC-036
+    §6.1).
     """
     from app.infrastructure.ai.model_runtime import default_runtime
 

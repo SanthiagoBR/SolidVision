@@ -1,4 +1,4 @@
-"""Immutable embedding vector value object for the domain layer."""
+"""Value object imutável do vetor de embedding para a camada de domínio."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.domain.exceptions import InvalidEmbeddingVectorError
 
 @dataclass(frozen=True)
 class EmbeddingVector:
-    """Immutable value object representing a semantic embedding vector."""
+    """Value object imutável que representa um vetor de embedding semântico."""
 
     values: tuple[float, ...]
 
@@ -26,12 +26,12 @@ class EmbeddingVector:
         return normalized_values
 
 
-# A dedicated SearchQuery value object was considered by RFC-025 and
-# deliberately deferred. Search now validates its query -- rejecting blank
-# text -- but that is the whole of the behavior, and a value object whose
-# only job is to carry an already-checked string buys nothing the use case
-# does not already have: every construction site would be one call away
-# from the one place that validates. It becomes worth its own type when
-# there is domain behavior to put on it (normalization the repository must
-# agree with, structured filters, a query the model rewrites), at which
-# point the validation moves here with it.
+# Um value object SearchQuery dedicado foi considerado pelo RFC-025 e adiado
+# de propósito. A busca agora valida a consulta -- recusando texto em branco
+# -- mas esse é todo o comportamento, e um value object cujo único trabalho é
+# levar uma string já verificada não compra nada que o caso de uso já não
+# tenha: todo ponto de construção ficaria a uma chamada do único lugar que
+# valida. Ele passa a valer um tipo próprio quando houver comportamento de
+# domínio para pôr nele (uma normalização com que o repositório precise
+# concordar, filtros estruturados, uma consulta que o modelo reescreve), e
+# nesse momento a validação vem para cá junto com ele.

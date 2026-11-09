@@ -1,4 +1,4 @@
-"""API routers package -- one resource per router."""
+"""Pacote dos routers da API -- um recurso por router."""
 
 from .capabilities import router as capabilities_router
 from .devices import router as devices_router

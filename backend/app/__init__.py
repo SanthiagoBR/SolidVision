@@ -1,1 +1,1 @@
-"""SolidVision backend package."""
+"""Pacote do backend do SolidVision."""

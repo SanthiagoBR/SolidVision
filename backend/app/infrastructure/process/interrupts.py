@@ -1,31 +1,35 @@
-"""Interrupts that wait for the database call in flight (RFC-036 section 7.5).
+"""Interrupções que esperam a chamada ao banco em andamento (RFC-036 §7.5).
 
-The job runner is stopped by a Ctrl+C -- the launcher's, through the end of
-its stdin (section 7.1) -- and the `KeyboardInterrupt` lands wherever the main
-thread is. Inside a database call, it costs a new connection, one of two ways:
+O job runner é parado por um Ctrl+C -- o do launcher, pelo fim do stdin
+(§7.1) -- e o `KeyboardInterrupt` cai onde quer que a thread principal esteja.
+Dentro de uma chamada ao banco, ele custa uma conexão nova, de um de dois
+jeitos:
 
-* psycopg, interrupted while a query runs, sends the server a cancel request
-  (`Connection.wait`, psycopg 3.3), and a cancel request is a connection; or
-* SQLAlchemy invalidates a connection an interrupt went through, and the next
-  call -- the `release()` of the job -- opens another.
+* o psycopg, interrompido enquanto uma consulta roda, manda ao servidor um
+  pedido de cancelamento (`Connection.wait`, psycopg 3.3), e um pedido de
+  cancelamento é uma conexão; ou
+* o SQLAlchemy invalida uma conexão por onde passou uma interrupção, e a
+  próxima chamada -- o `release()` do job -- abre outra.
 
-PostgreSQL on Windows serves each connection in a new process, and during a
-logoff no new process starts: it dies with `0xC000026B`
-(`STATUS_DLL_INIT_FAILED_LOGOFF`), the postmaster takes that for a crash and
-ends every other server process, cannot start its startup process either, and
-shuts down -- with the job still `running`, for the reaper. Measured in two
-logoffs of three on 2026-10-20.
+O PostgreSQL no Windows atende cada conexão num processo novo, e durante um
+logoff nenhum processo novo inicia: ele morre com `0xC000026B`
+(`STATUS_DLL_INIT_FAILED_LOGOFF`), o postmaster toma isso por uma queda e
+encerra todos os outros processos do servidor, também não consegue iniciar o
+processo de startup, e desliga -- com o job ainda `running`, para o reaper.
+Medido em dois logoffs de três, em 20/10/2026.
 
-So, in a process that called `install()`, an interrupt that arrives while the
-main thread is inside `deferred()` waits for the block to end, and is raised
-there: after the call returned, outside psycopg and SQLAlchemy, with the
-connection whole and free for the `release()`. Anywhere else it is raised at
-once, as before -- in the import of `torch`, the encoding of a batch, the read
-of a file -- so a stop takes no longer than it did. `deferring()` puts every
-method of a repository inside `deferred()`.
+Então, num processo que chamou `install()`, uma interrupção que chega enquanto
+a thread principal está dentro de `deferred()` espera o bloco terminar, e é
+levantada ali: depois que a chamada voltou, fora do psycopg e do SQLAlchemy,
+com a conexão inteira e livre para o `release()`. Em qualquer outro lugar ela é
+levantada na hora, como antes -- no import do `torch`, na codificação de um
+lote, na leitura de um arquivo --, então uma parada não demora mais do que
+demorava. `deferring()` põe cada método de um repositório dentro de
+`deferred()`.
 
-The main thread only: Python runs signal handlers there, and only there can an
-interrupt land in a call. Standard library only, like `supervision`.
+Só a thread principal: o Python roda os handlers de sinal ali, e só ali uma
+interrupção pode cair dentro de uma chamada. Só biblioteca padrão, como o
+`supervision`.
 """
 
 from __future__ import annotations
@@ -39,22 +43,22 @@ from types import FrameType
 from typing import Any, cast
 
 _thread = threading.local()
-"""`depth` and `pending`, per thread. The handler runs in the main thread, and
-so reads the main thread's."""
+"""`depth` e `pending`, por thread. O handler roda na thread principal, e por
+isso lê os da thread principal."""
 
 
 def install() -> None:
-    """Make SIGINT -- a Ctrl+C, or the stdin watch's -- wait for `deferred()`."""
+    """Faz o SIGINT -- um Ctrl+C, ou o da vigia do stdin -- esperar `deferred()`."""
     signal.signal(signal.SIGINT, _interrupt)
 
 
 @contextmanager
 def deferred() -> Iterator[None]:
-    """A block no interrupt lands in: one that arrives is raised as it ends.
+    """Um bloco em que nenhuma interrupção cai: a que chega é levantada no fim dele.
 
-    Nested blocks raise at the outermost end. Raised while another exception
-    leaves the block, the interrupt wins, with that exception as its context:
-    it is what the operator asked for.
+    Blocos aninhados levantam no fim do mais externo. Levantada enquanto outra
+    exceção sai do bloco, a interrupção vence, com aquela exceção como
+    contexto: é o que o operador pediu.
     """
     _thread.depth = _depth() + 1
     try:
@@ -67,7 +71,7 @@ def deferred() -> Iterator[None]:
 
 
 def deferring[T](target: T) -> T:
-    """`target`, with each of its methods called inside `deferred()`."""
+    """`target`, com cada um dos seus métodos chamado dentro de `deferred()`."""
     return cast(T, _Deferring(target))
 
 

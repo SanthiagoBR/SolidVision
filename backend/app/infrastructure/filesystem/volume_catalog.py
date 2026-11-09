@@ -1,14 +1,14 @@
-"""The `VolumeCatalog` adapter, over the RFC-027 volume provider (RFC-031 section 5).
+"""O adaptador de `VolumeCatalog`, sobre o provedor de volumes do RFC-027 (RFC-031 §5).
 
-A thin shell on `VolumeIdentityProvider`, in the shape
-`MountedDeviceLocator` already has: the platform knowledge stays in
-`WindowsVolumeIdentityProvider` and nothing new here knows what operating
-system it is on.
+Uma casca fina sobre `VolumeIdentityProvider`, no formato que
+`MountedDeviceLocator` já tem: o conhecimento da plataforma fica em
+`WindowsVolumeIdentityProvider`, e nada de novo aqui sabe em que sistema
+operacional está.
 
-**Nothing caches, and the absence is the design.** Every call enumerates
-again, for the reason written into both ports: a mount point is wrong from
-the moment the user pulls the cable, and Windows does not tell this
-process when they do.
+**Nada guarda cache, e a ausência é o desenho.** Toda chamada enumera de novo,
+pela razão escrita nas duas portas: um ponto de montagem está errado a partir do
+momento em que o usuário puxa o cabo, e o Windows não avisa este processo quando
+isso acontece.
 """
 
 from __future__ import annotations
@@ -29,15 +29,14 @@ logger = get_logger(__name__)
 
 
 def as_mounted_volume(resolved: ResolvedVolume) -> MountedVolume:
-    """Translate the Infrastructure value into the Domain one.
+    """Traduz o valor da infraestrutura para o do domínio.
 
-    A module function rather than a method, because the one caller that
-    needs it outside this class is `indexing_worker.register_device()`:
-    the CLI resolves a volume from a `--root` path, which is a question
-    this catalogue does not ask, and then hands the answer to the same
-    Application use case the HTTP route uses. One translation, written
-    once, so the two entry points cannot disagree about what they are
-    registering.
+    Uma função de módulo e não um método, porque o único chamador que precisa
+    dela fora desta classe é `indexing_worker.register_device()`: a CLI resolve
+    um volume a partir de um caminho `--root`, que é uma pergunta que este
+    catálogo não faz, e depois entrega a resposta ao mesmo caso de uso da
+    aplicação que a rota HTTP usa. Uma tradução, escrita uma vez, para que as
+    duas portas de entrada não possam discordar sobre o que estão registrando.
     """
     return MountedVolume(
         identity=resolved.identity,
@@ -48,48 +47,45 @@ def as_mounted_volume(resolved: ResolvedVolume) -> MountedVolume:
 
 
 class MountedVolumeCatalog(VolumeCatalog):
-    """Answers from what the operating system reports as mounted, every time."""
+    """Responde a partir do que o sistema operacional relata como montado, sempre."""
 
     def __init__(self, volume_provider: VolumeIdentityProvider) -> None:
         self._volumes = volume_provider
 
     def mount_points(self) -> dict[VolumeIdentity, Path]:
-        """One enumeration, straight through -- RFC-027 section 7's answer.
+        """Uma enumeração, direto -- a resposta do RFC-027 §7.
 
-        Measured at 0.19 ms median with one volume mounted (RFC-030,
-        `experiments/rfc-030-file-access/`), which is what makes it
-        affordable on the search path and affordable once per device
-        list.
+        Medida em 0,19 ms de mediana com um volume montado (RFC-030,
+        `experiments/rfc-030-file-access/`), o que a torna acessível no caminho
+        da busca e acessível uma vez por listagem de dispositivos.
         """
         return self._volumes.mounted_volumes()
 
     def list_mounted(self) -> list[MountedVolume]:
-        """The same enumeration, plus one identification call per volume.
+        """A mesma enumeração, mais uma chamada de identificação por volume.
 
-        **This is the expensive method, and it is separate for that
-        reason.** `resolve()` reads the filesystem label with
-        `GetVolumeInformationW` and the capacity with
-        `GetDiskFreeSpaceExW`; the second can spin up an external disk
-        that had parked its heads, which is seconds rather than
-        milliseconds. `mount_points()` above is on the hot path -- every
-        search page resolves its hits through it -- so the detail is paid
-        only by the two callers that asked for it, `GET /volumes` and the
-        registration that has to write `filesystem_label` and
-        `total_bytes` onto a new row (RFC-031 section 4.1 of the build
-        prompt).
+        **Este é o método caro, e é separado por essa razão.** `resolve()` lê o
+        rótulo do sistema de arquivos com `GetVolumeInformationW` e a capacidade
+        com `GetDiskFreeSpaceExW`; a segunda pode fazer girar um disco externo
+        que tinha estacionado as cabeças, o que leva segundos e não
+        milissegundos. `mount_points()`, acima, está no caminho quente -- toda
+        página de busca resolve os seus resultados por ele --, então o detalhe
+        só é pago pelos dois chamadores que o pediram, `GET /volumes` e o
+        registro que precisa escrever `filesystem_label` e `total_bytes` numa
+        linha nova (RFC-031 §4.1 do build prompt).
 
-        A volume that will not answer is skipped and logged, never
-        raised on: `mounted_volumes()` already skips the ones that refuse
-        to be *named*, and a disk that refuses to be *described* is the
-        same situation one question later -- not a reason to stop
-        reporting the disks that did answer (RFC-027 section 7).
+        Um volume que não responde é pulado e registrado no log, nunca vira
+        exceção: `mounted_volumes()` já pula os que se recusam a ser *nomeados*,
+        e um disco que se recusa a ser *descrito* é a mesma situação uma
+        pergunta depois -- não é razão para deixar de relatar os discos que
+        responderam (RFC-027 §7).
 
-        The identity kept is the enumeration's, not the one `resolve()`
-        re-derives. They are the same string from the same platform call,
-        and taking the enumeration's is what guarantees that a key from
-        `mount_points()` and an `identity` from here compare equal --
-        which is the whole mechanism by which `GET /volumes` knows a
-        volume is already a registered device.
+        A identidade mantida é a da enumeração, não a que `resolve()` deriva de
+        novo. São a mesma string, da mesma chamada à plataforma, e usar a da
+        enumeração é o que garante que uma chave de `mount_points()` e uma
+        `identity` daqui sejam iguais na comparação -- que é todo o mecanismo
+        pelo qual `GET /volumes` sabe que um volume já é um dispositivo
+        registrado.
         """
         mounted: list[MountedVolume] = []
         for identity, mount_point in self._volumes.mounted_volumes().items():

@@ -1,10 +1,10 @@
-"""Showing a file to the user in their own file manager (RFC-030 section 5).
+"""Mostrar um arquivo ao usuário no gerenciador de arquivos dele (RFC-030 §5).
 
-A port with one adapter, on purpose. RFC-030 section 5.3 names three
-platforms and delivers one: `explorer /select,` on Windows is implemented
-and tested, while `open -R` on macOS and the FileManager1 D-Bus call on
-Linux are declared and not written. An adapter nobody has run is a claim of
-portability nobody checked (RFC-027 section 4.1).
+Uma porta com um adaptador, de propósito. O RFC-030 §5.3 cita três
+plataformas e entrega uma: `explorer /select,` no Windows está implementado e
+testado, enquanto `open -R` no macOS e a chamada D-Bus FileManager1 no Linux
+estão declarados e não escritos. Um adaptador que ninguém rodou é uma
+promessa de portabilidade que ninguém verificou (RFC-027 §4.1).
 """
 
 from __future__ import annotations
@@ -15,27 +15,29 @@ from app.domain.value_objects.image_path import ImagePath
 
 
 class FileRevealerPort(ABC):
-    """Open the platform's file manager with one file selected."""
+    """Abre o gerenciador de arquivos da plataforma com um arquivo selecionado."""
 
     @abstractmethod
     def reveal(self, path: ImagePath) -> None:
-        """Ask the file manager to show `path`, and return once that is launched.
+        """Pede ao gerenciador de arquivos para mostrar `path`, e volta ao lançá-lo.
 
-        Returning means the request was *launched*, never that a window
-        opened: `explorer.exe` exits non-zero even when it succeeds, so no
-        exit status here could be trusted to say more (RFC-030 section
-        5.1).
+        Voltar quer dizer que o pedido foi *lançado*, nunca que uma janela
+        abriu: o `explorer.exe` sai com código diferente de zero mesmo quando
+        dá certo, então nenhum status de saída aqui seria confiável para
+        dizer mais que isso (RFC-030 §5.1).
 
-        `path` is never anything a client sent. It is built by the server
-        from a row and a mount point resolved now, which is the entire
-        security property of `/reveal` -- implementations must not accept a
-        string, and must never pass one through a shell.
+        `path` nunca é algo que um cliente mandou. Ele é montado pelo
+        servidor a partir de uma linha e de um ponto de montagem resolvido
+        agora, que é toda a propriedade de segurança de `/reveal` -- as
+        implementações não podem aceitar uma string, e nunca podem passá-la
+        por um shell.
 
-        Raises `FileNotFoundError` when nothing is at `path`, exactly as
-        opening it would. A file manager asked to select a missing file
-        does not fail; Explorer silently opens a default folder instead, so
-        without this check the user would see an unrelated window and no
-        error. What a missing file *means* -- a 410, because the disk is
-        connected and the photo is not on it -- is the caller's decision,
-        which is why this raises the I/O error rather than a domain one.
+        Levanta `FileNotFoundError` quando não há nada em `path`, exatamente
+        como abri-lo levantaria. Um gerenciador de arquivos a que se pede
+        para selecionar um arquivo ausente não falha; o Explorer abre em
+        silêncio uma pasta padrão no lugar, então, sem esta verificação, o
+        usuário veria uma janela sem relação nenhuma e nenhum erro. O que um
+        arquivo ausente *quer dizer* -- um 410, porque o disco está conectado
+        e a foto não está nele -- é decisão do chamador, e é por isso que
+        isto levanta o erro de I/O, e não um de domínio.
         """

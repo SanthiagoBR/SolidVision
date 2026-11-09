@@ -1,4 +1,4 @@
-"""Abstract contract for turning a typed address into a place (RFC-043)."""
+"""Contrato abstrato para transformar um endereço digitado num lugar (RFC-043)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,9 @@ from app.domain.value_objects.place import Place
 class GeocoderPort(ABC):
     @abstractmethod
     def geocode(self, address: str) -> Place | None:
-        """The best match, or `None` when nothing matched -- which is not an error.
+        """O melhor resultado, ou `None` quando nada casou -- o que não é erro.
 
-        A service that cannot answer raises its adapter's own exception, as a
-        model that cannot load raises `ModelUnavailableError`.
+        Um serviço que não consegue responder levanta a exceção do próprio
+        adaptador, como um modelo que não consegue carregar levanta
+        `ModelUnavailableError`.
         """

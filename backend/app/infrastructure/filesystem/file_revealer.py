@@ -1,14 +1,13 @@
-"""Opening Explorer with a file selected, and nothing else (RFC-030 section 5).
+"""Abre o Explorer com um arquivo selecionado, e nada mais (RFC-030 §5).
 
-The adapter behind `FileRevealerPort`, which lives in the Domain beside the
-other ports (`app/domain/services/file_revealer_port.py`) because the use
-case that calls it may not import Infrastructure. RFC-030 section 11 listed
-"port + Windows adapter" in this file; the port moved and the adapter did
-not.
+O adaptador por trás de `FileRevealerPort`, que mora no domínio ao lado das
+outras portas (`app/domain/services/file_revealer_port.py`) porque o caso de uso
+que a chama não pode importar a infraestrutura. O RFC-030 §11 listava "porta +
+adaptador Windows" neste arquivo; a porta se mudou e o adaptador não.
 
-**Windows only, deliberately** (RFC-030 section 5.3). `open -R` on macOS and
-the `org.freedesktop.FileManager1` D-Bus call on Linux are declared and not
-written: an adapter that has never run is a claim nobody verified.
+**Só Windows, de propósito** (RFC-030 §5.3). `open -R` no macOS e a chamada
+D-Bus `org.freedesktop.FileManager1` no Linux estão declarados e não escritos:
+um adaptador que nunca rodou é uma promessa que ninguém verificou.
 """
 
 from __future__ import annotations
@@ -23,17 +22,17 @@ from app.domain.services.file_revealer_port import FileRevealerPort
 from app.domain.value_objects.image_path import ImagePath
 
 Launcher = Callable[..., object]
-"""What starts the process: `subprocess.Popen`, or a recorder in tests."""
+"""O que inicia o processo: `subprocess.Popen`, ou um gravador nos testes."""
 
 
 class WindowsFileRevealer(FileRevealerPort):
-    """`explorer.exe /select,<path>`, without a shell and without waiting."""
+    """`explorer.exe /select,<path>`, sem shell e sem esperar."""
 
     def __init__(self, launch: Launcher = subprocess.Popen) -> None:
-        """Refuse to exist off Windows, like `WindowsVolumeIdentityProvider`.
+        """Recusa existir fora do Windows, como `WindowsVolumeIdentityProvider`.
 
-        `launch` is the seam the tests use so that nothing in the suite
-        opens a real Explorer window; production never passes it.
+        `launch` é a costura que os testes usam para que nada na suíte abra uma
+        janela real do Explorer; a produção nunca o passa.
         """
         if sys.platform != "win32":
             raise RuntimeError(
@@ -43,42 +42,43 @@ class WindowsFileRevealer(FileRevealerPort):
         self._launch = launch
 
     def reveal(self, path: ImagePath) -> None:
-        """Launch Explorer with `path` selected, or raise if nothing is there.
+        """Abre o Explorer com `path` selecionado, ou levanta exceção se nada há lá.
 
-        Four decisions, each of which the obvious version gets wrong:
+        Quatro decisões, e a versão óbvia erra cada uma delas:
 
-        * **An argument list, and `shell=False`.** No shell ever sees the
-          path, so no character in it can mean anything but itself. The
-          path came from the server's own row joined to a mount point, not
-          from the client (RFC-030 section 5.1), and this is still the
-          second wall rather than the only one.
-        * **`/select,` and the path are two arguments, not one.** RFC-030
-          section 5.1 wrote `f"/select,{path}"` as a single list item, and
-          that works only until the path contains a space: `subprocess`
-          then quotes the item whole, Explorer receives
-          `"/select,F:\fotos\fazenda São João.jpg"`, does not recognise the
-          switch inside the quotes, and opens the user's Documents folder
-          with nothing selected. As two items the command line is
-          `/select, "F:\fotos\fazenda São João.jpg"`, which selects the
-          file. Checked on Windows 10 by opening both forms and reading
-          Explorer's selection back through `Shell.Application`
+        * **Uma lista de argumentos, e `shell=False`.** Nenhum shell vê o
+          caminho, então nenhum caractere dele pode significar outra coisa
+          além de si mesmo. O caminho veio da própria linha do servidor unida a
+          um ponto de montagem, não do cliente (RFC-030 §5.1), e ainda assim
+          esta é a segunda barreira, e não a única.
+        * **`/select,` e o caminho são dois argumentos, não um.** O RFC-030
+          §5.1 escreveu `f"/select,{path}"` como um único item da lista, e isso
+          só funciona até o caminho ter um espaço: o `subprocess` então põe o
+          item inteiro entre aspas, o Explorer recebe
+          `"/select,F:\fotos\fazenda São João.jpg"`, não reconhece a chave
+          dentro das aspas e abre a pasta Documentos do usuário sem nada
+          selecionado. Como dois itens, a linha de comando é
+          `/select, "F:\fotos\fazenda São João.jpg"`, que seleciona o arquivo.
+          Verificado no Windows 10 abrindo as duas formas e lendo de volta a
+          seleção do Explorer por `Shell.Application`
           (`experiments/rfc-030-file-access/verify_explorer_select.log`).
-        * **`explorer.exe` by absolute path, under `%SystemRoot%`.** With
-          `shell=False`, Windows resolves a bare `explorer` by looking in
-          the Python executable's directory and the current directory
-          *before* the system ones -- so a stray `explorer.exe` in a
-          virtualenv's `Scripts` folder would be what ran.
-        * **`Popen`, never `run`.** RFC-030 section 5.1 wrote
-          `subprocess.run(..., check=False)`, and the `check=False` half
-          was right: Explorer exits non-zero on success, so its status
-          means nothing. The `run` half waits for the process to exit, and
-          with "launch folder windows in a separate process" enabled that
-          process is the window -- the request would hang until the user
-          closed it. 204 means *launched*, which is all anyone could know.
+        * **`explorer.exe` pelo caminho absoluto, sob `%SystemRoot%`.** Com
+          `shell=False`, o Windows resolve um `explorer` sem caminho procurando
+          no diretório do executável do Python e no diretório atual *antes*
+          dos do sistema -- então um `explorer.exe` perdido na pasta `Scripts`
+          de um virtualenv seria o que rodaria.
+        * **`Popen`, nunca `run`.** O RFC-030 §5.1 escreveu
+          `subprocess.run(..., check=False)`, e a metade `check=False` estava
+          certa: o Explorer sai com código diferente de zero quando dá certo,
+          então o seu status não significa nada. A metade `run` espera o
+          processo terminar, e com "abrir janelas de pastas em processos
+          separados" ligado esse processo é a janela -- a requisição ficaria
+          pendurada até o usuário fechá-la. 204 significa *iniciado*, que é
+          tudo o que alguém poderia saber.
 
-        The path is checked before launching because Explorer does not fail
-        for a missing file: it silently opens a default folder, and the
-        user would see an unrelated window with no explanation.
+        O caminho é checado antes de iniciar porque o Explorer não falha para
+        um arquivo ausente: ele abre em silêncio uma pasta padrão, e o usuário
+        veria uma janela sem relação nenhuma, sem explicação.
         """
         target = path.value
         if not target.is_file():
@@ -94,5 +94,5 @@ class WindowsFileRevealer(FileRevealerPort):
 
 
 def _explorer_executable() -> Path:
-    """The system's `explorer.exe`, never whichever one the search order finds."""
+    """O `explorer.exe` do sistema, nunca o que a ordem de busca achar."""
     return Path(os.environ.get("SystemRoot", r"C:\Windows")) / "explorer.exe"

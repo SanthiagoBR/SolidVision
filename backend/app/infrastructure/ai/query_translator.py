@@ -1,20 +1,21 @@
-"""Portuguese-to-English query normalization for the CLIP text encoder.
+"""Tradução das consultas do português para o inglês, para o encoder de texto do CLIP.
 
-CLIP's text tower is English-only. Feeding it a Portuguese query directly
-measurably degrades retrieval: in the RFC-023 bake-off the selected
-checkpoint scored 44.0% strict accuracy on raw Portuguese against 52.0%
-once the same queries were machine-translated to English first
-(`clip_pt_translation_run_output.log`). Translation therefore happens
-here, in Infrastructure, so that neither `EmbeddingModelPort` nor any
-Application code has to learn that the current model speaks one language.
+A torre de texto do CLIP só entende inglês. Entregar a ela uma consulta em
+português, direto, piora a recuperação de forma mensurável: no bake-off do
+RFC-023, o checkpoint escolhido fez 44,0% de acurácia estrita no português
+cru, contra 52,0% quando as mesmas consultas eram antes traduzidas para o
+inglês por máquina (`clip_pt_translation_run_output.log`). Por isso a
+tradução acontece aqui, na Infrastructure, para que nem `EmbeddingModelPort`
+nem nenhum código da Application precise saber que o modelo atual fala uma
+só língua.
 
-Since RFC-047 two things happen before the translator, both driven by the
-lexicon next to this file, `query_lexicon.toml`: a query is translated when
-`langdetect` calls it Portuguese *or* when it has a Portuguese marker
-(section 6), and the lexicon's forms the translator gets wrong are replaced
-by words it gets right before it sees them (section 5). Neither touches a
-query that is not translated, and neither changes any stored vector: the
-query's vector is computed on every search.
+Desde o RFC-047, duas coisas acontecem antes do tradutor, ambas guiadas pelo
+léxico ao lado deste arquivo, `query_lexicon.toml`: uma consulta é traduzida
+quando o `langdetect` a diz português *ou* quando ela tem um marcador de
+português (§6), e as formas do léxico que o tradutor erra são trocadas, antes
+que ele as veja, por palavras que ele acerta (§5). Nenhuma das duas toca uma
+consulta que não é traduzida, e nenhuma muda vetor guardado: o vetor da
+consulta é calculado a cada busca.
 """
 
 from __future__ import annotations
@@ -41,27 +42,27 @@ from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
-# `langdetect`'s algorithm is probabilistic and seeded per process. Pinning
-# the seed is what makes `detect()` reproducible across runs, processes, and
-# machines -- the same determinism requirement that rules out the salted
-# built-in `hash()` in `FakeEmbeddingModel` (ARCHITECTURE.md section 20).
-# Set at import time because `detect()` reads it lazily on first use.
+# O algoritmo do `langdetect` é probabilístico e recebe uma semente por
+# processo. Fixar a semente é o que torna `detect()` reproduzível entre
+# execuções, processos e máquinas -- a mesma exigência de determinismo que
+# descarta o `hash()` embutido, com sal, em `FakeEmbeddingModel`
+# (ARCHITECTURE.md §20). Definida no import porque `detect()` a lê sob
+# demanda, no primeiro uso.
 DetectorFactory.seed = 0
 
-# `TRANSLATION_MODEL` used to sit here, the name the checkpoint was loaded by.
-# Since RFC-035 the translator is the lockfile's `translator` entry, loaded
-# from its directory; the name is in `models.lock.json`.
+# `TRANSLATION_MODEL` ficava aqui, o nome pelo qual o checkpoint era carregado.
+# Desde o RFC-035, o tradutor é a entrada `translator` do lockfile, carregada
+# do diretório dela; o nome está em `models.lock.json`.
 PORTUGUESE = "pt"
 MAX_TRANSLATION_TOKENS = 128
 
 LEXICON_NAME = "query_lexicon.toml"
-"""Beside this module. RFC-047 section 4: versioned with the code, not in
-`Settings`. It changes
-the vector of some queries, which is an RFC's decision, as the CLIP template
-is; unlike the template it changes no stored vector."""
+"""Ao lado deste módulo. RFC-047 §4: versionado com o código, não em
+`Settings`. Ele muda o vetor de algumas consultas, o que é decisão de um RFC,
+como o template do CLIP; ao contrário do template, não muda vetor guardado."""
 
 ORIGINS = frozenset({"geral", "sul"})
-"""Where a form comes from: the general vocabulary, or the south of Brazil."""
+"""De onde vem uma forma: o vocabulário geral, ou o sul do Brasil."""
 
 FUNCTION_WORDS = frozenset(
     {
@@ -71,26 +72,26 @@ FUNCTION_WORDS = frozenset(
         "sobre", "sem", "e", "ou", "nao", "não",
     }
 )  # fmt: skip
-"""RFC-047 section 6: the closed list of Portuguese function words.
+"""RFC-047 §6: a lista fechada de palavras funcionais do português.
 
-None of them is also an English word -- "a", "as", "do", "no" and "on" are
-left out for that reason -- so one of them in a query is enough to call it
-Portuguese. Matched as typed, ignoring case but not accents: "à" is in the
-list and "a" is not."""
+Nenhuma delas é também uma palavra do inglês -- "a", "as", "do", "no" e "on"
+ficam de fora por isso --, então uma delas numa consulta basta para dizê-la
+português. Comparadas como digitadas, ignorando maiúsculas mas não acentos:
+"à" está na lista e "a" não."""
 
 _WORD = re.compile("[\\w\u0300-\u036f]+")
-"""A word: letters and digits, with any combining accent kept inside it."""
+"""Uma palavra: letras e dígitos, com qualquer acento combinante dentro dela."""
 
 _JOINER = re.compile("[\\s\\-'\u2019]+")
-"""What may stand between the words of a multi-word form ("estrada de chão",
-"cata-vento", "caixa d'água"): spaces, hyphens, apostrophes, and no other
-punctuation."""
+"""O que pode ficar entre as palavras de uma forma de várias palavras
+("estrada de chão", "cata-vento", "caixa d'água"): espaços, hífens,
+apóstrofos, e nenhuma outra pontuação."""
 
 
 def fold(text: str) -> str:
-    """Casefolded and without accents: how the lexicon's forms are matched.
+    """Sem maiúsculas e sem acentos: como as formas do léxico são comparadas.
 
-    "Chacara", "chácara" and "CHÁCARA" all fold to "chacara".
+    "Chacara", "chácara" e "CHÁCARA" viram todas "chacara".
     """
     decomposed = unicodedata.normalize("NFD", text.casefold())
     bare = "".join(c for c in decomposed if not unicodedata.combining(c))
@@ -99,13 +100,13 @@ def fold(text: str) -> str:
 
 @dataclass(frozen=True)
 class LexiconForm:
-    """One line of the lexicon: a Portuguese form, as typed, and its English.
+    """Uma linha do léxico: uma forma em português, como digitada, e o inglês dela.
 
-    `en` lists what counts as a right translation; the slow tests check that
-    what goes to Marian produces one of them. `troca` exists only when Marian
-    gets the form wrong, and is what goes to Marian in its place. A form with
-    `tambem_ingles` is an English word too ("hotel"), and is never a
-    Portuguese marker.
+    `en` lista o que conta como tradução certa; os testes lentos conferem que
+    o que vai ao Marian produz uma delas. `troca` só existe quando o Marian
+    erra a forma, e é o que vai ao Marian no lugar dela. Uma forma com
+    `tambem_ingles` é também uma palavra do inglês ("hotel"), e nunca é
+    marcador de português.
     """
 
     pt: str
@@ -116,7 +117,7 @@ class LexiconForm:
 
     @property
     def sent(self) -> str:
-        """What reaches Marian in place of the form (section 5, rule 3)."""
+        """O que chega ao Marian no lugar da forma (§5, regra 3)."""
         return self.troca if self.troca is not None else self.pt
 
     @property
@@ -125,16 +126,17 @@ class LexiconForm:
 
     @property
     def is_name(self) -> bool:
-        """A form written with a capital is a place name ("Mato Grosso").
+        """Uma forma escrita com maiúscula é nome de lugar ("Mato Grosso").
 
-        It is in the lexicon only so that the longest match takes it whole,
-        before a form inside it is replaced (RFC-047 section 11, risk 2).
+        Está no léxico só para que a correspondência mais longa a pegue
+        inteira, antes que uma forma dentro dela seja trocada (RFC-047 §11,
+        risco 2).
         """
         return self.pt[0].isupper()
 
 
 class LexiconError(ValueError):
-    """The lexicon file is malformed. The message names the line."""
+    """O arquivo do léxico está malformado. A mensagem diz a linha."""
 
 
 _FIELDS = {"pt", "en", "origem", "troca", "tambem_ingles"}
@@ -185,11 +187,12 @@ class _Match:
 
 
 class QueryLexicon:
-    """The forms of `query_lexicon.toml`, matched in a query (RFC-047 section 5).
+    """As formas de `query_lexicon.toml`, achadas numa consulta (RFC-047 §5).
 
-    A match is whole words, ignoring case and accents; the longest form
-    starting at a word wins, so "estrada de chão" is taken whole before
-    "chão" alone could be. Matching runs left to right and never overlaps.
+    Uma correspondência é de palavras inteiras, ignorando maiúsculas e
+    acentos; a forma mais longa que começa numa palavra ganha, então "estrada
+    de chão" é pega inteira antes que "chão" sozinho pudesse ser. A busca
+    corre da esquerda para a direita e nunca se sobrepõe.
     """
 
     def __init__(self, forms: Sequence[LexiconForm]) -> None:
@@ -212,12 +215,11 @@ class QueryLexicon:
 
     @classmethod
     def load(cls, path: Path | None = None) -> QueryLexicon:
-        """The lexicon in `path`, or, by default, the one of this version.
+        """O léxico em `path` ou, por padrão, o desta versão.
 
-        The default is read as data of this package, through
-        `importlib.resources`, as `model_runtime` reads the lockfile: the
-        file travels with the code, and only `layout` may know where the
-        code is (RFC-034).
+        O padrão é lido como dado deste pacote, por `importlib.resources`,
+        como `model_runtime` lê o lockfile: o arquivo viaja com o código, e
+        só `layout` pode saber onde o código está (RFC-034).
         """
         if path is None:
             source = resources.files("app.infrastructure.ai") / LEXICON_NAME
@@ -266,12 +268,12 @@ class QueryLexicon:
         return None
 
     def rewrite(self, text: str) -> str:
-        """`text` as it goes to Marian: each form replaced by what it sends.
+        """`text` como vai ao Marian: cada forma trocada pelo que ela envia.
 
-        Everything outside the matched forms -- punctuation, words the
-        lexicon does not know -- is left exactly as typed. A form typed with
-        a capital keeps it: Marian reads "Porto Alegre" as a name and "porto
-        Alegre" as *port Joy* (RFC-047 section 15).
+        Tudo fora das formas achadas -- pontuação, palavras que o léxico não
+        conhece -- fica exatamente como digitado. Uma forma digitada com
+        maiúscula a mantém: o Marian lê "Porto Alegre" como nome e "porto
+        Alegre" como *port Joy* (RFC-047 §15).
         """
         pieces: list[str] = []
         position = 0
@@ -286,8 +288,8 @@ class QueryLexicon:
         return "".join(pieces)
 
     def has_marker(self, text: str) -> bool:
-        """Whether `text` has a Portuguese marker (RFC-047 section 6, rule 2):
-        a function word of the closed list, or a form that is not English too.
+        """Se `text` tem um marcador de português (RFC-047 §6, regra 2): uma
+        palavra funcional da lista fechada, ou uma forma que não é também inglês.
         """
         if any(word.casefold() in FUNCTION_WORDS for word in _WORD.findall(text)):
             return True
@@ -295,79 +297,81 @@ class QueryLexicon:
 
 
 LEXICON = QueryLexicon.load()
-"""Loaded once, on import (RFC-047 section 13)."""
+"""Carregado uma vez, no import (RFC-047 §13)."""
 
 
 def _detected_as_portuguese(text: str) -> bool:
     try:
         return bool(detect(text) == PORTUGUESE)
     except LangDetectException:
-        # Raised for input with no detectable features -- empty strings,
-        # pure punctuation, bare digits. There is nothing to translate,
-        # so hand it to CLIP untouched rather than failing the query.
+        # Levantada para entradas sem traço detectável -- strings vazias,
+        # só pontuação, só dígitos. Não há o que traduzir, então a entrada
+        # vai intocada para o CLIP, em vez de a consulta falhar.
         return False
 
 
 def is_portuguese(text: str, lexicon: QueryLexicon = LEXICON) -> bool:
-    """RFC-047 section 6: a marker, or `langdetect` saying `pt`.
+    """RFC-047 §6: um marcador, ou o `langdetect` dizendo `pt`.
 
-    The markers are checked first because they are cheap, and because they
-    decide the cases `langdetect` gets wrong: single words it calls Turkish
-    or Tagalog, sentences it calls Spanish. It still decides the rest: whole
-    Portuguese sentences without a marker.
+    Os marcadores são conferidos primeiro porque são baratos, e porque
+    decidem os casos que o `langdetect` erra: palavras soltas que ele diz
+    turco ou tagalo, frases que ele diz espanhol. Ele ainda decide o resto:
+    frases inteiras em português sem marcador.
     """
     return lexicon.has_marker(text) or _detected_as_portuguese(text)
 
 
 def marian_input(text: str, lexicon: QueryLexicon = LEXICON) -> str | None:
-    """What Marian receives for this query, or None when it is not translated."""
+    """O que o Marian recebe para esta consulta, ou None quando não é traduzida."""
     if not is_portuguese(text, lexicon):
         return None
     return lexicon.rewrite(text)
 
 
 class QueryTranslator(ABC):
-    """Normalize a user query into the English the CLIP text encoder expects."""
+    """Normaliza uma consulta para o inglês que o encoder de texto do CLIP espera."""
 
     @abstractmethod
     def to_english(self, text: str) -> str:
-        """Return `text` in English, translating only when necessary."""
+        """Devolve `text` em inglês, traduzindo só quando é preciso."""
 
 
 class MarianQueryTranslator(QueryTranslator):
-    """Detect Portuguese and translate it with `Helsinki-NLP/opus-mt-ROMANCE-en`.
+    """Detecta português e o traduz com `Helsinki-NLP/opus-mt-ROMANCE-en`.
 
-    Loaded through `AutoTokenizer` / `AutoModelForSeq2SeqLM` rather than
-    `pipeline("translation")`: this checkpoint is not reliably registered
-    under that generic task in transformers 5.15, and the explicit pair also
-    keeps the decoding parameters visible instead of buried in pipeline
-    defaults.
+    Carregado por `AutoTokenizer` / `AutoModelForSeq2SeqLM`, e não por
+    `pipeline("translation")`: este checkpoint não está registrado de forma
+    confiável sob essa tarefa genérica no transformers 5.15, e o par
+    explícito também deixa os parâmetros de decodificação à vista, em vez de
+    enterrados nos defaults do pipeline.
 
-    No leading `>>xx<<` language token is sent: this checkpoint is
-    many-to-one (every Romance language into English), and many-to-one
-    Marian models carry no such tokens in their vocabulary. Prepending one
-    anyway -- e.g. `>>por<<` -- resolves to `<unk>`, which knocks greedy
-    decoding out of distribution; verified on this checkpoint, that made the
-    decoder loop on "." until `MAX_TRANSLATION_TOKENS` cut it off instead of
-    producing a translation.
+    Nenhum token de idioma `>>xx<<` é enviado na frente: este checkpoint é
+    muitos-para-um (toda língua românica para o inglês), e modelos Marian
+    muitos-para-um não têm esses tokens no vocabulário. Acrescentar um mesmo
+    assim -- p. ex. `>>por<<` -- resolve para `<unk>`, o que tira a
+    decodificação gulosa da distribuição; conferido neste checkpoint, isso
+    fazia o decoder entrar em laço em "." até `MAX_TRANSLATION_TOKENS` o
+    cortar, em vez de produzir uma tradução.
 
-    Decoding is greedy (`num_beams=1`, `do_sample=False`) so the same query
-    always yields the same English string, and therefore the same embedding.
+    A decodificação é gulosa (`num_beams=1`, `do_sample=False`), para que a
+    mesma consulta dê sempre a mesma string em inglês, e portanto o mesmo
+    embedding.
 
-    The weights are those of the pinned `main`, whose only copy on the Hub
-    is `pytorch_model.bin`, a pickle. `vendor_models.py` converts it to a
-    `model.safetensors` -- the same tensors, checked one by one, and 2.2 s
-    faster to load cold -- so this never unpickles anything (RFC-035 section
-    7.4). Not the `safetensors` of the Hub's `refs/pr/6`: that is a bot's
-    pull request, which can change or vanish.
+    Os pesos são os do `main` fixado, cuja única cópia no Hub é
+    `pytorch_model.bin`, um pickle. `vendor_models.py` o converte num
+    `model.safetensors` -- os mesmos tensores, conferidos um a um, e 2,2 s
+    mais rápido de carregar a frio --, então isto nunca desserializa pickle
+    nenhum (RFC-035 §7.4). Não o `safetensors` do `refs/pr/6` do Hub: esse é
+    o pull request de um bot, que pode mudar ou sumir.
 
-    Which queries are translated, and what Marian receives, is RFC-047's:
-    `marian_input()`. `langdetect` needs a few words to work -- `'fazenda'`
-    is detected as Turkish and `'lago'` as Tagalog -- so a query is also
-    translated when it has a Portuguese marker, and a lexicon form Marian
-    gets wrong ("morro" -> *Death*) reaches it as a word it gets right. A
-    single word outside the lexicon is still RFC-023's known gap: anything
-    neither marked nor detected as Portuguese is treated as English.
+    Quais consultas são traduzidas, e o que o Marian recebe, é do RFC-047:
+    `marian_input()`. O `langdetect` precisa de algumas palavras para
+    funcionar -- `'fazenda'` é detectada como turco e `'lago'` como tagalo --,
+    então uma consulta também é traduzida quando tem um marcador de português,
+    e uma forma do léxico que o Marian erra ("morro" -> *Death*) chega a ele
+    como uma palavra que ele acerta. Uma palavra só, fora do léxico, continua
+    a lacuna conhecida do RFC-023: o que não for marcado nem detectado como
+    português é tratado como inglês.
     """
 
     def __init__(
@@ -379,17 +383,17 @@ class MarianQueryTranslator(QueryTranslator):
         self._model_directory = model_directory
         self._device = device if device is not None else resolve_device()
         self._lexicon = lexicon if lexicon is not None else LEXICON
-        """The product's, `query_lexicon.toml`; another only in tests."""
+        """O do produto, `query_lexicon.toml`; outro só nos testes."""
         self._tokenizer: PreTrainedTokenizerBase | None = None
         self._model: PreTrainedModel | None = None
         self._load_lock = threading.Lock()
-        """One load at a time, as `ClipEmbeddingModel` does (RFC-036 5.3)."""
+        """Uma carga por vez, como faz `ClipEmbeddingModel` (RFC-036 5.3)."""
 
     def to_english(self, text: str) -> str:
-        """Translate `text` when it is Portuguese, otherwise return it unchanged.
+        """Traduz `text` quando é português; senão, o devolve sem mudança.
 
-        A query that is not translated never reaches the lexicon either: it
-        goes to CLIP exactly as typed, as before RFC-047.
+        Uma consulta que não é traduzida também nunca chega ao léxico: vai ao
+        CLIP exatamente como foi digitada, como antes do RFC-047.
         """
         source = marian_input(text, self._lexicon)
         if source is None:
@@ -414,11 +418,11 @@ class MarianQueryTranslator(QueryTranslator):
         inputs = {key: value.to(self._device) for key, value in batch.items()}
 
         with torch.no_grad():
-            # `PreTrainedModel` does not declare `generate` in transformers
-            # 5.15, so mypy resolves it through `nn.Module.__getattr__` and
-            # reports the resulting `Tensor` as not callable. An upstream
-            # typing gap rather than a real one; `warn_unused_ignores` will
-            # flag this line if a later release annotates the method.
+            # `PreTrainedModel` não declara `generate` no transformers 5.15,
+            # então o mypy o resolve por `nn.Module.__getattr__` e acusa o
+            # `Tensor` resultante como não chamável. Uma lacuna de tipagem da
+            # biblioteca, não um erro real; `warn_unused_ignores` vai apontar
+            # esta linha se uma versão futura anotar o método.
             generated = model.generate(  # type: ignore[operator]
                 **inputs,
                 max_new_tokens=MAX_TRANSLATION_TOKENS,
@@ -430,15 +434,16 @@ class MarianQueryTranslator(QueryTranslator):
         return decoded.strip()
 
     def _ensure_loaded(self) -> tuple[PreTrainedTokenizerBase, PreTrainedModel]:
-        """Load the translation checkpoint once, on first Portuguese query.
+        """Carrega o checkpoint de tradução uma vez, na primeira consulta em português.
 
-        Lazy rather than eager so that an English-only deployment -- and the
-        entire fast test suite -- never pays for a second model load or the
-        memory it occupies (RFC-023 section 10). The directory is checked
-        first, and `local_files_only` is written on both calls, for the
-        reasons `ClipEmbeddingModel._ensure_loaded()` gives -- and the load
-        happens once, under a lock, for the reason it gives too: the first
-        Portuguese search can arrive while the warm-up is loading this.
+        Sob demanda, e não antecipado, para que uma instalação só em inglês
+        -- e a suíte rápida de testes inteira -- nunca pague a carga de um
+        segundo modelo nem a memória que ele ocupa (RFC-023 §10). O diretório
+        é conferido antes, e `local_files_only` é escrito nas duas chamadas,
+        pelos motivos que `ClipEmbeddingModel._ensure_loaded()` dá -- e a
+        carga acontece uma vez, sob um lock, pelo motivo que ele também dá: a
+        primeira busca em português pode chegar enquanto o warm-up carrega
+        isto.
         """
         if self._tokenizer is None or self._model is None:
             with self._load_lock:

@@ -1,1 +1,1 @@
-"""Presentation layer for the SolidVision backend."""
+"""Camada de apresentação do backend do SolidVision."""

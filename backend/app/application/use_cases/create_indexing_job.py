@@ -1,21 +1,21 @@
-"""Accepting a request to index a disk, or some folders on it (RFC-029 section 7.1).
+"""Aceitar o pedido de indexar um disco, ou algumas pastas dele (RFC-029 §7.1).
 
-The use case that turns an HTTP body into a row, and **that is all it
-does**. It opens no file, loads no model, and never calls
-`IndexOrUpdateImagesUseCase`. The entire difference between this RFC and
-the thing RFC-026 section 3 prohibited is that the request returns once
-the intention is recorded, and the work happens in another process.
+O caso de uso que transforma um corpo HTTP numa linha, e **é só isso que ele
+faz**. Não abre arquivo, não carrega modelo e nunca chama
+`IndexOrUpdateImagesUseCase`. Toda a diferença entre este RFC e o que o
+RFC-026 §3 proibiu é que a requisição volta assim que a intenção é registrada,
+e o trabalho acontece em outro processo.
 
-What it does before recording the intention is refuse the four requests
-that could never succeed, each with a domain error the HTTP layer already
-knows how to answer:
+O que ele faz antes de registrar a intenção é recusar os quatro pedidos que
+nunca poderiam dar certo, cada um com um erro de domínio que a camada HTTP já
+sabe responder:
 
-* a device nobody has ever seen -- 404;
-* a device that is not plugged in *right now* -- 409, because the same
-  request would be accepted with the disk connected;
-* a scope that escapes the device, or is not a folder on it -- 400;
-* a device that is already busy -- 409, and that one is refused by the
-  database rather than here (see below).
+* um dispositivo que ninguém nunca viu -- 404;
+* um dispositivo que não está plugado *agora* -- 409, porque o mesmo pedido
+  seria aceito com o disco conectado;
+* um escopo que escapa do dispositivo, ou que não é uma pasta dele -- 400;
+* um dispositivo que já está ocupado -- 409, e esse é recusado pelo banco, não
+  aqui (ver abaixo).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from app.domain.value_objects.job_scope import JobScope, normalize_scopes
 
 
 class CreateIndexingJobUseCase:
-    """Validate a request to index, and queue it."""
+    """Valida um pedido de indexação e o põe na fila."""
 
     def __init__(
         self,
@@ -45,14 +45,14 @@ class CreateIndexingJobUseCase:
         device_locator: DeviceLocator,
         clock: Callable[[], datetime.datetime] | None = None,
     ) -> None:
-        """Compose the use case, optionally with a clock of the caller's choosing.
+        """Compõe o caso de uso, opcionalmente com um relógio escolhido por quem chama.
 
-        `clock` defaults to the wall clock and exists so that a test can
-        state what "now" is instead of asserting around it. It is a plain
-        callable rather than a port: the Application layer needs the
-        current time, not an abstraction over time, and a one-method ABC
-        here would be ceremony (`Settings` is injected the same way, as an
-        argument rather than an import).
+        `clock` tem como padrão o relógio de parede e existe para que um teste
+        possa dizer o que é "agora" em vez de fazer asserções em volta disso. É
+        um callable simples, não uma porta: a camada de aplicação precisa da
+        hora atual, não de uma abstração sobre o tempo, e uma ABC de um método
+        aqui seria cerimônia (`Settings` é injetado do mesmo jeito, como
+        argumento e não como import).
         """
         self._jobs = job_repository
         self._devices = device_repository
@@ -60,23 +60,22 @@ class CreateIndexingJobUseCase:
         self._clock = clock or _utc_now
 
     def execute(self, device_id: DeviceId, scopes: Iterable[str] = ()) -> IndexingJob:
-        """Queue a job for `device_id`, restricted to `scopes`.
+        """Põe na fila um job para `device_id`, restrito a `scopes`.
 
-        An empty `scopes` means the whole device, which is what zero scope
-        rows already mean in the schema (RFC-029 section 5.2).
+        Um `scopes` vazio significa o dispositivo inteiro, que é o que zero
+        linhas de escopo já significam no schema (RFC-029 §5.2).
 
-        The returned job carries the scopes that will *actually* be
-        walked, not the ones that were asked for: overlapping requests are
-        absorbed, and each is rewritten to the spelling the filesystem
-        uses. The route echoes them back in the 202 so a client that asked
-        for `2018` and `2018/junho` can see it got one.
+        O job devolvido traz os escopos que serão *de fato* percorridos, não os
+        que foram pedidos: pedidos sobrepostos são absorvidos, e cada um é
+        reescrito com a grafia que o sistema de arquivos usa. A rota os ecoa
+        no 202, para que um cliente que pediu `2018` e `2018/junho` veja que
+        recebeu um só.
 
-        **There is no check for an existing active job here.** That
-        refusal belongs to the partial unique index of RFC-029 section 9,
-        and asking first would be a check-then-act: two concurrent
-        requests for one disk would both find nothing and both insert.
-        `IndexingJobRepository.create()` raises `DeviceBusyError` when the
-        database refuses.
+        **Não há verificação de job ativo existente aqui.** Essa recusa cabe ao
+        índice único parcial do RFC-029 §9, e perguntar antes seria um
+        check-then-act: dois pedidos simultâneos para um disco não achariam
+        nada e os dois inseririam. `IndexingJobRepository.create()` levanta
+        `DeviceBusyError` quando o banco recusa.
         """
         device = self._devices.get(device_id)
         if device is None:
@@ -100,18 +99,18 @@ class CreateIndexingJobUseCase:
         )
 
     def _resolve(self, device: Device, raw: str) -> JobScope:
-        """Turn one requested scope into the folder the filesystem agrees on.
+        """Transforma um escopo pedido na pasta que o sistema de arquivos reconhece.
 
-        Two refusals, in this order, because the order is the guarantee.
-        `JobScope` rejects an absolute path, a drive anchor, a UNC share
-        and any `..` **without touching the disk** -- so an escaping scope
-        is refused whether or not the folder exists, and never gets one
-        chance to be resolved as a real path.
+        Duas recusas, nesta ordem, porque a ordem é a garantia. `JobScope`
+        rejeita um caminho absoluto, uma letra de unidade, um compartilhamento
+        UNC e qualquer `..` **sem tocar no disco** -- então um escopo que escapa
+        é recusado exista a pasta ou não, e nunca tem uma chance de ser
+        resolvido como caminho real.
 
-        Only then does the locator look: it resolves the scope under the
-        mount point, confirms the result is still inside the device -- an
-        NTFS junction inside the scope looks like an ordinary folder until
-        it is resolved -- and returns the folder's canonical spelling.
+        Só então o localizador olha: ele resolve o escopo sob o ponto de
+        montagem, confirma que o resultado continua dentro do dispositivo --
+        uma junction NTFS dentro do escopo parece uma pasta comum até ser
+        resolvida -- e devolve a grafia canônica da pasta.
         """
         scope = JobScope(raw)
         resolved = self._locator.resolve_scope(device, scope)

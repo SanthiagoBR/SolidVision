@@ -1,16 +1,16 @@
-"""The skip decision, extracted so one image and a batch can share it.
+"""A decisão de pulo, extraída para que uma imagem e um lote possam compartilhá-la.
 
-Before RFC-024 this logic lived inside `IndexOrUpdateImageUseCase.execute()`,
-fused to the embed and the persist for a single image. Batch inference cannot
-be built on top of that shape -- calling a single-image method N times in a
-loop is still N single-image calls -- so the decision was pulled out into a
-pure function that both the single-image use case and the batch coordinator
-call.
+Antes do RFC-024, esta lógica vivia dentro de
+`IndexOrUpdateImageUseCase.execute()`, fundida ao embedding e à persistência de
+uma única imagem. Não dá para construir inferência em lote sobre essa forma --
+chamar N vezes em loop um método de uma imagem continua sendo N chamadas de uma
+imagem --, então a decisão foi extraída para uma função pura, que o caso de uso
+de uma imagem e o coordenador de lotes chamam.
 
-"Pure" is load-bearing: given the candidate, the metadata already read back
-from persistence, and a hasher, this function decides and returns. It performs
-no writes, so the caller is free to run it over every discovered file first
-and only then assemble batches from the survivors (RFC-024 section 8).
+"Pura" é essencial aqui: dados o candidato, os metadados já lidos de volta da
+persistência e um hasher, esta função decide e devolve. Ela não grava nada,
+então quem chama fica livre para rodá-la primeiro sobre todos os arquivos
+descobertos e só depois montar lotes com os sobreviventes (RFC-024 §8).
 """
 
 from __future__ import annotations
@@ -27,24 +27,24 @@ from app.domain.value_objects.index_metadata import IndexMetadata
 
 
 class FileContent:
-    """The bytes of one file, read once, and their SHA-256 (RFC-045 section 5.3).
+    """Os bytes de um arquivo, lidos uma vez, e o seu SHA-256 (RFC-045 §5.3).
 
-    Produced by the read-ahead thread, in Infrastructure, which read the
-    whole file and hashed what it read; consumed here, where the hash
-    answers step 3 of `plan_indexing()` and the bytes go to the embedding
-    model and the thumbnail instead of the file being opened again. Each
-    consumer still decodes for itself: what this carries is where the bytes
-    come from, never a decoded picture (RFC-030 section 7.2).
+    Produzido pela thread de leitura antecipada, na infraestrutura, que leu o
+    arquivo inteiro e calculou o hash do que leu; consumido aqui, onde o hash
+    responde ao passo 3 de `plan_indexing()` e os bytes vão para o modelo de
+    embedding e para a thumbnail, em vez de o arquivo ser aberto de novo. Cada
+    consumidor continua decodificando por conta própria: o que isto carrega é
+    de onde vêm os bytes, nunca uma imagem decodificada (RFC-030 §7.2).
 
-    **The bytes are released explicitly**, by the pipeline, as soon as the
-    file needs them no more (RFC-045 section 5.5): a decision that skips
-    it, a failed hash, the write of the batch it went into. After
-    `release()`, `data` raises rather than handing back something stale.
-    `on_release` is told how many bytes went, once, on the first of
-    `release()` or the garbage collection of this object -- a path that
-    forgets to release still gives the bytes back, it only gives them back
-    later. It is called with the size alone and holds no reference to this
-    object, which is what lets the collection happen at all.
+    **Os bytes são liberados explicitamente**, pelo pipeline, assim que o
+    arquivo não precisa mais deles (RFC-045 §5.5): uma decisão que o pula, um
+    hash que falha, a gravação do lote em que ele entrou. Depois de
+    `release()`, `data` levanta exceção em vez de devolver algo obsoleto.
+    `on_release` fica sabendo quantos bytes saíram, uma vez, no primeiro entre
+    `release()` e a coleta de lixo deste objeto -- um caminho que esquece de
+    liberar ainda devolve os bytes, só que mais tarde. Ele é chamado só com o
+    tamanho e não guarda referência a este objeto, e é isso que permite que a
+    coleta aconteça.
     """
 
     __slots__ = ("__weakref__", "_data", "_finalizer", "content_hash", "size")
@@ -56,9 +56,9 @@ class FileContent:
         on_release: Callable[[int], None] | None = None,
     ) -> None:
         self.content_hash = content_hash
-        """The SHA-256 of `data`, as `Sha256ContentHasher` writes it."""
+        """O SHA-256 de `data`, como `Sha256ContentHasher` o escreve."""
         self.size = len(data)
-        """How many bytes `data` holds, and still says so once released."""
+        """Quantos bytes `data` tem; continua dizendo isso depois de liberado."""
         self._data: bytes | None = data
         self._finalizer = (
             weakref.finalize(self, on_release, self.size)
@@ -68,18 +68,18 @@ class FileContent:
 
     @property
     def data(self) -> bytes:
-        """The file's bytes; raises `RuntimeError` once they were released."""
+        """Os bytes do arquivo; levanta `RuntimeError` depois de liberados."""
         if self._data is None:
             raise RuntimeError("The bytes of this file were already released")
         return self._data
 
     @property
     def released(self) -> bool:
-        """Whether `release()` was called."""
+        """Se `release()` foi chamado."""
         return self._data is None
 
     def release(self) -> None:
-        """Drop the bytes and give them back to whoever counts them. Idempotent."""
+        """Descarta os bytes e os devolve a quem os conta. Idempotente."""
         self._data = None
         if self._finalizer is not None:
             self._finalizer()
@@ -91,58 +91,57 @@ class FileContent:
 
 @dataclass(frozen=True)
 class IndexCandidate:
-    """One discovered file, as the Application layer sees it.
+    """Um arquivo descoberto, como a camada de aplicação o vê.
 
-    Carries the filesystem facts the skip decision compares against, and
-    nothing about how the file was found -- the Infrastructure type that
-    produced it (`DiscoveredImageFile`) stays in Infrastructure.
+    Carrega os fatos do sistema de arquivos com que a decisão de pulo compara,
+    e nada sobre como o arquivo foi encontrado -- o tipo da infraestrutura que
+    o produziu (`DiscoveredImageFile`) fica na infraestrutura.
 
-    The capture date the scan read (RFC-028) travels on `image`, where it
-    is a field of the entity, rather than as two more fields here beside
-    `file_size` and `file_modified_at` -- and so does the position
-    (RFC-032). That placement is also a guard: the fields of this class
-    are the change signals `plan_indexing()` compares, and neither a
-    capture date nor a position is one (RFC-028 section 6.1, RFC-032
-    section 8).
+    A data de captura que o scan leu (RFC-028) viaja em `image`, onde é um
+    campo da entidade, em vez de vir como mais dois campos aqui ao lado de
+    `file_size` e `file_modified_at` -- e a posição também (RFC-032). Esse
+    lugar também é uma proteção: os campos desta classe são os sinais de
+    mudança que `plan_indexing()` compara, e nem uma data de captura nem uma
+    posição é um deles (RFC-028 §6.1, RFC-032 §8).
     """
 
     image: Image
     file_size: int | None
     file_modified_at: datetime.datetime | None
     content: FileContent | None = None
-    """The file's bytes and their hash, when the read-ahead read them (RFC-045).
+    """Os bytes do arquivo e o seu hash, quando a leitura antecipada os leu (RFC-045).
 
-    `None` -- every candidate built before RFC-045, the CLI with the
-    read-ahead off, the backfills, the tests -- means the pipeline works as
-    it did: the hash and the decodes read the file from its location. Not a
-    change signal either: `plan_indexing()` takes its hash from here only
-    after steps 1 and 2 have decided that a hash is needed.
+    `None` -- todo candidato montado antes do RFC-045, a CLI com a leitura
+    antecipada desligada, os backfills, os testes -- significa que o pipeline
+    funciona como funcionava: o hash e as decodificações leem o arquivo da sua
+    localização. Também não é um sinal de mudança: `plan_indexing()` só tira o
+    hash daqui depois de os passos 1 e 2 decidirem que um hash é necessário.
     """
 
 
 class IndexAction(enum.Enum):
-    """What the three-step incremental check concluded about one file."""
+    """O que a verificação incremental em três passos concluiu sobre um arquivo."""
 
     EMBED = "embed"
-    """Content is new or genuinely changed; generate an embedding."""
+    """O conteúdo é novo ou mudou de fato; gerar um embedding."""
 
     SKIP_UNCHANGED = "skip_unchanged"
-    """Size and mtime both match; nothing to do, and nothing was read."""
+    """Tamanho e mtime batem; nada a fazer, e nada foi lido."""
 
     REFRESH_METADATA = "refresh_metadata"
-    """Size or mtime moved but the bytes did not.
+    """O tamanho ou o mtime mudou, mas os bytes não.
 
-    The stored embedding is still correct, so only the filesystem metadata
-    that drives the next run's comparison needs to catch up. This is the
-    outcome that ARCHITECTURE.md section 16 step 3 exists to produce, and
-    the one RFC-024 counts separately in its summary: every file landing
-    here would have been re-embedded before this RFC.
+    O embedding guardado continua correto, então só os metadados de sistema
+    de arquivos que guiam a comparação da próxima execução precisam ser
+    atualizados. Este é o resultado que o passo 3 do ARCHITECTURE.md §16 existe
+    para produzir, e o que o RFC-024 conta à parte no seu resumo: todo arquivo
+    que cai aqui teria o embedding refeito antes deste RFC.
     """
 
 
 @dataclass(frozen=True)
 class IndexPlan:
-    """A decision about one candidate, plus the hash that justified it."""
+    """Uma decisão sobre um candidato, mais o hash que a justificou."""
 
     candidate: IndexCandidate
     action: IndexAction
@@ -154,17 +153,17 @@ def is_unchanged(
     file_size: int | None,
     file_modified_at: datetime.datetime | None,
 ) -> bool:
-    """Step 2 of the incremental check: both stored change signals match.
+    """Passo 2 da verificação incremental: os dois sinais de mudança guardados batem.
 
-    Extracted from `plan_indexing()` by RFC-045 section 5.2, because a
-    second caller needs the same rule: the read-ahead thread, which decides
-    from a snapshot of the stored signals whether the decision will ask for
-    a file's bytes, before it reads them. One function, so the rule of "not
-    changed" stays in one place.
+    Extraído de `plan_indexing()` pelo RFC-045 §5.2, porque um segundo chamador
+    precisa da mesma regra: a thread de leitura antecipada, que decide, a
+    partir de um retrato dos sinais guardados, se a decisão vai pedir os bytes
+    de um arquivo, antes de lê-los. Uma função só, para que a regra de "não
+    mudou" fique num lugar só.
 
-    A stored `None` never matches a value the scan read, which is a plain
-    consequence of `None != int` -- a row that never had the columns is
-    treated as changed, never as unchanged.
+    Um `None` guardado nunca bate com um valor que o scan leu, o que é simples
+    consequência de `None != int` -- uma linha que nunca teve as colunas é
+    tratada como alterada, nunca como inalterada.
     """
     return (
         file_size == candidate.file_size
@@ -177,51 +176,52 @@ def plan_indexing(
     existing: IndexMetadata | None,
     content_hasher: ContentHasherPort,
 ) -> IndexPlan:
-    """Run ARCHITECTURE.md section 16's cost-ascending check on one file.
+    """Roda num arquivo a verificação de custo crescente do ARCHITECTURE.md §16.
 
-    1. No row at all (`existing is None`) -> new file.
-    2. Row exists and both `file_size` and `file_modified_at` match -> skip,
-       having read nothing but the directory entry.
-    3. Otherwise the file is a *candidate* for reprocessing, so -- and only
-       so -- read its bytes and hash them. A stored hash that matches means
-       the content never changed and the embedding can stand.
+    1. Nenhuma linha (`existing is None`) -> arquivo novo.
+    2. A linha existe e tanto `file_size` quanto `file_modified_at` batem ->
+       pular, sem ter lido nada além da entrada do diretório.
+    3. Senão, o arquivo é *candidato* a reprocessamento, então -- e só então --
+       ler os seus bytes e calcular o hash. Um hash guardado que bate significa
+       que o conteúdo nunca mudou e o embedding pode ficar.
 
-    The hash is also computed for a file with no row yet, which step 1 has
-    already condemned to embedding. That is not a violation of "never hash
-    before the timestamp and size checks": the checks have already run and
-    already returned "process this". It is what makes step 3 possible on
-    the *next* run -- a row persisted without a hash reads back as `None`,
-    which means unknown, so skipping the hash here would leave the whole
-    mechanism permanently dormant for every file the system ever indexes.
+    O hash também é calculado para um arquivo ainda sem linha, que o passo 1
+    já condenou ao embedding. Isso não viola o "nunca calcular o hash antes
+    das verificações de data e tamanho": as verificações já rodaram e já
+    responderam "processe isto". É o que torna o passo 3 possível na
+    *próxima* execução -- uma linha persistida sem hash é lida de volta como
+    `None`, que significa desconhecido, então pular o hash aqui deixaria o
+    mecanismo inteiro adormecido para sempre para todo arquivo que o sistema
+    indexar.
 
-    **The capture date is not consulted, and must never be** (RFC-028
-    section 6.1). `existing.capture_source` is in the prefetched metadata
-    for the conditional date write, not for this decision: a new EXIF date
-    on identical pixels is a metadata change, and answering it with a
-    re-embed would spend the most expensive operation in the system on
-    it. `tests/application/test_indexing_plan.py` fails if a comparison is
-    added.
+    **A data de captura não é consultada, e nunca deve ser** (RFC-028 §6.1).
+    `existing.capture_source` está nos metadados lidos antecipadamente para a
+    gravação condicional da data, não para esta decisão: uma data EXIF nova
+    sobre pixels idênticos é uma mudança de metadados, e respondê-la refazendo
+    o embedding gastaria nela a operação mais cara do sistema.
+    `tests/application/test_indexing_plan.py` falha se uma comparação for
+    acrescentada.
 
-    **Neither is the position** (RFC-032 section 8), and for the same
-    reason: `existing.position_source` rides the prefetch for the
-    conditional position write. A coordinate read today describes the same
-    pixels it described yesterday. The tests vary that field on the stored
-    metadata and were checked by mutation -- adding
-    `existing.position_source == candidate.image.position_source` to the
-    first condition makes them fail.
+    **Nem a posição** (RFC-032 §8), pelo mesmo motivo:
+    `existing.position_source` vem na leitura antecipada para a gravação
+    condicional da posição. Uma coordenada lida hoje descreve os mesmos
+    pixels que descrevia ontem. Os testes variam esse campo nos metadados
+    guardados e foram verificados por mutação -- acrescentar
+    `existing.position_source == candidate.image.position_source` à primeira
+    condição os faz falhar.
 
-    A stored hash of `None` never matches a computed one, which is a plain
-    consequence of `None != str` rather than a special case. Rows written
-    before RFC-024 carry NULL and were deliberately not backfilled
-    (RFC-024 section 15), so "unknown" has to cost one re-embed rather than
-    risk a wrongly skipped one.
+    Um hash guardado `None` nunca bate com um calculado, o que é simples
+    consequência de `None != str`, e não um caso especial. As linhas gravadas
+    antes do RFC-024 trazem NULL e de propósito não passaram por backfill
+    (RFC-024 §15), então "desconhecido" tem de custar um embedding refeito em
+    vez de arriscar um pulo errado.
 
-    **The hash of step 3 comes from `candidate.content` when there is one**
-    (RFC-045 section 5.3): the read-ahead already read the file and hashed
-    those bytes, with the same SHA-256 the hasher computes. Without it the
-    hasher reads the file, as before. Same three outcomes either way, and
-    the bytes are not read for a file step 2 skips -- `content` is only
-    looked at after it.
+    **O hash do passo 3 vem de `candidate.content` quando ele existe**
+    (RFC-045 §5.3): a leitura antecipada já leu o arquivo e calculou o hash
+    desses bytes, com o mesmo SHA-256 que o hasher calcula. Sem ele, o hasher
+    lê o arquivo, como antes. Os mesmos três resultados de um jeito ou de
+    outro, e os bytes não são lidos para um arquivo que o passo 2 pula --
+    `content` só é olhado depois dele.
     """
     if existing is not None and is_unchanged(
         candidate, existing.file_size, existing.file_modified_at

@@ -1,21 +1,21 @@
-"""The embedded PostgreSQL cluster: an adapter that owns its lifecycle (RFC-033).
+"""O cluster PostgreSQL embarcado: um adaptador dono do próprio ciclo de vida (RFC-033).
 
-Locates the vendored binaries, creates the cluster on first run, starts it
-or adopts one already up, chooses the port, recovers from a dirty shutdown,
-prepares the database and stops it. It also answers, without starting
-anything, where a cluster that is up can be reached: `locate()` (RFC-034
-section 7.2). It does not decide who calls it -- the launcher of RFC-036.
+Localiza os binários embarcados, cria o cluster na primeira execução, inicia-o
+ou adota um que já esteja de pé, escolhe a porta, se recupera de um
+desligamento sujo, prepara o banco e o para. Também responde, sem iniciar
+nada, onde um cluster de pé pode ser alcançado: `locate()` (RFC-034 §7.2).
+Não decide quem o chama -- o launcher do RFC-036.
 
-There is deliberately no port in the Domain (RFC-033 section 4.1): no use
-case starts a database. The consumer is a composition root -- today the CLI
-in `__main__`, later the launcher -- and, for the same reason, no class here
-reads `settings`. They take paths in their constructors, and only `__main__`
-reads the `Settings`. The two paths of Alembic come from the layout, which
-is the geometry of directories and not configuration (RFC-034 section 4.1).
+Não há, de propósito, porta no Domain (RFC-033 §4.1): nenhum caso de uso
+inicia um banco. Quem consome é uma composition root -- hoje a CLI em
+`__main__`, depois o launcher --, e, pelo mesmo motivo, nenhuma classe aqui
+lê `settings`. Elas recebem caminhos nos construtores, e só `__main__` lê os
+`Settings`. Os dois caminhos do Alembic vêm do layout, que é a geometria dos
+diretórios, e não configuração (RFC-034 §4.1).
 
-Nothing in this package imports `app.infrastructure.persistence.engine`. The
-dependency runs the other way: with the embedded source, the engine asks
-this package for the port and the password at every new connection.
+Nada neste pacote importa `app.infrastructure.persistence.engine`. A
+dependência vai no sentido contrário: com a origem embarcada, o engine pede a
+este pacote a porta e a senha a cada nova conexão.
 """
 
 from __future__ import annotations

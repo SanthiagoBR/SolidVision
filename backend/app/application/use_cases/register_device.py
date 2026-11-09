@@ -1,33 +1,32 @@
-"""Making a volume into a device this system knows (RFC-031 section 6).
+"""Fazer de um volume um dispositivo que este sistema conhece (RFC-031 §6).
 
-The rule that used to live in `infrastructure/workers/indexing_worker.py`
-and could only be reached through an `argparse`. A product whose premise
-is *"the photographer points at their own disks"* cannot require a
-terminal for a disk to exist, and RFC-031 gives the rule a third caller
-that is an HTTP route -- at which point the layer stops being debatable.
+A regra que morava em `infrastructure/workers/indexing_worker.py` e só podia
+ser alcançada por um `argparse`. Um produto cuja premissa é *"o fotógrafo
+aponta para os próprios discos"* não pode exigir um terminal para um disco
+existir, e o RFC-031 dá à regra um terceiro chamador que é uma rota HTTP --
+e, a partir daí, a camada deixa de ser discutível.
 
-**What moved, and what deliberately did not.** RFC-031 section 13 says
-`register_device()` *"migrates"* here, and the literal migration is
-impossible: its signature takes a `VolumeIdentityProvider`, returns a
-`ResolvedVolume` and calls `compute_device_id()`, which were three
-imports of `app.infrastructure` -- and `test_application_architecture.py`
-fails the build on any one of them. So the function was split along the
-line that was already there:
+**O que mudou de lugar, e o que de propósito não mudou.** O RFC-031 §13 diz
+que `register_device()` *"migra"* para cá, e a migração literal é
+impossível: a assinatura dela recebe um `VolumeIdentityProvider`, devolve um
+`ResolvedVolume` e chama `compute_device_id()`, que eram três imports de
+`app.infrastructure` -- e `test_application_architecture.py` quebra o build
+por qualquer um deles. Então a função foi dividida na linha que já existia:
 
-* **naming a volume** stays in Infrastructure, because the two callers
-  ask the platform differently. The CLI has a path (`--root D:\\fotos`)
-  and resolves it; the route has an opaque identity and looks it up in an
-  enumeration. Neither question has an answer above the adapter;
-* **deciding which row to write** -- the cascade for `label`,
-  `first_seen_at` preserved, `last_seen_at` moved, the scan counters left
-  alone -- comes here. That is the part the old docstring warned "drifts
-  apart in two copies", and it is what RFC-031 wanted in the Application
-  layer.
+* **dar nome a um volume** fica na Infrastructure, porque os dois chamadores
+  perguntam à plataforma de jeitos diferentes. A CLI tem um caminho
+  (`--root D:\\fotos`) e o resolve; a rota tem uma identidade opaca e a
+  procura numa enumeração. Nenhuma das duas perguntas tem resposta acima do
+  adaptador;
+* **decidir qual linha escrever** -- a cascata do `label`, o `first_seen_at`
+  preservado, o `last_seen_at` atualizado, os contadores do scan intocados --
+  vem para cá. É a parte que a docstring antiga avisava que "diverge em duas
+  cópias", e é o que o RFC-031 queria na camada Application.
 
-`indexing_worker.register_device()` still exists with the same public
-signature, now a shell that resolves a root and calls `register()` below.
-Six callers pass `root` and `label` and read a tuple back, and none of
-them changed.
+`indexing_worker.register_device()` continua existindo com a mesma assinatura
+pública, agora uma casca que resolve uma raiz e chama `register()`, abaixo.
+Seis chamadores passam `root` e `label` e leem uma tupla de volta, e nenhum
+deles mudou.
 """
 
 from __future__ import annotations
@@ -50,25 +49,24 @@ from app.domain.value_objects.mounted_volume import MountedVolume
 
 @dataclass(frozen=True)
 class RegisteredDevice:
-    """A registered device, and whether this call is what created it."""
+    """Um dispositivo registrado, e se foi esta chamada que o criou."""
 
     device: Device
 
     created: bool
-    """`False` when the identity already had a row -- nothing was created.
+    """`False` quando a identidade já tinha uma linha -- nada foi criado.
 
-    Carried out of the use case rather than decided in the route, because
-    the route has no way to know: `save()` is an upsert by design
-    (RFC-027), so a second registration and a first are the same write.
-    It costs no extra query -- `get_by_volume_identity()` is already
-    called to preserve `first_seen_at` -- and it is what lets one route
-    answer `201` the first time and `200` the second (RFC-031 section
-    6.1).
+    Levado para fora do caso de uso, em vez de decidido na rota, porque a
+    rota não tem como saber: `save()` é um upsert por desenho (RFC-027),
+    então um segundo registro e um primeiro são a mesma escrita. Não custa
+    consulta a mais -- `get_by_volume_identity()` já é chamado para preservar
+    o `first_seen_at` -- e é o que deixa uma rota responder `201` da primeira
+    vez e `200` da segunda (RFC-031 §6.1).
     """
 
 
 class RegisterDeviceUseCase:
-    """Register a mounted volume, or refresh the device it already is."""
+    """Registra um volume montado, ou atualiza o dispositivo que ele já é."""
 
     def __init__(
         self,
@@ -76,18 +74,18 @@ class RegisterDeviceUseCase:
         device_repository: DeviceRepository,
         clock: Callable[[], datetime.datetime] | None = None,
     ) -> None:
-        """Compose the use case, optionally with a clock of the caller's choosing.
+        """Compõe o caso de uso, opcionalmente com um relógio escolhido pelo chamador.
 
-        `clock` follows `CreateIndexingJobUseCase`: a plain callable
-        rather than a port, so a test can state what "now" is instead of
-        asserting around it. The Application layer needs the current
-        time, not an abstraction over time.
+        `clock` segue `CreateIndexingJobUseCase`: um callable simples, e não
+        uma porta, para que um teste possa dizer o que é "agora" em vez de
+        fazer asserções em volta disso. A camada Application precisa da hora
+        atual, não de uma abstração sobre o tempo.
 
-        `volume_catalog` is required even by the CLI path, which never
-        touches it -- `register()` is handed a volume somebody else
-        resolved. One object with two entry points is simpler than an
-        optional dependency, and constructing the catalogue costs a
-        reference: it is a shell over an enumeration it has not performed.
+        `volume_catalog` é obrigatório até no caminho da CLI, que nunca toca
+        nele -- `register()` recebe um volume que outro resolveu. Um objeto
+        com duas entradas é mais simples que uma dependência opcional, e
+        construir o catálogo custa uma referência: é uma casca sobre uma
+        enumeração que ele ainda não fez.
         """
         self._catalog = volume_catalog
         self._devices = device_repository
@@ -96,37 +94,34 @@ class RegisterDeviceUseCase:
     def execute(
         self, volume_identity: str, volume_kind: str, label: str = ""
     ) -> RegisteredDevice:
-        """Register the mounted volume with this identity; 409 if it is not here.
+        """Registra o volume montado com esta identidade; 409 se ele não está aqui.
 
-        **The identity is a key, never a location.** It is compared for
-        equality against a mapping the server itself produced moments
-        ago; it is never parsed, never joined onto anything, and never
-        turned into a path. The `root` the registration needs is the
-        mount point *the server enumerated*, which is what preserves the
-        property RFC-030 section 5.1 established for `/reveal` while
-        still letting a user add a disk (RFC-031 section 5.1). An
-        invented identity is therefore not a place -- it resolves to
-        nothing at all, which is precisely the difference between this
-        design and accepting a path.
+        **A identidade é uma chave, nunca um local.** Ela é comparada por
+        igualdade com um mapeamento que o próprio servidor produziu momentos
+        antes; nunca é interpretada, nunca é juntada a nada e nunca vira um
+        caminho. A `root` de que o registro precisa é o ponto de montagem *que
+        o servidor enumerou*, e é isso que preserva a propriedade que o
+        RFC-030 §5.1 estabeleceu para `/reveal`, deixando ainda o usuário
+        adicionar um disco (RFC-031 §5.1). Uma identidade inventada,
+        portanto, não é um lugar -- não resolve para nada, e essa é
+        exatamente a diferença entre este desenho e aceitar um caminho.
 
-        The two strings arrive unconverted because converting them is a
-        domain rule with a domain error attached. Declaring
-        `volume_kind: VolumeKind` on the request schema would have
-        FastAPI refuse an unknown kind with a `422` *before* this method
-        runs, and the `400 InvalidVolumeIdentityError` RFC-031 section 6
-        specifies would never be raised. It is the argument
-        `CreateJobRequestSchema` already makes for keeping `scopes` a
-        list of plain strings: what makes a value legal here is a rule
-        this layer owns, and answering it in Presentation produces a 422
-        where a 400 with a readable message belongs.
+        As duas strings chegam sem conversão porque convertê-las é uma regra
+        de domínio com um erro de domínio junto. Declarar
+        `volume_kind: VolumeKind` no schema do pedido faria o FastAPI recusar
+        um tipo desconhecido com um `422` *antes* de este método rodar, e o
+        `400 InvalidVolumeIdentityError` que o RFC-031 §6 especifica nunca
+        seria levantado. É o argumento que `CreateJobRequestSchema` já faz
+        para manter `scopes` uma lista de strings simples: o que torna um
+        valor válido aqui é uma regra que esta camada detém, e respondê-la na
+        Presentation produz um 422 onde cabe um 400 com uma mensagem legível.
 
-        An empty identity needs no check of its own --
-        `VolumeIdentity.__post_init__` already refuses it with the same
-        error.
+        Uma identidade vazia não precisa de checagem própria --
+        `VolumeIdentity.__post_init__` já a recusa com o mesmo erro.
 
-        `list_mounted()` rather than `mount_points()`: a new row has to
-        record `filesystem_label` and `total_bytes`, and this is the one
-        route where paying for them is the point.
+        `list_mounted()` em vez de `mount_points()`: uma linha nova precisa
+        registrar `filesystem_label` e `total_bytes`, e esta é a única rota em
+        que pagar por eles é o objetivo.
         """
         identity = VolumeIdentity(value=volume_identity, kind=_kind(volume_kind))
         for volume in self._catalog.list_mounted():
@@ -141,45 +136,43 @@ class RegisterDeviceUseCase:
     def register(
         self, volume: MountedVolume, label: str, persist: bool = True
     ) -> Device:
-        """Apply the merge rule to a volume the caller already resolved.
+        """Aplica a regra de fusão a um volume que o chamador já resolveu.
 
-        The CLI's entry point: `indexing_worker.register_device()` asks
-        the platform about a `--root` path, which is a question no HTTP
-        client can ask, and then arrives here with the answer. Nothing in
-        this method touches the operating system.
+        A entrada da CLI: `indexing_worker.register_device()` pergunta à
+        plataforma sobre um caminho de `--root`, que é uma pergunta que nenhum
+        cliente HTTP pode fazer, e depois chega aqui com a resposta. Nada
+        neste método toca o sistema operacional.
 
-        `persist=False` computes the device without writing it, which is
-        what `device_reconcile --dry-run` needs: a dry run that created a
-        row would not be a dry run, and the device id is derived rather
-        than allocated, so nothing has to be written for it to be known.
+        `persist=False` calcula o dispositivo sem escrevê-lo, que é do que
+        `device_reconcile --dry-run` precisa: um dry run que criasse uma linha
+        não seria um dry run, e o id do dispositivo é derivado, e não
+        alocado, então nada precisa ser escrito para que ele seja conhecido.
         """
         return self._merge(volume, label, persist).device
 
     def _merge(
         self, volume: MountedVolume, label: str, persist: bool
     ) -> RegisteredDevice:
-        """Fold a mounted volume into the row it should have, and say if it is new.
+        """Funde um volume montado na linha que ele deve ter, e diz se ela é nova.
 
-        The rules about which fields survive an existing row, in one
-        place because two copies of them drift and both callers mint
-        image ids from the device they produce:
+        As regras sobre quais campos sobrevivem de uma linha existente, num
+        lugar só, porque duas cópias delas divergem e os dois chamadores
+        cunham ids de imagem a partir do dispositivo que produzem:
 
-        * `label` prefers what the caller asked for, then what the user
-          already named the disk, then the volume's own label, then the
-          identity string. A disk already known keeps its name unless
-          somebody asked to change it -- renaming is a user's decision,
-          not a side effect of indexing;
-        * `first_seen_at` is preserved and `last_seen_at` moves on every
-          call, which is what makes the pair history rather than state;
-        * `last_scan_at` and `last_scan_file_count` are carried over
-          untouched. They are the result of a scan, and registering a
-          disk is not one -- overwriting them here would reset the
-          denominator of the "% indexed" figure to nothing every time
-          somebody opened the sidebar (RFC-031 section 4.2).
+        * `label` prefere o que o chamador pediu, depois o nome que o usuário
+          já deu ao disco, depois o rótulo do próprio volume, depois a string
+          da identidade. Um disco já conhecido mantém o nome, a menos que
+          alguém tenha pedido para mudá-lo -- renomear é decisão do usuário,
+          não efeito colateral da indexação;
+        * `first_seen_at` é preservado e `last_seen_at` avança a cada chamada,
+          o que faz do par um histórico, e não um estado;
+        * `last_scan_at` e `last_scan_file_count` passam adiante intocados.
+          São o resultado de um scan, e registrar um disco não é um --
+          sobrescrevê-los aqui zeraria o denominador do número de "% indexado"
+          toda vez que alguém abrisse a barra lateral (RFC-031 §4.2).
 
-        `filesystem_label` and `total_bytes` are taken from the volume
-        rather than preserved: they are observations, and the freshest
-        observation wins.
+        `filesystem_label` e `total_bytes` vêm do volume, em vez de serem
+        preservados: são observações, e a observação mais recente vence.
         """
         now = self._clock()
         existing = self._devices.get_by_volume_identity(volume.identity)
@@ -206,12 +199,11 @@ class RegisterDeviceUseCase:
 
 
 def _kind(value: str) -> VolumeKind:
-    """Read a platform discriminator, refusing an unknown one as a domain error.
+    """Lê um discriminador de plataforma; um desconhecido é erro de domínio.
 
-    `VolumeKind(value)` raises `ValueError`, which no handler dresses up
-    and which would surface as a 500. `InvalidVolumeIdentityError` is the
-    error RFC-031 section 6 names, it already exists, and it already
-    answers 400.
+    `VolumeKind(value)` levanta `ValueError`, que nenhum handler traduz e que
+    apareceria como um 500. `InvalidVolumeIdentityError` é o erro que o
+    RFC-031 §6 nomeia, já existe e já responde 400.
     """
     try:
         return VolumeKind(value)

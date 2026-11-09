@@ -1,4 +1,4 @@
-"""Domain value objects package."""
+"""Pacote dos value objects do domínio."""
 
 from app.domain.value_objects.capture_date import CaptureDate
 from app.domain.value_objects.capture_source import CaptureSource

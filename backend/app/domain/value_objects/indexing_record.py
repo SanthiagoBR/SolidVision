@@ -1,4 +1,4 @@
-"""Carrier bundling everything needed to persist an indexed image."""
+"""Portador que junta tudo o que é preciso para persistir uma imagem indexada."""
 
 from __future__ import annotations
 
@@ -11,15 +11,15 @@ from app.domain.value_objects.embedding_vector import EmbeddingVector
 
 @dataclass(frozen=True)
 class IndexingRecord:
-    """Write-only carrier bundling an image with its embedding and filesystem metadata.
+    """Portador só de escrita que junta uma imagem ao embedding e aos metadados.
 
-    Exists because `ImageRepository.save()` has no way to convey an
-    embedding or filesystem metadata alongside a Domain `Image`. It is
-    part of the `ImageRepository` port's own contract -- like `EmbeddingVector`
-    or `ImageId` -- so it lives in Domain rather than Application, keeping
-    the port self-contained within its own layer. `Image` itself remains
-    completely unchanged. Not used as a read type; see `IndexMetadata`
-    for that.
+    Existe porque `ImageRepository.save()` não tem como levar um embedding ou
+    metadados de sistema de arquivos junto com uma `Image` do Domain. Ele faz
+    parte do contrato da própria porta `ImageRepository` -- como
+    `EmbeddingVector` ou `ImageId` -- então mora no Domain, e não na
+    Application, o que mantém a porta autocontida na própria camada. A
+    `Image` em si continua completamente inalterada. Não é usado como tipo de
+    leitura; para isso, ver `IndexMetadata`.
     """
 
     image: Image
@@ -27,25 +27,23 @@ class IndexingRecord:
     file_size: int | None
     file_modified_at: datetime.datetime | None
     content_hash: str | None = None
-    """Fingerprint of the bytes that produced `embedding`.
+    """Impressão digital dos bytes que produziram `embedding`.
 
-    Optional for the same reason as `IndexMetadata.content_hash`: a writer
-    that never computed one persists NULL, and NULL reads back as
-    "unknown", which costs a re-embed on the next size/mtime change rather
-    than risking a skipped one.
+    Opcional pela mesma razão de `IndexMetadata.content_hash`: um escritor
+    que nunca calculou uma grava NULL, e NULL é relido como "desconhecido", o
+    que custa recalcular o embedding na próxima mudança de tamanho ou mtime,
+    em vez de arriscar pular um.
     """
 
     thumbnail_path: str | None = None
-    """Where the thumbnail rendered from these bytes was stored (RFC-030).
+    """Onde a thumbnail gerada destes bytes foi guardada (RFC-030).
 
-    Optional like `content_hash`, and `None` is written as `None`: a
-    record reaches the repository because its bytes are new or changed, so
-    a thumbnail stored for an *earlier* version of the file no longer
-    depicts it. Keeping that stale location would serve the old picture
-    under the new `ETag`.
+    Opcional como `content_hash`, e `None` é escrito como `None`: um registro
+    chega ao repositório porque os bytes dele são novos ou mudaram, então uma
+    thumbnail guardada para uma versão *anterior* do arquivo não o mostra
+    mais. Manter esse local velho serviria a foto antiga sob o `ETag` novo.
 
-    `None` when rendering failed, which is never a failure of the record
-    -- the embedding was paid for and the image is searchable without a
-    thumbnail (RFC-030 section 7.2) -- or when the pipeline was composed
-    without a thumbnail writer at all.
+    `None` quando a geração falhou, o que nunca é uma falha do registro -- o
+    embedding foi pago e a imagem é buscável sem thumbnail (RFC-030 §7.2) --
+    ou quando o pipeline foi montado sem escritor de thumbnails nenhum.
     """

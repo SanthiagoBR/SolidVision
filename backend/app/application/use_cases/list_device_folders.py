@@ -1,39 +1,39 @@
-r"""One level of a device tree, and what we know of each folder (RFC-031 §8).
+r"""Um nível da árvore de um dispositivo, e o que sabemos de cada pasta (RFC-031 §8).
 
-The screen where a user picks what to index. It returns the folders
-directly inside one path, each with an exact count of indexed images and
-one of five words describing its state -- and it returns **what the
-client will send back**, because what this lists becomes `scopes[]` on
-the next `POST /api/v1/jobs`.
+A tela em que o usuário escolhe o que indexar. Devolve as pastas diretamente
+dentro de um caminho, cada uma com a contagem exata de imagens indexadas e uma
+de cinco palavras descrevendo o seu estado -- e devolve **o que o cliente vai
+mandar de volta**, porque o que isto lista vira `scopes[]` no próximo
+`POST /api/v1/jobs`.
 
-That last sentence is the constraint the whole module is built around,
-and it has two consequences:
+Essa última frase é a restrição em torno da qual o módulo inteiro é
+construído, e ela tem duas consequências:
 
-* **the same validation `POST /jobs` applies, applied here.** `JobScope`
-  refuses `..`, a drive anchor and a UNC share without touching the disk;
-  `DeviceLocator.resolve_scope()` then confirms the result is genuinely
-  inside the device after NTFS junctions are resolved. A folder that were
-  listable but not scopable would be a dead end in the interface
-  (RFC-031 section 8);
-* **the paths echoed back are the filesystem's spelling, never the
-  client's.** `resolve_scope()` returns the canonical one, which is half
-  the reason it exists -- Windows is case-insensitive while
-  `normalize_scopes()` compares parts exactly, so a client that asked for
-  `FOTOS/2018` and got its own spelling back would send it to `POST
-  /jobs` and have it rewritten into something else.
+* **a mesma validação que o `POST /jobs` aplica, aplicada aqui.** `JobScope`
+  recusa `..`, uma letra de unidade e um compartilhamento UNC sem tocar no
+  disco; `DeviceLocator.resolve_scope()` então confirma que o resultado está
+  de fato dentro do dispositivo depois de resolvidas as junctions NTFS. Uma
+  pasta que pudesse ser listada mas não virar escopo seria um beco sem saída
+  na interface (RFC-031 §8);
+* **os caminhos ecoados são a grafia do sistema de arquivos, nunca a do
+  cliente.** `resolve_scope()` devolve a canônica, que é metade do motivo de
+  ele existir -- o Windows não diferencia maiúsculas de minúsculas, enquanto
+  `normalize_scopes()` compara as partes exatamente, então um cliente que
+  pediu `FOTOS/2018` e recebeu de volta a própria grafia a mandaria ao
+  `POST /jobs` e a veria reescrita em outra coisa.
 
-**One level per request, not the whole tree and not a flat list.** A flat
-first level turns "index the wedding" into "index all of 2018", which is
-five hours of inference to reach three hundred photos; the whole tree
-costs the size of the disk every time the screen opens, to draw four rows
-(RFC-031 section 8.1).
+**Um nível por requisição, nem a árvore inteira nem uma lista plana.** Um
+primeiro nível plano transforma "indexar o casamento" em "indexar todo o
+2018", que são cinco horas de inferência para chegar a trezentas fotos; a
+árvore inteira custa o tamanho do disco a cada vez que a tela abre, para
+desenhar quatro linhas (RFC-031 §8.1).
 
-**No percentage anywhere, and no count of files on disk.** There is no
-denominator per folder and obtaining one means walking the subtree, which
-is the read RFC-029 section 7.2 measured as dominant on a cold mechanical
-disk. `indexed_images` is an exact fact about our own table instead:
-*"1,204 indexed"* is true, *"30% indexed"* has nothing to be 30% of
-(RFC-031 section 2.3).
+**Nenhuma porcentagem em lugar nenhum, e nenhuma contagem de arquivos no
+disco.** Não há denominador por pasta, e obter um significa percorrer a
+subárvore, que é a leitura que o RFC-029 §7.2 mediu como dominante num disco
+mecânico a frio. `indexed_images` é, em vez disso, um fato exato sobre a nossa
+própria tabela: *"1.204 indexadas"* é verdade, *"30% indexada"* não tem do que
+ser 30% (RFC-031 §2.3).
 """
 
 from __future__ import annotations
@@ -55,68 +55,66 @@ from app.domain.value_objects.job_scope import JobScope
 
 @dataclass(frozen=True)
 class FolderListing:
-    """One folder, as a row in the picker."""
+    """Uma pasta, como uma linha no seletor."""
 
     scope: JobScope
-    """The folder as a device-relative scope, in the filesystem's spelling.
+    """A pasta como escopo relativo ao dispositivo, na grafia do sistema de arquivos.
 
-    A `JobScope` rather than a string because that is what the client is
-    going to send back, and because it is what `contains()` compares --
-    in parts, not in text, so `2018` is not a prefix of `2018b`.
+    Um `JobScope`, e não uma string, porque é isso que o cliente vai mandar de
+    volta, e porque é o que `contains()` compara -- por partes, não por texto,
+    então `2018` não é prefixo de `2018b`.
     """
 
     has_children: bool
-    """Whether this folder holds folders of its own.
+    """Se esta pasta tem pastas dentro dela.
 
-    Read from the disk by the locator, which pays one extra `readdir`
-    per row for it. Without it the UI draws an expand arrow on a leaf and
-    the user finds the mistake by clicking (RFC-031 section 4.4 of the
-    build prompt).
+    Lido do disco pelo localizador, que paga um `readdir` a mais por linha
+    para isso. Sem ele, a interface desenha uma seta de expandir numa folha e
+    o usuário descobre o erro clicando (RFC-031 §4.4 do build prompt).
     """
 
     indexed_images: int
-    """Rows in `images` anywhere beneath this folder. Exact, and not a ratio."""
+    """Linhas de `images` em qualquer ponto abaixo desta pasta. Exato, não razão."""
 
     state: FolderState
     job: IndexingJob | None
-    """The job the state was read from, or `None` when no job explains it.
+    """O job de que o estado foi lido, ou `None` quando nenhum job o explica.
 
-    Travels with the row because the interesting states are the ones
-    where the job carries the detail: a cancelled job's
-    `last_processed_relative_path` is *where it stopped*, which is what
-    RFC-031 section 12 puts in place of the mockup's invented
-    percentage.
+    Viaja com a linha porque os estados interessantes são aqueles em que o job
+    traz o detalhe: o `last_processed_relative_path` de um job cancelado é
+    *onde ele parou*, que é o que o RFC-031 §12 põe no lugar da porcentagem
+    inventada do mockup.
     """
 
     @property
     def name(self) -> str:
-        """The folder's own name -- the last part of its scope."""
+        """O nome da própria pasta -- a última parte do seu escopo."""
         return self.scope.parts[-1]
 
 
 @dataclass(frozen=True)
 class DeviceFolders:
-    """One level of one device's tree: where we are, and what is here."""
+    """Um nível da árvore de um dispositivo: onde estamos, e o que há aqui."""
 
     device: Device
     scope: JobScope
-    """The folder that was listed, canonically spelled. Empty is the device root."""
+    """A pasta listada, na grafia canônica. Vazio é a raiz do dispositivo."""
 
     folders: list[FolderListing]
 
     @property
     def parent(self) -> JobScope:
-        """One level up, and the root's parent is the root.
+        """Um nível acima; o pai da raiz é a raiz.
 
-        Derived from `parts` rather than by trimming text, for the reason
-        `JobScope` holds parts at all: string surgery on a path is how
-        `2018` becomes a prefix of `2018b`.
+        Derivado de `parts`, e não aparando texto, pelo mesmo motivo de
+        `JobScope` guardar partes: cirurgia de string num caminho é como
+        `2018` vira prefixo de `2018b`.
         """
         return JobScope(self.scope.parts[:-1])
 
 
 class ListDeviceFoldersUseCase:
-    """List one level of a device's folders, with each folder's indexing state."""
+    """Lista um nível das pastas de um dispositivo, cada uma com o seu estado."""
 
     def __init__(
         self,
@@ -131,33 +129,32 @@ class ListDeviceFoldersUseCase:
         self._locator = device_locator
 
     def execute(self, device_id: DeviceId, path: str = "") -> DeviceFolders:
-        """List the folders inside `path` on `device_id`.
+        """Lista as pastas dentro de `path` em `device_id`.
 
-        The four refusals, in this order, each with a domain error the
-        HTTP layer already knows how to answer:
+        As quatro recusas, nesta ordem, cada uma com um erro de domínio que a
+        camada HTTP já sabe responder:
 
-        * a device nobody has ever seen -- 404;
-        * a device that is not plugged in *right now* -- 409, and the
-          message names the disk. Unlike the rename route this one needs
-          bytes, and *which disk to plug in* is more useful than being
-          told the folder is not there;
-        * a scope that escapes the device, or is not a folder on it --
-          400, refused by `JobScope` before the disk is touched and then
-          by the locator after junctions are resolved;
-        * a folder that vanished between being resolved and being read --
-          400 as well, by the same rule: it is not a folder on this
-          device.
+        * um dispositivo que ninguém nunca viu -- 404;
+        * um dispositivo que não está plugado *agora* -- 409, e a mensagem
+          nomeia o disco. Ao contrário da rota de renomear, esta precisa de
+          bytes, e *qual disco plugar* é mais útil do que ouvir que a pasta
+          não está lá;
+        * um escopo que escapa do dispositivo, ou que não é uma pasta dele --
+          400, recusado por `JobScope` antes de tocar no disco e depois pelo
+          localizador, com as junctions resolvidas;
+        * uma pasta que sumiu entre ser resolvida e ser lida -- 400 também,
+          pela mesma regra: não é uma pasta deste dispositivo.
 
-        `path` absent, empty or `.` all list the device root, because
-        that is what `JobScope("")` already decides -- `PurePosixPath`
-        drops `.` during normalisation. There is deliberately no second
-        handling of it here.
+        `path` ausente, vazio ou `.` listam todos a raiz do dispositivo,
+        porque é o que `JobScope("")` já decide -- `PurePosixPath` descarta o
+        `.` na normalização. De propósito, não há um segundo tratamento disso
+        aqui.
 
-        Cost: one `SELECT` for the device, three enumerations of the
-        mounted volumes (connection, resolution, listing -- 0.19 ms
-        each), one `readdir` per folder plus one for the level itself,
-        **one** grouped count query for every folder at once, and one
-        `SELECT` for the job history.
+        Custo: um `SELECT` para o dispositivo, três enumerações dos volumes
+        montados (conexão, resolução, listagem -- 0,19 ms cada), um `readdir`
+        por pasta mais um para o próprio nível, **uma** consulta de contagem
+        agrupada para todas as pastas de uma vez, e um `SELECT` para o
+        histórico de jobs.
         """
         device = self._devices.get(device_id)
         if device is None:
@@ -188,21 +185,21 @@ class ListDeviceFoldersUseCase:
             self._describe(
                 scope=JobScope(resolved.parts + (entry.name,)),
                 has_children=entry.has_children,
-                # `.get(..., 0)` rather than a lookup: a folder with no
-                # indexed image has no group in the count, and reading
-                # the mapping directly would either drop the folder or
-                # raise. Zero is a real answer here, and it is the
-                # answer for most folders on a fresh disk.
+                # `.get(..., 0)` em vez de um acesso direto: uma pasta sem
+                # imagem indexada não tem grupo na contagem, e ler o
+                # mapeamento diretamente descartaria a pasta ou levantaria
+                # exceção. Zero é uma resposta de verdade aqui, e é a
+                # resposta para a maioria das pastas de um disco novo.
                 indexed_images=indexed.get(entry.name, 0),
                 history=history,
             )
             for entry in entries
         ]
-        # Sorted by name **here**, in the layer that knows this is being
-        # rendered. `scandir` has no order to promise and neither does
-        # the port; this is also not the scan order, which
-        # `FilesystemImageProvider` establishes with the platform's own
-        # path comparison, and the two must not be confused.
+        # Ordenado por nome **aqui**, na camada que sabe que isto vai ser
+        # exibido. `scandir` não tem ordem a prometer, nem a porta; esta
+        # também não é a ordem do scan, que `FilesystemImageProvider`
+        # estabelece com a comparação de caminhos da própria plataforma, e
+        # as duas não podem ser confundidas.
         folders.sort(key=lambda folder: folder.name)
         return DeviceFolders(device=device, scope=resolved, folders=folders)
 
@@ -226,42 +223,40 @@ class ListDeviceFoldersUseCase:
 def _state_of(
     folder: JobScope, history: list[IndexingJob], indexed_images: int
 ) -> tuple[FolderState, IndexingJob | None]:
-    """Read one folder's state off the device's job history (RFC-031 section 8.2).
+    """Lê o estado de uma pasta no histórico de jobs do dispositivo (RFC-031 §8.2).
 
-    Walks newest first -- which `IndexingJobRepository.list()` guarantees
-    by contract -- and stops at the first job that covers the folder at
-    all. That is correct rather than merely convenient: at most one job
-    per device is active (the partial unique index of RFC-029 section 9),
-    and a job can only be created while none is active, so an active job
-    is always the newest one. There is no case where an older running job
-    should outrank a newer finished one.
+    Percorre do mais novo para o mais antigo -- o que
+    `IndexingJobRepository.list()` garante por contrato -- e para no primeiro
+    job que cobre a pasta de algum modo. Isso é correto, e não só
+    conveniente: no máximo um job por dispositivo está ativo (o índice único
+    parcial do RFC-029 §9), e um job só pode ser criado quando nenhum está
+    ativo, então um job ativo é sempre o mais novo. Não há caso em que um job
+    em execução mais antigo deva passar à frente de um terminado mais novo.
 
-    "Covers" is a prefix relation **in both directions**, and the two
-    directions mean different things:
+    "Cobrir" é uma relação de prefixo **nas duas direções**, e as duas
+    direções significam coisas diferentes:
 
-    * a job over `2018` contains `2018/janeiro` -- full coverage, so the
-      job's own outcome is the folder's state;
-    * a job over `2018/janeiro/casamento` sits *inside* `2018/janeiro` --
-      partial coverage, so even a `completed` job leaves the folder
-      `partial`, which is literally what it is.
+    * um job sobre `2018` contém `2018/janeiro` -- cobertura total, então o
+      resultado do próprio job é o estado da pasta;
+    * um job sobre `2018/janeiro/casamento` fica *dentro* de `2018/janeiro` --
+      cobertura parcial, então mesmo um job `completed` deixa a pasta
+      `partial`, que é literalmente o que ela é.
 
-    Every comparison goes through `JobScope.contains()`, which compares
-    parts. Doing it in text would make `2018` a prefix of `2018b`, which
-    is a different folder.
+    Toda comparação passa por `JobScope.contains()`, que compara partes.
+    Fazê-la em texto tornaria `2018` prefixo de `2018b`, que é outra pasta.
 
-    `scopes == ()` means the whole device and contains everything,
-    falling out of the same prefix rule: an empty tuple is a prefix of
-    every tuple.
+    `scopes == ()` significa o dispositivo inteiro e contém tudo, o que sai da
+    mesma regra de prefixo: uma tupla vazia é prefixo de toda tupla.
 
-    **No `list_covering()` was added to the job port for this.** RFC-031
-    section 13 proposed one; writing it would mean reproducing this
-    relation in SQL, in both directions, in two implementations, with the
-    comparison done on text -- which is the exact mistake `JobScope`
-    exists to prevent. The rule is already written, already tested, and
-    already Domain. The declared cost is that a disk's history grows
-    without bound and this list grows with it; the mitigation when that
-    starts to matter is a `limit` on the port, measured first, not a
-    prefix match in SQL (RFC-031 section 4.9 of the build prompt).
+    **Nenhum `list_covering()` foi acrescentado à porta de jobs para isto.** O
+    RFC-031 §13 propôs um; escrevê-lo significaria reproduzir esta relação em
+    SQL, nas duas direções, em duas implementações, com a comparação feita em
+    texto -- que é exatamente o erro que `JobScope` existe para evitar. A
+    regra já está escrita, já está testada e já é domínio. O custo declarado
+    é que o histórico de um disco cresce sem limite, e esta lista cresce com
+    ele; a mitigação, quando isso começar a importar, é um `limit` na porta,
+    medido antes, e não um casamento de prefixo em SQL (RFC-031 §4.9 do build
+    prompt).
     """
     for job in history:
         fully = _covers_fully(job, folder)
@@ -273,29 +268,29 @@ def _state_of(
             return FolderState.QUEUED, job
         if job.status is JobStatus.COMPLETED:
             return (FolderState.INDEXED if fully else FolderState.PARTIAL), job
-        # `cancelled` or `failed`: some of it was walked, none of it is
-        # claimed to be finished. The job goes back with the row because
-        # its checkpoint is *where it stopped*, which is the true and
-        # useful thing the mockup's "Parcial · 30%" was reaching for.
+        # `cancelled` ou `failed`: parte foi percorrida, e nada é dado como
+        # terminado. O job volta com a linha porque o seu checkpoint é *onde
+        # ele parou*, que é a coisa verdadeira e útil que o "Parcial · 30%"
+        # do mockup tentava dizer.
         return FolderState.PARTIAL, job
 
-    # No job in the history covers this folder. `never_indexed` requires
-    # both halves of RFC-031 section 8.2 -- no covering job **and** no
-    # indexed images -- so rows with no job to explain them are
-    # `partial`: they exist, the search can already return them, and
-    # saying "never indexed" about them would be false.
+    # Nenhum job do histórico cobre esta pasta. `never_indexed` exige as duas
+    # metades do RFC-031 §8.2 -- nenhum job que cubra **e** nenhuma imagem
+    # indexada --, então linhas sem job que as explique são `partial`: elas
+    # existem, a busca já pode devolvê-las, e dizer "nunca indexada" sobre
+    # elas seria falso.
     if indexed_images == 0:
         return FolderState.NEVER_INDEXED, None
     return FolderState.PARTIAL, None
 
 
 def _covers_fully(job: IndexingJob, folder: JobScope) -> bool:
-    """Whether every file under `folder` is inside one of the job's scopes."""
+    """Se todo arquivo sob `folder` está dentro de um dos escopos do job."""
     if not job.scopes:
         return True
     return any(scope.contains(folder) for scope in job.scopes)
 
 
 def _covers_partially(job: IndexingJob, folder: JobScope) -> bool:
-    """Whether one of the job's scopes is inside `folder` -- some of it, not all."""
+    """Se um dos escopos do job está dentro de `folder` -- parte dela, não toda."""
     return any(folder.contains(scope) for scope in job.scopes)

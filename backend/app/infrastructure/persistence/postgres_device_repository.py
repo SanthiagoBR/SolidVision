@@ -1,4 +1,4 @@
-"""PostgreSQL-backed implementation of the device repository port (RFC-027)."""
+"""Implementação em PostgreSQL da porta do repositório de dispositivos (RFC-027)."""
 
 from __future__ import annotations
 
@@ -14,31 +14,32 @@ from app.infrastructure.database.models.device_model import DeviceModel
 
 
 class PostgresDeviceRepository(DeviceRepository):
-    """Repository implementation backed by PostgreSQL via SQLAlchemy."""
+    """Implementação do repositório sobre o PostgreSQL, via SQLAlchemy."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
     def save(self, device: Device) -> None:
-        """Create the row, or update the one that already carries this id.
+        """Cria a linha, ou atualiza a que já tem este id.
 
-        A genuine upsert, because the natural call site is a worker
-        starting a run against a disk it has probably seen before: the id
-        is derived from the volume identity, so the second run over the
-        same disk arrives here with the same primary key and needs the
-        row refreshed, not rejected.
+        Um upsert de verdade, porque quem chama, naturalmente, é um worker
+        começando uma execução num disco que provavelmente já viu: o id
+        deriva da identidade do volume, então a segunda execução no mesmo
+        disco chega aqui com a mesma chave primária e precisa da linha
+        atualizada, não recusada.
 
-        `first_seen_at` is written on insert and never touched again --
-        it is the one field that answers a question about the past, and
-        an upsert that overwrote it would quietly turn "since March" into
-        "since just now" on every run. Everything else moves: the label
-        when the user renames the disk, the capacity when it is replaced,
-        the scan counters after a scan, and `last_seen_at` always.
+        `first_seen_at` é escrito no insert e nunca mais tocado -- é o único
+        campo que responde a uma pergunta sobre o passado, e um upsert que o
+        sobrescrevesse trocaria, em silêncio, "desde março" por "desde
+        agora" a cada execução. O resto muda: o rótulo quando o usuário
+        renomeia o disco, a capacidade quando ele é trocado, os contadores
+        do scan depois de um scan, e `last_seen_at` sempre.
 
-        The rollback on failure follows `PostgresImageRepository`: the
-        session is shared with the image writes for the rest of the run,
-        so a rejected device row must not leave the transaction in a
-        pending-rollback state that fails the *next* unrelated write.
+        O rollback na falha segue o `PostgresImageRepository`: a sessão é
+        compartilhada com as escritas de imagens pelo resto da execução,
+        então uma linha de dispositivo recusada não pode deixar a transação
+        num estado de rollback pendente que faça falhar a *próxima* escrita,
+        sem relação com ela.
         """
         try:
             existing = self._session.get(DeviceModel, device.id.value)
@@ -53,7 +54,7 @@ class PostgresDeviceRepository(DeviceRepository):
 
     @staticmethod
     def _apply(model: DeviceModel, device: Device) -> None:
-        """Copy every mutable field of `device` onto an existing row."""
+        """Copia cada campo mutável de `device` para uma linha existente."""
         model.volume_identity = device.volume_identity.value
         model.volume_kind = device.volume_identity.kind.value
         model.label = device.label
@@ -68,19 +69,18 @@ class PostgresDeviceRepository(DeviceRepository):
     def record_scan(
         self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
     ) -> None:
-        """One `UPDATE` of the two scan columns, keyed on the id.
+        """Um `UPDATE` das duas colunas do scan, pela chave do id.
 
-        Not the `save()` above, which copies every field of a `Device` the
-        caller built: the executor's copy is from the start of the job,
-        and would put back a label renamed since (RFC-039 section 4.1). A
-        row that is not there matches nothing, and nothing is written.
+        Não o `save()` acima, que copia cada campo de um `Device` montado
+        por quem chama: a cópia do executor é do começo do job, e poria de
+        volta um rótulo renomeado depois (RFC-039 §4.1). Uma linha que não
+        existe não casa com nada, e nada é escrito.
 
-        The session's own copy of the row, if it holds one, is brought up
-        to date by the statement (SQLAlchemy's default synchronization):
-        the executor's sessions do not expire on commit
-        (`session.py`), and a `get()` after this would otherwise answer
-        from the copy it loaded before. The rollback on failure is
-        `save()`'s, for the same shared session.
+        A cópia da linha que a sessão tiver, se tiver, é atualizada pelo
+        próprio comando (a sincronização padrão do SQLAlchemy): as sessões
+        do executor não expiram no commit (`session.py`), e um `get()`
+        depois deste responderia, sem isso, pela cópia carregada antes. O
+        rollback na falha é o do `save()`, pela mesma sessão compartilhada.
         """
         try:
             self._session.execute(
@@ -98,13 +98,13 @@ class PostgresDeviceRepository(DeviceRepository):
         return model.to_domain() if model is not None else None
 
     def get_by_volume_identity(self, identity: VolumeIdentity) -> Device | None:
-        """Look the device up by what the operating system just reported.
+        """Busca o dispositivo pelo que o sistema operacional acabou de informar.
 
-        Both halves of the identity are in the `WHERE`. The string alone
-        is unique in the schema today, but the kind is what stops two
-        platforms' identically-shaped identifiers from being read as one
-        volume, and leaving it out here would make that depend on a
-        constraint rather than on the query.
+        As duas metades da identidade estão no `WHERE`. A string sozinha é
+        única no schema hoje, mas é o tipo que impede que identificadores de
+        mesmo formato, de duas plataformas, sejam lidos como um só volume, e
+        deixá-lo de fora aqui faria isso depender de uma constraint em vez
+        da consulta.
         """
         statement = select(DeviceModel).where(
             DeviceModel.volume_identity == identity.value,
@@ -119,13 +119,13 @@ class PostgresDeviceRepository(DeviceRepository):
         return [model.to_domain() for model in models]
 
     def delete(self, device_id: DeviceId) -> None:
-        """Delete the row, letting the foreign key refuse while images remain.
+        """Apaga a linha; a chave estrangeira recusa enquanto houver imagens.
 
-        No cascade, and the refusal is the feature. `images.device_id` is
-        a plain foreign key with no `ON DELETE`, so PostgreSQL raises
-        rather than removing rows whose embeddings cost hours of
-        inference -- exactly what RFC-027 section 6.3 says must never
-        happen quietly.
+        Sem cascata, e a recusa é a funcionalidade. `images.device_id` é uma
+        chave estrangeira simples, sem `ON DELETE`, então o PostgreSQL
+        levanta erro em vez de remover linhas cujos embeddings custaram
+        horas de inferência -- exatamente o que o RFC-027 §6.3 diz que nunca
+        pode acontecer em silêncio.
         """
         model = self._session.get(DeviceModel, device_id.value)
         if model is None:

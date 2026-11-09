@@ -1,4 +1,4 @@
-"""In-memory device repository for development and dependency wiring (RFC-027)."""
+"""Repositório de dispositivos em memória, para desenvolvimento e ligação (RFC-027)."""
 
 from __future__ import annotations
 
@@ -12,34 +12,34 @@ from app.domain.value_objects.device_id import DeviceId, VolumeIdentity
 
 
 class InMemoryDeviceRepository(DeviceRepository):
-    """Repository implementation backed by an in-memory dict.
+    """Implementação do repositório sobre um dict em memória.
 
-    Held to the same contract test as `PostgresDeviceRepository`, which is
-    the only reason it is worth having: a double that accepted a second
-    row for the same volume, or that matched identities loosely, would
-    turn every green test above it into evidence about the double.
+    Submetida ao mesmo teste de contrato que `PostgresDeviceRepository`, que é
+    a única razão de valer a pena tê-la: um dublê que aceitasse uma segunda
+    linha para o mesmo volume, ou que casasse identidades de forma frouxa,
+    transformaria cada teste verde acima dele em evidência sobre o dublê.
     """
 
     def __init__(self) -> None:
         self._devices: dict[uuid.UUID, Device] = {}
 
     def save(self, device: Device) -> None:
-        """Insert or update the device, keyed by id.
+        """Insere ou atualiza o dispositivo, com o id como chave.
 
-        A dict assignment is nearly an upsert for free, which happens to
-        be the contract. What it must not become is an append: `DeviceId`
-        is derived from the volume identity, so saving the same disk twice
-        is the normal case -- every worker run does it -- and a second
-        entry would be a duplicate the database's `UNIQUE` constraint
-        would have refused.
+        Uma atribuição num dict é quase um upsert de graça, que por acaso é o
+        contrato. O que ela não pode virar é um acréscimo: `DeviceId` é
+        derivado da identidade do volume, então salvar o mesmo disco duas vezes
+        é o caso normal -- toda execução do worker faz isso --, e uma segunda
+        entrada seria uma duplicata que a restrição `UNIQUE` do banco teria
+        recusado.
 
-        `first_seen_at` is carried over from the existing row rather than
-        overwritten, matching `PostgresDeviceRepository`. It is the one
-        field that answers a question about the past, and a plain
-        assignment here would let this double be quietly more forgetful
-        than the database it stands in for -- turning "known since March"
-        into "known since just now" on every worker run, in the
-        implementation that most tests actually exercise.
+        `first_seen_at` é trazido da linha existente em vez de sobrescrito, como
+        em `PostgresDeviceRepository`. É o único campo que responde a uma
+        pergunta sobre o passado, e uma atribuição simples aqui deixaria este
+        dublê silenciosamente mais esquecido que o banco que ele substitui --
+        transformando "conhecido desde março" em "conhecido desde agora" a cada
+        execução do worker, na implementação que a maioria dos testes de fato
+        exercita.
         """
         existing = self._devices.get(device.id.value)
         if existing is not None:
@@ -49,11 +49,11 @@ class InMemoryDeviceRepository(DeviceRepository):
     def record_scan(
         self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
     ) -> None:
-        """Replace the two scan fields of the stored device, and keep the rest.
+        """Substitui os dois campos de scan do dispositivo guardado, e mantém o resto.
 
-        From the device as it is stored *now*, not from a copy the caller
-        holds, matching the `UPDATE` of `PostgresDeviceRepository`: a
-        label renamed after the job started stays renamed.
+        A partir do dispositivo como está guardado *agora*, não de uma cópia que
+        quem chama tem em mãos, como o `UPDATE` de `PostgresDeviceRepository`:
+        um rótulo renomeado depois de o job começar continua renomeado.
         """
         existing = self._devices.get(device_id.value)
         if existing is None:
@@ -66,12 +66,11 @@ class InMemoryDeviceRepository(DeviceRepository):
         return self._devices.get(device_id.value)
 
     def get_by_volume_identity(self, identity: VolumeIdentity) -> Device | None:
-        """Find the device for a volume identity, matching both of its halves.
+        """Acha o dispositivo de uma identidade de volume, casando as duas metades.
 
-        `VolumeIdentity` is a frozen dataclass, so `==` already compares
-        the opaque string *and* the platform kind. Comparing only the
-        string would merge two volumes that two platforms happened to
-        name alike.
+        `VolumeIdentity` é uma dataclass congelada, então `==` já compara a
+        string opaca *e* o tipo de plataforma. Comparar só a string fundiria
+        dois volumes que duas plataformas por acaso nomeassem igual.
         """
         for device in self._devices.values():
             if device.volume_identity == identity:
@@ -82,11 +81,11 @@ class InMemoryDeviceRepository(DeviceRepository):
         return list(self._devices.values())
 
     def delete(self, device_id: DeviceId) -> None:
-        """Forget the device, and nothing else.
+        """Esquece o dispositivo, e nada mais.
 
-        Deliberately does not touch any image: this repository does not
-        know about images, and the port forbids cascading anyway, because
-        an image row is an embedding that cost real inference time
-        (RFC-027 section 6.3).
+        Deliberadamente não toca em imagem nenhuma: este repositório não sabe
+        de imagens, e a porta proíbe a cascata de qualquer forma, porque uma
+        linha de imagem é um embedding que custou tempo real de inferência
+        (RFC-027 §6.3).
         """
         self._devices.pop(device_id.value, None)

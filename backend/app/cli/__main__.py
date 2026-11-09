@@ -1,17 +1,16 @@
-"""Unified command-line entry point over SolidVision's use cases.
+"""Ponto de entrada único de linha de comando sobre os casos de uso do SolidVision.
 
     python -m app.cli index --root PATH [--label LABEL]
     python -m app.cli search "query text" [--limit N] [--near LAT LON --radius M]
     python -m app.cli search-image PATH/TO/PICTURE.jpg [--limit N]
                                    [--near LAT LON --radius M]
 
-A thin dispatcher, not a new abstraction: each subcommand parses its own
-arguments and calls straight into the composition an existing worker module
-already owns -- `indexing_worker.run()` for indexing,
-`app.cli.search.run()` for search, `app.cli.search.run_image()` for search
-by picture. No business logic lives here: `--near` and `--radius` are
-parsed into numbers and handed on, and `app.cli.search` decides what makes a
-circle.
+Um despachante fino, e não uma nova abstração: cada subcomando lê os próprios
+argumentos e chama direto a composição que um módulo de worker existente já
+detém -- `indexing_worker.run()` para a indexação, `app.cli.search.run()`
+para a busca, `app.cli.search.run_image()` para a busca por imagem. Nenhuma
+regra de negócio mora aqui: `--near` e `--radius` são lidos como números e
+repassados, e `app.cli.search` decide o que faz um círculo.
 """
 
 from __future__ import annotations
@@ -21,14 +20,14 @@ from pathlib import Path
 
 
 def _add_circle_arguments(parser: argparse.ArgumentParser) -> None:
-    """`--near LAT LON --radius METRES`: only photos taken inside the circle.
+    """`--near LAT LON --radius METRES`: só as fotos tiradas dentro do círculo.
 
-    The API's `near_lat`/`near_lon`/`radius_m` (RFC-032 section 6). The
-    centre is one option taking two numbers, so latitude and longitude cannot
-    be given apart; the radius is a second option with no default, because
-    completing a missing radius would invent the one quantity the drone's
-    offset makes critical. argparse reads `-26.3` as a number here, not as
-    an option, since no option of this parser looks like a negative number.
+    Os `near_lat`/`near_lon`/`radius_m` da API (RFC-032 §6). O centro é uma
+    opção que recebe dois números, então latitude e longitude não podem ser
+    dadas separadas; o raio é uma segunda opção sem padrão, porque completar um
+    raio ausente inventaria justamente a grandeza que o deslocamento do drone
+    torna crítica. O argparse lê `-26.3` aqui como número, e não como opção,
+    já que nenhuma opção deste parser parece um número negativo.
     """
     parser.add_argument(
         "--near",
@@ -122,11 +121,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Dispatch, and turn a model that cannot be loaded into one line.
+    """Despacha, e transforma um modelo que não pode ser carregado numa linha.
 
-    The line names the model, the file and what to do (RFC-035 section 6.5);
-    a traceback would only bury it. The exit code is 78, which says that
-    running the command again will not help (RFC-036 section 6.1).
+    A linha nomeia o modelo, o arquivo e o que fazer (RFC-035 §6.5); um
+    traceback só a enterraria. O código de saída é 78, que diz que rodar o
+    comando de novo não vai ajudar (RFC-036 §6.1).
     """
     from app.infrastructure.ai.model_runtime import ModelUnavailableError
     from app.infrastructure.process.supervision import refuse_to_start

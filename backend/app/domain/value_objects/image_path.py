@@ -1,4 +1,4 @@
-"""Image path value object for the domain layer."""
+"""Value object do caminho de imagem para a camada de domínio."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.domain.exceptions import InvalidImagePathError
 
 @dataclass(frozen=True)
 class ImagePath:
-    """A filesystem path represented as a value object."""
+    """Um caminho do sistema de arquivos representado como value object."""
 
     value: Path
 

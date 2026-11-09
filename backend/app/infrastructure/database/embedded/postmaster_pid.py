@@ -1,15 +1,15 @@
-"""`postmaster.pid`, read as the server wrote it (RFC-033 sections 8.2 and 9).
+"""`postmaster.pid`, lido como o servidor o escreveu (RFC-033 §8.2 e §9).
 
-The server's own lock on the data directory, and the one source of truth
-about a running cluster: line 1 is the PID, line 2 the data directory, line 4
-the port the server is *using* -- `solidvision.conf` only says which one the
-adapter *asked for* -- and line 8 the state. A state file of the adapter's own
-would be a third source able to disagree with both.
+A trava do próprio servidor sobre o diretório de dados, e a única fonte de
+verdade sobre um cluster rodando: a linha 1 é o PID, a linha 2 o diretório de
+dados, a linha 4 a porta que o servidor está *usando* -- o `solidvision.conf`
+só diz qual o adaptador *pediu* -- e a linha 8 o estado. Um arquivo de estado
+do próprio adaptador seria uma terceira fonte, capaz de discordar das duas.
 
-Read-only. The adapter never deletes this file (section 9.2): with a server
-alive, deleting it lets a second postmaster start on the same `data\\`, and
-two postmasters in one directory corrupt the cluster. Whether a lock left
-behind is still valid is the server's decision, not this module's.
+Somente leitura. O adaptador nunca apaga este arquivo (§9.2): com um servidor
+vivo, apagá-lo deixa um segundo postmaster subir no mesmo `data\\`, e dois
+postmasters num diretório corrompem o cluster. Se uma trava deixada para trás
+ainda vale é decisão do servidor, não deste módulo.
 """
 
 from __future__ import annotations
@@ -27,24 +27,24 @@ STATUS_STANDBY = "standby"
 
 @dataclass(frozen=True)
 class PostmasterPid:
-    """The lines of `postmaster.pid` the adapter acts on."""
+    """As linhas do `postmaster.pid` com que o adaptador age."""
 
     pid: int
     data_directory: str
     port: int | None
     status: str | None
-    """`starting`, `ready`, `stopping` or `standby`; `None` until line 8 exists.
+    """`starting`, `ready`, `stopping` ou `standby`; `None` até a linha 8 existir.
 
-    The server writes the file in stages while it starts, so a file read in
-    the first milliseconds can have a PID and nothing after it.
+    O servidor escreve o arquivo em etapas enquanto sobe, então um arquivo lido
+    nos primeiros milissegundos pode ter um PID e nada depois dele.
     """
 
     def points_to(self, data: Path) -> bool:
-        """Whether line 2 names this data directory (section 8.4).
+        """Se a linha 2 nomeia este diretório de dados (§8.4).
 
-        The server canonicalizes the path with forward slashes, and the case
-        may differ from the one the adapter passed; `samefile` is the last
-        word when both spellings exist.
+        O servidor canonicaliza o caminho com barras normais, e a caixa pode
+        diferir da que o adaptador passou; o `samefile` dá a palavra final
+        quando as duas grafias existem.
         """
         if not self.data_directory:
             return False
@@ -59,13 +59,13 @@ class PostmasterPid:
 
 
 def read_postmaster_pid(path: Path) -> PostmasterPid | None:
-    """Parse `postmaster.pid`, or `None` when it is absent or has no PID yet."""
+    """Lê o `postmaster.pid`, ou `None` quando ele não existe ou ainda não tem PID."""
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
         return None
-    # The server writes paths in the ANSI code page, like every narrow-`main`
-    # program on Windows (section 10).
+    # O servidor escreve caminhos na code page ANSI, como todo programa de
+    # `main` estreito no Windows (§10).
     encoding = "mbcs" if sys.platform == "win32" else "utf-8"
     lines = [line.rstrip("\r") for line in raw.decode(encoding, "replace").split("\n")]
     if not lines or not lines[0].strip().isdigit():

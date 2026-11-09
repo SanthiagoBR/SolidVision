@@ -1,26 +1,26 @@
-"""Where indexed images are right now, asked once per disk (RFC-030 section 4).
+"""Onde as imagens indexadas estão agora, perguntado uma vez por disco (RFC-030 §4).
 
-Two routes need the same answer -- `GET /images/search` for every hit on a
-page, `GET /images/{id}` for one image -- and `POST /images/{id}/reveal`
-needs it before it can open anything. None of them may compute it
-themselves:
+Duas rotas precisam da mesma resposta -- `GET /images/search` para cada
+resultado de uma página, `GET /images/{id}` para uma imagem -- e
+`POST /images/{id}/reveal` precisa dela antes de poder abrir qualquer coisa.
+Nenhuma delas pode calculá-la sozinha:
 
-* not the route, because "is this disk plugged in, and where" is exactly
-  the kind of rule `AI_Context.md` keeps out of Presentation;
-* not `SearchImagesUseCase`, because resolving a location is not searching.
-  It decorates a result after the fact, and putting it inside search would
-  leave the other two use cases either duplicating it or importing a use
-  case to borrow a private method.
+* não a rota, porque "este disco está plugado, e onde" é exatamente o tipo de
+  regra que o `AI_Context.md` mantém fora da Presentation;
+* não o `SearchImagesUseCase`, porque resolver um local não é buscar. Isso
+  decora um resultado depois do fato, e pô-lo dentro da busca deixaria os
+  outros dois casos de uso ou duplicando-o ou importando um caso de uso para
+  pegar emprestado um método privado.
 
-So it is its own small use case, composed from the same two ports
-`CreateIndexingJobUseCase` already combines: the `DeviceRepository` that
-knows each disk's name, and the `DeviceLocator` that knows where it is
-mounted this instant.
+Então é um caso de uso próprio, pequeno, composto pelas mesmas duas portas
+que o `CreateIndexingJobUseCase` já combina: o `DeviceRepository`, que sabe o
+nome de cada disco, e o `DeviceLocator`, que sabe onde ele está montado neste
+instante.
 
-**Nothing here is persisted and nothing here is cached.** `absolute_path`
-lives on the returned `Image` for the length of one request and is never
-written (RFC-027 section 7) -- the answer is wrong from the moment the user
-pulls the cable, and nothing tells this process when that happens.
+**Nada aqui é persistido e nada aqui vai para cache.** O `absolute_path` vive
+no `Image` devolvido pela duração de um pedido e nunca é escrito (RFC-027 §7)
+-- a resposta está errada a partir do momento em que o usuário puxa o cabo, e
+nada avisa este processo quando isso acontece.
 """
 
 from __future__ import annotations
@@ -40,32 +40,32 @@ from app.domain.value_objects.image_path import ImagePath
 
 @dataclass(frozen=True)
 class LocatedImage:
-    """An image, the disk it is on, and whether that disk is here right now.
+    """Uma imagem, o disco em que ela está, e se esse disco está aqui agora.
 
-    `connected` is derived from `image.absolute_path` rather than stored
-    beside it, so the two cannot disagree: an image with a path on an
-    unplugged disk, or a plugged-in disk whose image has no path, are not
-    states this type can represent.
+    `connected` é derivado de `image.absolute_path`, em vez de guardado ao
+    lado dele, para que os dois não possam discordar: uma imagem com caminho
+    num disco desplugado, ou um disco plugado cuja imagem não tem caminho,
+    não são estados que este tipo consegue representar.
     """
 
     image: Image
-    """The image with `absolute_path` filled in when its device is mounted."""
+    """A imagem, com `absolute_path` preenchido quando o dispositivo está montado."""
 
     device: Device
 
     @property
     def connected(self) -> bool:
-        """Whether the image's disk was mounted when the location was resolved.
+        """Se o disco da imagem estava montado quando o local foi resolvido.
 
-        `False` is an answer, not a failure: "it is on HD3, in 2018/junho"
-        is the result the product exists to give for a disk in a drawer
-        (RFC-030 section 4.1).
+        `False` é uma resposta, não uma falha: "está no HD3, em 2018/junho" é
+        o resultado que o produto existe para dar sobre um disco na gaveta
+        (RFC-030 §4.1).
         """
         return self.image.absolute_path is not None
 
 
 class ResolveImageLocationUseCase:
-    """Attach to each image its device, and its absolute path when mounted."""
+    """Junta a cada imagem o seu dispositivo, e o caminho absoluto se montado."""
 
     def __init__(
         self, device_repository: DeviceRepository, device_locator: DeviceLocator
@@ -74,25 +74,25 @@ class ResolveImageLocationUseCase:
         self._locator = device_locator
 
     def execute(self, images: Sequence[Image]) -> list[LocatedImage]:
-        """Return one `LocatedImage` per image, in the order given.
+        """Devolve um `LocatedImage` por imagem, na ordem dada.
 
-        **The operating system is asked once per distinct device, not once
-        per image.** `MountedDeviceLocator.mount_point()` enumerates every
-        mounted volume on each call and refuses to cache, on purpose
-        (RFC-027 section 7), so a page of ten hits spread over two disks
-        must cost two enumerations rather than ten. The grouping lives
-        inside this one call and dies with it: remembering an answer
-        across calls would be precisely the cache the port forbids.
+        **O sistema operacional é consultado uma vez por dispositivo
+        distinto, não uma vez por imagem.** `MountedDeviceLocator.mount_point()`
+        enumera todo volume montado a cada chamada e se recusa, de propósito, a
+        guardar cache (RFC-027 §7), então uma página de dez resultados
+        espalhados por dois discos tem de custar duas enumerações, e não dez. O
+        agrupamento vive dentro desta chamada e morre com ela: lembrar uma
+        resposta entre chamadas seria exatamente o cache que a porta proíbe.
 
-        The order and the length of `images` are kept exactly, so a caller
-        holding a ranked list can pair the two back up without matching
-        ids -- the ranking is the repository's and nothing here may
-        reorder it.
+        A ordem e o tamanho de `images` são mantidos exatamente, para que um
+        chamador com uma lista ranqueada possa emparelhar as duas de volta sem
+        casar ids -- o ranking é do repositório, e nada aqui pode reordená-lo.
 
-        An image whose device has no row is a broken invariant rather than
-        a request to refuse: `images.device_id` is a foreign key, so
-        PostgreSQL cannot produce one. It raises `LookupError`, which no
-        error handler dresses up as a 4xx, because a bug must stay a 500.
+        Uma imagem cujo dispositivo não tem linha é uma invariante quebrada,
+        e não um pedido a recusar: `images.device_id` é uma chave estrangeira,
+        então o PostgreSQL não consegue produzir uma. Levanta `LookupError`,
+        que nenhum handler de erro traduz para um 4xx, porque um bug tem de
+        continuar sendo um 500.
         """
         located_devices: dict[DeviceId, tuple[Device, Path | None]] = {}
         for device_id in dict.fromkeys(image.device_id for image in images):
@@ -114,18 +114,18 @@ class ResolveImageLocationUseCase:
         return located
 
     def execute_one(self, image: Image) -> LocatedImage:
-        """Locate a single image; the one-element case of `execute()`."""
+        """Localiza uma única imagem; o caso de um elemento de `execute()`."""
         (located,) = self.execute([image])
         return located
 
 
 def _with_location(image: Image, mount_point: Path | None) -> Image:
-    """Return `image` with its absolute path for `mount_point`, or with none.
+    """Devolve `image` com o caminho absoluto para `mount_point`, ou sem nenhum.
 
-    `None` is written explicitly rather than left as whatever the entity
-    carried. Rows come back from the repository with no path, but an
-    `Image` built by the indexing worker has one, and a resolution that
-    kept a stale path for an unplugged disk would report it as connected.
+    O `None` é escrito de forma explícita, em vez de deixar o que a entidade
+    trazia. As linhas voltam do repositório sem caminho, mas um `Image`
+    construído pelo worker de indexação tem um, e uma resolução que mantivesse
+    um caminho velho para um disco desplugado o relataria como conectado.
     """
     absolute_path = (
         ImagePath(mount_point / str(image.relative_path))

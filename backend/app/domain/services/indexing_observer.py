@@ -1,21 +1,19 @@
-"""The seam through which a long indexing run reports in, and is stopped.
+"""A junção pela qual uma indexação longa dá notícias, e é parada.
 
-`IndexOrUpdateImagesUseCase` had no extension point at all before
-RFC-029: it took an iterable, ran until the iterable was exhausted, and
-returned counters. Both halves of RFC-029 -- progress while running
-(section 7.3) and cooperative cancellation (section 8) -- need one, and
-this is it.
+`IndexOrUpdateImagesUseCase` não tinha ponto de extensão nenhum antes do
+RFC-029: recebia um iterável, rodava até o iterável se esgotar e devolvia
+contadores. As duas metades do RFC-029 -- o progresso durante a execução
+(§7.3) e o cancelamento cooperativo (§8) -- precisam de um, e é este.
 
-**The port says nothing about jobs.** No heartbeat, no database, no
-`cancel_requested`, no id. That is invariant 3 of the build prompt in
-port form: the incremental decision must not learn that jobs exist, or
-"the CLI reindexes things the UI skips" becomes possible. The
-Infrastructure adapter is where a `should_stop()` becomes a read of a
-flag and a `batch_persisted()` becomes an `UPDATE` at most every N
-seconds.
+**A porta não diz nada sobre jobs.** Nenhum heartbeat, nenhum banco, nenhum
+`cancel_requested`, nenhum id. É a invariante 3 do build prompt em forma de
+porta: a decisão incremental não pode ficar sabendo que jobs existem, ou "a
+CLI reindexa coisas que a interface pula" passa a ser possível. O adaptador
+da Infrastructure é onde um `should_stop()` vira a leitura de uma flag e um
+`batch_persisted()` vira um `UPDATE` no máximo a cada N segundos.
 
-The alternative -- handing `IndexingJobRepository` to the use case -- was
-rejected for exactly that reason.
+A alternativa -- entregar `IndexingJobRepository` ao caso de uso -- foi
+recusada exatamente por essa razão.
 """
 
 from __future__ import annotations
@@ -28,59 +26,58 @@ from app.domain.value_objects.root_listing import RootListing
 
 
 class IndexingObserver(ABC):
-    """Watches an indexing run and may ask it to stop.
+    """Acompanha uma indexação e pode lhe pedir para parar.
 
-    Implementations must not raise. An exception from any method here
-    surfaces inside the pipeline, where it would abort a run for a reason
-    that has nothing to do with the images -- and when raised during the
-    lazy consumption of the discovery generator it closes that generator
-    and truncates the scan in silence, which is the failure
-    `discovered_candidates()` already documents.
+    As implementações não podem levantar. Uma exceção de qualquer método
+    daqui aparece dentro do pipeline, onde abortaria a execução por uma razão
+    que nada tem a ver com as imagens -- e, levantada durante o consumo
+    preguiçoso do gerador da descoberta, ela fecha esse gerador e trunca o
+    scan em silêncio, que é a falha que `discovered_candidates()` já
+    documenta.
     """
 
     @abstractmethod
     def discovered(self, files_seen: int, complete: bool) -> None:
-        """Report how many files the scan has produced so far.
+        """Informa quantos arquivos o scan produziu até agora.
 
-        Called from inside the discovery stream, which is why it exists
-        separately from the two callbacks below: a scan of a cold
-        mechanical disk, or a resume that skips everything before its
-        checkpoint, can run for minutes without completing a single
-        window, and a run that only reported per batch would look dead
-        for that whole time (RFC-029 section 9.1).
+        Chamado de dentro do fluxo da descoberta, e é por isso que existe
+        separado dos dois callbacks abaixo: um scan de um disco mecânico a
+        frio, ou uma retomada que pula tudo antes do checkpoint, pode rodar
+        por minutos sem completar uma única janela, e uma execução que só
+        informasse por lote pareceria morta durante todo esse tempo (RFC-029
+        §9.1).
 
-        `complete` is true exactly once, when the scan is exhausted. Until
-        then `files_seen` is a running count and not a total -- there is
-        no total, because discovery is a generator (RFC-021) and counting
-        ahead would mean reading the disk twice.
+        `complete` é verdadeiro exatamente uma vez, quando o scan se esgota.
+        Até lá, `files_seen` é uma contagem corrente, e não um total -- não
+        há total, porque a descoberta é um gerador (RFC-021), e contar antes
+        seria ler o disco duas vezes.
         """
 
     def listed(self, listing: RootListing) -> None:
-        """Report what the listing of the whole root holds.
+        """Informa o que a listagem da raiz inteira contém.
 
-        Called once, by a scan of a whole root -- no scopes -- as soon as
-        the listing is done and before the first file comes out
-        (RFC-039 section 4.1). It is not `discovered()`: that one counts
-        what the scan has *yielded so far*, and only knows the total at
-        the very end of the run, while this one is the listing the scan
-        already holds in memory, known before any file is read. On a
-        resume it includes the files the checkpoint skips, because the
-        listing is always of the whole tree.
+        Chamado uma vez, por um scan de uma raiz inteira -- sem escopos --
+        assim que a listagem termina e antes de o primeiro arquivo sair
+        (RFC-039 §4.1). Não é `discovered()`: aquele conta o que o scan
+        *produziu até agora*, e só sabe o total no fim da execução, enquanto
+        este é a listagem que o scan já tem em memória, conhecida antes de
+        qualquer arquivo ser lido. Numa retomada, inclui os arquivos que o
+        checkpoint pula, porque a listagem é sempre da árvore inteira.
 
-        Since RFC-046 it carries the listing itself, and not only its
-        size: the files, relative to the root, and the folders that could
-        not be read (`RootListing`). The size is the denominator of "% indexed";
-        the files are what the sweep at the end of the job compares the
-        device's rows with, to mark the ones that are no longer on the disk
-        (RFC-046 section 5.3). Only files count: the walk tells a folder
-        named `x.jpg` from a file without a `stat` (section 5.2).
+        Desde o RFC-046, traz a própria listagem, e não só o tamanho dela: os
+        arquivos, relativos à raiz, e as pastas que não puderam ser lidas
+        (`RootListing`). O tamanho é o denominador do "% indexado"; os
+        arquivos são aquilo com que a varredura ao fim do job compara as
+        linhas do dispositivo, para marcar as que não estão mais no disco
+        (RFC-046 §5.3). Só arquivos contam: o percurso distingue uma pasta
+        chamada `x.jpg` de um arquivo sem um `stat` (§5.2).
 
-        A scan of some folders never calls it: the files of two folders
-        are not the disk.
+        Um scan de algumas pastas nunca o chama: os arquivos de duas pastas
+        não são o disco.
 
-        **Not abstract, and empty here**, so that the null observer and
-        every test double written before RFC-039 keep working unchanged.
-        Only the observer of a job has a use for it.
+        **Não abstrato, e vazio aqui**, para que o observador nulo e todo
+        dublê de teste escrito antes do RFC-039 continuem funcionando sem
+        mudança. Só o observador de um job tem uso para ele.
         """
         return None
 
@@ -88,49 +85,49 @@ class IndexingObserver(ABC):
     def window_decided(
         self, progress: IndexingProgress, durable_through: ImagePath | None
     ) -> None:
-        """Report the end of one metadata-prefetch window.
+        """Informa o fim de uma janela de prefetch de metadados.
 
-        The counterpart of `batch_persisted` for the case that produces no
-        batches at all: a re-scan of an already-indexed disk decides whole
-        windows as `SKIP_UNCHANGED` and never flushes anything. That is
-        the most common shape of run there is, and a run that only
-        reported on flush would be indistinguishable from a dead one.
+        A contraparte de `batch_persisted` para o caso que não produz lote
+        nenhum: um novo scan de um disco já indexado decide janelas inteiras
+        como `SKIP_UNCHANGED` e nunca descarrega nada. É a forma de execução
+        mais comum que existe, e uma execução que só informasse na descarga
+        não se distinguiria de uma morta.
         """
 
     @abstractmethod
     def batch_persisted(
         self, progress: IndexingProgress, durable_through: ImagePath | None
     ) -> None:
-        """Report that a batch's rows are committed.
+        """Informa que as linhas de um lote foram gravadas com commit.
 
-        `durable_through` is the checkpoint, and it is the file up to
-        which *everything* is durable -- not the last file written. It can
-        move backwards relative to the newest path processed, and it can
-        be `None` while the pending buffer holds the oldest undecided
-        file. Both are correct: a checkpoint that ran ahead of the buffer
-        would silently drop those images on a resume.
+        `durable_through` é o checkpoint, e é o arquivo até o qual *tudo*
+        está durável -- não o último arquivo escrito. Ele pode andar para
+        trás em relação ao caminho processado mais novo, e pode ser `None`
+        enquanto o buffer pendente guarda o arquivo ainda não decidido mais
+        antigo. As duas coisas estão certas: um checkpoint que passasse à
+        frente do buffer descartaria essas imagens em silêncio numa
+        retomada.
         """
 
     @abstractmethod
     def should_stop(self) -> bool:
-        """Whether the run should wind up at the next safe point.
+        """Se a execução deve se encerrar no próximo ponto seguro.
 
-        Consulted between batches and between windows, never inside a
-        forward pass. A run that stops flushes what it has already
-        inferred and returns normally -- stopping is not a failure, and
-        discarding inference that has already been paid for buys nothing
-        (RFC-029 section 8).
+        Consultado entre lotes e entre janelas, nunca dentro de uma passada
+        do modelo. Uma execução que para descarrega o que já inferiu e volta
+        normalmente -- parar não é falha, e descartar inferência que já foi
+        paga não compra nada (RFC-029 §8).
         """
 
 
 class NullIndexingObserver(IndexingObserver):
-    """The observer for every caller that does not want one.
+    """O observador de todo chamador que não quer um.
 
-    The default argument of `IndexOrUpdateImagesUseCase.execute()`, which
-    is what lets RFC-024's entire existing test suite keep passing
-    untouched: a run with nobody watching behaves exactly as it did
-    before RFC-029, and `should_stop()` answering `False` for ever is the
-    old unconditional loop.
+    O argumento padrão de `IndexOrUpdateImagesUseCase.execute()`, que é o que
+    deixa toda a suíte de testes existente do RFC-024 continuar passando sem
+    mudança: uma execução sem ninguém olhando se comporta exatamente como
+    antes do RFC-029, e `should_stop()` respondendo `False` para sempre é o
+    antigo laço incondicional.
     """
 
     def discovered(self, files_seen: int, complete: bool) -> None:

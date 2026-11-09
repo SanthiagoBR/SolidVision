@@ -1,20 +1,18 @@
-"""Giving a disk the name its owner calls it (RFC-031 section 7).
+"""Dar a um disco o nome pelo qual o dono o chama (RFC-031 §7).
 
-The only editable thing about a `Device`, and the list of what is not
-editable is the interesting half. Everything else is derived (`id`),
-observed (`filesystem_label`, `total_bytes`, `last_seen_at`) or the
-result of a scan (`last_scan_at`, `last_scan_file_count`). Accepting an
-edit to any of them would let a client lie about the world -- and
-`last_scan_file_count` in particular is the declared denominator of the
-"% indexed" figure, so an editable one is an invented number wearing the
-clothes of a measurement (RFC-031 section 4.2).
+A única coisa editável de um `Device`, e a lista do que não é editável é a
+metade interessante. Todo o resto é derivado (`id`), observado
+(`filesystem_label`, `total_bytes`, `last_seen_at`) ou resultado de um scan
+(`last_scan_at`, `last_scan_file_count`). Aceitar edição em qualquer um deles
+deixaria um cliente mentir sobre o mundo -- e o `last_scan_file_count`, em
+particular, é o denominador declarado do número de "% indexado", então um
+editável seria um número inventado vestido de medição (RFC-031 §4.2).
 
-**The rename never requires the disk.** It is a fact about our table,
-not about the volume, and RFC-027 section 2.3 is explicit that an
-unplugged disk is still a device the system knows perfectly well. The
-describer below is consulted only to *report* whether the disk happens to
-be here, and answering "no" is as successful an outcome as answering
-"yes".
+**Renomear nunca exige o disco.** É um fato sobre a nossa tabela, não sobre o
+volume, e o RFC-027 §2.3 é explícito: um disco desplugado continua sendo um
+dispositivo que o sistema conhece perfeitamente. O describer, abaixo, só é
+consultado para *relatar* se o disco por acaso está aqui, e responder "não" é
+um resultado tão bem-sucedido quanto responder "sim".
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ from app.domain.value_objects.device_id import DeviceId
 
 
 class RenameDeviceUseCase:
-    """Change a device's user-facing label, and nothing else about it."""
+    """Muda o rótulo de um dispositivo visto pelo usuário, e nada mais nele."""
 
     def __init__(
         self,
@@ -42,25 +40,25 @@ class RenameDeviceUseCase:
         self._describer = describer
 
     def execute(self, device_id: DeviceId, label: str) -> DeviceSummary:
-        """Rename the device, or raise `DeviceNotFoundError` for an unknown id.
+        """Renomeia o dispositivo; um id desconhecido levanta `DeviceNotFoundError`.
 
-        Reads the row and writes a copy of it with one field replaced,
-        rather than issuing a targeted update. `Device` is frozen, so
-        `dataclasses.replace()` *is* the edit; and because it starts from
-        the stored row, there is no way for this to carry a stale value
-        of anything it did not mean to touch -- which is the failure mode
-        a hand-built `Device(...)` here would have.
+        Lê a linha e escreve uma cópia dela com um campo trocado, em vez de
+        emitir um update dirigido. `Device` é congelado, então
+        `dataclasses.replace()` *é* a edição; e, como parte da linha guardada,
+        não há como isto carregar um valor velho de algo que não pretendia
+        tocar -- que é o modo de falha que um `Device(...)` montado à mão aqui
+        teria.
 
-        `save()` is an upsert keyed on the derived id (RFC-027), so this
-        updates the one row rather than creating a second.
+        `save()` é um upsert pela chave do id derivado (RFC-027), então isto
+        atualiza a única linha, em vez de criar uma segunda.
 
-        Returns a full summary rather than the bare entity so the route
-        can answer in the same shape `GET /devices` uses, and a client
-        can drop the response straight into the row it just renamed. The
-        alternative -- publishing a device body with `connected` and
-        `indexed_images` hardcoded because this route did not look --
-        would be a response that is *wrong* rather than merely partial,
-        and a client that trusted it would blank out a connected disk.
+        Devolve um resumo completo, e não a entidade crua, para que a rota
+        responda no mesmo formato que `GET /devices` usa, e um cliente possa
+        pôr a resposta direto na linha que acabou de renomear. A alternativa
+        -- publicar um corpo de dispositivo com `connected` e `indexed_images`
+        fixos no código porque esta rota não olhou -- seria uma resposta
+        *errada*, e não só parcial, e um cliente que confiasse nela apagaria
+        um disco conectado.
         """
         device = self._devices.get(device_id)
         if device is None:

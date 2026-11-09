@@ -1,4 +1,4 @@
-"""Image-specific domain exceptions."""
+"""Exceções de domínio próprias das imagens."""
 
 from app.domain.exceptions.domain_error import (
     ConflictError,
@@ -8,15 +8,15 @@ from app.domain.exceptions.domain_error import (
 
 
 class ImageNotFoundError(NotFoundError):
-    """Raised when an image cannot be found.
+    """Levantada quando uma imagem não é encontrada.
 
-    Re-based from `DomainError` onto `NotFoundError` by RFC-030, which
-    gave the first route able to raise it: `GET /api/v1/images/{id}` with
-    an id that names no row is a 404 (RFC-030 section 4.2), and a plain
-    `DomainError` answers 400. The same move RFC-029 made for
-    `DeviceNotFoundError`, and safe for the same reason -- until RFC-030
-    nothing in production raised this at all, so no client has ever been
-    told a status for it.
+    Mudada de base, de `DomainError` para `NotFoundError`, pelo RFC-030, que
+    trouxe a primeira rota capaz de levantá-la: `GET /api/v1/images/{id}` com
+    um id que não nomeia nenhuma linha é um 404 (RFC-030 §4.2), e uma
+    `DomainError` simples responde 400. O mesmo movimento que o RFC-029 fez
+    para `DeviceNotFoundError`, e seguro pela mesma razão -- até o RFC-030,
+    nada em produção a levantava, então nenhum cliente jamais recebeu um
+    status para ela.
     """
 
     def __init__(self, message: str = "Image not found.") -> None:
@@ -24,13 +24,13 @@ class ImageNotFoundError(NotFoundError):
 
 
 class ImageNotIndexedError(ConflictError):
-    """Raised when an image is known but has no embedding to compare (RFC-038).
+    """Levantada quando uma imagem conhecida não tem embedding a comparar (RFC-038).
 
-    *"Parecidas com esta"* ranks the index against the photo's stored vector,
-    and a row written without one -- by `IndexImageUseCase`, or before its
-    file was ever read -- has none. A conflict, not a 400: the identical
-    request succeeds once the photo is indexed, which is the doctrine of
-    `error_handlers.py`. And not a 404, because the photo exists.
+    *"Parecidas com esta"* ranqueia o índice contra o vetor guardado da foto,
+    e uma linha escrita sem ele -- pelo `IndexImageUseCase`, ou antes de o
+    arquivo ter sido lido -- não tem nenhum. Um conflito, e não um 400: o
+    pedido idêntico dá certo assim que a foto é indexada, que é a doutrina do
+    `error_handlers.py`. E não um 404, porque a foto existe.
     """
 
     def __init__(self, message: str = "This image has not been indexed yet.") -> None:
@@ -38,28 +38,28 @@ class ImageNotIndexedError(ConflictError):
 
 
 class ImageAlreadyExistsError(DomainError):
-    """Raised when an image already exists in a context where it should not."""
+    """Levantada quando uma imagem já existe num contexto em que não deveria."""
 
     def __init__(self, message: str = "Image already exists.") -> None:
         super().__init__(message)
 
 
 class InvalidImageIdentifierError(DomainError):
-    """Raised when an image identifier is invalid."""
+    """Levantada quando um identificador de imagem é inválido."""
 
     def __init__(self, message: str = "Image identifier must be a valid UUID") -> None:
         super().__init__(message)
 
 
 class InvalidImagePathError(DomainError):
-    """Raised when an image path is invalid."""
+    """Levantada quando um caminho de imagem é inválido."""
 
     def __init__(self, message: str = "Invalid image path.") -> None:
         super().__init__(message)
 
 
 class UnsupportedImageExtensionError(DomainError):
-    """Raised when an image extension is not supported."""
+    """Levantada quando uma extensão de imagem não é suportada."""
 
     def __init__(self, message: str = "Unsupported image extension.") -> None:
         super().__init__(message)

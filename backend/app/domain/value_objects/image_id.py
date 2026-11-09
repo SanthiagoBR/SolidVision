@@ -1,4 +1,4 @@
-"""Image identifier value object for the domain layer."""
+"""Value object do identificador de imagem para a camada de domínio."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.domain.exceptions import InvalidImageIdentifierError
 
 @dataclass(frozen=True)
 class ImageId:
-    """Strongly typed identifier for an image."""
+    """Identificador fortemente tipado de uma imagem."""
 
     value: UUID
 

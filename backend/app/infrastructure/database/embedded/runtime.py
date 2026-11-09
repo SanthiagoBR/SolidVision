@@ -1,10 +1,10 @@
-"""The vendored PostgreSQL binaries, and the environment they run in (RFC-033 5).
+"""Os binários vendorizados do PostgreSQL, e o ambiente em que rodam (RFC-033 §5).
 
-`scripts/vendor_postgres.py` materializes the runtime from a lockfile and
-writes a manifest beside it. This module is the other half: it finds the
-binaries by absolute path -- never through `PATH` -- checks that the manifest
-and the four files the cluster needs are there, and builds the environment
-every PostgreSQL child process gets.
+O `scripts/vendor_postgres.py` materializa o runtime a partir de um lockfile e
+escreve um manifesto ao lado. Este módulo é a outra metade: acha os binários
+por caminho absoluto -- nunca pelo `PATH` --, confere que o manifesto e os
+quatro arquivos de que o cluster precisa estão lá, e monta o ambiente que todo
+processo filho do PostgreSQL recebe.
 """
 
 from __future__ import annotations
@@ -27,10 +27,10 @@ REQUIRED_FILES = (
     "Library/bin/pg_ctl.exe",
     "Library/lib/vector.dll",
 )
-"""Checked for presence on every start; never hashed (RFC-033 section 5.2).
+"""Conferidos quanto à presença a cada subida; nunca têm hash (RFC-033 §5.2).
 
-Hashing 123 MB off a hard disk on every start would cost more than the start
-itself. The integrity of the files is the installer's responsibility.
+Calcular o hash de 123 MB de um HD a cada subida custaria mais que a própria
+subida. A integridade dos arquivos é responsabilidade do instalador.
 """
 
 MATERIALIZE_HINT = "Materialize it with `python scripts/vendor_postgres.py`."
@@ -38,7 +38,7 @@ MATERIALIZE_HINT = "Materialize it with `python scripts/vendor_postgres.py`."
 
 @dataclass(frozen=True)
 class RuntimeManifest:
-    """What `vendor_postgres.py` wrote: the versions the lockfile pins."""
+    """O que o `vendor_postgres.py` escreveu: as versões que o lockfile fixa."""
 
     postgresql: str
     pgvector: str
@@ -46,12 +46,12 @@ class RuntimeManifest:
 
     @property
     def major(self) -> int:
-        """`16` for `16.15`: the part that names the cluster directory (section 6)."""
+        """`16` para `16.15`: a parte que nomeia o diretório do cluster (§6)."""
         return int(self.postgresql.split(".", 1)[0])
 
 
 class PostgresRuntime:
-    """One materialized runtime directory, refused unless it is complete."""
+    """Um diretório de runtime materializado, recusado a menos que esteja completo."""
 
     def __init__(self, root: Path) -> None:
         if not root.is_absolute():
@@ -68,14 +68,13 @@ class PostgresRuntime:
 
     @property
     def command_root(self) -> Path:
-        """The root as the executables themselves can be told it (section 10).
+        """A raiz como os próprios executáveis conseguem recebê-la (§10).
 
-        `initdb` finds `postgres.exe` from its own path, which it reads in the
-        ANSI code page; under a directory outside it, it cannot find itself.
-        So the executables are started through the 8.3 short form of the
-        root whenever the long one does not fit -- which makes the directory
-        the installer chooses a restriction only on a volume without short
-        names.
+        O `initdb` acha o `postgres.exe` a partir do próprio caminho, que lê na
+        code page ANSI; sob um diretório fora dela, não acha a si mesmo. Então
+        os executáveis são iniciados pela forma curta 8.3 da raiz sempre que a
+        longa não cabe -- o que faz do diretório que o instalador escolhe uma
+        restrição só num volume sem nomes curtos.
         """
         if self._command_root is None:
             self._command_root = (
@@ -102,10 +101,10 @@ class PostgresRuntime:
         return self.bin_directory / "postgres.exe"
 
     def manifest(self) -> RuntimeManifest:
-        """Read the manifest and check the four files, or refuse the directory.
+        """Lê o manifesto e confere os quatro arquivos, ou recusa o diretório.
 
-        Cheap by design -- one small JSON file and four `stat`s -- because it
-        runs on every start.
+        Barato por desenho -- um JSON pequeno e quatro `stat`s --, porque roda
+        a cada subida.
         """
         path = self._root / MANIFEST_NAME
         try:
@@ -144,12 +143,12 @@ class PostgresRuntime:
         return manifest
 
     def contains(self, path: Path) -> bool:
-        """Whether an executable lives inside this runtime.
+        """Se um executável mora dentro deste runtime.
 
-        Compared after `realpath`, which turns an 8.3 short name back into the
-        long one and normalizes case, so the same file reached by two spellings
-        is one file. This is half of the adoption rule (section 8.4) and half
-        of the orphan rule (section 9.3).
+        Comparado depois do `realpath`, que devolve um nome curto 8.3 ao nome
+        longo e normaliza a caixa, de modo que o mesmo arquivo alcançado por
+        duas grafias é um arquivo só. É metade da regra de adoção (§8.4) e
+        metade da regra dos órfãos (§9.3).
         """
         root = os.path.normcase(os.path.realpath(self._root))
         candidate = os.path.normcase(os.path.realpath(path))
@@ -158,15 +157,15 @@ class PostgresRuntime:
     def child_environment(
         self, base: Mapping[str, str] | None = None
     ) -> dict[str, str]:
-        """The environment of `initdb`, `pg_ctl` and the server (section 5.3).
+        """O ambiente do `initdb`, do `pg_ctl` e do servidor (§5.3).
 
-        `PATH` is built, not inherited: the runtime root, `Library\\bin`,
-        `System32` and the Windows directory, in that order, and nothing from
-        the user's `PATH` -- a PostgreSQL 15 there must not lend the server a
-        `libssl`. Every `PG*` variable goes: `PGDATA`, `PGPORT` and
-        `PGOPTIONS` in the user's environment would change which cluster
-        `pg_ctl` controls, or the server's options. Everything else passes
-        through, because Winsock itself needs `SystemRoot`.
+        O `PATH` é montado, não herdado: a raiz do runtime, `Library\\bin`,
+        `System32` e o diretório do Windows, nessa ordem, e nada do `PATH` do
+        usuário -- um PostgreSQL 15 lá não pode emprestar ao servidor uma
+        `libssl`. Toda variável `PG*` sai: `PGDATA`, `PGPORT` e `PGOPTIONS` no
+        ambiente do usuário mudariam qual cluster o `pg_ctl` controla, ou as
+        opções do servidor. Todo o resto passa, porque o próprio Winsock
+        precisa de `SystemRoot`.
         """
         source = dict(os.environ if base is None else base)
         system_root = next(

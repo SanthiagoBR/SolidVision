@@ -1,29 +1,31 @@
-r"""The process that runs indexing jobs, and the reaper that cleans up after it.
+r"""O processo que roda os jobs de indexação, e o reaper que limpa depois dele.
 
     python -m app.infrastructure.workers.job_runner
 
-**A host process, not a container, and that is not provisional.** RFC-029
-section 6 proposed a second service in `docker-compose.yml`. It cannot
-work here and would be wrong if it could: there is no backend image;
-`WindowsVolumeIdentityProvider` refuses to construct off `win32`; and even
-with a bind mount a container sees a mounted path rather than the
-`\\?\Volume{GUID}\` that RFC-027's whole identity scheme rests on. The
-product ships as a native Windows process with an installer, with only
-PostgreSQL in a container -- so a Linux executor would also lose hot-plug
-detection, since bind mounts are fixed when the container starts.
+**Um processo do host, não um contêiner, e isso não é provisório.** O RFC-029
+§6 propôs um segundo serviço no `docker-compose.yml`. Isso não funciona aqui,
+e seria errado se funcionasse: não há imagem do backend;
+`WindowsVolumeIdentityProvider` se recusa a ser construído fora de `win32`; e,
+mesmo com um bind mount, um contêiner vê um caminho montado, e não o
+`\\?\Volume{GUID}\` sobre o qual repousa todo o esquema de identidade do
+RFC-027. O produto é entregue como um processo nativo do Windows com
+instalador, só com o PostgreSQL num contêiner -- então um executor Linux
+perderia também a detecção de hot-plug, já que os bind mounts são fixados
+quando o contêiner inicia.
 
-The consequence for this file: **nothing in it knows what platform it is
-on.** Claiming, the reaper, the checkpoint and the heartbeat are plain
-database work. The one Windows-shaped thing is behind `DeviceLocator`, so
-a future Linux deployment is a new volume adapter rather than a rewrite.
+A consequência para este arquivo: **nada nele sabe em que plataforma está.**
+A reivindicação, o reaper, o checkpoint e o heartbeat são trabalho comum de
+banco. A única coisa com cara de Windows fica atrás do `DeviceLocator`, então
+uma futura implantação em Linux é um novo adaptador de volume, e não uma
+reescrita.
 
-Three entry points, one code path:
+Três pontos de entrada, um caminho de código:
 
-* `JobRunner.run_forever()` -- the polling loop, which is the executor;
-* `JobRunner.run_claimed()` -- everything that happens to one claimed job;
-* `JobRunner.run_job()` -- claim *this* job and run it, which is what the
-  CLI uses so that `indexing_worker --root PATH` needs no second process
-  running (RFC-029 section 12).
+* `JobRunner.run_forever()` -- o laço de polling, que é o executor;
+* `JobRunner.run_claimed()` -- tudo o que acontece a um job reivindicado;
+* `JobRunner.run_job()` -- reivindica *este* job e o roda, que é o que a CLI
+  usa para que `indexing_worker --root PATH` não precise de um segundo
+  processo rodando (RFC-029 §12).
 """
 
 from __future__ import annotations
@@ -73,19 +75,19 @@ from app.infrastructure.workers.read_ahead import ReadAheadCandidates, ReadAhead
 logger = get_logger(__name__)
 
 SYSTEM_DIRECTORIES: tuple[str, ...] = ("$RECYCLE.BIN", "System Volume Information")
-"""The folders of a volume's root that no scan lists (RFC-046 section 5.6).
+"""As pastas da raiz de um volume que nenhum scan lista (RFC-046 §5.6).
 
-The recycle bin, first: the Explorer deletes a photo by moving it there, and
-a scan of the whole disk then indexed it as a new photo -- 1,268 rows of `E:`
-on the development database, and the `$I...` index files, which carry the
-deleted file's extension, failing as photos (RFC-045 section 14.10). Excluded,
-a photo deleted by the Explorer leaves the search at the next scan, as one
-deleted for good; and restoring it puts it back where it was, where the next
-scan unmarks it. `System Volume Information` is the other folder Windows keeps
-at every volume's root, and it is not the user's either.
+A lixeira, primeiro: o Explorer apaga uma foto movendo-a para lá, e um scan do
+disco inteiro então a indexava como foto nova -- 1.268 linhas do `E:` no banco
+de desenvolvimento, e os arquivos de índice `$I...`, que carregam a extensão
+do arquivo apagado, falhando como fotos (RFC-045 §14.10). Com a exclusão, uma
+foto apagada pelo Explorer sai da busca no próximo scan, como uma apagada de
+vez; e restaurá-la a põe de volta onde estava, onde o próximo scan a desmarca.
+`System Volume Information` é a outra pasta que o Windows mantém na raiz de
+todo volume, e também não é do usuário.
 
-Joined to the mount point per job. The exclusion compares paths, with the
-platform's case rule, so the `$Recycle.Bin` of `C:` is the same folder.
+Juntadas ao ponto de montagem a cada job. A exclusão compara caminhos, com a
+regra de caixa da plataforma, então o `$Recycle.Bin` do `C:` é a mesma pasta.
 """
 
 
@@ -94,11 +96,11 @@ def utc_now() -> datetime.datetime:
 
 
 class _KeptListing:
-    """The listing of the whole disk, kept by `_record_scan()` for the sweep.
+    """A listagem do disco inteiro, guardada por `_record_scan()` para a varredura.
 
-    One per job, filled from inside the scan and read once the pipeline has
-    ended. `mount` is where the disk was when it was listed: the sweep runs
-    only if it is still there (RFC-046 section 5.4).
+    Uma por job, preenchida de dentro do scan e lida depois que o pipeline
+    terminou. `mount` é onde o disco estava quando foi listado: a varredura só
+    roda se ele ainda estiver lá (RFC-046 §5.4).
     """
 
     def __init__(self) -> None:
@@ -107,13 +109,13 @@ class _KeptListing:
 
 
 class JobRunner:
-    """Claims queued jobs, runs them, and resolves the ones nobody is running.
+    """Reivindica jobs da fila, os roda e resolve os que ninguém está rodando.
 
-    Dependency-injected all the way down, including the clock. The clock
-    is what makes the reaper testable: RFC-029's validation table asks for
-    a worker that died mid-job, and the honest way to test that is to move
-    time forward rather than to kill a process -- which on Windows would
-    mean `subprocess` and a signal that does not exist there.
+    Dependências injetadas de ponta a ponta, inclusive o relógio. O relógio é
+    o que torna o reaper testável: a tabela de validação do RFC-029 pede um
+    worker que morreu no meio de um job, e o jeito honesto de testar isso é
+    avançar o tempo em vez de matar um processo -- o que no Windows
+    significaria `subprocess` e um sinal que lá não existe.
     """
 
     def __init__(
@@ -148,10 +150,10 @@ class JobRunner:
         self._supported_extensions = tuple(supported_extensions)
         self._extract_capture_date = extract_capture_date
         self._extract_gps = extract_gps
-        """`settings.extract_gps`, handed to every scan (RFC-032 section 4.2).
+        """`settings.extract_gps`, entregue a todo scan (RFC-032 §4.2).
 
-        Last in the signature, as a keyword, so the RFC-029 callers and
-        tests that pass arguments by position are not moved.
+        Por último na assinatura, como keyword, para que os chamadores e
+        testes do RFC-029 que passam argumentos por posição não se mexam.
         """
         self._clock = clock
         self._poll_interval = poll_interval
@@ -160,64 +162,64 @@ class JobRunner:
         self._max_attempts = max_attempts
         self._sleep = sleep
         self._excluded_directories = excluded_directories
-        """Directories no scan may yield files from -- the thumbnail cache.
+        """Pastas de onde nenhum scan pode entregar arquivos -- o cache de thumbnails.
 
-        See `FilesystemImageProvider`: without this, a job over a system
-        disk would index the application's own thumbnails as photographs
-        (RFC-030 section 7.1).
+        Veja `FilesystemImageProvider`: sem isto, um job sobre um disco de
+        sistema indexaria as próprias thumbnails do aplicativo como fotografias
+        (RFC-030 §7.1).
         """
         self._read_ahead = read_ahead
-        """Whether, and how far, each job reads its files ahead (RFC-045).
+        """Se, e quanto, cada job lê os arquivos adiantado (RFC-045).
 
-        `None` is the pipeline of RFC-024, one thread, every file read from
-        its path -- what `INDEXING_READ_AHEAD=false` gives, and every test
-        written before RFC-045. Last in the signature with `images`, as
-        keywords, so that no caller's arguments move.
+        `None` é o pipeline do RFC-024, uma thread, cada arquivo lido pelo
+        caminho -- o que `INDEXING_READ_AHEAD=false` dá, e todo teste escrito
+        antes do RFC-045. Por último na assinatura junto com `images`, como
+        keywords, para que os argumentos de nenhum chamador se mexam.
         """
         self._images = images
-        """Where the snapshot of a device's change signals is read from.
+        """De onde o snapshot dos sinais de mudança de um dispositivo é lido.
 
-        The repository the indexer writes through, on the same session:
-        the snapshot is read on this thread, before the reading thread
-        starts, and never from it (RFC-045 section 5.2).
+        O repositório pelo qual o indexador grava, na mesma sessão: o snapshot
+        é lido nesta thread, antes de a thread de leitura começar, e nunca a
+        partir dela (RFC-045 §5.2).
 
-        Since RFC-046 also where a job of the whole disk marks the photos it
-        did not find, at its end. Without it -- every test written before,
-        unless it asks -- no job sweeps.
+        Desde o RFC-046, também onde um job do disco inteiro marca, no fim, as
+        fotos que não achou. Sem ele -- todo teste escrito antes, a menos que
+        peça -- nenhum job faz a varredura.
         """
         self._sweeper = (
             SweepMissingImagesUseCase(images, clock) if images is not None else None
         )
         self._warm_up = warm_up
-        """Loads the model before the loop starts; see `run_forever()`.
+        """Carrega o modelo antes de o laço começar; veja `run_forever()`.
 
-        Held by the runner rather than left to the composition root to
-        remember, because the ordering is a correctness rule and not a
-        convenience: a worker that claimed a job first would hold it,
-        silent, for the several seconds the CLIP checkpoint takes to
-        load, and on a short stale timeout could be reaped before it had
-        done anything at all (RFC-029 section 9.1).
+        Guardado pelo runner em vez de deixado para a raiz de composição
+        lembrar, porque a ordem é uma regra de correção, não uma conveniência:
+        um worker que reivindicasse um job primeiro o seguraria, calado, pelos
+        vários segundos que o checkpoint do CLIP leva para carregar, e com um
+        stale timeout curto poderia ser recolhido pelo reaper antes de ter
+        feito qualquer coisa (RFC-029 §9.1).
         """
         self._interrupted = False
-        """Set when an interrupt landed inside a job; the loop then ends.
+        """Ligado quando uma interrupção caiu dentro de um job; o laço então termina.
 
-        `run_claimed()` catches the interrupt to hand the job back, so the
-        loop would otherwise go on and claim the same job again on its next
-        turn: an executor asked to stop would keep the job `running`, and the
-        launcher of RFC-036 would end it at its deadline (section 7.2).
+        `run_claimed()` captura a interrupção para devolver o job, então, sem
+        isto, o laço seguiria e reivindicaria o mesmo job de novo na próxima
+        volta: um executor a quem se pediu para parar manteria o job `running`,
+        e o launcher do RFC-036 o encerraria no prazo (§7.2).
         """
 
     # ------------------------------------------------------------------
-    # The loop
+    # O laço
 
     def run_forever(self) -> None:
-        """Reap, claim, run, repeat -- until the operator stops the process.
+        """Recolhe, reivindica, roda, repete -- até o operador parar o processo.
 
-        Reaping happens between polls rather than on a timer of its own,
-        which is the arrangement RFC-029 section 9.1 describes: it is the
-        same process, doing the cheap query while it has nothing else to
-        do. One executor therefore cleans up after a previous incarnation
-        of itself, which is the common case -- the machine was rebooted.
+        O reaper roda entre um poll e outro, e não num timer próprio, que é o
+        arranjo que o RFC-029 §9.1 descreve: é o mesmo processo, fazendo a
+        consulta barata enquanto não tem mais nada a fazer. Um executor,
+        portanto, limpa o que uma encarnação anterior dele mesmo deixou, que é
+        o caso comum -- a máquina foi reiniciada.
         """
         self.warm_up_now()
         logger.info("Job executor started")
@@ -227,36 +229,36 @@ class JobRunner:
                 if not self.claim_and_run():
                     self._sleep(self._poll_interval)
         except KeyboardInterrupt:
-            # Reaching here means the interrupt landed between jobs, so
-            # there is nothing to hand back. An interrupt *during* a job
-            # is caught in `run_claimed()`, which returns it to the queue
-            # and ends the loop through `_interrupted`.
+            # Chegar aqui significa que a interrupção caiu entre dois jobs,
+            # então não há nada a devolver. Uma interrupção *durante* um job
+            # é capturada em `run_claimed()`, que o devolve à fila e encerra o
+            # laço por meio de `_interrupted`.
             pass
         logger.info("Job executor stopped by the operator")
 
     def warm_up_now(self) -> None:
-        """Load the model now, without entering the polling loop.
+        """Carrega o modelo agora, sem entrar no laço de polling.
 
-        `run_forever()` calls this first. `--once` calls it too, because a
-        measurement of start-up latency that skipped the load would be
-        measuring a different process from the one that runs in anger.
+        `run_forever()` chama isto primeiro. `--once` também chama, porque uma
+        medição da latência de partida que pulasse a carga estaria medindo um
+        processo diferente do que roda de verdade.
         """
         if self._warm_up is not None:
             logger.info("Loading the embedding model before polling for work")
             self._warm_up()
 
     def run_job(self, job_id: JobId) -> IndexingJob | None:
-        """Claim one named job and run it here, or report that somebody has it.
+        """Reivindica um job nomeado e o roda aqui, ou reporta que outro o tem.
 
-        What `indexing_worker --root PATH` calls, so that the CLI executes
-        its job in its own process instead of waiting for an executor
-        somebody may never have started (RFC-029 section 12). It is the
-        same claim and the same run as the polling loop -- one code path,
-        and no second process is ever required.
+        O que `indexing_worker --root PATH` chama, para que a CLI execute o
+        job no próprio processo em vez de esperar um executor que talvez
+        ninguém tenha iniciado (RFC-029 §12). É a mesma reivindicação e a
+        mesma execução do laço de polling -- um caminho de código, e nunca é
+        preciso um segundo processo.
 
-        Returns `None` when the job was not claimable, which is not a
-        failure: a separate executor got there first, and the caller
-        follows that job by polling instead.
+        Devolve `None` quando o job não podia ser reivindicado, o que não é
+        falha: um executor separado chegou primeiro, e quem chama acompanha
+        esse job por polling.
         """
         claimed = self._jobs.claim(job_id, self._clock())
         if claimed is None:
@@ -264,7 +266,7 @@ class JobRunner:
         return self.run_claimed(claimed)
 
     def claim_and_run(self) -> bool:
-        """Take the oldest queued job and run it; report whether there was one."""
+        """Pega o job mais antigo da fila e o roda; reporta se havia algum."""
         claimed = self._jobs.claim_next(self._clock())
         if claimed is None:
             return False
@@ -272,20 +274,20 @@ class JobRunner:
         return True
 
     # ------------------------------------------------------------------
-    # The reaper
+    # O reaper
 
     def reap(self) -> list[IndexingJob]:
-        """Resolve every running job whose worker stopped proving it is alive.
+        """Resolve todo job rodando cujo worker parou de provar que está vivo.
 
-        The query is here and the *verdict* is not: `IndexingJob.expire()`
-        decides between requeueing, cancelling and failing, because that
-        is a rule about what a job is. This applies the verdict through a
-        conditional write, so a job that emitted a heartbeat between the
-        query and the write is left alone -- the worker holding it is
-        alive after all, and stealing it would put two workers on one disk.
+        A consulta está aqui, e o *veredito* não: `IndexingJob.expire()`
+        decide entre devolver à fila, cancelar e falhar, porque essa é uma
+        regra sobre o que um job é. Isto aplica o veredito por meio de uma
+        escrita condicional, então um job que emitiu um heartbeat entre a
+        consulta e a escrita é deixado em paz -- o worker que o segura está
+        vivo, afinal, e tomá-lo poria dois workers num disco só.
 
-        Returns what it actually changed, so a caller (and a test) can see
-        it rather than infer it from a log line.
+        Devolve o que de fato mudou, para que quem chama (e um teste) possa
+        ver isso em vez de deduzi-lo de uma linha de log.
         """
         cutoff = self._clock() - datetime.timedelta(seconds=self._stale_timeout)
         resolved: list[IndexingJob] = []
@@ -307,16 +309,15 @@ class JobRunner:
         return resolved
 
     # ------------------------------------------------------------------
-    # One job
+    # Um job
 
     def run_claimed(self, job: IndexingJob) -> IndexingJob | None:
-        """Run a job this runner has already claimed, and write its outcome.
+        """Roda um job que este runner já reivindicou, e grava o desfecho.
 
-        Every exit from here writes a terminal state or hands the job
-        back, so a claimed job never stays `running` because of something
-        this process did. The one case that does leave it `running` is the
-        one nothing can write: the process dying, which is what the reaper
-        is for.
+        Toda saída daqui grava um estado terminal ou devolve o job, então um
+        job reivindicado nunca fica `running` por causa de algo que este
+        processo fez. O único caso que o deixa `running` é aquele que nada
+        consegue gravar: o processo morrer, que é para o que serve o reaper.
         """
         logger.info("Running job %s on device %s", job.id, job.device_id)
         observer = JobProgressObserver(
@@ -327,18 +328,18 @@ class JobRunner:
         try:
             summary = self._index(job, observer, kept)
         except KeyboardInterrupt:
-            # An operator stopping the process is not a crash, so no
-            # attempt is consumed -- otherwise three ordinary restarts
-            # would permanently fail a job that never went wrong.
+            # Um operador parando o processo não é um crash, então nenhuma
+            # tentativa é consumida -- do contrário, três reinícios comuns
+            # fariam falhar para sempre um job que nunca deu errado.
             logger.info("Job %s interrupted; returning it to the queue", job.id)
             self._no_sweep(job, "the job was interrupted")
             self._interrupted = True
             return self._finish(job, lambda current: current.release(self._clock()))
         except Exception as error:
-            # The message is taken here rather than inside the lambda:
-            # Python unbinds an `except ... as` name when the block ends,
-            # so a closure over it is a latent `NameError` waiting for the
-            # day the call moves out of the block.
+            # A mensagem é tirada aqui, e não dentro da lambda: o Python
+            # desvincula um nome de `except ... as` quando o bloco termina,
+            # então uma closure sobre ele é um `NameError` latente, esperando
+            # o dia em que a chamada sair do bloco.
             reason = str(error)
             logger.exception("Job %s failed", job.id)
             self._no_sweep(job, "the job failed")
@@ -347,9 +348,9 @@ class JobRunner:
             )
 
         if observer.lost:
-            # The reaper gave this job to somebody else while we were
-            # working. Writing anything now would overwrite whatever that
-            # worker has done since.
+            # O reaper deu este job a outro enquanto trabalhávamos. Gravar
+            # qualquer coisa agora sobrescreveria o que aquele worker fez
+            # desde então.
             logger.warning("Job %s was taken over; leaving it alone", job.id)
             self._no_sweep(job, "the job was taken over by another executor")
             return None
@@ -370,27 +371,27 @@ class JobRunner:
         return self._finish(job, self._completion_of(job))
 
     # ------------------------------------------------------------------
-    # The photos no longer on the disk (RFC-046)
+    # As fotos que não estão mais no disco (RFC-046)
 
     def _sweep_missing(self, job: IndexingJob, kept: _KeptListing) -> None:
-        """Mark the rows the listing did not find, and unmark the ones it did.
+        """Marca as linhas que a listagem não achou, e desmarca as que ela achou.
 
-        Here, after the pipeline ended and before the job is concluded, and
-        **only if four things hold** (RFC-046 section 5.4): the job is of
-        the whole disk; its listing was kept; the pipeline ended without an
-        exception, a cancellation or an interrupt, and the job is still this
-        runner's -- the early returns of `run_claimed()` see to that; and the
-        disk is **at the mount point it was listed at**. `_completion_of()`
-        only asks whether the disk is connected; for this, a disk back under
-        another letter is another disk, for `_record_scan()`'s reason. When
-        one fails, nothing is marked and an INFO line says which.
+        Aqui, depois de o pipeline terminar e antes de o job ser concluído, e
+        **só se quatro coisas valerem** (RFC-046 §5.4): o job é do disco
+        inteiro; a listagem dele foi guardada; o pipeline terminou sem
+        exceção, cancelamento ou interrupção, e o job ainda é deste runner --
+        os retornos antecipados de `run_claimed()` cuidam disso; e o disco está
+        **no ponto de montagem em que foi listado**. `_completion_of()` só
+        pergunta se o disco está conectado; para isto, um disco de volta sob
+        outra letra é outro disco, pelo motivo de `_record_scan()`. Quando uma
+        falha, nada é marcado e uma linha de INFO diz qual.
 
-        **A sweep that fails does not fail the job.** The indexing is done,
-        and the next job of the whole disk sweeps again; the error goes to
-        the log in ERROR, as `_record_scan()` does with the denominator.
+        **Uma varredura que falha não faz o job falhar.** A indexação está
+        feita, e o próximo job do disco inteiro varre de novo; o erro vai para
+        o log em ERROR, como `_record_scan()` faz com o denominador.
 
-        No other writer can come between the listing and this: the runner
-        runs one job at a time, and the purge refuses a disk with a job.
+        Nenhum outro escritor pode se meter entre a listagem e isto: o runner
+        roda um job por vez, e a purga recusa um disco com job.
         """
         if job.scopes:
             self._no_sweep(job, "the job is of some folders")
@@ -445,30 +446,29 @@ class JobRunner:
             )
 
     def _no_sweep(self, job: IndexingJob, reason: str) -> None:
-        """Say, in INFO, which condition of the sweep failed (RFC-046 §5.4).
+        """Diz, em INFO, qual condição da varredura falhou (RFC-046 §5.4).
 
-        A job of some folders always says so, whatever else happened to it:
-        that is the first condition, and the one that settles it.
+        Um job de algumas pastas sempre diz isso, aconteça o que mais lhe tiver
+        acontecido: essa é a primeira condição, e a que decide a questão.
         """
         if job.scopes:
             reason = "the job is of some folders"
         logger.info("Job %s marks no photo as not found: %s", job.id, reason)
 
     def _completion_of(self, job: IndexingJob) -> Callable[[IndexingJob], IndexingJob]:
-        """Decide between `completed` and `failed` by looking at the disk again.
+        """Decide entre `completed` e `failed` olhando o disco de novo.
 
-        **A scan whose volume disappeared halfway does not raise.**
-        `discover()` returns quietly when its root is gone, and an
-        `rglob` over a volume that vanished can simply stop producing
-        files -- so without this check the job would be marked
-        `completed` with half its scope indexed, which is the worst
-        possible outcome because it looks like success (RFC-029 section
-        15).
+        **Um scan cujo volume sumiu no meio do caminho não levanta exceção.**
+        `discover()` retorna em silêncio quando a raiz some, e um `rglob`
+        sobre um volume que desapareceu pode simplesmente parar de produzir
+        arquivos -- então, sem esta verificação, o job seria marcado
+        `completed` com metade do escopo indexada, o pior desfecho possível,
+        porque parece sucesso (RFC-029 §15).
 
-        The mount point is compared, not merely re-enumerated: a disk that
-        was unplugged and plugged back in under a different letter is not
-        the disk this run was reading from, and the files it did not get
-        to are not the files it would have got to.
+        O ponto de montagem é comparado, e não só enumerado de novo: um disco
+        que foi desconectado e conectado de volta sob outra letra não é o
+        disco que esta execução estava lendo, e os arquivos a que ela não
+        chegou não são os arquivos a que ela teria chegado.
         """
         device = self._devices.get(job.device_id)
         mount = self._locator.mount_point(device) if device is not None else None
@@ -488,14 +488,14 @@ class JobRunner:
     def _index(
         self, job: IndexingJob, observer: JobProgressObserver, kept: _KeptListing
     ) -> IndexingSummary:
-        """Build the pipeline for one job and run it.
+        """Monta o pipeline de um job e o roda.
 
-        The connection is re-validated *here*, after the claim, because a
-        disk that was plugged in when the job was created can be in a
-        drawer by the time the job comes out of the queue (RFC-029 section
-        7.1). So can a folder: a scope that no longer exists is refused
-        rather than scanned into nothing, because "indexed zero files"
-        and "that folder is gone" are different answers.
+        A conexão é validada de novo *aqui*, depois da reivindicação, porque
+        um disco que estava conectado quando o job foi criado pode estar numa
+        gaveta quando o job sai da fila (RFC-029 §7.1). Uma pasta também: um
+        escopo que não existe mais é recusado, em vez de varrido para nada,
+        porque "indexou zero arquivos" e "aquela pasta sumiu" são respostas
+        diferentes.
         """
         device = self._devices.get(job.device_id)
         if device is None:
@@ -516,15 +516,15 @@ class JobRunner:
                 )
 
         if not job.scopes:
-            # The listing of the whole disk is its denominator (RFC-039
-            # section 4.1), and what the sweep compares the rows with at the
-            # end (RFC-046 section 5.3). A job of some folders records
-            # nothing: two folders are not the disk.
+            # A listagem do disco inteiro é o denominador dele (RFC-039 §4.1),
+            # e aquilo com que a varredura compara as linhas no fim (RFC-046
+            # §5.3). Um job de algumas pastas não registra nada: duas pastas
+            # não são o disco.
             observer.relay_listing_to(
                 lambda listing: self._record_scan(device, mount, listing, kept)
             )
 
-        # The thumbnail cache, and the system folders of this volume's root.
+        # O cache de thumbnails, e as pastas de sistema da raiz deste volume.
         excluded = self._excluded_directories + tuple(
             mount / name for name in SYSTEM_DIRECTORIES
         )
@@ -553,22 +553,21 @@ class JobRunner:
         observer: JobProgressObserver,
         limits: ReadAheadLimits,
     ) -> IndexingSummary:
-        """Run the pipeline over a scan that a second thread reads ahead (RFC-045).
+        """Roda o pipeline sobre um scan que uma segunda thread lê adiantado (RFC-045).
 
-        **The snapshot first, here**, on the thread that owns the session:
-        one query for the size and mtime of every row of the device, which
-        the reading thread consults to read only the files the decision
-        will hash (section 5.2). The thread never queries.
+        **O snapshot primeiro, aqui**, na thread dona da sessão: uma consulta
+        pelo tamanho e o mtime de cada linha do dispositivo, que a thread de
+        leitura consulta para ler só os arquivos de que a decisão vai calcular
+        o hash (§5.2). A thread nunca consulta o banco.
 
-        **The scan is built in the thread**, with an observer that queues
-        its events; this thread hands them to `observer` as it takes them
-        out, so that every write the scan triggers -- the heartbeat of
-        `discovered()`, the device row of `listed()` -- happens on the
-        thread that owns the job's session (section 5.4).
+        **O scan é montado na thread**, com um observador que põe os eventos
+        dele na fila; esta thread os entrega a `observer` à medida que os tira
+        de lá, para que toda escrita que o scan dispara -- o heartbeat de
+        `discovered()`, a linha do dispositivo de `listed()` -- aconteça na
+        thread dona da sessão do job (§5.4).
 
-        The `with` block is what ends the thread, on every way out of the
-        pipeline: the end of the scan, a cancellation, an exception, an
-        interrupt (section 5.1).
+        O bloco `with` é o que encerra a thread, em toda saída do pipeline: o
+        fim do scan, um cancelamento, uma exceção, uma interrupção (§5.1).
         """
         assert self._images is not None
         started = time.perf_counter()
@@ -603,25 +602,25 @@ class JobRunner:
         listing: RootListing,
         kept: _KeptListing,
     ) -> None:
-        """Write the size of the whole disk's listing, if the disk is still there.
+        """Grava o tamanho da listagem do disco inteiro, se o disco ainda está lá.
 
-        Called from inside the scan, when the listing of the root ends and
-        before the first file is read. **The mount point is compared
-        first**, for the reason `_completion_of()` gives: a listing over a
-        volume that vanished can simply stop, without an error, and its
-        count would be a confident wrong denominator. A disk that is not
-        mounted where the job began -- gone, or back under another letter
-        -- is not the disk that was listed, and nothing is written.
+        Chamado de dentro do scan, quando a listagem da raiz termina e antes de
+        o primeiro arquivo ser lido. **O ponto de montagem é comparado
+        primeiro**, pelo motivo que `_completion_of()` dá: uma listagem sobre
+        um volume que desapareceu pode simplesmente parar, sem erro, e a
+        contagem dela seria um denominador errado com toda a confiança. Um
+        disco que não está montado onde o job começou -- sumiu, ou voltou sob
+        outra letra -- não é o disco que foi listado, e nada é gravado.
 
-        `record_scan()` writes the two columns and not the row: the copy
-        of the device held here is from the start of the job, and a
-        rename since then must stay (RFC-039 section 4.1). What it raises
-        is the observer's to swallow, with a WARNING; the job goes on.
+        `record_scan()` grava as duas colunas, e não a linha: a cópia do
+        dispositivo guardada aqui é do início do job, e um renome feito desde
+        então precisa ficar (RFC-039 §4.1). O que ele levantar cabe ao
+        observador engolir, com um WARNING; o job segue.
 
-        **The same check decides whether the listing is kept** for the
-        sweep at the end of the job (RFC-046 section 5.3), and it is kept
-        before the write: a denominator that could not be written is no
-        reason not to compare the rows.
+        **A mesma verificação decide se a listagem é guardada** para a
+        varredura no fim do job (RFC-046 §5.3), e ela é guardada antes da
+        escrita: um denominador que não pôde ser gravado não é motivo para não
+        comparar as linhas.
         """
         mounted = self._locator.mount_point(device)
         if mounted != started_on:
@@ -648,12 +647,12 @@ class JobRunner:
         device: Device,
         mount: Path,
     ) -> Iterator[IndexCandidate]:
-        """Stream discovered files as candidates, exactly as the CLI does.
+        """Entrega os arquivos descobertos como candidatos, exatamente como a CLI.
 
-        `discovered_candidates()` is imported rather than reimplemented:
-        it is where `ImageId` is minted, and a second copy would be a
-        second chance to compute a different id for the same file
-        (RFC-029 section 12 -- one indexing code path, not two).
+        `discovered_candidates()` é importada, e não reimplementada: é onde o
+        `ImageId` é gerado, e uma segunda cópia seria uma segunda chance de
+        calcular um id diferente para o mesmo arquivo (RFC-029 §12 -- um
+        caminho de código de indexação, não dois).
         """
         undiscoverable: list[IndexingFailure] = []
         yield from discovered_candidates(provider, device, mount, undiscoverable)
@@ -665,16 +664,16 @@ class JobRunner:
         job: IndexingJob,
         transition: Callable[[IndexingJob], IndexingJob],
     ) -> IndexingJob | None:
-        """Apply a terminal transition to the job **as it stands now**.
+        """Aplica uma transição terminal ao job **como ele está agora**.
 
-        Re-read rather than transitioned from the copy claimed minutes
-        ago, because the row has moved since: the observer has been
-        writing counters and a checkpoint into it, and the route may have
-        set `cancel_requested`. Writing the stale copy would erase the
-        progress of the run that just finished.
+        Lido de novo, em vez de transicionado a partir da cópia reivindicada
+        minutos atrás, porque a linha mudou desde então: o observador vem
+        gravando nela contadores e um checkpoint, e a rota pode ter ligado
+        `cancel_requested`. Gravar a cópia velha apagaria o progresso da
+        execução que acabou de terminar.
 
-        Conditional on the row still being `running`, so a job the reaper
-        took back in the last instant is not overwritten.
+        Condicionado a a linha ainda estar `running`, para que um job que o
+        reaper tomou de volta no último instante não seja sobrescrito.
         """
         current = self._jobs.get(job.id)
         if current is None:
@@ -698,13 +697,13 @@ class JobRunner:
 
 
 def _checkpoint_of(job: IndexingJob) -> PurePath | None:
-    """Rebuild the stored checkpoint as a path of the running platform's kind.
+    """Reconstrói o checkpoint gravado como um caminho do tipo da plataforma atual.
 
-    **Never compared as a string.** The checkpoint is a position in an
-    order established by `sorted()` over paths, which on Windows compares
-    part by part and case-insensitively; text comparison gives a different
-    answer and PostgreSQL's collation a third, so a resume driven by any
-    of the other two skips and repeats arbitrary files.
+    **Nunca comparado como string.** O checkpoint é uma posição numa ordem
+    estabelecida por `sorted()` sobre caminhos, que no Windows compara parte
+    por parte e sem diferenciar caixa; a comparação de texto dá outra resposta
+    e a collation do PostgreSQL uma terceira, então uma retomada guiada por
+    qualquer uma das outras duas pula e repete arquivos arbitrários.
     """
     stored = job.last_processed_relative_path
     return None if stored is None else Path(str(stored))
@@ -740,37 +739,35 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def build_runner(job_session: Session, image_session: Session) -> JobRunner:
-    """Compose a runner over two already-open sessions.
+    """Compõe um runner sobre duas sessões já abertas.
 
-    **Two sessions, and they must not be one** (RFC-029 section 4.11). The
-    heartbeat and the checkpoint would otherwise share a transaction with
-    the image writes, so the `rollback()` in RFC-024 section 6's bulk-write
-    fallback would undo progress that had already been reported -- or the
-    heartbeat's commit would commit half a batch.
+    **Duas sessões, e elas não podem ser uma só** (RFC-029 §4.11). Do
+    contrário, o heartbeat e o checkpoint dividiriam uma transação com as
+    escritas de imagens, e o `rollback()` do fallback de escrita em lote do
+    RFC-024 §6 desfaria progresso já reportado -- ou o commit do heartbeat
+    commitaria meio lote.
 
-    Separated as a function so the executor and the CLI compose the same
-    runner rather than two that drift.
+    Separada como função para que o executor e a CLI componham o mesmo runner,
+    e não dois que se desencontram.
 
-    **This is the composition that renders thumbnails** (RFC-030 section
-    7.2), and the thumbnail cache is excluded from every scan it runs.
-    Both are here rather than defaulted inside `JobRunner` because the
-    directory is configuration, and this is where configuration becomes
-    arguments.
+    **Esta é a composição que renderiza thumbnails** (RFC-030 §7.2), e o cache
+    de thumbnails fica excluído de todo scan que ela roda. Os dois estão aqui,
+    e não como padrão dentro do `JobRunner`, porque a pasta é configuração, e
+    é aqui que a configuração vira argumento.
 
-    **Every repository is `deferring()`** (RFC-036 section 7.5): in a process
-    that installed the handler, an interrupt waits for the database call in
-    flight, so that the `release()` it leads to finds its connection whole
-    and opens none -- at a logoff, a new connection is a new server process
-    that cannot start, and takes the cluster down with it. Without the
-    handler (the CLI), the wrapping changes nothing.
+    **Todo repositório é `deferring()`** (RFC-036 §7.5): num processo que
+    instalou o handler, uma interrupção espera a chamada ao banco em
+    andamento, para que o `release()` a que ela leva encontre a conexão
+    inteira e não abra nenhuma -- num logoff, uma conexão nova é um novo
+    processo do servidor que não consegue iniciar, e derruba o cluster junto.
+    Sem o handler (a CLI), o invólucro não muda nada.
 
-    **This is where the read-ahead is switched on** (RFC-045 section 5.7):
-    with `indexing_read_ahead`, every job reads its files in a second
-    thread, `read_ahead_files` ahead, and the pipeline decides windows of
-    that size rather than of `metadata_prefetch_size` -- a window holds the
-    bytes of each of its files. The CLI composes its runner here too, so it
-    reads ahead as the executor does; the backfills compose their own and
-    do not.
+    **É aqui que a leitura antecipada é ligada** (RFC-045 §5.7): com
+    `indexing_read_ahead`, todo job lê os arquivos numa segunda thread,
+    `read_ahead_files` à frente, e o pipeline decide janelas desse tamanho em
+    vez de `metadata_prefetch_size` -- uma janela segura os bytes de cada um
+    dos arquivos dela. A CLI também compõe o runner dela aqui, então lê
+    adiantado como o executor; os backfills compõem o próprio e não leem.
     """
     from app.application.use_cases.thumbnail_writer import ThumbnailWriter
     from app.infrastructure.config.settings import settings
@@ -844,33 +841,33 @@ def build_runner(job_session: Session, image_session: Session) -> JobRunner:
 
 
 def main() -> None:
-    """Compose the executor and run it.
+    """Compõe o executor e o roda.
 
-    The composition root -- the one place allowed to know every concrete
-    class at once. The imports are function-local for the reason
-    `indexing_worker.main()` gives: importing `JobRunner` must not drag
-    the CLIP adapter into an Infrastructure import graph, and most of the
-    test suite imports this module.
+    A raiz de composição -- o único lugar autorizado a conhecer todas as
+    classes concretas de uma vez. Os imports ficam dentro da função pelo
+    motivo que `indexing_worker.main()` dá: importar `JobRunner` não pode
+    arrastar o adaptador CLIP para um grafo de imports da Infraestrutura, e a
+    maior parte da suíte de testes importa este módulo.
 
-    **The model is loaded before the first poll**, not after a job is
-    claimed -- and `JobRunner` owns that ordering rather than this
-    function, so it holds however the executor is started.
+    **O modelo é carregado antes do primeiro poll**, e não depois de um job
+    ser reivindicado -- e é o `JobRunner` que é dono dessa ordem, não esta
+    função, então ela vale seja qual for o jeito de iniciar o executor.
 
-    **Without its models, the executor refuses to start** (RFC-035 section
-    6.5): one line on stderr and exit code 78, like a `ConfigurationError`.
-    It has nothing to do without CLIP, and staying up would claim jobs only
-    to fail each one. Both models are checked for presence first, which is
-    cheap; the load of CLIP then checks its hashes. Restarting fixes none
-    of it, and 78 is how the launcher of RFC-036 tells (section 6.1).
+    **Sem os modelos, o executor se recusa a iniciar** (RFC-035 §6.5): uma
+    linha no stderr e o código de saída 78, como um `ConfigurationError`. Ele
+    não tem nada a fazer sem o CLIP, e ficar de pé só reivindicaria jobs para
+    fazer cada um falhar. A presença dos dois modelos é verificada primeiro, o
+    que é barato; a carga do CLIP então verifica os hashes. Reiniciar não
+    conserta nada disso, e o 78 é como o launcher do RFC-036 sabe (§6.1).
 
-    **Stopped before the loop, it leaves in silence, with 0** (RFC-036
-    section 7.1). With `--supervised` the stop can come while `torch` is
-    being imported or the model loaded, and there is no job in hand then:
-    nothing to hand back, and a stop that was asked for is not a failure.
+    **Parado antes do laço, ele sai em silêncio, com 0** (RFC-036 §7.1). Com
+    `--supervised`, a parada pode chegar enquanto o `torch` está sendo
+    importado ou o modelo carregado, e não há job em mãos nessa hora: nada a
+    devolver, e uma parada que foi pedida não é falha.
 
-    **An interrupt waits for the database call in flight** (section 7.5):
-    `install()` before anything can raise one, and `build_runner()` hands
-    the runner repositories that defer it.
+    **Uma interrupção espera a chamada ao banco em andamento** (§7.5):
+    `install()` antes de qualquer coisa poder levantar uma, e `build_runner()`
+    entrega ao runner repositórios que a adiam.
     """
     args = _build_arg_parser().parse_args()
     install()
@@ -892,8 +889,8 @@ def _run(*, once: bool) -> None:
     job_session = SessionLocal()
     image_session = SessionLocal()
     try:
-        # Before `build_runner()`, which is what imports `torch`: a missing
-        # tree is refused in a second rather than after that import.
+        # Antes de `build_runner()`, que é o que importa o `torch`: uma árvore
+        # ausente é recusada em um segundo, e não depois desse import.
         default_runtime().check_presence()
         runner = build_runner(job_session, image_session)
         if once:
@@ -905,7 +902,7 @@ def _run(*, once: bool) -> None:
     except ModelUnavailableError as error:
         refuse_to_start(f"SolidVision cannot start: {error}")
     finally:
-        # A rollback each, on the connections the repositories used.
+        # Um rollback cada, nas conexões que os repositórios usaram.
         with deferred():
             image_session.close()
             job_session.close()

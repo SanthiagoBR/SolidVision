@@ -1,23 +1,23 @@
-"""Abstract repository port for indexing-job persistence (RFC-029).
+"""Porta abstrata de repositório para a persistência dos jobs de indexação (RFC-029).
 
-Two properties of this port are unusual for the codebase, and both are
-deliberate.
+Duas propriedades desta porta são incomuns no código, e as duas são
+deliberadas.
 
-**Every write is conditional, and there is no plain `save()`.** Other
-repositories here are stores: the caller owns the entity and writes it
-back. A job has no single owner -- a route sets `cancel_requested` while a
-worker writes counters, a reaper can take an abandoned job away from the
-worker still holding it, and two workers may reach for the same queued job
-in the same millisecond. So "write this only if the row is still in the
-state I decided from" is the contract, not an implementation detail, and a
-method that wrote unconditionally would be the one every future caller
-reached for by mistake.
+**Toda escrita é condicional, e não há um `save()` simples.** Os outros
+repositórios daqui são stores: o chamador é dono da entidade e a escreve de
+volta. Um job não tem um dono só -- uma rota liga `cancel_requested` enquanto
+um worker escreve contadores, um reaper pode tirar um job abandonado do worker
+que ainda o segura, e dois workers podem estender a mão para o mesmo job
+enfileirado no mesmo milissegundo. Por isso "escreva isto só se a linha ainda
+estiver no estado a partir do qual decidi" é o contrato, e não um detalhe de
+implementação, e um método que escrevesse incondicionalmente seria aquele que
+todo chamador futuro pegaria por engano.
 
-**It never decides anything.** The transitions live on `IndexingJob`; what
-is here is the guarantee that a decided transition is applied atomically.
-The one place that line blurs is `claim_next()`, which has to choose a row
-and move it in a single statement -- and the contract test pins the result
-against `IndexingJob.claim()` so the two cannot drift.
+**Ela nunca decide nada.** As transições moram em `IndexingJob`; o que está
+aqui é a garantia de que uma transição decidida é aplicada atomicamente. O
+único lugar em que essa linha fica borrada é `claim_next()`, que precisa
+escolher uma linha e movê-la num único comando -- e o teste de contrato prende
+o resultado a `IndexingJob.claim()`, para que os dois não se afastem.
 """
 
 from __future__ import annotations
@@ -33,32 +33,33 @@ from app.domain.value_objects.job_id import JobId
 
 
 class IndexingJobRepository(ABC):
-    """Repository contract for managing `IndexingJob` entities."""
+    """Contrato de repositório para gerenciar as entidades `IndexingJob`."""
 
     @abstractmethod
     def create(self, job: IndexingJob) -> IndexingJob:
-        """Insert a new job, refusing a device that already has an active one.
+        """Insere um job novo, recusando um dispositivo que já tem um ativo.
 
-        Raises `DeviceBusyError` when the device already has a `pending`
-        or `running` job. **An implementation must not answer this with a
-        query of its own**: the PostgreSQL implementation lets the partial
-        unique index of RFC-029 section 9 refuse the insert and translates
-        the failure, because a `SELECT` before the `INSERT` is a
-        check-then-act and two concurrent requests would both pass it.
+        Levanta `DeviceBusyError` quando o dispositivo já tem um job
+        `pending` ou `running`. **Uma implementação não pode responder isso
+        com uma consulta própria**: a implementação PostgreSQL deixa o
+        índice único parcial do RFC-029 §9 recusar o insert e traduz a
+        falha, porque um `SELECT` antes do `INSERT` é um check-then-act, e
+        duas requisições concorrentes passariam as duas por ele.
 
-        The in-memory double has no index to lean on and therefore has to
-        emulate the refusal. That is not optional politeness: a double
-        that accepted two active jobs would make every Application test
-        above it evidence about the double rather than about the system.
+        O dublê em memória não tem índice em que se apoiar e por isso
+        precisa emular a recusa. Isso não é uma gentileza opcional: um
+        dublê que aceitasse dois jobs ativos faria de todo teste de
+        Application acima dele uma evidência sobre o dublê, e não sobre o
+        sistema.
 
-        Returns the stored job so that a caller sees server-assigned
-        values -- `created_at` in particular -- rather than assuming its
-        own.
+        Devolve o job gravado, para que o chamador veja os valores
+        atribuídos pelo servidor -- `created_at` em particular -- em vez de
+        supor os seus.
         """
 
     @abstractmethod
     def get(self, job_id: JobId) -> IndexingJob | None:
-        """Retrieve one job, or `None` when no row carries that id."""
+        """Busca um job, ou `None` quando nenhuma linha tem esse id."""
 
     @abstractmethod
     def record_progress(
@@ -68,97 +69,97 @@ class IndexingJobRepository(ABC):
         checkpoint: ImagePath | None,
         heartbeat_at: datetime.datetime,
     ) -> IndexingJob | None:
-        """Write progress and a heartbeat onto a running job, and read it back.
+        """Escreve o progresso e um heartbeat num job em execução, e o relê.
 
-        **One round trip, and that is the point.** RFC-029 section 9.1
-        puts the heartbeat on the same write that already updates the
-        counters, so proving the worker is alive costs nothing extra; and
-        the row that comes back carries `cancel_requested`, so the worker
-        learns whether it has been asked to stop from the same call.
+        **Uma ida e volta, e esse é o ponto.** O RFC-029 §9.1 põe o
+        heartbeat na mesma escrita que já atualiza os contadores, então
+        provar que o worker está vivo não custa nada a mais; e a linha que
+        volta traz `cancel_requested`, então o worker fica sabendo se lhe
+        pediram para parar pela mesma chamada.
 
-        Writes **only** those columns. A whole-entity write here would
-        carry the worker's own stale copy of `cancel_requested` -- read
-        when it claimed the job, minutes ago, and `False` -- straight over
-        a cancellation the route had recorded since. The bug is invisible:
-        the job simply never stops.
+        Escreve **só** essas colunas. Uma escrita da entidade inteira aqui
+        levaria a cópia velha que o próprio worker tem de `cancel_requested`
+        -- lida quando ele pegou o job, minutos atrás, e `False` -- direto
+        por cima de um cancelamento que a rota gravou desde então. O bug é
+        invisível: o job simplesmente nunca para.
 
-        `checkpoint` of `None` leaves the stored checkpoint alone rather
-        than clearing it: it means "nothing new is durable yet", which is
-        what a full batch buffer looks like, and clearing would throw away
-        a position a crash still needs.
+        Um `checkpoint` `None` deixa o checkpoint gravado como está, em vez
+        de limpá-lo: quer dizer "nada novo está durável ainda", que é como
+        fica um buffer de lote cheio, e limpar jogaria fora uma posição de
+        que um crash ainda precisa.
 
-        Returns `None` when the job is no longer running -- the reaper
-        requeued it, or it was cancelled outright -- which tells the worker
-        it is no longer the one holding this job.
+        Devolve `None` quando o job não está mais em execução -- o reaper o
+        reenfileirou, ou ele foi cancelado de vez -- o que diz ao worker que
+        não é mais ele quem segura este job.
         """
 
     @abstractmethod
     def save_if_status(
         self, job: IndexingJob, expected: JobStatus
     ) -> IndexingJob | None:
-        """Write `job` only while its row still holds `expected`.
+        """Escreve `job` só enquanto a linha dele ainda tiver `expected`.
 
-        The compare-and-set the cancellation path is built from (RFC-029
-        section 8). Cancelling a `pending` job is immediate, and the race
-        it has to survive is a worker claiming that job in the moment
-        between the read and the write; the `UPDATE ... WHERE status =
-        'pending'` either wins or matches no row.
+        O compare-and-set de que o caminho do cancelamento é feito (RFC-029
+        §8). Cancelar um job `pending` é imediato, e a corrida a que ele
+        precisa sobreviver é um worker pegando esse job no instante entre a
+        leitura e a escrita; o `UPDATE ... WHERE status = 'pending'` ou
+        ganha, ou não casa com nenhuma linha.
 
-        Returns the stored job, or `None` when the row had moved on --
-        which is not an error. The caller re-reads and decides again,
-        which for cancellation means falling back to setting the flag on
-        a job that is now running.
+        Devolve o job gravado, ou `None` quando a linha já tinha mudado --
+        o que não é erro. O chamador relê e decide de novo, o que, para o
+        cancelamento, quer dizer recorrer a ligar a flag num job que agora
+        está em execução.
         """
 
     @abstractmethod
     def claim_next(self, now: datetime.datetime) -> IndexingJob | None:
-        """Atomically take the oldest queued job, or `None` when there is none.
+        """Pega atomicamente o job enfileirado mais antigo, ou `None` se não há.
 
-        **Must not be implemented as select-then-update.** Two executors
-        polling at once will pick the same row, and under `READ COMMITTED`
-        the loser's `UPDATE` matches nothing and it goes back to sleep
-        with work still queued -- a latency ghost that is invisible with a
-        single executor, which is how every test runs. The PostgreSQL
-        implementation selects `FOR UPDATE SKIP LOCKED` inside the
-        `UPDATE`, and the contract test fires two concurrent claims and
-        requires two different jobs.
+        **Não pode ser implementado como select-then-update.** Dois
+        executores consultando ao mesmo tempo vão escolher a mesma linha, e
+        sob `READ COMMITTED` o `UPDATE` do perdedor não casa com nada e ele
+        volta a dormir com trabalho ainda na fila -- um fantasma de latência
+        invisível com um executor só, que é como todo teste roda. A
+        implementação PostgreSQL faz o select `FOR UPDATE SKIP LOCKED`
+        dentro do `UPDATE`, e o teste de contrato dispara dois claims
+        concorrentes e exige dois jobs diferentes.
 
-        Oldest first, by `created_at`. There is no priority and no
-        reordering (RFC-029 section 14).
+        O mais antigo primeiro, por `created_at`. Não há prioridade nem
+        reordenação (RFC-029 §14).
 
-        The claimed row is exactly `job.claim(now)` applied to the row as
-        it stood -- `started_at` preserved on a resume, heartbeat stamped
-        immediately -- and the contract test asserts that equality rather
-        than trusting each implementation to have written the transition
-        out the same way.
+        A linha pega é exatamente `job.claim(now)` aplicado à linha como
+        estava -- `started_at` preservado numa retomada, heartbeat carimbado
+        na hora -- e o teste de contrato afirma essa igualdade, em vez de
+        confiar que cada implementação escreveu a transição do mesmo jeito.
         """
 
     @abstractmethod
     def claim(self, job_id: JobId, now: datetime.datetime) -> IndexingJob | None:
-        """Atomically take *this* job if it is still queued.
+        """Pega atomicamente *este* job, se ele ainda estiver na fila.
 
-        What the CLI uses. `indexing_worker --root PATH` creates a job and
-        then runs it in its own process, so it needs the same atomic move
-        as the polling loop but aimed at one id -- and it has to lose
-        gracefully when a separate executor got there first, in which case
-        it follows the job by polling instead (RFC-029 section 12).
+        O que a CLI usa. `indexing_worker --root PATH` cria um job e depois
+        o roda no próprio processo, então precisa do mesmo movimento atômico
+        do laço de consulta, mas apontado para um id -- e precisa perder com
+        elegância quando um executor separado chegou antes, caso em que
+        passa a acompanhar o job por consulta (RFC-029 §12).
 
-        Returns `None` when the job is absent or no longer `pending`.
+        Devolve `None` quando o job não existe ou não está mais `pending`.
         """
 
     @abstractmethod
     def list_stale(self, heartbeat_before: datetime.datetime) -> list[IndexingJob]:
-        """Return running jobs whose last heartbeat predates `heartbeat_before`.
+        """Devolve os jobs em execução com último heartbeat antes de `heartbeat_before`.
 
-        The reaper's query, and only the query: what to *do* with an
-        abandoned job -- back to the queue, cancelled, or finally failed
-        -- is `IndexingJob.expire()`'s decision, and the reaper applies it
-        through `save_if_status()` so that a job which came back to life
-        between the two calls is left alone.
+        A consulta do reaper, e só a consulta: o que *fazer* com um job
+        abandonado -- de volta à fila, cancelado ou, enfim, falho -- é
+        decisão de `IndexingJob.expire()`, e o reaper a aplica por
+        `save_if_status()`, para que um job que voltou à vida entre as duas
+        chamadas fique em paz.
 
-        A running job that has never emitted a heartbeat cannot exist:
-        `claim()` stamps one. An implementation that returned rows with a
-        `NULL` heartbeat would be reaping jobs it has no evidence about.
+        Um job em execução que nunca emitiu um heartbeat não pode existir:
+        `claim()` carimba um. Uma implementação que devolvesse linhas com
+        heartbeat `NULL` estaria recolhendo jobs sobre os quais não tem
+        evidência.
         """
 
     @abstractmethod
@@ -167,11 +168,11 @@ class IndexingJobRepository(ABC):
         device_id: DeviceId | None = None,
         status: JobStatus | None = None,
     ) -> list[IndexingJob]:
-        """Return jobs, newest first, optionally narrowed by device or status.
+        """Lista os jobs, o mais novo primeiro, opcionalmente por dispositivo ou status.
 
-        Newest first is part of the contract rather than a convenience:
-        the history of a disk is read to answer "what happened last", and
-        a list whose order depended on the implementation would make the
-        in-memory double and PostgreSQL disagree about the first row a UI
-        renders.
+        O mais novo primeiro faz parte do contrato, e não é uma
+        conveniência: o histórico de um disco é lido para responder "o que
+        aconteceu por último", e uma lista cuja ordem dependesse da
+        implementação faria o dublê em memória e o PostgreSQL discordarem
+        sobre a primeira linha que uma interface desenha.
         """

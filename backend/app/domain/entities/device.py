@@ -1,10 +1,10 @@
-"""Device entity for the domain layer (RFC-027).
+"""Entidade Device da camada de domínio (RFC-027).
 
-A device is one physical volume: an external disk, a memory card, the
-internal drive. It is *not* a `Collection` -- one disk holds several
-indexed folders, indexed at different times against different model
-versions, and fusing the two would force a whole disk to share one
-embedding model version (RFC-027 section 10).
+Um dispositivo é um volume físico: um disco externo, um cartão de memória, o
+disco interno. Ele *não* é uma `Collection` -- um disco guarda várias pastas
+indexadas, indexadas em momentos diferentes contra versões diferentes do
+modelo, e fundir os dois obrigaria um disco inteiro a compartilhar uma versão
+só do modelo de embedding (RFC-027 §10).
 """
 
 from __future__ import annotations
@@ -17,65 +17,64 @@ from app.domain.value_objects.device_id import DeviceId, VolumeIdentity
 
 @dataclass(frozen=True)
 class Device:
-    """Immutable business entity representing a storage volume.
+    """Entidade de negócio imutável que representa um volume de armazenamento.
 
-    Frozen and comparing by `id`, following `Image` (RFC-009): two values
-    describing the same disk at two moments -- a different `last_seen_at`,
-    a renamed label -- are the same device, and a set of devices must not
-    contain it twice.
+    Congelada e comparada pelo `id`, seguindo `Image` (RFC-009): dois valores
+    que descrevem o mesmo disco em dois momentos -- um `last_seen_at`
+    diferente, um rótulo renomeado -- são o mesmo dispositivo, e um conjunto de
+    dispositivos não pode contê-lo duas vezes.
 
-    **There is no `mount_point` field, and no `drive_letter` field.**
-    Persisting either would reintroduce precisely the unstable datum this
-    entity exists to eliminate: on Windows a removable volume's letter is
-    a function of mount order, so the same disk is `D:` today and `F:`
-    tomorrow while nothing on it changed (RFC-027 section 2.1). Where the
-    volume is mounted *right now* is resolved when it is asked for, by
-    `VolumeIdentityProvider.mounted_volumes()`, and is never written down.
+    **Não há campo `mount_point`, nem campo `drive_letter`.** Persistir
+    qualquer um deles reintroduziria justamente o dado instável que esta
+    entidade existe para eliminar: no Windows, a letra de um volume removível
+    é função da ordem de montagem, então o mesmo disco é `D:` hoje e `F:`
+    amanhã sem que nada nele tenha mudado (RFC-027 §2.1). Onde o volume está
+    montado *agora* é resolvido quando perguntado, por
+    `VolumeIdentityProvider.mounted_volumes()`, e nunca é anotado.
 
-    For the same reason there is no `is_connected` field. It would be
-    wrong on every read taken after the user unplugged the disk, and
-    nothing would ever correct it -- Windows does not notify this process
-    (RFC-027 section 7).
+    Pela mesma razão, não há campo `is_connected`. Ele estaria errado em toda
+    leitura feita depois de o usuário desplugar o disco, e nada jamais o
+    corrigiria -- o Windows não avisa este processo (RFC-027 §7).
     """
 
     id: DeviceId
     volume_identity: VolumeIdentity
     label: str
-    """The user's name for the disk -- "HD2".
+    """O nome que o usuário dá ao disco -- "HD2".
 
-    Separate from `filesystem_label` because that one is frequently
-    `Untitled`, or empty, or the vendor's marketing string. A product that
-    promises to say *"it is on HD3"* needs somewhere to keep "HD3".
+    Separado de `filesystem_label` porque esse muitas vezes é `Untitled`, ou
+    vazio, ou a string de marketing do fabricante. Um produto que promete
+    dizer *"está no HD3"* precisa de um lugar para guardar "HD3".
     """
 
     filesystem_label: str | None = None
-    """Whatever the volume itself reports. Informative, never an identifier."""
+    """O que o próprio volume informa. Informativo, nunca um identificador."""
 
     total_bytes: int | None = None
     first_seen_at: datetime.datetime | None = None
     last_seen_at: datetime.datetime | None = None
-    """When this disk was last observed plugged in -- history, not state.
+    """Quando este disco foi visto plugado pela última vez -- histórico, não estado.
 
-    The distinction is the one RFC-027 section 7 makes: this answers
-    "when did I last see it", which is a fact about the past and stays
-    true. It never answers "is it plugged in now", which is a fact about
-    the present that no stored value can keep.
+    A distinção é a que o RFC-027 §7 faz: isto responde "quando o vi pela
+    última vez", que é um fato sobre o passado e continua verdadeiro. Nunca
+    responde "ele está plugado agora", que é um fato sobre o presente que
+    nenhum valor guardado consegue manter.
     """
 
     last_scan_at: datetime.datetime | None = None
     last_scan_file_count: int | None = None
-    """How many supported files the last scan found on this volume.
+    """Quantos arquivos suportados o último scan achou neste volume.
 
-    The denominator of the "% indexed" figure, persisted separately from
-    the indexing result because the two answer different questions
-    (RFC-027 section 8). A scan is cheap -- `stat`, no inference -- and
-    without its own count the percentage could only ever be computed
-    against rows already in `images`, which reaches 100% after any
-    complete pipeline run and never sees a file that was never scanned.
+    O denominador do número de "% indexado", persistido separado do
+    resultado da indexação porque os dois respondem a perguntas diferentes
+    (RFC-027 §8). Um scan é barato -- `stat`, sem inferência -- e, sem uma
+    contagem própria, a porcentagem só poderia ser calculada contra as linhas
+    que já estão em `images`, o que chega a 100% depois de qualquer execução
+    completa do pipeline e nunca vê um arquivo que nunca passou pelo scan.
 
-    Anything rendering a percentage from this must also render *when* the
-    scan happened. "50%" alone is a confident wrong number for a user who
-    copied 10,000 photos onto the disk yesterday.
+    Tudo o que desenha uma porcentagem a partir disto tem de desenhar também
+    *quando* o scan aconteceu. "50%" sozinho é um número errado e confiante
+    para um usuário que copiou 10.000 fotos para o disco ontem.
     """
 
     def __eq__(self, other: object) -> bool:

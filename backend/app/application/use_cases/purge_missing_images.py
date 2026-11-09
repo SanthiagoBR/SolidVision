@@ -1,22 +1,22 @@
-"""Forgetting, by a button, the photos a disk no longer has (RFC-046 section 5.7).
+"""Esquecer, por um botão, as fotos que um disco não tem mais (RFC-046 §5.7).
 
-The one way a row of `images` leaves the database since RFC-046, besides the
-restart of RFC-045: the user asks for it, per disk, having been told how many.
-What a scan does is mark (`SweepMissingImagesUseCase`); this deletes what is
-marked.
+O único caminho por que uma linha de `images` sai do banco desde o RFC-046,
+além do recomeço do RFC-045: o usuário pede, por disco, depois de saber
+quantas são. O que um scan faz é marcar (`SweepMissingImagesUseCase`); isto
+apaga o que está marcado.
 
-    the request                         the answer
-    a device nobody knows               DeviceNotFoundError -- 404
-    a device with a pending or running  DeviceBusyError -- 409: the job may
-    job                                 unmark a row this would delete
-    otherwise                           the number of rows deleted
+    o pedido                            a resposta
+    um dispositivo que ninguém conhece  DeviceNotFoundError -- 404
+    um dispositivo com um job pendente  DeviceBusyError -- 409: o job pode
+    ou rodando                          desmarcar uma linha que isto apagaria
+    nos outros casos                    o número de linhas apagadas
 
-**The disk does not have to be plugged in.** The marks came from a scan that
-was checked when it ran; forgetting what is no longer on a disk does not need
-the disk.
+**O disco não precisa estar plugado.** As marcas vieram de um scan que foi
+conferido quando rodou; esquecer o que não está mais num disco não precisa do
+disco.
 
-**No guard of RFC-030.** Those protect the user's file system, and nothing
-here touches it: the rows and the thumbnails are what this application made.
+**Nenhuma guarda do RFC-030.** Elas protegem o sistema de arquivos do usuário,
+e nada aqui toca nele: as linhas e as miniaturas são o que esta aplicação fez.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from app.domain.value_objects.device_id import DeviceId
 
 
 class PurgeMissingImagesUseCase:
-    """Delete a device's marked rows, then their thumbnails."""
+    """Apaga as linhas marcadas de um dispositivo, e depois as miniaturas delas."""
 
     def __init__(
         self,
@@ -46,18 +46,18 @@ class PurgeMissingImagesUseCase:
         self._thumbnails = thumbnail_store
 
     def execute(self, device_id: DeviceId) -> int:
-        """Purge the marked rows of `device_id`, and return how many went.
+        """Purga as linhas marcadas de `device_id` e devolve quantas saíram.
 
-        **The rows first, in one transaction, and only then the
-        thumbnails.** A process that dies between the two leaves thumbnails
-        without rows, which are litter in the application's cache; the
-        other order would leave rows pointing at nothing.
+        **As linhas primeiro, numa transação, e só depois as miniaturas.** Um
+        processo que morre entre as duas deixa miniaturas sem linhas, que são
+        lixo no cache da aplicação; a outra ordem deixaria linhas apontando
+        para nada.
 
-        **Refused while the disk has a job** (`DeviceBusyError`): a running
-        job ends with a sweep that unmarks the photos it found again, and a
-        photo it found would lose its row here -- and be inferred again by
-        the next scan. The job runner runs one job at a time, so with no
-        active job nothing else writes the marks (section 5.4).
+        **Recusado enquanto o disco tem um job** (`DeviceBusyError`): um job
+        rodando termina com uma varredura que desmarca as fotos que ele achou
+        de novo, e uma foto que ele achou perderia a linha aqui -- e passaria
+        de novo pela inferência no próximo scan. O job runner roda um job por
+        vez, então, sem job ativo, nada mais escreve as marcas (§5.4).
         """
         device = self._devices.get(device_id)
         if device is None:
@@ -75,8 +75,8 @@ class PurgeMissingImagesUseCase:
             try:
                 self._thumbnails.delete(location)
             except OSError:
-                # A thumbnail being served at this instant cannot be removed
-                # on Windows. It stays as litter -- the failure this order
-                # accepts -- and the rows, already gone, are the answer.
+                # Uma miniatura sendo servida neste instante não pode ser
+                # removida no Windows. Ela fica como lixo -- a falha que esta
+                # ordem aceita -- e as linhas, já apagadas, são a resposta.
                 continue
         return purged.count

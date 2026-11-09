@@ -1,4 +1,4 @@
-"""Public exports for domain exceptions."""
+"""Exportações públicas das exceções de domínio."""
 
 from app.domain.exceptions.address_errors import EmptyAddressError
 from app.domain.exceptions.capture_date_errors import (
@@ -50,7 +50,7 @@ from app.domain.exceptions.search_errors import (
 
 
 class InvalidEmbeddingVectorError(DomainError):
-    """Raised when an embedding vector is invalid."""
+    """Levantada quando um vetor de embedding é inválido."""
 
     def __init__(self, message: str = "Invalid embedding vector.") -> None:
         super().__init__(message)

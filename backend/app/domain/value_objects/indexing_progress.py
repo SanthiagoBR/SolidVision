@@ -1,17 +1,17 @@
-"""The four counters an indexing run reports while it is still running.
+"""Os quatro contadores que uma indexação informa enquanto ainda está rodando.
 
-A Domain value object rather than the Application's `IndexingSummary`,
-and the split is a layering requirement rather than taste. The progress
-port that RFC-029 needs lives in `app/domain/services/`, beside
-`ContentHasherPort`; a port whose signature named `IndexingSummary` would
-make the Domain import the Application, which is backwards and which
-nothing in `app/domain/` does today.
+Um value object do Domain, e não o `IndexingSummary` da Application, e a
+divisão é uma exigência das camadas, e não gosto. A porta de progresso de
+que o RFC-029 precisa mora em `app/domain/services/`, ao lado de
+`ContentHasherPort`; uma porta cuja assinatura citasse `IndexingSummary`
+faria o Domain importar a Application, o que é ao contrário e que nada em
+`app/domain/` faz hoje.
 
-The shape is also the better one to depend on. `IndexingSummary` carries
-timings, fallback records and per-file failures because a finished run is
-reported to a human; a job row carries four integers and a flag because a
-client is drawing a progress bar. Coupling the two would drag every
-future summary field through the database.
+A forma também é a melhor de que depender. `IndexingSummary` traz tempos,
+registros de recuo e falhas por arquivo porque uma execução terminada é
+relatada a uma pessoa; uma linha de job traz quatro inteiros e uma flag
+porque um cliente está desenhando uma barra de progresso. Acoplar os dois
+arrastaria todo campo futuro do resumo pelo banco.
 """
 
 from __future__ import annotations
@@ -21,37 +21,37 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class IndexingProgress:
-    """How far a run has got, as of the moment it was asked.
+    """Até onde uma execução chegou, no momento da pergunta.
 
-    Every counter only grows within one run, which is what lets a client
-    poll and compare. They are *not* comparable across a resume: a
-    resumed job starts counting from zero and skips everything before its
-    checkpoint, so `discovered_files` after a restart is smaller than it
-    was before one. RFC-029 section 10 accepts that -- the checkpoint
-    saves the scan, and the honest denominator problem is section 4.12's.
+    Cada contador só cresce dentro de uma execução, e é isso que deixa um
+    cliente consultar e comparar. Eles *não* são comparáveis entre
+    retomadas: um job retomado começa a contar do zero e pula tudo antes do
+    checkpoint, então `discovered_files` depois de um reinício é menor do que
+    era antes dele. O RFC-029 §10 aceita isso -- o checkpoint salva o scan, e
+    o problema do denominador honesto é o da §4.12.
     """
 
     discovered_files: int = 0
     processed_images: int = 0
-    """Images that gained or refreshed an embedding."""
+    """Imagens que ganharam ou renovaram um embedding."""
 
     skipped_images: int = 0
-    """Images the incremental decision passed over without inference.
+    """Imagens que a decisão incremental deixou passar sem inferência.
 
-    Reported separately because without it a re-scan of an indexed disk
-    looks stuck: 39,000 of 40,000 files skipped would render as
-    `processed=1000 / discovered=40000` and a bar that never moves
-    (RFC-029 section 5.1).
+    Informado à parte porque, sem isso, um novo scan de um disco indexado
+    parece travado: 39.000 de 40.000 arquivos pulados apareceriam como
+    `processed=1000 / discovered=40000` e uma barra que nunca anda (RFC-029
+    §5.1).
     """
 
     failed_images: int = 0
 
     discovery_complete: bool = False
-    """Whether the scan has finished, making `discovered_files` a total.
+    """Se o scan terminou, o que faz de `discovered_files` um total.
 
-    False for most of a job's life, and the client must render that as
-    "scanning N files" rather than as a percentage. Discovery is a
-    generator (RFC-021), so there is no denominator until it is exhausted,
-    and counting ahead of time would mean walking the disk twice
-    (RFC-029 section 4.12 of the build prompt).
+    Falso durante a maior parte da vida de um job, e o cliente precisa
+    mostrar isso como "lendo N arquivos", e não como porcentagem. A
+    descoberta é um gerador (RFC-021), então não há denominador até ela se
+    esgotar, e contar antes seria percorrer o disco duas vezes (RFC-029
+    §4.12 do build prompt).
     """

@@ -1,22 +1,23 @@
-"""The name of the program this process is running (RFC-034 section 8.2).
+"""O nome do programa que este processo está rodando (RFC-034 §8.2).
 
-Each program writes its own log file, named after it::
+Cada programa escreve o seu próprio arquivo de log, com o nome dele::
 
     python -m uvicorn app.presentation.api:app          uvicorn.log
     python -m app.infrastructure.workers.job_runner     job_runner.log
     python -m app.infrastructure.database.embedded ...  embedded.log
     python -m app.cli ...                               cli.log
     python -m pytest, or pytest                         pytest.log
-    anything else (python -c, a REPL)                   python.log
+    qualquer outra coisa (python -c, um REPL)           python.log
 
-Derived here and nowhere else, so that no entry point has to declare
-anything -- which none could do in time: the logger is configured by the
-first `get_logger()`, during import, before any `main()` runs.
+Derivado aqui e em nenhum outro lugar, para que nenhum ponto de entrada
+precise declarar nada -- o que nenhum conseguiria fazer a tempo: o logger é
+configurado pelo primeiro `get_logger()`, durante o import, antes de qualquer
+`main()` rodar.
 
-For the same reason the name is read from `sys.orig_argv`, the command line
-as the interpreter received it. While the packages of a `-m` module are
-still being imported, `sys.argv[0]` is the literal `-m` and
-`__main__.__spec__` is not set yet.
+Pela mesma razão, o nome é lido de `sys.orig_argv`, a linha de comando como o
+interpretador a recebeu. Enquanto os pacotes de um módulo `-m` ainda estão
+sendo importados, `sys.argv[0]` é o literal `-m` e `__main__.__spec__` ainda
+não foi definido.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_.-]")
 
 
 def program_name(argv: Sequence[str] | None = None) -> str:
-    """The module given to `-m`, or the script, or `python`."""
+    """O módulo passado a `-m`, ou o script, ou `python`."""
     arguments = list(sys.orig_argv if argv is None else argv)[1:]
     position = 0
     while position < len(arguments):
@@ -48,8 +49,8 @@ def program_name(argv: Sequence[str] | None = None) -> str:
             return FALLBACK
         if not argument.startswith("-"):
             return _clean(PureWindowsPath(argument).stem)
-        # A cluster of one-letter options. `-m` and `-c` end the interpreter's
-        # own options, and whatever follows the letter is their value.
+        # Um grupo de opções de uma letra. `-m` e `-c` encerram as opções do
+        # próprio interpretador, e o que vier depois da letra é o valor delas.
         for index, letter in enumerate(argument[1:], start=1):
             if letter == "m":
                 attached = argument[index + 1 :]

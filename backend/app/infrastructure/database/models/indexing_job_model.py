@@ -1,22 +1,22 @@
-"""SQLAlchemy models for indexing jobs and their scopes (RFC-029).
+"""Modelos SQLAlchemy dos jobs de indexação e de seus escopos (RFC-029).
 
-**Neither table has a foreign key to `images`, and neither may grow one.**
-RFC-027 section 6.2 justified its own priority by noting that rewriting
-image identity stays cheap only while nothing references `images.id`, and
-named this RFC as the one that might close that window. It does not: a
-job refers to a device and to a set of folders, its counters are
-aggregates, and its checkpoint is a path. An association table linking
-jobs to images would be 40,000 rows per job for a log with no reader
-(RFC-029 section 11). `test_indexing_job_model.py` reads the SQLAlchemy
-metadata and fails if such a key appears.
+**Nenhuma das duas tabelas tem chave estrangeira para `images`, e nenhuma pode
+ganhar uma.** O RFC-027 §6.2 justificou a própria prioridade observando que
+reescrever a identidade das imagens só continua barato enquanto nada referencia
+`images.id`, e apontou este RFC como o que poderia fechar essa janela. Não
+fecha: um job se refere a um dispositivo e a um conjunto de pastas, seus
+contadores são agregados e seu checkpoint é um caminho. Uma tabela de associação
+ligando jobs a imagens seriam 40.000 linhas por job, para um log sem leitor
+(RFC-029 §11). `test_indexing_job_model.py` lê os metadados do SQLAlchemy e
+falha se uma chave dessas aparecer.
 
-**The timestamps here are `TIMESTAMPTZ`, next to an `images.captured_at`
-that is not, and both are right.** A capture date is the camera's local
-wall-clock reading with no zone at all, so RFC-028 section 5 stores it
-zoneless. Everything below is an instant on the machine running the job
--- when it was queued, when a worker last proved it was alive -- and an
-instant without a zone is ambiguous. Anyone tempted to make the two
-uniform should read both comments first.
+**Os timestamps aqui são `TIMESTAMPTZ`, ao lado de um `images.captured_at` que
+não é, e os dois estão certos.** Uma data de captura é a leitura do relógio
+local da câmera, sem fuso nenhum, e por isso o RFC-028 §5 a guarda sem fuso.
+Tudo o que está abaixo é um instante na máquina que roda o job -- quando ele
+entrou na fila, quando um worker provou pela última vez que estava vivo --, e
+um instante sem fuso é ambíguo. Quem tiver a tentação de uniformizar os dois
+deve ler os dois comentários antes.
 """
 
 from __future__ import annotations
@@ -46,19 +46,19 @@ from app.domain.value_objects.job_scope import JobScope
 from app.infrastructure.persistence.base import Base
 
 ACTIVE_JOB_INDEX = "uq_one_active_job_per_device"
-"""The partial unique index of RFC-029 section 9, named once.
+"""O índice único parcial do RFC-029 §9, nomeado uma vez só.
 
-Named as a module constant because the PostgreSQL repository has to
-recognise this exact string in an `IntegrityError` to translate it into
-`DeviceBusyError`. Matching on the message text instead would break the
-day PostgreSQL rewords it or the server runs in another locale, and
-treating *any* `IntegrityError` as "device busy" would report a bad
-foreign key as a busy disk.
+Nomeado como constante do módulo porque o repositório PostgreSQL precisa
+reconhecer exatamente esta string num `IntegrityError` para traduzi-lo em
+`DeviceBusyError`. Casar pelo texto da mensagem quebraria no dia em que o
+PostgreSQL mudasse a redação ou o servidor rodasse em outro locale, e tratar
+*qualquer* `IntegrityError` como "dispositivo ocupado" relataria uma chave
+estrangeira inválida como um disco ocupado.
 """
 
 
 class IndexingJobModel(Base):
-    """SQLAlchemy representation of an `IndexingJob` domain entity."""
+    """Representação SQLAlchemy de uma entidade de domínio `IndexingJob`."""
 
     __tablename__ = "indexing_jobs"
 
@@ -72,19 +72,19 @@ class IndexingJobModel(Base):
         ForeignKey("devices.id", name="fk_indexing_jobs_device_id"),
         nullable=False,
     )
-    """Which disk this job is for.
+    """De qual disco é este job.
 
-    A device rather than the `collection_id` of `ARCHITECTURE.md` section
-    15: `Collection` is still a placeholder (RFC-027 section 10), and a
-    device is what the system actually has.
+    Um dispositivo, e não o `collection_id` do `ARCHITECTURE.md` §15:
+    `Collection` ainda é um marcador de lugar (RFC-027 §10), e um dispositivo
+    é o que o sistema de fato tem.
     """
 
     status: Mapped[str] = mapped_column(String, nullable=False)
     """`pending` / `running` / `completed` / `failed` / `cancelled`.
 
-    Plain text rather than a PostgreSQL `ENUM`, following RFC-028's
-    `capture_source`: a closed database type buys nothing here and would
-    make adding a state cost a migration.
+    Texto simples e não um `ENUM` do PostgreSQL, seguindo o `capture_source`
+    do RFC-028: um tipo fechado no banco não compra nada aqui e faria
+    acrescentar um estado custar uma migration.
     """
 
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -99,12 +99,12 @@ class IndexingJobModel(Base):
     discovered_files: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
-    """A running count, and **not** a denominator until `discovery_complete`.
+    """Uma contagem corrente, e **não** um denominador até `discovery_complete`.
 
-    Discovery is a generator (RFC-021), so the total does not exist until
-    the scan ends. Counting ahead of time would mean walking the disk
-    twice, which on the cold mechanical disk this product exists for is
-    the dominant cost -- so the client is given the honest pair instead.
+    A descoberta é um gerador (RFC-021), então o total não existe até o scan
+    terminar. Contar antes significaria percorrer o disco duas vezes, o que, no
+    disco mecânico frio para o qual este produto existe, é o custo dominante --
+    então o cliente recebe o par honesto no lugar.
     """
 
     processed_images: Mapped[int] = mapped_column(
@@ -113,11 +113,11 @@ class IndexingJobModel(Base):
     skipped_images: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
-    """Files the incremental decision passed over (RFC-029 section 5.1).
+    """Arquivos que a decisão incremental deixou passar (RFC-029 §5.1).
 
-    Without this column a job that skipped 39,000 of 40,000 files reports
-    `processed=1000` against `discovered=40000` and looks stuck. It is the
-    only thing that makes the progress bar honest.
+    Sem esta coluna, um job que pulou 39.000 de 40.000 arquivos relata
+    `processed=1000` contra `discovered=40000` e parece travado. Ela é a única
+    coisa que torna a barra de progresso honesta.
     """
 
     failed_images: Mapped[int] = mapped_column(
@@ -129,24 +129,24 @@ class IndexingJobModel(Base):
     last_processed_relative_path: Mapped[str | None] = mapped_column(
         String, nullable=True
     )
-    """The checkpoint, relative to the device's mount point.
+    """O checkpoint, relativo ao ponto de montagem do dispositivo.
 
-    Relative for the reason every path in this database is relative since
-    RFC-027: an absolute checkpoint would name a drive letter, and a drive
-    letter is assigned by mount order. Compared as a path and never as a
-    string -- see `FilesystemImageProvider`.
+    Relativo pela mesma razão de todo caminho deste banco ser relativo desde o
+    RFC-027: um checkpoint absoluto nomearia uma letra de unidade, e a letra de
+    unidade é atribuída pela ordem de montagem. Comparado como caminho, nunca
+    como string -- ver `FilesystemImageProvider`.
     """
 
     error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     last_heartbeat_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    """The evidence that somebody is still working on this job.
+    """A evidência de que alguém ainda está trabalhando neste job.
 
-    Written on a timer rather than per batch. A re-scan of an indexed disk
-    produces no batches at all for minutes at a time, and a heartbeat tied
-    to batches would have the reaper killing the healthiest possible run
-    (RFC-029 section 9.1).
+    Escrito por um temporizador, e não a cada lote. Um novo scan de um disco
+    indexado passa minutos seguidos sem produzir lote nenhum, e um heartbeat
+    preso aos lotes faria o reaper matar justamente a execução mais saudável
+    possível (RFC-029 §9.1).
     """
 
     cancel_requested: Mapped[bool] = mapped_column(
@@ -161,11 +161,11 @@ class IndexingJobModel(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    """The folders to walk; zero rows means the whole device.
+    """As pastas a percorrer; zero linhas significa o dispositivo inteiro.
 
-    `selectin` rather than lazy loading because every read of a job reads
-    its scopes -- the API echoes them, and the executor walks them -- so
-    the alternative is one extra query per job in every list response.
+    `selectin` em vez de carregamento lazy porque toda leitura de um job lê os
+    seus escopos -- a API os devolve, e o executor os percorre --, então a
+    alternativa é uma consulta a mais por job em toda resposta de listagem.
     """
 
     __table_args__ = (
@@ -181,36 +181,37 @@ class IndexingJobModel(Base):
         CheckConstraint("failed_images >= 0", name="failed_images_non_negative"),
         CheckConstraint("attempts >= 0", name="attempts_non_negative"),
     )
-    """One active job per device, enforced by the database (RFC-029 section 9).
+    """Um job ativo por dispositivo, garantido pelo banco (RFC-029 §9).
 
-    A partial unique index, not a plain one: a device is expected to have
-    many finished jobs and at most one that still holds the disk. Two
-    concurrent creations race inside PostgreSQL, where the race actually
-    is, instead of inside a Python `SELECT` that both of them would pass.
+    Um índice único parcial, não um simples: espera-se que um dispositivo tenha
+    muitos jobs terminados e no máximo um que ainda segura o disco. Duas
+    criações concorrentes disputam dentro do PostgreSQL, onde a disputa de fato
+    está, e não dentro de um `SELECT` em Python pelo qual as duas passariam.
 
-    `pending` is inside the predicate on purpose. A queued job has already
-    reserved the disk, and it keeps that reservation through a reaper's
-    requeue -- which is what stops an interrupted job at 60% from losing
-    its place to whatever was asked for next.
+    `pending` está no predicado de propósito. Um job na fila já reservou o
+    disco, e mantém essa reserva quando um reaper o devolve à fila -- é isso
+    que impede um job interrompido em 60% de perder o lugar para o que quer
+    que tenha sido pedido em seguida.
     """
 
     @classmethod
     def from_domain(cls, job: IndexingJob) -> IndexingJobModel:
-        """Create an ORM model from a domain entity."""
+        """Cria um modelo ORM a partir de uma entidade de domínio."""
         model = cls(id=job.id.value)
         model.apply(job)
         return model
 
     def apply(self, job: IndexingJob) -> None:
-        """Copy every mutable field of `job` onto this row.
+        """Copia cada campo mutável de `job` para esta linha.
 
-        Shared by insert and update so the two cannot disagree about what
-        a job is. `id` is deliberately absent: a job's identity never
-        moves, and an update that rewrote it would create a second row.
+        Compartilhado pela inserção e pela atualização, para que as duas não
+        possam discordar sobre o que é um job. `id` fica de fora de propósito:
+        a identidade de um job nunca muda, e uma atualização que a reescrevesse
+        criaria uma segunda linha.
 
-        Scopes are rewritten only when they differ, because they never
-        change after creation and `delete-orphan` would otherwise issue a
-        delete and an insert on every heartbeat.
+        Os escopos só são reescritos quando diferem, porque nunca mudam depois
+        da criação, e o `delete-orphan` emitiria, caso contrário, um delete e um
+        insert a cada heartbeat.
         """
         self.device_id = job.device_id.value
         self.status = job.status.value
@@ -237,7 +238,7 @@ class IndexingJobModel(Base):
             self.scopes = [IndexingJobScopeModel(relative_path=path) for path in wanted]
 
     def to_domain(self) -> IndexingJob:
-        """Create a domain entity from this ORM model."""
+        """Cria uma entidade de domínio a partir deste modelo ORM."""
         return IndexingJob(
             id=JobId(self.id),
             device_id=DeviceId(self.device_id),
@@ -266,16 +267,16 @@ class IndexingJobModel(Base):
 
 
 class IndexingJobScopeModel(Base):
-    """One folder a job is restricted to, device-relative (RFC-029 section 5.2).
+    """Uma pasta a que um job se restringe, relativa ao dispositivo (RFC-029 §5.2).
 
-    A child table rather than an array or a JSON column on the job row.
-    The question actually asked of scopes is *"is this folder covered by
-    a running job?"*, which is a `WHERE` here and a scan in memory in any
-    of the other shapes.
+    Uma tabela filha, e não um array ou uma coluna JSON na linha do job. A
+    pergunta que de fato se faz aos escopos é *"esta pasta está coberta por um
+    job em execução?"*, que aqui é um `WHERE` e, em qualquer das outras formas,
+    uma varredura em memória.
 
-    The primary key is the pair, which makes a duplicate scope row
-    impossible -- a second guard behind `normalize_scopes()`, and a
-    cheap one, since the pair is what any lookup would key on anyway.
+    A chave primária é o par, o que torna impossível uma linha de escopo
+    duplicada -- uma segunda guarda atrás de `normalize_scopes()`, e barata,
+    já que o par é a chave de qualquer busca de qualquer jeito.
     """
 
     __tablename__ = "indexing_job_scopes"
@@ -291,13 +292,12 @@ class IndexingJobScopeModel(Base):
         nullable=False,
     )
     relative_path: Mapped[str] = mapped_column(String, primary_key=True, nullable=False)
-    """Where the folder sits within the device, never an absolute path.
+    """Onde a pasta fica dentro do dispositivo, nunca um caminho absoluto.
 
-    `ON DELETE CASCADE` on the key above, unlike `images.device_id`, which
-    refuses. The asymmetry is deliberate: deleting a job should take its
-    scopes, because a scope has no meaning without its job, whereas an
-    image row is an embedding that cost real inference time (RFC-027
-    section 6.3).
+    `ON DELETE CASCADE` na chave acima, ao contrário de `images.device_id`, que
+    recusa. A assimetria é deliberada: apagar um job deve levar os seus escopos,
+    porque um escopo não tem sentido sem o seu job, enquanto uma linha de imagem
+    é um embedding que custou tempo real de inferência (RFC-027 §6.3).
     """
 
     job: Mapped[IndexingJobModel] = relationship(back_populates="scopes")

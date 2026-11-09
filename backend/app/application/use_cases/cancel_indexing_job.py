@@ -1,24 +1,23 @@
-"""Stopping an indexing job, cooperatively (RFC-029 section 8).
+"""Parar um job de indexação, de forma cooperativa (RFC-029 §8).
 
-Cancellation has two shapes and one entry point, and which shape applies
-depends on whether anybody is holding the job:
+O cancelamento tem duas formas e uma porta de entrada, e qual forma vale
+depende de alguém estar segurando o job:
 
-* a **queued** job is cancelled outright. Nothing is running, so there is
-  nothing to ask politely;
-* a **running** job gets a flag. The worker owns every transition out of
-  `running`, reads the flag between batches, finishes the batch in flight,
-  writes its checkpoint and leaves. Setting `status` here instead would
-  race the worker for that column, and would release the disk before the
-  worker had actually let go of it.
+* um job **na fila** é cancelado de vez. Nada está rodando, então não há a quem
+  pedir com educação;
+* um job **em execução** recebe uma flag. O worker é dono de toda transição
+  para fora de `running`, lê a flag entre lotes, termina o lote em andamento,
+  grava o seu checkpoint e sai. Mudar `status` aqui, em vez disso, disputaria
+  essa coluna com o worker, e liberaria o disco antes de o worker de fato o
+  ter soltado.
 
-And one refusal: cancelling a job that has already finished raises. The
-RFC is explicit that this is an error rather than a silent no-op -- a
-caller asking for it holds a wrong belief, and a 202 would confirm it.
+E uma recusa: cancelar um job que já terminou levanta exceção. O RFC é
+explícito: isso é um erro, e não um no-op silencioso -- quem pede isso tem uma
+crença errada, e um 202 a confirmaria.
 
-**Nothing is undone.** A job cancelled at 60% leaves 60% of the scope
-indexed and searchable, and the next job over the same scope skips it
-through the incremental decision of RFC-020. Cancelling stops; it does not
-reverse.
+**Nada é desfeito.** Um job cancelado em 60% deixa 60% do escopo indexado e
+buscável, e o próximo job sobre o mesmo escopo pula essa parte pela decisão
+incremental do RFC-020. Cancelar para; não reverte.
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from app.domain.value_objects.job_id import JobId
 
 
 class CancelIndexingJobUseCase:
-    """Ask a job to stop, in whichever way its current state allows."""
+    """Pede a um job que pare, do jeito que o seu estado atual permitir."""
 
     def __init__(
         self,
@@ -44,25 +43,26 @@ class CancelIndexingJobUseCase:
         self._clock = clock or _utc_now
 
     def execute(self, job_id: JobId) -> IndexingJob:
-        """Cancel `job_id`, or record that it should stop, and return the job.
+        """Cancela `job_id`, ou registra que ele deve parar, e devolve o job.
 
-        Written as read, decide, conditionally write -- twice at most, and
-        never in a loop. The race worth naming is the first one: between
-        reading a `pending` job and writing it `cancelled`, an executor
-        can claim it. The conditional write then matches no row, and the
-        second half of this method does the right thing for the job as it
-        now is, rather than overwriting a running job with a cancelled one
-        and leaving a worker indexing a job the database says is over.
+        Escrito como ler, decidir, gravar condicionalmente -- no máximo duas
+        vezes, e nunca em loop. A corrida que vale nomear é a primeira: entre
+        ler um job `pending` e gravá-lo `cancelled`, um executor pode
+        reivindicá-lo. A gravação condicional então não casa com nenhuma
+        linha, e a segunda metade deste método faz a coisa certa para o job
+        como ele está agora, em vez de sobrescrever um job em execução com um
+        cancelado e deixar um worker indexando um job que o banco diz ter
+        acabado.
 
-        The bound is what makes this terminate. If the second conditional
-        write also loses, the job finished on its own in the meantime --
-        which is a genuine `IllegalJobTransitionError`, not something to
-        retry.
+        O limite é o que faz isto terminar. Se a segunda gravação condicional
+        também perde, o job terminou sozinho nesse meio-tempo -- o que é um
+        `IllegalJobTransitionError` legítimo, não algo para tentar de novo.
         """
         job = self._require(job_id)
-        # Asks the entity for permission before touching anything: a
-        # finished job raises here, and the route needs no `if` of its own
-        # (`AI_Context.md` -- Presentation decides no business rules).
+        # Pede permissão à entidade antes de tocar em qualquer coisa: um job
+        # terminado levanta exceção aqui, e a rota não precisa de um `if`
+        # próprio (`AI_Context.md` -- a apresentação não decide regra de
+        # negócio).
         flagged = job.request_cancel()
 
         if job.status is JobStatus.PENDING:
@@ -72,9 +72,9 @@ class CancelIndexingJobUseCase:
             if cancelled is not None:
                 return cancelled
 
-            # A worker claimed it in between. Re-read and treat it as the
-            # running job it now is -- including raising if it has already
-            # finished, which is what `request_cancel()` does.
+            # Um worker o reivindicou no meio-tempo. Relê e o trata como o job
+            # em execução que ele agora é -- inclusive levantando exceção se
+            # ele já terminou, que é o que `request_cancel()` faz.
             job = self._require(job_id)
             flagged = job.request_cancel()
 
@@ -88,11 +88,11 @@ class CancelIndexingJobUseCase:
         )
 
     def _require(self, job_id: JobId) -> IndexingJob:
-        """Fetch the job, or say plainly that there is no such job.
+        """Busca o job, ou diz claramente que esse job não existe.
 
-        Distinct from "the job exists and has not started", which is an
-        ordinary `pending` job somebody is polling. Collapsing the two
-        would make a typo in an id indistinguishable from a slow queue.
+        Diferente de "o job existe e não começou", que é um job `pending`
+        comum que alguém está consultando. Juntar os dois tornaria um erro de
+        digitação num id indistinguível de uma fila lenta.
         """
         job = self._jobs.get(job_id)
         if job is None:

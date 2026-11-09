@@ -1,26 +1,25 @@
-"""The adapter that turns pipeline callbacks into job rows (RFC-029).
+"""O adaptador que transforma callbacks do pipeline em linhas de job (RFC-029).
 
-`IndexingObserver` is a Domain port that knows nothing about jobs. This is
-the half that knows about nothing else: it holds a job id, writes the
-counters, keeps the heartbeat moving, and reads back whether somebody has
-asked the run to stop.
+`IndexingObserver` é uma porta do Domínio que não sabe nada de jobs. Esta é a
+metade que não sabe de mais nada: guarda um id de job, grava os contadores,
+mantém o heartbeat andando e lê de volta se alguém pediu para a execução parar.
 
-Two policies live here and nowhere else.
+Duas políticas moram aqui e em nenhum outro lugar.
 
-**When to write.** The end of a prefetch window and the end of a batch are
-written every time -- that is already at most one write per 512 files or
-per 8 images, which is the rate RFC-029 section 7.3 chose. The scan
-callback fires per file, so that one is rate-limited by time.
+**Quando gravar.** O fim de uma janela de prefetch e o fim de um lote são
+gravados toda vez -- isso já é no máximo uma escrita a cada 512 arquivos ou a
+cada 8 imagens, a taxa que o RFC-029 §7.3 escolheu. O callback do scan dispara
+por arquivo, então esse é limitado por tempo.
 
-**When to stop.** `should_stop()` never queries: it answers from what the
-last write read back. That works because the write happens at every batch
-and every window, which is exactly where RFC-029 section 8 says the flag
-should be observed, so the answer is never more than one batch old.
+**Quando parar.** `should_stop()` nunca consulta: responde a partir do que a
+última escrita leu de volta. Isso funciona porque a escrita acontece a cada
+lote e a cada janela, que é exatamente onde o RFC-029 §8 diz que a flag deve
+ser observada, então a resposta nunca tem mais de um lote de atraso.
 
-And one relay that writes nothing here: the listing of a whole disk, which
-`listed()` hands to whatever function the runner gave it -- the runner
-knows the device and where it was mounted, and this object knows neither
-(RFC-039 section 4.1; since RFC-046 the listing itself, not its size).
+E um repasse que não grava nada aqui: a listagem de um disco inteiro, que
+`listed()` entrega a qualquer função que o runner lhe tenha dado -- o runner
+conhece o dispositivo e onde ele foi montado, e este objeto não conhece nenhum
+dos dois (RFC-039 §4.1; desde o RFC-046, a própria listagem, não o tamanho).
 """
 
 from __future__ import annotations
@@ -41,7 +40,7 @@ logger = get_logger(__name__)
 
 
 class JobProgressObserver(IndexingObserver):
-    """Reports one run's progress onto its job row, and relays cancellation."""
+    """Reporta o progresso de uma execução na linha do job e repassa o cancelamento."""
 
     def __init__(
         self,
@@ -63,28 +62,28 @@ class JobProgressObserver(IndexingObserver):
         self._on_listed: Callable[[RootListing], None] | None = None
 
         self.cancelled = False
-        """Whether the route asked this job to stop."""
+        """Se a rota pediu para este job parar."""
 
         self.lost = False
-        """Whether this job stopped being ours -- the reaper took it back.
+        """Se este job deixou de ser nosso -- o reaper o tomou de volta.
 
-        Distinct from `cancelled` because the outcomes differ: a cancelled
-        job is ours to mark `cancelled`, and a lost one must not be
-        written at all, because another worker may already be running it.
+        Distinto de `cancelled` porque os desfechos diferem: um job cancelado
+        cabe a nós marcar `cancelled`, e um perdido não pode ser gravado de
+        jeito nenhum, porque outro worker pode já estar rodando-o.
         """
 
     def discovered(self, files_seen: int, complete: bool) -> None:
-        """Record how far the scan has got, at most every heartbeat interval.
+        """Registra até onde o scan chegou, no máximo uma vez por heartbeat.
 
-        The callback that keeps a job alive when nothing else is
-        happening: a re-scan of an indexed disk completes no batches, and
-        a resume skips most of its files here without yielding any
-        (RFC-029 section 9.1). Rate-limited because it fires per file and
-        a write per file would be 40,000 writes to watch 40,000 files.
+        O callback que mantém um job vivo quando nada mais acontece: um novo
+        scan de um disco indexado não completa nenhum lote, e uma retomada
+        pula aqui a maioria dos arquivos sem entregar nenhum (RFC-029 §9.1).
+        Limitado por tempo porque dispara por arquivo, e uma escrita por
+        arquivo seriam 40.000 escritas para acompanhar 40.000 arquivos.
 
-        `complete` always writes: it is the moment `discovered_files`
-        stops being a running count and becomes a total, which is the one
-        thing a client needs to render a percentage instead of "scanning
+        `complete` sempre grava: é o momento em que `discovered_files` deixa
+        de ser uma contagem corrente e vira um total, a única coisa de que um
+        cliente precisa para mostrar uma porcentagem em vez de "scanning
         N files".
         """
         self._scanned = files_seen
@@ -93,27 +92,26 @@ class JobProgressObserver(IndexingObserver):
             self._write()
 
     def relay_listing_to(self, record: Callable[[RootListing], None]) -> None:
-        """Send the whole disk's listing to `record`.
+        """Envia a listagem do disco inteiro para `record`.
 
-        Given by the runner once it has resolved the device and its mount
-        point, which is after this object exists: the runner builds the
-        observer first so that every way out of a run can read `lost`.
-        Only a job without scopes is given one, and only such a job's scan
-        calls `listed()`. The runner's `_record_scan()` writes the
-        denominator from it and keeps it for the sweep at the end of the
-        job (RFC-046 section 5.3).
+        Dada pelo runner depois que ele resolveu o dispositivo e o ponto de
+        montagem, o que acontece depois de este objeto existir: o runner
+        constrói o observador primeiro para que toda saída de uma execução
+        possa ler `lost`. Só um job sem escopos recebe uma, e só o scan de um
+        job assim chama `listed()`. O `_record_scan()` do runner grava o
+        denominador a partir dela e a guarda para a varredura no fim do job
+        (RFC-046 §5.3).
         """
         self._on_listed = record
 
     def listed(self, listing: RootListing) -> None:
-        """Pass the listing on, and swallow whatever goes wrong with it.
+        """Repassa a listagem, e engole o que der errado com ela.
 
-        **Never raises**, for the reason `_write()` gives: this runs
-        inside the discovery generator, and an exception there would close
-        it and truncate the scan in silence. A disk whose percentage
-        could not be recorded is a disk without a percentage; a job cut
-        short by it would be a job that calls itself complete with half
-        the disk unread.
+        **Nunca levanta exceção**, pelo motivo que `_write()` dá: isto roda
+        dentro do gerador da descoberta, e uma exceção ali o fecharia e
+        truncaria o scan em silêncio. Um disco cuja porcentagem não pôde ser
+        registrada é um disco sem porcentagem; um job interrompido por isso
+        seria um job que se diz completo com metade do disco sem ler.
         """
         record = self._on_listed
         if record is None:
@@ -138,19 +136,19 @@ class JobProgressObserver(IndexingObserver):
         self._record(progress, durable_through)
 
     def should_stop(self) -> bool:
-        """Whether this run should wind up at the next safe point."""
+        """Se esta execução deve se encerrar no próximo ponto seguro."""
         return self.cancelled or self.lost
 
     def _record(
         self, progress: IndexingProgress, durable_through: ImagePath | None
     ) -> None:
-        """Take the pipeline's counters and checkpoint, and write them out.
+        """Pega os contadores e o checkpoint do pipeline, e os grava.
 
-        A `durable_through` of `None` is kept rather than stored: it means
-        the batch buffer still holds the oldest undecided file, so the
-        previous checkpoint is the furthest point that is actually safe to
-        resume from. Overwriting it with `None` would throw away a
-        position a crash still needs.
+        Um `durable_through` igual a `None` é mantido em vez de gravado:
+        significa que o buffer do lote ainda guarda o arquivo não decidido
+        mais antigo, então o checkpoint anterior é o ponto mais adiante de
+        onde é de fato seguro retomar. Sobrescrevê-lo com `None` jogaria fora
+        uma posição de que um crash ainda precisa.
         """
         self._pipeline = progress
         if durable_through is not None:
@@ -161,15 +159,15 @@ class JobProgressObserver(IndexingObserver):
         return (time.monotonic() - self._last_write) >= self._heartbeat_interval
 
     def _merged(self) -> IndexingProgress:
-        """Combine what the scan knows with what the pipeline knows.
+        """Combina o que o scan sabe com o que o pipeline sabe.
 
-        Two sources, because neither has the whole picture. The scan is
-        the only thing that knows how many files exist and whether it has
-        finished looking; the pipeline is the only thing that knows how
-        many of them were embedded, skipped or failed. The scan always
-        runs ahead of the pipeline, so its count is the larger of the two
-        -- but `max` rather than a bare assignment, because a counter a
-        client is watching must never go backwards.
+        Duas fontes, porque nenhuma tem o quadro inteiro. O scan é o único
+        que sabe quantos arquivos existem e se terminou de procurar; o
+        pipeline é o único que sabe quantos deles receberam embedding, foram
+        pulados ou falharam. O scan sempre corre à frente do pipeline, então a
+        contagem dele é a maior das duas -- mas `max` em vez de uma atribuição
+        simples, porque um contador que um cliente está acompanhando nunca
+        pode andar para trás.
         """
         return IndexingProgress(
             discovered_files=max(self._scanned, self._pipeline.discovered_files),
@@ -180,15 +178,15 @@ class JobProgressObserver(IndexingObserver):
         )
 
     def _write(self) -> None:
-        """Write progress, and learn from the same call whether to stop.
+        """Grava o progresso, e sabe pela mesma chamada se deve parar.
 
-        **Never raises**, and the reason is specific rather than general
-        caution: these callbacks run inside the lazy consumption of the
-        discovery generator, and an exception raised there closes the
-        generator and truncates the scan in silence -- the same failure
-        `discovered_candidates()` already documents. A job that cannot
-        report its progress should finish and be slightly out of date, not
-        stop half way and call itself complete.
+        **Nunca levanta exceção**, e o motivo é específico, não cautela
+        genérica: esses callbacks rodam dentro do consumo preguiçoso do
+        gerador da descoberta, e uma exceção levantada ali fecha o gerador e
+        trunca o scan em silêncio -- a mesma falha que
+        `discovered_candidates()` já documenta. Um job que não consegue
+        reportar o progresso deve terminar um pouco desatualizado, e não parar
+        no meio do caminho e se dizer completo.
         """
         self._last_write = time.monotonic()
         try:
@@ -204,9 +202,9 @@ class JobProgressObserver(IndexingObserver):
             return
 
         if stored is None:
-            # The row is no longer `running`: the reaper decided this
-            # worker was dead and put the job back in the queue, or
-            # finished it. Another worker may already have it.
+            # A linha não está mais `running`: o reaper concluiu que este
+            # worker estava morto e devolveu o job à fila, ou o encerrou.
+            # Outro worker pode já estar com ele.
             self.lost = True
             logger.warning(
                 "Job %s is no longer assigned to this worker; winding up",

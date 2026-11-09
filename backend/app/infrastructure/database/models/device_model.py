@@ -1,4 +1,4 @@
-"""SQLAlchemy model for persisting storage devices (RFC-027)."""
+"""Modelo SQLAlchemy para persistir dispositivos de armazenamento (RFC-027)."""
 
 from __future__ import annotations
 
@@ -15,19 +15,19 @@ from app.infrastructure.persistence.base import Base
 
 
 class DeviceModel(Base):
-    """SQLAlchemy representation of a `Device` domain entity.
+    """Representação SQLAlchemy de uma entidade de domínio `Device`.
 
-    **There is no `drive_letter` column and no `mount_point` column**, and
-    the absence is the design. A removable volume's letter is assigned by
-    mount order, so persisting one would make a stationary file's recorded
-    location change on its own -- which is the defect RFC-027 exists to
-    remove, not a convenience it forgot.
+    **Não há coluna `drive_letter` nem coluna `mount_point`**, e a ausência é
+    o desenho. A letra de um volume removível é atribuída pela ordem de
+    montagem, então persistir uma faria a localização registrada de um
+    arquivo parado mudar sozinha -- que é o defeito que o RFC-027 existe para
+    remover, não uma conveniência que ele esqueceu.
 
-    **There is no `is_connected` column either.** It would be wrong on
-    every read taken after the user unplugged the disk, and nothing would
-    ever correct it, because Windows does not notify this process
-    (RFC-027 section 7). Connection is resolved by enumerating what is
-    mounted at the moment the question is asked.
+    **Também não há coluna `is_connected`.** Ela estaria errada em toda
+    leitura feita depois que o usuário desplugasse o disco, e nada jamais a
+    corrigiria, porque o Windows não avisa este processo (RFC-027 §7). A
+    conexão é resolvida enumerando o que está montado no momento em que a
+    pergunta é feita.
     """
 
     __tablename__ = "devices"
@@ -38,19 +38,20 @@ class DeviceModel(Base):
         nullable=False,
     )
     volume_identity: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    """The opaque string the operating system reports for this volume.
+    """A string opaca que o sistema operacional informa para este volume.
 
-    Unique, because two rows claiming the same physical disk is exactly
-    the duplication RFC-027 removes. Stored as text and never parsed: it
-    is a key, and the only operations on a key are equality and hashing.
+    Única, porque duas linhas reivindicando o mesmo disco físico são
+    exatamente a duplicação que o RFC-027 remove. Guardada como texto e
+    nunca interpretada: é uma chave, e as únicas operações sobre uma chave
+    são igualdade e hash.
     """
 
     volume_kind: Mapped[str] = mapped_column(String, nullable=False)
-    """Which platform's scheme `volume_identity` came from.
+    """De qual esquema de plataforma veio o `volume_identity`.
 
-    Persisted so that adding the Linux or macOS adapter needs no migration
-    (RFC-027 section 4.1), and so that identical-looking strings from two
-    platforms stay two devices.
+    Persistido para que acrescentar o adaptador de Linux ou macOS não precise
+    de migration (RFC-027 §4.1), e para que strings de aparência idêntica de
+    duas plataformas continuem sendo dois dispositivos.
     """
 
     label: Mapped[str] = mapped_column(String, nullable=False)
@@ -62,27 +63,28 @@ class DeviceModel(Base):
     last_seen_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    """When the disk was last observed plugged in -- history, not state.
+    """Quando o disco foi visto plugado pela última vez -- histórico, não estado.
 
-    Answers "when did I last see it", which stays true forever. It never
-    answers "is it plugged in now", which no stored value can keep.
+    Responde "quando o vi pela última vez", o que continua verdade para
+    sempre. Nunca responde "está plugado agora", o que nenhum valor guardado
+    consegue manter.
     """
 
     last_scan_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     last_scan_file_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    """How many supported files the last scan found on this volume.
+    """Quantos arquivos suportados o último scan achou neste volume.
 
-    The declared denominator of "% indexed" (RFC-027 section 8). Kept
-    apart from anything in `images` because the two count different
-    things: rows in `images` can only ever describe files somebody already
-    scanned, so a percentage computed from them alone reaches 100% after
-    any complete run and never sees a file that was never looked at.
+    O denominador declarado do "% indexado" (RFC-027 §8). Mantido à parte de
+    qualquer coisa em `images` porque os dois contam coisas diferentes: as
+    linhas de `images` só podem descrever arquivos que alguém já varreu,
+    então uma porcentagem calculada só a partir delas chega a 100% depois de
+    qualquer execução completa e nunca vê um arquivo que nunca foi olhado.
 
-    Nullable because a device that has never been scanned has no
-    denominator, and a missing denominator must render as "not scanned",
-    never as zero.
+    Anulável porque um dispositivo que nunca passou por scan não tem
+    denominador, e um denominador ausente tem de aparecer como "sem scan",
+    nunca como zero.
     """
 
     __table_args__ = (
@@ -94,14 +96,14 @@ class DeviceModel(Base):
 
     @classmethod
     def from_domain(cls, device: Device) -> DeviceModel:
-        """Create an ORM model from a domain entity.
+        """Cria um modelo ORM a partir de uma entidade de domínio.
 
-        `first_seen_at` and `last_seen_at` are NOT NULL in the schema but
-        optional on the entity, so a device constructed without them is
-        stamped with "now" here rather than rejected. That is the right
-        place for the default: the timestamps describe when persistence
-        observed the disk, and the domain entity is usable in tests and in
-        memory without inventing a clock.
+        `first_seen_at` e `last_seen_at` são NOT NULL no schema, mas opcionais
+        na entidade, então um dispositivo construído sem eles recebe "agora"
+        aqui em vez de ser rejeitado. Este é o lugar certo para o default: os
+        timestamps descrevem quando a persistência observou o disco, e a
+        entidade de domínio fica utilizável em testes e em memória sem
+        inventar um relógio.
         """
         seen_at = datetime.datetime.now(tz=datetime.UTC)
         return cls(
@@ -118,7 +120,7 @@ class DeviceModel(Base):
         )
 
     def to_domain(self) -> Device:
-        """Create a domain entity from this ORM model."""
+        """Cria uma entidade de domínio a partir deste modelo ORM."""
         return Device(
             id=DeviceId(self.id),
             volume_identity=VolumeIdentity(

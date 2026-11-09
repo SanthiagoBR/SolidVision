@@ -1,4 +1,4 @@
-"""Central logging factory for the application."""
+"""Fábrica central de loggers da aplicação."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ _APP_LOGGER_NAME = "app"
 
 
 def _log_filename() -> str:
-    """`LOG_FILENAME` when set; otherwise one file per program (RFC-034 8.2)."""
+    """`LOG_FILENAME` quando definido; senão, um arquivo por programa (RFC-034 §8.2)."""
     return settings.log_filename or f"{program_name()}.log"
 
 
 def _configure_root_logger() -> logging.Logger:
-    """Configure the root application logger once."""
+    """Configura o logger raiz da aplicação, uma vez só."""
     root_logger = logging.getLogger(_APP_LOGGER_NAME)
     if root_logger.handlers:
         return root_logger
@@ -28,7 +28,7 @@ def _configure_root_logger() -> logging.Logger:
     root_logger.propagate = False
 
     root_logger.addHandler(build_console_handler())
-    # Absolute already: `Settings` anchors every path (RFC-034 section 6.3).
+    # Já absoluto: `Settings` ancora todo caminho (RFC-034 §6.3).
     root_logger.addHandler(
         build_rotating_file_handler(settings.log_directory, _log_filename())
     )
@@ -37,10 +37,10 @@ def _configure_root_logger() -> logging.Logger:
 
 
 def _write_configuration_report(root_logger: logging.Logger) -> None:
-    """Say where this process's configuration came from (RFC-034 section 5.6).
+    """Diz de onde veio a configuração deste processo (RFC-034 §5.6).
 
-    Written here because `settings` cannot log: this module imports it. The
-    warnings name every key of the file that did not do what it seems to.
+    Escrito aqui porque `settings` não pode fazer log: este módulo o importa. Os
+    avisos nomeiam cada chave do arquivo que não fez o que parece fazer.
     """
     for line in configuration_report.lines():
         root_logger.info(line)
@@ -49,11 +49,11 @@ def _write_configuration_report(root_logger: logging.Logger) -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a configured logger for the calling module."""
+    """Devolve um logger configurado para o módulo que chama."""
     _configure_root_logger()
     return logging.getLogger(f"{_APP_LOGGER_NAME}.{name}")
 
 
 def log_exception(logger: logging.Logger, message: str, exc_info: Any = True) -> None:
-    """Log an exception with a traceback."""
+    """Registra uma exceção no log, com traceback."""
     logger.exception(message, exc_info=exc_info)

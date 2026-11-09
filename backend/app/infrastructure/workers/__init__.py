@@ -1,1 +1,1 @@
-"""Worker infrastructure package."""
+"""Pacote de infraestrutura dos workers."""

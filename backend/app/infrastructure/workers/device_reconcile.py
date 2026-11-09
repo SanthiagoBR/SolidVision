@@ -1,53 +1,52 @@
-"""Assisted migration step for RFC-027: give existing image rows a device.
+"""Passo assistido de migração do RFC-027: dar um dispositivo às linhas de imagem.
 
     python -m app.infrastructure.workers.device_reconcile --root PATH --label HD2
 
-This is step 2 of the three-step migration in RFC-027 section 6.3, and it
-is a deliverable rather than a line in a README on purpose: the work it
-does cannot be done by `upgrade()`.
+Este é o passo 2 da migração em três passos do RFC-027 §6.3, e é de propósito
+um entregável, e não uma linha num README: o trabalho que ele faz não pode ser
+feito por `upgrade()`.
 
-**Why a migration cannot do it.** A row's `relative_path` is not derivable
-from its absolute `path` without knowing which prefix was the scan root,
-and the root arrived as the indexing worker's `--root` argument, which was
-never stored. There is no way to split `D:/fotos/2018/x.JPG` into a device
-and a path within it from inside the database. So an operator supplies the
-missing half -- the root -- and this command supplies everything else.
+**Por que uma migration não consegue fazê-lo.** O `relative_path` de uma linha
+não pode ser derivado do `path` absoluto sem saber qual prefixo era a raiz do
+scan, e a raiz chegou como o argumento `--root` do worker de indexação, que
+nunca foi guardado. Não há como dividir `D:/fotos/2018/x.JPG` num dispositivo e
+num caminho dentro dele de dentro do banco. Então um operador fornece a metade
+que falta -- a raiz -- e este comando fornece todo o resto.
 
-**What it rewrites, and what it protects.** Every matched row gets a
-`device_id`, a `relative_path`, and a **new primary key**, because
-`ImageId` is `uuid5` over the location and the location changed shape
-(RFC-027 section 6.1). It does not touch `embedding`. That is the whole
-point: RFC-024 measured indexing at 2.2 images/second on CPU, so a
-40,000-image disk is roughly five hours of inference, and this command
-exists so that none of it is repeated.
+**O que ele reescreve, e o que ele protege.** Cada linha que casa ganha um
+`device_id`, um `relative_path` e uma **chave primária nova**, porque `ImageId`
+é `uuid5` sobre a localização e a localização mudou de forma (RFC-027 §6.1).
+Ele não toca em `embedding`. É esse o ponto: o RFC-024 mediu a indexação em
+2,2 imagens/segundo na CPU, então um disco de 40.000 imagens são cerca de cinco
+horas de inferência, e este comando existe para que nada disso se repita.
 
-**Rewriting the primary key is safe here and will not be later.** Nothing
-in the schema references `images.id` today -- `IndexingJobs`,
-`SearchHistory` and thumbnails are all designed in `ARCHITECTURE.md` and
-none is built -- so this is one table and one `UPDATE`, with no cascade.
-RFC-029 closes that window (RFC-027 section 6.2).
+**Reescrever a chave primária é seguro aqui e não será depois.** Nada no schema
+referencia `images.id` hoje -- `IndexingJobs`, `SearchHistory` e as thumbnails
+estão todos desenhados no `ARCHITECTURE.md` e nenhum está construído --, então
+isto é uma tabela e um `UPDATE`, sem cascata. O RFC-029 fecha essa janela
+(RFC-027 §6.2).
 
-**Rows it does not match are left exactly as they are.** They are the
-record of a disk the operator has not reconciled yet, and each one holds
-an embedding that cost real time; the next migration refuses to proceed
-while any remain, which is the loud failure RFC-027 section 6.3 asks for.
+**As linhas que ele não casa ficam exatamente como estão.** Elas são o registro
+de um disco que o operador ainda não reconciliou, e cada uma guarda um
+embedding que custou tempo de verdade; a próxima migration se recusa a seguir
+enquanto restar alguma, que é a falha ruidosa que o RFC-027 §6.3 pede.
 
-The command is idempotent: rows that already have a device are skipped, so
-running it twice over the same root is a no-op, and running it once per
-disk is the intended usage.
+O comando é idempotente: linhas que já têm dispositivo são puladas, então
+rodá-lo duas vezes na mesma raiz não faz nada, e rodá-lo uma vez por disco é o
+uso pretendido.
 
-The device itself is resolved by `register_device()`, imported from the
-indexing worker rather than reimplemented here. Both commands mint image
-ids from the device they resolve, so a second copy of the "find or create,
-and which fields survive" rules would be a second chance for the two to
-disagree about the same disk.
+O próprio dispositivo é resolvido por `register_device()`, importado do worker
+de indexação em vez de reimplementado aqui. Os dois comandos cunham ids de
+imagem a partir do dispositivo que resolvem, então uma segunda cópia das regras
+de "achar ou criar, e quais campos sobrevivem" seria uma segunda chance de os
+dois discordarem sobre o mesmo disco.
 
-**It talks to the database in raw SQL, deliberately.** It runs *between*
-two migrations, against a schema that matches neither the old `ImageModel`
-nor the new one: `path` still exists, `device_id` and `relative_path`
-exist but are nullable, and there is no foreign key yet. Mapping that
-transitional shape onto the ORM model would mean an ORM class describing a
-schema that exists for the duration of one operator session.
+**Ele fala com o banco em SQL puro, de propósito.** Ele roda *entre* duas
+migrations, contra um schema que não corresponde nem ao `ImageModel` antigo nem
+ao novo: `path` ainda existe, `device_id` e `relative_path` existem mas aceitam
+nulo, e ainda não há chave estrangeira. Mapear essa forma de transição no model
+do ORM significaria uma classe do ORM descrevendo um schema que existe pela
+duração de uma sessão do operador.
 """
 
 from __future__ import annotations
@@ -73,41 +72,41 @@ logger = get_logger(__name__)
 
 @dataclass
 class ReconcileSummary:
-    """What one reconciliation run did, as data rather than as log output."""
+    """O que uma execução da reconciliação fez, como dado, e não como saída de log."""
 
     device_id: DeviceId
     matched: int = 0
-    """Rows whose `path` fell under the supplied root."""
+    """Linhas cujo `path` caiu sob a raiz fornecida."""
 
     reconciled: int = 0
-    """Rows given a device, a relative path, and a new id."""
+    """Linhas que ganharam um dispositivo, um caminho relativo e um id novo."""
 
     already_reconciled: int = 0
-    """Rows under the root that a previous run had already claimed."""
+    """Linhas sob a raiz que uma execução anterior já tinha reivindicado."""
 
     merged_duplicates: int = 0
-    """Rows discarded because a *different* row is already the same file.
+    """Linhas descartadas porque uma linha *diferente* já é o mesmo arquivo.
 
-    The one case where a row is removed, and it is not a loss: these are
-    the duplicates RFC-027 section 2.1 describes -- the same file on the
-    same disk indexed twice under two drive letters -- collapsing onto one
-    identity now that the identity no longer contains a letter. The
-    surviving row keeps its embedding, and every merge is logged with both
-    of the old paths.
+    O único caso em que uma linha é removida, e não é uma perda: estas são
+    as duplicatas que o RFC-027 §2.1 descreve -- o mesmo arquivo no mesmo
+    disco indexado duas vezes, com duas letras de unidade -- convergindo
+    para uma identidade só, agora que a identidade não contém mais letra. A
+    linha que sobrevive mantém o embedding, e cada fusão vai para o log com
+    os dois caminhos antigos.
 
-    "Different" is load-bearing. A row whose recomputed id equals its own
-    current id is not a duplicate; it is a row that was already reconciled
-    once and only needs its device columns filled in, which is the state
-    `b8e4d2a13c75.downgrade()` leaves behind. Counting that as a merge
-    empties the table.
+    "Diferente" sustenta o resto. Uma linha cujo id recalculado é igual ao
+    próprio id atual não é duplicata; é uma linha que já foi reconciliada
+    uma vez e só precisa das colunas do dispositivo preenchidas, que é o
+    estado que `b8e4d2a13c75.downgrade()` deixa. Contar isso como fusão
+    esvazia a tabela.
     """
 
     remaining_unreconciled: int = 0
-    """Rows anywhere in the table that still have no device.
+    """Linhas em qualquer ponto da tabela que ainda não têm dispositivo.
 
-    Reported so that an operator learns there is another disk to plug in
-    *before* the next migration refuses to run, rather than from its error
-    message.
+    Relatadas para que o operador saiba que há outro disco a plugar *antes*
+    de a próxima migration se recusar a rodar, e não pela mensagem de erro
+    dela.
     """
 
     merges: list[tuple[str, str]] = field(default_factory=list)
@@ -129,19 +128,19 @@ def reconcile(
     root: Path,
     dry_run: bool = False,
 ) -> ReconcileSummary:
-    """Rewrite every unreconciled row under `root` to belong to `device`.
+    """Reescreve cada linha não reconciliada sob `root` para pertencer a `device`.
 
-    **`relative_path` is relative to the device's mount point, not to
-    `root`.** The distinction is the entire second half of RFC-027 section
-    2.2: `--root` is how the operator says *which rows are on this disk*,
-    and nothing more. If the relative path were measured from `--root`,
-    then reconciling `D:\\fotos` and later indexing `D:\\fotos\\2018` would
-    describe the same file two different ways and mint two ids for it --
-    reintroducing, through a different door, the duplication this whole
-    RFC removes.
+    **`relative_path` é relativo ao ponto de montagem do dispositivo, não a
+    `root`.** A distinção é toda a segunda metade do RFC-027 §2.2: `--root`
+    é como o operador diz *quais linhas estão neste disco*, e nada mais. Se
+    o caminho relativo fosse medido a partir de `--root`, reconciliar
+    `D:\\fotos` e depois indexar `D:\\fotos\\2018` descreveria o mesmo
+    arquivo de dois jeitos e cunharia dois ids para ele -- reintroduzindo,
+    por outra porta, a duplicação que este RFC inteiro remove.
 
-    Matching is case-insensitive because Windows paths are, and a stored
-    `D:/fotos` must match a root the operator typed as `d:\\fotos`.
+    O casamento ignora maiúsculas e minúsculas porque os caminhos do Windows
+    ignoram, e um `D:/fotos` guardado precisa casar com uma raiz que o
+    operador digitou como `d:\\fotos`.
     """
     summary = ReconcileSummary(device_id=device.id)
     mount_prefix = _posix_prefix(volume.mount_point)
@@ -158,10 +157,10 @@ def reconcile(
 
         relative = _device_relative(stored_path, mount_prefix, relative_root)
         if relative is None:
-            # The row matched the root but does not sit under the mount
-            # point the root resolved to. Only reachable if the operator
-            # pointed at one disk and the table holds a path that merely
-            # looks like it -- leave it alone rather than guess.
+            # A linha casou com a raiz, mas não está sob o ponto de montagem
+            # para o qual a raiz foi resolvida. Só acontece se o operador
+            # apontou para um disco e a tabela tem um caminho que apenas se
+            # parece com ele -- melhor deixá-la como está do que adivinhar.
             logger.warning(
                 "Skipping %s: it does not sit under mount point %s",
                 stored_path,
@@ -215,23 +214,23 @@ def reconcile(
 def _rows_under(
     session: Session, root_prefix: str, relative_root: str | None
 ) -> list[tuple[uuid.UUID, str, bool]]:
-    """Return `(id, path, already_has_device)` for every row under a root.
+    """Devolve `(id, path, already_has_device)` de cada linha sob uma raiz.
 
-    Two prefixes are tried, because `path` can be in either of two shapes.
-    The normal one is absolute -- `D:/fotos/2018/x.JPG` -- written by a
-    pre-RFC-027 indexing run. The other is device-relative, and it is what
-    `b8e4d2a13c75.downgrade()` leaves behind: rolling back cannot restore
-    an absolute path, since the mount point it began with was never
-    stored, so it backfills `path` from `relative_path`. Matching only the
-    absolute form would leave a downgraded database impossible to
-    reconcile, which would make RFC-007's required round trip a one-way
-    door.
+    Dois prefixos são tentados, porque `path` pode estar em qualquer de duas
+    formas. A normal é absoluta -- `D:/fotos/2018/x.JPG` --, escrita por uma
+    indexação anterior ao RFC-027. A outra é relativa ao dispositivo, e é o
+    que `b8e4d2a13c75.downgrade()` deixa: o rollback não consegue restaurar
+    um caminho absoluto, já que o ponto de montagem de onde ele partiu nunca
+    foi guardado, então faz o backfill de `path` a partir de
+    `relative_path`. Casar só a forma absoluta deixaria um banco que passou
+    por downgrade impossível de reconciliar, o que faria da ida e volta
+    exigida pelo RFC-007 uma porta de mão única.
 
-    Read in full before any write, rather than iterated while updating.
-    The `UPDATE` below changes the primary key, so a cursor still walking
-    the table could legitimately hand the same row back a second time
-    under its new id -- and the second visit would compute a relative path
-    from a `path` value that is no longer there.
+    Lido por inteiro antes de qualquer escrita, em vez de iterado durante a
+    atualização. O `UPDATE` abaixo muda a chave primária, então um cursor
+    ainda percorrendo a tabela poderia, legitimamente, devolver a mesma
+    linha uma segunda vez com o id novo -- e a segunda visita calcularia um
+    caminho relativo a partir de um valor de `path` que não está mais lá.
     """
     statement = text(
         "SELECT id, path, device_id IS NOT NULL AS has_device FROM images "
@@ -241,12 +240,12 @@ def _rows_under(
         "OR lower(path) LIKE lower(:relative_root) || '/%' "
         "ORDER BY path"
     )
-    # A root that is not under the mount point has no relative form, and
-    # the second pair of clauses then simply repeats the first rather than
-    # being switched off with a NULL. PostgreSQL cannot infer a type for a
-    # bare `NULL` parameter in `:p IS NOT NULL`, and casting one just to
-    # disable a branch is more machinery than repeating a predicate that
-    # is already true or already false.
+    # Uma raiz que não está sob o ponto de montagem não tem forma relativa,
+    # e o segundo par de cláusulas então simplesmente repete o primeiro, em
+    # vez de ser desligado com um NULL. O PostgreSQL não consegue inferir um
+    # tipo para um parâmetro `NULL` puro em `:p IS NOT NULL`, e fazer cast
+    # de um só para desligar um ramo é mais maquinário do que repetir um
+    # predicado que já é verdadeiro ou já é falso.
     rows = session.execute(
         statement,
         {"root": root_prefix, "relative_root": relative_root or root_prefix},
@@ -255,16 +254,15 @@ def _rows_under(
 
 
 def _row_exists(session: Session, image_id: uuid.UUID) -> bool:
-    """Return whether some row already holds this id.
+    """Diz se alguma linha já tem este id.
 
-    Callers must first check that the id is not the one the row already
-    has. A row whose computed id equals its current id is not a duplicate
-    of anything -- it is itself, and it happens whenever the identity was
-    already correct and only the device columns need filling in, which is
-    exactly the state a downgrade leaves behind. Treating that as a
-    collision would delete every row in the table, one at a time, each
-    time reporting that "another row already holds" the identity it is
-    about to destroy.
+    Quem chama precisa antes verificar que o id não é o que a linha já tem.
+    Uma linha cujo id calculado é igual ao id atual não é duplicata de nada
+    -- é ela mesma, e isso acontece sempre que a identidade já estava certa
+    e só as colunas do dispositivo precisam ser preenchidas, que é
+    exatamente o estado que um downgrade deixa. Tratar isso como colisão
+    apagaria cada linha da tabela, uma a uma, relatando a cada vez que
+    "another row already holds" a identidade que está para destruir.
     """
     statement = text("SELECT 1 FROM images WHERE id = :image_id")
     return session.execute(statement, {"image_id": image_id}).first() is not None
@@ -279,11 +277,11 @@ def _unreconciled_count(session: Session) -> int:
 
 
 def _posix_prefix(path: Path) -> str:
-    """Normalize a path to the posix form `ImagePath` stores, without a trailing slash.
+    """Normaliza um caminho para a forma posix que `ImagePath` guarda, sem barra final.
 
-    Stored paths went through `ImagePath`, which replaces backslashes with
-    forward slashes, so the comparison has to happen in that form or a
-    Windows root would match nothing at all.
+    Os caminhos guardados passaram por `ImagePath`, que troca barras
+    invertidas por barras normais, então a comparação tem de acontecer nessa
+    forma, ou uma raiz do Windows não casaria com nada.
     """
     return str(ImagePath(str(path))).rstrip("/")
 
@@ -291,16 +289,16 @@ def _posix_prefix(path: Path) -> str:
 def _device_relative(
     stored_path: str, mount_prefix: str, relative_root: str | None
 ) -> ImagePath | None:
-    """Turn a stored `path` into a path relative to the device's mount point.
+    """Transforma um `path` guardado num caminho relativo ao ponto de montagem.
 
-    Handles both shapes `_rows_under()` matches. An absolute path has the
-    mount point stripped off it; a path that is already device-relative --
-    what a downgrade leaves behind -- is returned unchanged.
+    Trata as duas formas que `_rows_under()` casa. Um caminho absoluto perde
+    o ponto de montagem; um caminho que já é relativo ao dispositivo -- o
+    que um downgrade deixa -- é devolvido sem mudança.
 
-    Returns `None` when the path is neither, which the caller reports
-    rather than working around: a path that matched the root but sits
-    under no recognised prefix means the two disagree, and guessing would
-    file a photo under the wrong disk.
+    Devolve `None` quando o caminho não é nenhum dos dois, o que quem chama
+    relata em vez de contornar: um caminho que casou com a raiz mas não está
+    sob nenhum prefixo reconhecido significa que os dois discordam, e
+    adivinhar arquivaria uma foto no disco errado.
     """
     stripped = _strip_prefix(stored_path, mount_prefix)
     if stripped is not None:
@@ -311,11 +309,12 @@ def _device_relative(
 
 
 def _strip_prefix(path: str, prefix: str) -> str | None:
-    r"""Remove a leading `prefix/` from `path`, case-insensitively.
+    r"""Remove um `prefix/` do início de `path`, ignorando maiúsculas e minúsculas.
 
-    Case-insensitive because Windows paths are, so a stored `D:/fotos`
-    has to match a mount point Windows reported as `d:\`. Returns `None`
-    when `path` does not sit under `prefix` at all.
+    Ignora porque os caminhos do Windows ignoram, então um `D:/fotos`
+    guardado tem de casar com um ponto de montagem que o Windows informou
+    como `d:\`. Devolve `None` quando `path` não está sob `prefix` de jeito
+    nenhum.
     """
     normalized = prefix.rstrip("/") + "/"
     if not path.lower().startswith(normalized.lower()):
@@ -324,7 +323,7 @@ def _strip_prefix(path: str, prefix: str) -> str | None:
 
 
 def _is_under(path: str, prefix: str) -> bool:
-    """Return whether `path` is `prefix` itself or sits inside it."""
+    """Diz se `path` é o próprio `prefix` ou está dentro dele."""
     return path.lower() == prefix.lower() or _strip_prefix(path, prefix) is not None
 
 
@@ -368,7 +367,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
-    """Compose the real reconciliation and run it against one named root."""
+    """Monta a reconciliação real e a roda contra uma raiz nomeada."""
     from app.infrastructure.filesystem.volume_identity_provider import (
         WindowsVolumeIdentityProvider,
     )

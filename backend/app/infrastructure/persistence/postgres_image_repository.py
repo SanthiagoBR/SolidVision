@@ -1,4 +1,4 @@
-"""PostgreSQL-backed implementation of the image repository port."""
+"""Implementação em PostgreSQL da porta do repositório de imagens."""
 
 from __future__ import annotations
 
@@ -73,35 +73,35 @@ from app.infrastructure.database.models.image_model import (
 )
 
 PRESENCE_CHUNK = 10_000
-"""How many ids one `UPDATE` of `mark_presence()` names at most, and how many
-rows `list_presence()` reads per fetch.
+"""Quantos ids um `UPDATE` de `mark_presence()` nomeia no máximo, e quantas
+linhas `list_presence()` lê por fetch.
 
-Well under the 65,535 bind parameters one statement may carry, and large
-enough that a disk of 116,396 rows that lost every one is twelve statements.
+Bem abaixo dos 65.535 parâmetros que um comando pode levar, e grande o bastante
+para que um disco de 116.396 linhas que perdeu todas sejam doze comandos.
 """
 
 PGVECTOR_DEFAULT_EF_SEARCH = 40
-"""`hnsw.ef_search` when nobody sets it: the most rows one HNSW scan returns.
+"""`hnsw.ef_search` quando ninguém o define: o máximo de linhas de um scan HNSW.
 
-From pgvector's README: *"Results are limited by the size of the dynamic
-candidate list (`hnsw.ef_search`), which is 40 by default"* (RFC-038 2.2).
+Do README do pgvector: *"Results are limited by the size of the dynamic
+candidate list (`hnsw.ef_search`), which is 40 by default"* (RFC-038 §2.2).
 """
 
 
 class PostgresImageRepository(ImageRepository):
-    """Repository implementation backed by PostgreSQL via SQLAlchemy."""
+    """Implementação do repositório sobre o PostgreSQL, via SQLAlchemy."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
     def save(self, image: Image) -> None:
-        """Persist an image, translating location collisions into a domain error.
+        """Persiste uma imagem, traduzindo colisões de localização num erro de domínio.
 
-        The collision it names is now `(device_id, relative_path)` rather
-        than the old absolute `path`, which is the constraint that finally
-        means what this method always claimed: two rows for the same file
-        on the same disk are rejected, including when the disk mounted
-        under a different letter the second time (RFC-027 section 2.1).
+        A colisão que ele nomeia agora é `(device_id, relative_path)`, e não
+        mais o `path` absoluto antigo, que é a constraint que enfim significa
+        o que este método sempre afirmou: duas linhas para o mesmo arquivo no
+        mesmo disco são recusadas, inclusive quando o disco foi montado com
+        outra letra da segunda vez (RFC-027 §2.1).
         """
         model = ImageModel.from_domain(image)
         self._session.add(model)
@@ -131,21 +131,21 @@ class PostgresImageRepository(ImageRepository):
         return [model.to_domain() for model in models]
 
     def save_indexed(self, record: IndexingRecord) -> None:
-        """Create or update an image row together with its embedding and metadata.
+        """Cria ou atualiza a linha de uma imagem junto com o embedding e os metadados.
 
-        Unlike `save()`, this is a genuine upsert and does not translate
-        `IntegrityError` into `ImageAlreadyExistsError` -- a constraint
-        violation here (e.g. the `file_size` CHECK) is a real error, not a
-        duplicate-create signal.
+        Ao contrário de `save()`, este é um upsert de verdade e não traduz
+        `IntegrityError` em `ImageAlreadyExistsError` -- uma violação de
+        constraint aqui (por exemplo, o CHECK de `file_size`) é um erro real,
+        não um sinal de criação duplicada.
 
-        The rollback on failure is load-bearing, not defensive tidiness.
-        Every caller of this method indexes many files in sequence and
-        isolates failures per file, so the session has to survive a
-        rejected row: without the rollback, SQLAlchemy leaves the
-        transaction in a pending-rollback state and the *next* file fails
-        with `PendingRollbackError` instead of succeeding, turning one bad
-        row into a cascade. RFC-024's per-row fallback (section 7.2) walks
-        exactly that path on the same session.
+        O rollback na falha sustenta o resto; não é arrumação defensiva. Todo
+        chamador deste método indexa muitos arquivos em sequência e isola as
+        falhas por arquivo, então a sessão tem de sobreviver a uma linha
+        recusada: sem o rollback, o SQLAlchemy deixa a transação num estado
+        de rollback pendente e o *próximo* arquivo falha com
+        `PendingRollbackError` em vez de dar certo, transformando uma linha
+        ruim numa cascata. O fallback linha a linha do RFC-024 (§7.2) percorre
+        exatamente esse caminho na mesma sessão.
         """
         try:
             self._stage_indexed(record)
@@ -155,34 +155,36 @@ class PostgresImageRepository(ImageRepository):
             raise
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
-        """Upsert many rows as one read, one flush, and one commit.
+        """Faz o upsert de muitas linhas com uma leitura, um flush e um commit.
 
-        The commit is the cheap part, which is the opposite of what RFC-024
-        assumed going in: profiling a real run showed a single commit of 45
-        rows costing 2.5 ms, against ~48 ms per row for everything else.
-        The cost was the *read* half -- see the comment below -- so this
-        method collapses the reads rather than just sharing a commit.
+        O commit é a parte barata, o oposto do que o RFC-024 supunha de
+        início: o profiling de uma execução real mostrou um único commit de 45
+        linhas custando 2,5 ms, contra ~48 ms por linha para todo o resto. O
+        custo estava na metade da *leitura* -- veja o comentário abaixo --,
+        então este método junta as leituras, em vez de só compartilhar um
+        commit.
 
-        On failure the session is rolled back before the error propagates,
-        so the caller's per-row retry starts from a clean session rather
-        than one poisoned by a half-applied batch.
+        Na falha, a sessão sofre rollback antes de o erro se propagar, para
+        que a nova tentativa linha a linha de quem chama comece de uma sessão
+        limpa, e não de uma envenenada por um lote aplicado pela metade.
         """
         if not records:
             return
 
         try:
-            # Two details make this a bulk write rather than a loop that
-            # merely shares a commit, and both were found by profiling
-            # (RFC-024 section 7.2):
+            # Dois detalhes fazem disto uma escrita em massa, e não um loop
+            # que apenas compartilha um commit, e os dois foram achados por
+            # profiling (RFC-024 §7.2):
             #
-            # `session.get()` per record would issue one SELECT per row --
-            # and, worse, each of those SELECTs autoflushes the rows staged
-            # so far, so the ORM emits an INSERT round trip per record
-            # anyway. One `IN (...)` query up front removes both.
+            # `session.get()` por registro emitiria um SELECT por linha -- e,
+            # pior, cada um desses SELECTs faz autoflush das linhas preparadas
+            # até ali, então o ORM emite de todo jeito uma ida e volta de
+            # INSERT por registro. Uma consulta `IN (...)` no começo elimina
+            # os dois.
             #
-            # `no_autoflush` then keeps the staging loop from flushing
-            # partway through for any other reason, so the batch reaches
-            # the database as one flush followed by one commit.
+            # `no_autoflush` então impede o loop de preparação de fazer flush
+            # no meio por qualquer outro motivo, e o lote chega ao banco como
+            # um flush seguido de um commit.
             with self._session.no_autoflush:
                 staged = self._existing_models(
                     [record.image.id.value for record in records]
@@ -197,7 +199,7 @@ class PostgresImageRepository(ImageRepository):
             raise
 
     def _existing_models(self, ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, ImageModel]:
-        """Load whichever of `ids` already have rows, in one query."""
+        """Carrega, numa consulta, os `ids` que já tiverem linha."""
         statement = select(ImageModel).where(ImageModel.id.in_(ids))
         return {
             model.id: model
@@ -207,11 +209,11 @@ class PostgresImageRepository(ImageRepository):
     def _stage_indexed(
         self, record: IndexingRecord, model: ImageModel | None = None
     ) -> ImageModel:
-        """Apply one record to the session without committing it.
+        """Aplica um registro à sessão sem fazer commit.
 
-        `model` is the already-loaded row when the caller has one; passing
-        `None` means "look it up", which is what the single-record path
-        does.
+        `model` é a linha já carregada, quando quem chama tem uma; passar
+        `None` significa "busque-a", que é o que o caminho de um registro só
+        faz.
         """
         if model is None:
             model = self._session.get(ImageModel, record.image.id.value)
@@ -235,7 +237,7 @@ class PostgresImageRepository(ImageRepository):
         model.file_modified_at = record.file_modified_at
         model.content_hash = record.content_hash
         model.thumbnail_path = record.thumbnail_path
-        # A photo that was just indexed exists (RFC-046 section 5.1).
+        # Uma foto que acabou de ser indexada existe (RFC-046 §5.1).
         model.missing_since = None
         return model
 
@@ -245,113 +247,114 @@ class PostgresImageRepository(ImageRepository):
         limit: int,
         filters: SearchFilters | None = None,
     ) -> SearchHits:
-        """Rank the indexed images against `embedding` inside PostgreSQL.
+        """Ordena as imagens indexadas contra `embedding` dentro do PostgreSQL.
 
-        The ranking is the database's job and stays there. Reading the
-        vectors back to sort them in Python would move 100,000 x 512
-        floats across the wire to answer a question the server can answer
-        with the HNSW index the RFC-023 migration already built -- roughly
-        200 MB per search, to return ten rows.
+        A ordenação é trabalho do banco e fica lá. Ler os vetores de volta
+        para ordená-los no Python moveria 100.000 x 512 floats pela rede para
+        responder a uma pergunta que o servidor responde com o índice HNSW
+        que a migration do RFC-023 já construiu -- uns 200 MB por busca,
+        para devolver dez linhas.
 
-        Three details are load-bearing:
+        Três detalhes sustentam o resto:
 
-        `<=>` (`cosine_distance`) is the operator the index was created
-        for (`vector_cosine_ops`). Ordering by anything else -- L2, inner
-        product, or a Python-side expression -- silently gives up the
-        index and changes the ranking.
+        `<=>` (`cosine_distance`) é o operador para o qual o índice foi
+        criado (`vector_cosine_ops`). Ordenar por qualquer outra coisa -- L2,
+        produto interno, ou uma expressão do lado do Python -- abre mão do
+        índice em silêncio e muda a ordenação.
 
-        The distance-to-similarity conversion happens here, at the edge.
-        pgvector returns cosine *distance* in [0, 2]; `1 - distance` is
-        cosine similarity in [-1, 1]. It is not clamped or rescaled: a
-        negative score means the vectors genuinely oppose each other, and
-        nothing above this layer should have to know that a distance was
-        ever involved.
+        A conversão de distância em similaridade acontece aqui, na borda. O
+        pgvector devolve a *distância* de cosseno em [0, 2]; `1 - distance` é
+        a similaridade de cosseno em [-1, 1]. Ela não é limitada nem
+        reescalada: uma pontuação negativa significa que os vetores de fato
+        se opõem, e nada acima desta camada deveria precisar saber que uma
+        distância esteve envolvida.
 
-        The id is the tie-break. Without it, equally distant rows come
-        back in whatever order the plan produces, which is not stable
-        across plans or across the seq-scan/index-scan boundary, and
-        `limit` would then cut an arbitrary one of them.
+        O id é o desempate. Sem ele, linhas igualmente distantes voltam na
+        ordem que o plano produzir, que não é estável entre planos nem na
+        fronteira entre seq scan e index scan, e o `limit` então cortaria uma
+        delas, arbitrária.
 
-        Only the columns the domain entity needs are selected. The
-        `embedding` column is deliberately not among them: the caller
-        cannot use it, and hydrating full rows would drag a 512-float
-        vector back per hit for nothing. `absolute_path` is left unset on
-        every hit, because the database does not know where a device is
-        mounted and must not pretend to (RFC-027 section 7).
+        Só são selecionadas as colunas de que a entidade de domínio precisa.
+        A coluna `embedding` fica de fora de propósito: quem chama não tem
+        uso para ela, e hidratar linhas inteiras arrastaria de volta um vetor
+        de 512 floats por resultado, à toa. `absolute_path` fica sem valor em
+        todo resultado, porque o banco não sabe onde um dispositivo está
+        montado e não pode fingir que sabe (RFC-027 §7).
 
-        **The device filter is a `WHERE`, and what PostgreSQL does with it
-        is a measurement rather than a deduction.** The planner is free to
-        abandon the HNSW index and scan the subset sequentially, which is
-        both fast and exact for a selective filter; or to keep the index
-        and apply the predicate to what the traversal returned, which is
-        nearly free for an unselective one. The middle is the risk: an
-        index scan explores at most `hnsw.ef_search` candidates, so
-        post-filtering can discard enough of them to return **fewer than
-        `limit`** rows while more matching rows exist. Known mitigations,
-        none chosen here: `hnsw.iterative_scan`, raising `ef_search` when
-        a filter is present, or partial HNSW indexes per device.
-        `experiments/rfc-027-devices/planner_check.py` measures the three
-        regimes with `EXPLAIN ANALYZE`.
+        **O filtro de dispositivo é um `WHERE`, e o que o PostgreSQL faz com
+        ele é uma medição, e não uma dedução.** O planner é livre para
+        abandonar o índice HNSW e varrer o subconjunto sequencialmente, o que
+        é rápido e exato para um filtro seletivo; ou para manter o índice e
+        aplicar o predicado ao que a travessia devolveu, o que sai quase de
+        graça para um pouco seletivo. O meio é o risco: um index scan explora
+        no máximo `hnsw.ef_search` candidatos, então o pós-filtro pode
+        descartar o bastante deles para devolver **menos que `limit`**
+        linhas enquanto existem mais linhas que casam. Mitigações conhecidas,
+        nenhuma escolhida aqui: `hnsw.iterative_scan`, aumentar `ef_search`
+        quando há filtro, ou índices HNSW parciais por dispositivo.
+        `experiments/rfc-027-devices/planner_check.py` mede os três regimes
+        com `EXPLAIN ANALYZE`.
 
-        **A capture-date range is the harder filter of the two** (RFC-028
-        section 8.1). Its selectivity is set by whatever interval the user
-        asks for rather than known in advance, and there is no finite set
-        of ranges to build one partial index per, so the mitigation that
-        suits devices does not exist for dates.
-        `experiments/rfc-028-capture-date/planner_check.py` measures it.
+        **Um intervalo de data de captura é o mais difícil dos dois filtros**
+        (RFC-028 §8.1). A seletividade dele é dada pelo intervalo que o
+        usuário pedir, e não conhecida de antemão, e não há um conjunto
+        finito de intervalos para construir um índice parcial para cada, então
+        a mitigação que serve para dispositivos não existe para datas.
+        `experiments/rfc-028-capture-date/planner_check.py` mede isso.
 
-        **A circle is the worst of the three for the approximate index**
-        (RFC-032 section 6.1): high cardinality like a date, and *clustered*
-        -- in the pilot, 5 cells of ~100 m held 45% of the positions -- so a
-        few kilometres around a much-photographed place is not selective at
-        all, and lands in exactly the band RFC-028 measured returning 5 to
-        9 rows of 10. `experiments/rfc-032-geolocation/planner_check.py`
-        measures it on a clustered corpus, and RFC-032 section 6.1 decided
-        the mitigation against a criterion stated before the number: the
-        cheapest configuration returning `limit` of `limit` everywhere with
-        a filtered p95 no worse than twice the unfiltered one.
+        **Um círculo é o pior dos três para o índice aproximado** (RFC-032
+        §6.1): cardinalidade alta, como uma data, e *concentrado* -- no
+        piloto, 5 células de ~100 m tinham 45% das posições --, então alguns
+        quilômetros em volta de um lugar muito fotografado não são nada
+        seletivos, e caem exatamente na faixa em que o RFC-028 mediu a busca
+        devolvendo de 5 a 9 linhas de 10.
+        `experiments/rfc-032-geolocation/planner_check.py` mede isso num
+        corpus concentrado, e o RFC-032 §6.1 decidiu a mitigação contra um
+        critério declarado antes do número: a configuração mais barata que
+        devolvesse `limit` de `limit` em todo caso, com um p95 filtrado no
+        máximo o dobro do sem filtro.
 
-        **No configuration met it, so none is applied here** -- the RFC's
-        own rule for that outcome. Measured on 20,000 images: every
-        mitigation (`hnsw.iterative_scan = strict_order`, `ef_search` 100 to
-        400) made every query full, where the baseline came back short in
-        13 of 20 queries at 20% selectivity; but the latency half failed for
-        every configuration, the baseline included, because the planner
-        answers low selectivities with *exact* sequential plans (23-65 ms
-        server-side at 5-10%, and up to ~340 ms under a forced generic plan)
-        against a 3.0 ms unfiltered p95. Those plans are untouched by any
-        HNSW setting. The verdict and the numbers are in RFC-032 section
-        6.1; adopting `strict_order` anyway would be a change to the
-        criterion, which is a decision for the RFC, not for this method.
+        **Nenhuma configuração o atendeu, então nenhuma é aplicada aqui** --
+        a regra do próprio RFC para esse desfecho. Medido em 20.000 imagens:
+        toda mitigação (`hnsw.iterative_scan = strict_order`, `ef_search` de
+        100 a 400) deixou toda consulta completa, onde a linha de base voltou
+        curta em 13 de 20 consultas com 20% de seletividade; mas a metade da
+        latência falhou para toda configuração, a linha de base incluída,
+        porque o planner responde a seletividades baixas com planos
+        sequenciais *exatos* (23-65 ms no servidor com 5-10%, e até ~340 ms
+        sob um plano genérico forçado), contra um p95 sem filtro de 3,0 ms.
+        Esses planos não são afetados por nenhum ajuste do HNSW. O veredito e
+        os números estão no RFC-032 §6.1; adotar `strict_order` mesmo assim
+        seria mudar o critério, o que é decisão do RFC, não deste método.
 
-        **The result is best-effort once the planner uses the index.**
-        HNSW is an approximate index: a scan explores at most
-        `hnsw.ef_search` (40 by default) candidates, and any of those that
-        are dead-but-not-yet-vacuumed tuples are spent from that budget
-        and then filtered out. So an index scan can return *fewer* hits
-        than `limit` while more matching rows exist, and its top-K is not
-        guaranteed to be the true top-K. Measured, not theorized: with a
-        deliberately bloated index the shipped query returned 1 of 3 live
-        rows (RFC-025 section 7.3). At the sizes the planner answers with
-        a sequential scan the ranking is exact.
+        **O resultado é o melhor possível, sem garantia, quando o planner usa
+        o índice.** O HNSW é um índice aproximado: um scan explora no máximo
+        `hnsw.ef_search` (40 por padrão) candidatos, e os que forem tuplas
+        mortas ainda não limpas pelo vacuum gastam esse orçamento e depois
+        são filtrados. Então um index scan pode devolver *menos* resultados
+        que `limit` enquanto existem mais linhas que casam, e o top-K dele
+        não é garantidamente o top-K verdadeiro. Medido, e não teorizado: com
+        um índice inchado de propósito, a consulta entregue devolveu 1 de 3
+        linhas vivas (RFC-025 §7.3). Nos tamanhos que o planner responde com
+        um seq scan, a ordenação é exata.
 
-        **Above 40 the candidate list is the `limit`** (RFC-038 section
-        4.3): `ef_search` caps what one scan can return at all, so a
-        `limit=100` with no filter would come back with 40 and no error,
-        and a short page is how a caller learns there is nothing more.
-        `set_config(..., true)` lasts until the end of the transaction,
-        which is the request's -- `SET LOCAL` takes no parameter. **Up to
-        40 nothing is sent**, and the query is the one RFC-025 to 032
-        measured (RFC-032 section 6.1, rule 4). It is the floor that lets
-        the `limit` be met, not a recall setting: a filtered search can
-        still come back short, by RFC-028 section 8.1's mechanism.
+        **Acima de 40, a lista de candidatos é o `limit`** (RFC-038 §4.3):
+        `ef_search` limita o que um scan pode devolver, ponto, então um
+        `limit=100` sem filtro voltaria com 40 e nenhum erro, e uma página
+        curta é como quem chama fica sabendo que não há mais nada.
+        `set_config(..., true)` dura até o fim da transação, que é a da
+        requisição -- `SET LOCAL` não aceita parâmetro. **Até 40 nada é
+        enviado**, e a consulta é a que os RFCs 025 a 032 mediram (RFC-032
+        §6.1, regra 4). É o piso que deixa o `limit` ser atendido, não um
+        ajuste de recall: uma busca filtrada ainda pode voltar curta, pelo
+        mecanismo do RFC-028 §8.1.
 
-        **Which plan answers depends on the server's major version**
-        (`test_search_ef_search.py`). The tie-break on `id` is a second
-        sort key the HNSW index cannot provide; PostgreSQL 17 serves the
-        first from the index and sorts the ties incrementally, and 16 --
-        the embedded runtime -- cannot, and scans the table. There the
-        ranking is exact and the 40 never happens.
+        **Qual plano responde depende da versão major do servidor**
+        (`test_search_ef_search.py`). O desempate por `id` é uma segunda
+        chave de ordenação que o índice HNSW não fornece; o PostgreSQL 17
+        serve a primeira pelo índice e ordena os empates incrementalmente, e
+        o 16 -- o runtime embarcado -- não consegue, e varre a tabela. Ali a
+        ordenação é exata e o 40 nunca acontece.
         """
         self._require_indexed_dimension(embedding)
         if limit > PGVECTOR_DEFAULT_EF_SEARCH:
@@ -372,13 +375,13 @@ class PostgresImageRepository(ImageRepository):
         limit: int,
         filters: SearchFilters | None = None,
     ) -> Select[Any]:
-        """The exact `SELECT` `search_similar()` runs, without running it.
+        """O `SELECT` exato que `search_similar()` roda, sem rodá-lo.
 
-        Public, and a `classmethod`, for one reader besides
-        `search_similar()`: `experiments/rfc-032-geolocation/planner_check.py`,
-        which has to `EXPLAIN` the query the application sends -- box
-        pre-filter, haversine and all -- rather than a hand-copied imitation
-        that would drift from it the first time either changed.
+        Público, e `classmethod`, para um leitor além de `search_similar()`:
+        `experiments/rfc-032-geolocation/planner_check.py`, que precisa dar
+        `EXPLAIN` na consulta que a aplicação manda -- pré-filtro da caixa,
+        haversine e tudo -- e não numa imitação copiada à mão que divergiria
+        dela na primeira vez em que uma das duas mudasse.
         """
         distance = ImageModel.embedding.cosine_distance(list(embedding.values)).label(
             "distance"
@@ -398,17 +401,18 @@ class PostgresImageRepository(ImageRepository):
         limit: int,
         after: Image | None,
     ) -> ListedImages:
-        """One page of the capture-date listing, in one `SELECT` (RFC-044 5.2).
+        """Uma página da listagem por data de captura, num `SELECT` (RFC-044 §5.2).
 
-        The `WHERE` is `search_similar()`'s -- `embedding IS NOT NULL` and
-        `_apply_filters()` -- and the columns are the entity's, the same
-        list: the `embedding` stays out, so the vectors in the TOAST are
-        never read (RFC-044 section 2.3). Behind a `LIMIT`, PostgreSQL sorts
-        with a top-N heapsort that keeps only `limit` rows in memory; that
-        is a hypothesis the measurement's `EXPLAIN` checks, not a promise.
+        O `WHERE` é o de `search_similar()` -- `embedding IS NOT NULL` e
+        `_apply_filters()` --, e as colunas são as da entidade, a mesma lista:
+        o `embedding` fica de fora, então os vetores no TOAST nunca são lidos
+        (RFC-044 §2.3). Atrás de um `LIMIT`, o PostgreSQL ordena com um top-N
+        heapsort que mantém só `limit` linhas na memória; isso é uma hipótese
+        que o `EXPLAIN` da medição verifica, não uma promessa.
 
-        The cursor is `after`'s own key, read by the caller from the primary
-        key -- never a path a client sent (RFC-030 section 5.1).
+        O cursor é a própria chave de `after`, lida por quem chama a partir
+        da chave primária -- nunca um caminho que um cliente mandou (RFC-030
+        §5.1).
         """
         statement = self.listing_statement(filters, order, limit, after)
         return [_image_of(row) for row in self._session.execute(statement)]
@@ -421,18 +425,18 @@ class PostgresImageRepository(ImageRepository):
         limit: int,
         after: Image | None = None,
     ) -> Select[Any]:
-        """The exact `SELECT` `list_by_filters()` runs, for the measurement.
+        """O `SELECT` exato que `list_by_filters()` roda, para a medição.
 
-        Public for the reason `search_statement()` is:
-        `experiments/rfc-044-browse/measure_browse.py` has to `EXPLAIN` the
-        query the route sends.
+        Público pela razão de `search_statement()`:
+        `experiments/rfc-044-browse/measure_browse.py` precisa dar `EXPLAIN`
+        na consulta que a rota manda.
 
-        `ORDER BY captured_at DESC NULLS LAST` (or `ASC NULLS LAST`), then
-        the path and the id ascending. **The path is sorted `COLLATE "C"`,
-        explicitly**: byte order of UTF-8, which is code-point order, which
-        is how `str` compares in the in-memory doubles. Both clusters are
-        initialised with the `C` locale (RFC-033a section 5), and saying it
-        in the query keeps the order from depending on that.
+        `ORDER BY captured_at DESC NULLS LAST` (ou `ASC NULLS LAST`), depois
+        o caminho e o id ascendentes. **O caminho é ordenado com `COLLATE
+        "C"`, explicitamente**: ordem de bytes do UTF-8, que é a ordem de code
+        point, que é como `str` compara nos doubles em memória. Os dois
+        clusters são inicializados com o locale `C` (RFC-033a §5), e dizê-lo
+        na consulta impede que a ordem dependa disso.
         """
         date = (
             ImageModel.captured_at.desc()
@@ -450,10 +454,10 @@ class PostgresImageRepository(ImageRepository):
         return cls._apply_filters(statement, filters)
 
     def summarize_listing(self, filters: SearchFilters) -> ListingSummary:
-        """`count(*)`, the undated, `min` and `max`, in one aggregate (RFC-044 5.3).
+        """`count(*)`, as sem data, `min` e `max`, numa agregação (RFC-044 §5.3).
 
-        The listing's `WHERE` with no `ORDER BY` and no `LIMIT`: one pass
-        over the rows the filters keep.
+        O `WHERE` da listagem sem `ORDER BY` e sem `LIMIT`: uma passada pelas
+        linhas que os filtros mantêm.
         """
         row = self._session.execute(self.summary_statement(filters)).one()
         return ListingSummary(
@@ -465,7 +469,7 @@ class PostgresImageRepository(ImageRepository):
 
     @classmethod
     def summary_statement(cls, filters: SearchFilters) -> Select[Any]:
-        """The exact `SELECT` `summarize_listing()` runs, for the same reader."""
+        """O `SELECT` exato que `summarize_listing()` roda, para o mesmo leitor."""
         statement = select(
             func.count().label("total"),
             func.count().filter(ImageModel.captured_at.is_(None)).label("undated"),
@@ -479,30 +483,32 @@ class PostgresImageRepository(ImageRepository):
     def _apply_filters(
         statement: Select[Any], filters: SearchFilters | None
     ) -> Select[Any]:
-        """Add the narrowing clauses, or none at all.
+        """Acrescenta as cláusulas de restrição, ou nenhuma.
 
-        An absent or empty `SearchFilters` adds nothing, so the emitted
-        SQL is character-for-character the query RFC-025 shipped and its
-        contract tests keep describing the unfiltered behaviour. The
-        alternative -- always emitting `device_id IN (...)` and letting an
-        empty list mean "everything" -- is the bug this branch exists to
-        avoid: an empty `IN ()` matches no rows, so a defaulted argument
-        would silently return nothing.
+        Um `SearchFilters` ausente ou vazio não acrescenta nada, então o SQL
+        emitido é, caractere por caractere, a consulta que o RFC-025 entregou,
+        e os testes de contrato dele continuam descrevendo o comportamento
+        sem filtro. A alternativa -- emitir sempre `device_id IN (...)` e
+        deixar uma lista vazia significar "tudo" -- é o bug que este ramo
+        existe para evitar: um `IN ()` vazio não casa com linha nenhuma,
+        então um argumento com valor padrão devolveria nada, em silêncio.
 
-        Each field adds its own clause, or none, independently of the
-        other. The same reasoning applies to the date range: an absent one
-        is not `[datetime.min, datetime.max)`, which would exclude every
-        image with a NULL `captured_at` and change the unfiltered query.
+        Cada campo acrescenta a sua própria cláusula, ou nenhuma,
+        independentemente do outro. O mesmo raciocínio vale para o intervalo
+        de datas: um ausente não é `[datetime.min, datetime.max)`, que
+        excluiria toda imagem com `captured_at` NULL e mudaria a consulta sem
+        filtro.
 
-        The range is `captured_at >= start AND captured_at < end`, and the
-        NULL rule of RFC-020 needs no clause of its own here: a comparison
-        with NULL is NULL, which `WHERE` treats as false, so an image with
-        an unknown date never matches. The in-memory implementations have
-        no such free lunch and must say `is not None` explicitly.
+        O intervalo é `captured_at >= start AND captured_at < end`, e a regra
+        do NULL do RFC-020 não precisa de cláusula própria aqui: uma
+        comparação com NULL dá NULL, que o `WHERE` trata como falso, então
+        uma imagem com data desconhecida nunca casa. As implementações em
+        memória não ganham isso de graça e precisam dizer `is not None`
+        explicitamente.
 
-        A circle (RFC-032) adds its clauses the same way, and the same NULL
-        rule makes an unknown position fail them for free; see
-        `_circle_clauses()`.
+        Um círculo (RFC-032) acrescenta as suas cláusulas do mesmo jeito, e a
+        mesma regra do NULL faz uma posição desconhecida falhar nelas de
+        graça; veja `_circle_clauses()`.
         """
         if filters is None or filters.is_empty():
             return statement
@@ -515,16 +521,17 @@ class PostgresImageRepository(ImageRepository):
         return statement
 
     def count_unknown_capture_date(self, filters: SearchFilters) -> int:
-        """Count, in one `COUNT(*)`, what a date range hid for having no date.
+        """Conta, num `COUNT(*)`, o que um intervalo de datas escondeu por não ter data.
 
-        Mirrors `search_similar()`'s `WHERE` minus the ranking and minus
-        the date clause itself -- `embedding IS NOT NULL`, the device set
-        if any, the circle if any (RFC-032), and `captured_at IS NULL` --
-        so "the photos the filter hid" and "the photos the search could
-        have shown" are drawn from the same definition of searchable.
+        Espelha o `WHERE` de `search_similar()`, menos a ordenação e menos a
+        própria cláusula de data -- `embedding IS NOT NULL`, o conjunto de
+        dispositivos, se houver, o círculo, se houver (RFC-032), e
+        `captured_at IS NULL` --, para que "as fotos que o filtro escondeu" e
+        "as fotos que a busca poderia ter mostrado" saiam da mesma definição
+        de buscável.
 
-        No query at all without a date range, so an unfiltered search
-        never pays for a second round trip (RFC-028 section 8).
+        Nenhuma consulta sem um intervalo de datas, para que uma busca sem
+        filtro nunca pague uma segunda ida e volta (RFC-028 §8).
         """
         if filters.captured_between is None:
             return 0
@@ -541,17 +548,17 @@ class PostgresImageRepository(ImageRepository):
         return int(self._session.execute(statement).scalar_one())
 
     def count_unknown_position(self, filters: SearchFilters) -> int:
-        """Count, in one `COUNT(*)`, the searchable images that have no position.
+        """Conta, num `COUNT(*)`, as imagens buscáveis que não têm posição.
 
-        `search_similar()`'s `WHERE` minus the ranking and minus the circle
-        -- `embedding IS NOT NULL`, the device set, the date range, and
-        `latitude IS NULL` (RFC-032 section 6.2). `latitude` alone is
-        enough: `ck_images_position_pairing` guarantees `longitude` is NULL
-        with it.
+        O `WHERE` de `search_similar()`, menos a ordenação e menos o círculo
+        -- `embedding IS NOT NULL`, o conjunto de dispositivos, o intervalo
+        de datas, e `latitude IS NULL` (RFC-032 §6.2). `latitude` sozinha
+        basta: `ck_images_position_pairing` garante que `longitude` é NULL
+        junto.
 
-        Queries whether or not `filters` has a circle, because the map asks
-        this exact question with none; not asking it for a search without a
-        circle is `SearchImagesUseCase`'s rule.
+        Consulta tendo `filters` um círculo ou não, porque o mapa faz
+        exatamente esta pergunta sem nenhum; não fazê-la para uma busca sem
+        círculo é regra do `SearchImagesUseCase`.
         """
         statement = (
             select(func.count())
@@ -571,28 +578,30 @@ class PostgresImageRepository(ImageRepository):
         precision: int,
         cell_limit: int | None,
     ) -> PositionCells:
-        """One `GROUP BY` over rounded coordinates (RFC-032 section 7).
+        """Um `GROUP BY` sobre coordenadas arredondadas (RFC-032 §7).
 
-        `round(latitude::numeric, p)`: PostgreSQL has no
-        `round(double precision, int)`, and the cast is also what fixes the
-        rounding rule -- the double's 15 significant digits, rounded half
-        away from zero in decimal -- that `round_to_cell()` reproduces for
-        the in-memory implementations.
+        `round(latitude::numeric, p)`: o PostgreSQL não tem
+        `round(double precision, int)`, e o cast também é o que fixa a regra
+        de arredondamento -- os 15 dígitos significativos do double,
+        arredondados metade para longe do zero, em decimal -- que
+        `round_to_cell()` reproduz para as implementações em memória.
 
-        **The precision is rendered into the SQL, not bound.** It appears
-        in the select list and in the `GROUP BY`, and with server-side
-        binding two separate parameters would be two different expressions
-        to PostgreSQL, which then refuses the select list as "not in GROUP
-        BY". `literal_execute` inlines the integer at execution time; it is
-        an `int` by type, so nothing a client sends reaches the text.
+        **A precisão é renderizada no SQL, e não passada como parâmetro.**
+        Ela aparece na lista do select e no `GROUP BY`, e, com binding no
+        servidor, dois parâmetros separados seriam duas expressões diferentes
+        para o PostgreSQL, que então recusa a lista do select como "not in
+        GROUP BY". `literal_execute` põe o inteiro no texto na hora da
+        execução; ele é `int` pelo tipo, então nada que um cliente mande
+        chega ao texto.
 
-        The area is two `BETWEEN`s on the plain columns -- the same shape as
-        a circle's pre-filter -- and the device and date clauses are the
-        search's own, so the map's universe cannot drift from the search's.
-        `filters.taken_within` is not applied (see the port).
+        A área são dois `BETWEEN`s nas colunas simples -- a mesma forma do
+        pré-filtro de um círculo --, e as cláusulas de dispositivo e de data
+        são as da própria busca, para que o universo do mapa não possa
+        divergir do da busca. `filters.taken_within` não é aplicado (veja a
+        porta).
 
-        Whether an index serves this over a large table is measured, not
-        assumed: `experiments/rfc-032-geolocation/planner_check.py`.
+        Se um índice atende a isto numa tabela grande é medido, e não
+        suposto: `experiments/rfc-032-geolocation/planner_check.py`.
         """
         statement = self.aggregate_statement(filters, area, precision, cell_limit)
         return [
@@ -611,10 +620,10 @@ class PostgresImageRepository(ImageRepository):
         precision: int,
         cell_limit: int | None,
     ) -> Select[Any]:
-        """The exact `SELECT` `aggregate_positions()` runs, for the same reader.
+        """O `SELECT` exato que `aggregate_positions()` roda, para o mesmo leitor.
 
-        Public for the reason `search_statement()` is: the measurement has
-        to `EXPLAIN` what the endpoint sends.
+        Público pela razão de `search_statement()`: a medição precisa dar
+        `EXPLAIN` no que o endpoint manda.
         """
         digits = literal(int(precision), Integer, literal_execute=True)
         cell_latitude = func.round(sql_cast(ImageModel.latitude, Numeric), digits)
@@ -643,14 +652,14 @@ class PostgresImageRepository(ImageRepository):
 
     @staticmethod
     def _require_indexed_dimension(embedding: EmbeddingVector) -> None:
-        """Fail a wrong-width query vector before it reaches the server.
+        """Recusa um vetor de consulta de largura errada antes que chegue ao servidor.
 
-        PostgreSQL rejects it too, but not reliably and not legibly: the
-        `vector(512)` column only complains once a row is actually
-        compared, so the same bad call raises against a populated table
-        and returns `[]` against an empty one. Checking up front makes the
-        failure identical everywhere, and identical to the in-memory
-        implementations, which is the point of the shared contract test.
+        O PostgreSQL também o recusa, mas não de modo confiável nem legível:
+        a coluna `vector(512)` só reclama quando uma linha é de fato
+        comparada, então a mesma chamada errada levanta erro contra uma
+        tabela populada e devolve `[]` contra uma vazia. Verificar antes deixa
+        a falha idêntica em todo lugar, e idêntica à das implementações em
+        memória, que é o objetivo do teste de contrato compartilhado.
         """
         if len(embedding.values) != EMBEDDING_DIMENSION:
             raise EmbeddingDimensionMismatchError(
@@ -659,7 +668,7 @@ class PostgresImageRepository(ImageRepository):
             )
 
     def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
-        """`SELECT embedding` of one row: about 2 KB, and nothing else."""
+        """`SELECT embedding` de uma linha: uns 2 KB, e nada mais."""
         statement = select(ImageModel.embedding).where(ImageModel.id == image_id.value)
         values = self._session.execute(statement).scalar_one_or_none()
         if values is None:
@@ -682,20 +691,21 @@ class PostgresImageRepository(ImageRepository):
     def get_index_metadata_many(
         self, image_ids: Sequence[ImageId]
     ) -> dict[ImageId, IndexMetadata]:
-        """Read the metadata for many ids in one round trip.
+        """Lê os metadados de muitos ids numa ida e volta.
 
-        Selects the metadata columns by name rather than loading whole
-        `ImageModel` rows. That is not premature tidiness: `embedding` is a
-        512-float vector, so hydrating full rows would drag roughly two
-        kilobytes per image across the wire to answer a question decided by
-        two scalars -- on the very path that exists to make re-scanning a
-        large unchanged collection cheap.
+        Seleciona as colunas de metadados pelo nome, em vez de carregar
+        linhas inteiras de `ImageModel`. Não é arrumação prematura:
+        `embedding` é um vetor de 512 floats, então hidratar linhas inteiras
+        arrastaria uns dois kilobytes por imagem pela rede para responder a
+        uma pergunta decidida por dois escalares -- justamente no caminho que
+        existe para tornar barato varrer de novo uma coleção grande que não
+        mudou.
 
-        `capture_source` is one of them since RFC-028, for the conditional
-        capture-date write, and costs one short string per row in a query
-        that was running anyway. `thumbnail_path` joined it in RFC-030 for
-        the thumbnail backfill, on the same terms, and `position_source` in
-        RFC-032 for the conditional position write.
+        `capture_source` é uma delas desde o RFC-028, para a escrita
+        condicional da data de captura, e custa uma string curta por linha
+        numa consulta que já rodava de todo jeito. `thumbnail_path` entrou no
+        RFC-030 para o backfill das thumbnails, nos mesmos termos, e
+        `position_source` no RFC-032, para a escrita condicional da posição.
         """
         if not image_ids:
             return {}
@@ -723,13 +733,13 @@ class PostgresImageRepository(ImageRepository):
         }
 
     def list_change_signals(self, device_id: DeviceId) -> dict[ImageId, ChangeSignals]:
-        """Three columns of every row of the device, in one query (RFC-045 section 5.2).
+        """Três colunas de cada linha do dispositivo, numa consulta (RFC-045 §5.2).
 
-        Named columns rather than `ImageModel` rows, for the reason the
-        prefetch gives: hydrating the embedding of 116,396 rows to compare
-        two scalars would read the whole index to answer a question about
-        its metadata. No `ORDER BY`: the caller looks ids up, and an order
-        would cost a sort nobody reads.
+        Colunas nomeadas, e não linhas de `ImageModel`, pela razão que o
+        prefetch dá: hidratar o embedding de 116.396 linhas para comparar
+        dois escalares leria o índice inteiro para responder a uma pergunta
+        sobre os metadados dele. Sem `ORDER BY`: quem chama procura ids, e
+        uma ordem custaria uma ordenação que ninguém lê.
         """
         statement = select(
             ImageModel.id, ImageModel.file_size, ImageModel.file_modified_at
@@ -743,12 +753,12 @@ class PostgresImageRepository(ImageRepository):
         }
 
     def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
-        """Refresh one row's filesystem metadata, leaving its embedding alone.
+        """Atualiza os metadados de arquivo de uma linha, sem tocar no embedding.
 
-        A targeted UPDATE rather than a read-modify-write, because the whole
-        point of this path is that no embedding needs to be produced or
-        moved; loading the row would fetch the 512-float vector this method
-        exists to avoid touching.
+        Um UPDATE direcionado, em vez de ler-modificar-escrever, porque todo o
+        ponto deste caminho é que nenhum embedding precisa ser produzido nem
+        movido; carregar a linha buscaria o vetor de 512 floats que este
+        método existe para não tocar.
         """
         statement = (
             update(ImageModel)
@@ -763,25 +773,25 @@ class PostgresImageRepository(ImageRepository):
         self._session.commit()
 
     def update_capture_date(self, image_id: ImageId, capture: CaptureDate) -> None:
-        """Write one row's capture date with a targeted UPDATE.
+        """Escreve a data de captura de uma linha com um UPDATE direcionado.
 
-        Like `update_index_metadata()`, and for the same reason: loading
-        the row first would fetch the embedding this path exists to leave
-        alone. An id with no row matches nothing and changes nothing.
+        Como `update_index_metadata()`, e pela mesma razão: carregar a linha
+        antes buscaria o embedding que este caminho existe para deixar em
+        paz. Um id sem linha não casa com nada e não muda nada.
         """
         self.update_capture_date_many({image_id: capture})
 
     def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
-        """Write many capture dates as one executemany UPDATE and one commit.
+        """Escreve muitas datas de captura num UPDATE executemany e num commit.
 
-        A Core `UPDATE ... WHERE id = :target_id` executed with a list of
-        parameter sets, rather than the ORM's bulk update by primary key.
-        The ORM form checks that every key matched a row, and the port's
-        contract is the opposite: an id with no row is skipped silently,
-        the same as the single-row method.
+        Um `UPDATE ... WHERE id = :target_id` do Core executado com uma lista
+        de conjuntos de parâmetros, em vez do bulk update por chave primária
+        do ORM. A forma do ORM verifica que cada chave casou com uma linha, e
+        o contrato da porta é o oposto: um id sem linha é pulado em silêncio,
+        como no método de uma linha só.
 
-        Rolled back on failure before the error propagates, so the caller
-        can fall back to per-row writes on a clean session.
+        Sofre rollback na falha antes de o erro se propagar, para que quem
+        chama possa recorrer às escritas linha a linha numa sessão limpa.
         """
         if not captures:
             return
@@ -811,20 +821,21 @@ class PostgresImageRepository(ImageRepository):
             raise
 
     def update_position(self, image_id: ImageId, reading: PositionReading) -> None:
-        """Write one row's position with a targeted UPDATE (RFC-032 section 8)."""
+        """Escreve a posição de uma linha com um UPDATE direcionado (RFC-032 §8)."""
         self.update_position_many({image_id: reading})
 
     def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
-        """Write many positions as one executemany UPDATE and one commit.
+        """Escreve muitas posições num UPDATE executemany e num commit.
 
-        `update_capture_date_many()`'s shape, for its reasons: a Core
-        `UPDATE ... WHERE id = :target_id` so an id with no row is skipped
-        rather than refused, no read of the row -- which would drag the
-        embedding along -- and a rollback before re-raising so the caller's
-        per-row fallback starts from a clean session.
+        A forma de `update_capture_date_many()`, pelas razões dele: um
+        `UPDATE ... WHERE id = :target_id` do Core, para que um id sem linha
+        seja pulado e não recusado; nenhuma leitura da linha -- que
+        arrastaria o embedding junto --; e um rollback antes de relançar,
+        para que o fallback linha a linha de quem chama comece de uma sessão
+        limpa.
 
-        All three columns move in one statement, so the pairing CHECK never
-        sees a row mid-write holding half a position.
+        As três colunas mudam num só comando, então o CHECK do par nunca vê
+        uma linha no meio da escrita com meia posição.
         """
         if not readings:
             return
@@ -856,17 +867,17 @@ class PostgresImageRepository(ImageRepository):
             raise
 
     def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
-        """Record one row's thumbnail location with a targeted UPDATE."""
+        """Registra o local da thumbnail de uma linha com um UPDATE direcionado."""
         self.update_thumbnail_path_many({image_id: location})
 
     def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
-        """Record many thumbnail locations as one executemany UPDATE.
+        """Registra muitos locais de thumbnail num UPDATE executemany.
 
-        The shape of `update_capture_date_many()`, for its reasons: a Core
-        `UPDATE` so that an id with no row is skipped rather than refused,
-        no read of the row -- which would drag the embedding along -- and a
-        rollback before re-raising so the caller's per-row fallback starts
-        from a clean session.
+        A forma de `update_capture_date_many()`, pelas razões dele: um
+        `UPDATE` do Core, para que um id sem linha seja pulado e não
+        recusado; nenhuma leitura da linha -- que arrastaria o embedding
+        junto --; e um rollback antes de relançar, para que o fallback linha
+        a linha de quem chama comece de uma sessão limpa.
         """
         if not locations:
             return
@@ -889,15 +900,16 @@ class PostgresImageRepository(ImageRepository):
             raise
 
     def list_presence(self, device_id: DeviceId) -> Presences:
-        """Three columns of every row of the device, in one query (RFC-046 §5.5).
+        """Três colunas de cada linha do dispositivo, numa consulta (RFC-046 §5.5).
 
-        Named columns, for the reason `list_change_signals()` gives: the
-        embedding of 116,396 rows stays where it is. The mark comes back as
-        a boolean computed by the server; the sweep needs whether, not when.
+        Colunas nomeadas, pela razão que `list_change_signals()` dá: o
+        embedding de 116.396 linhas fica onde está. A marca volta como um
+        booleano calculado pelo servidor; a varredura precisa saber se, não
+        quando.
 
-        **Read through a server-side cursor**, `PRESENCE_CHUNK` rows at a
-        time (`yield_per`), and handed out as they arrive: the sweep keeps
-        only the rows it marks or unmarks.
+        **Lida por um cursor no servidor**, `PRESENCE_CHUNK` linhas por vez
+        (`yield_per`), e entregue conforme chega: a varredura guarda só as
+        linhas que marca ou desmarca.
         """
         statement = (
             select(
@@ -921,21 +933,23 @@ class PostgresImageRepository(ImageRepository):
         present: Collection[ImageId],
         since: datetime.datetime,
     ) -> None:
-        """Two `UPDATE`s by id, in chunks, and one commit (RFC-046 section 5.5).
+        """Dois `UPDATE`s por id, em blocos, e um commit (RFC-046 §5.5).
 
-        **ORM-enabled `UPDATE`s, not Core ones.** The sessions are made with
-        `expire_on_commit=False`, so a row this session loaded before keeps
-        its old `missing_since` in the identity map; a later
-        `save_indexed()` setting it to `None` over a stale `None` would be no
-        change to the ORM, and the row would stay marked although it was just
-        indexed. The ORM form brings the objects in the session along.
+        **`UPDATE`s pelo ORM, e não pelo Core.** As sessões são criadas com
+        `expire_on_commit=False`, então uma linha que esta sessão carregou
+        antes mantém o `missing_since` antigo no identity map; um
+        `save_indexed()` posterior que o pusesse em `None` sobre um `None`
+        velho não seria mudança nenhuma para o ORM, e a linha continuaria
+        marcada, embora acabasse de ser indexada. A forma do ORM leva junto
+        os objetos que estão na sessão.
 
-        Only rows not yet marked are marked -- `missing_since IS NULL` in the
-        `WHERE` -- so a row missed by two scans keeps the first date.
+        Só as linhas ainda não marcadas são marcadas -- `missing_since IS
+        NULL` no `WHERE` --, então uma linha que faltou em dois scans mantém a
+        primeira data.
 
-        **In chunks of `PRESENCE_CHUNK` ids.** A reorganised disk can miss
-        every one of its rows at once, and an `IN` of 116,396 values is more
-        bind parameters than one statement may carry (65,535).
+        **Em blocos de `PRESENCE_CHUNK` ids.** Um disco reorganizado pode
+        perder todas as suas linhas de uma vez, e um `IN` de 116.396 valores
+        são mais parâmetros do que um comando pode levar (65.535).
         """
         missing_ids = [image_id.value for image_id in missing]
         present_ids = [image_id.value for image_id in present]
@@ -965,7 +979,7 @@ class PostgresImageRepository(ImageRepository):
             raise
 
     def count_missing_by_device(self) -> dict[DeviceId, MissingImages]:
-        """One `GROUP BY device_id` over the marked rows (RFC-046 section 5.8)."""
+        """Um `GROUP BY device_id` sobre as linhas marcadas (RFC-046 §5.8)."""
         statement = (
             select(
                 ImageModel.device_id,
@@ -978,16 +992,16 @@ class PostgresImageRepository(ImageRepository):
         return {
             DeviceId(device_id): MissingImages(count=int(total), since=oldest)
             for device_id, total, oldest in self._session.execute(statement).all()
-            # A group exists only for marked rows, so its `min` is never NULL.
+            # Só há grupo para linhas marcadas, então o `min` nunca é NULL.
             if oldest is not None
         }
 
     def purge_missing(self, device_id: DeviceId) -> PurgedImages:
-        """`DELETE ... RETURNING thumbnail_path`, and one commit (RFC-046 §5.7).
+        """`DELETE ... RETURNING thumbnail_path`, e um commit (RFC-046 §5.7).
 
-        ORM-enabled, for `mark_presence()`'s reason: the objects of the
-        deleted rows leave the session with them, so that a `get()` on the
-        same session does not hand back a row that is gone.
+        Pelo ORM, pela razão de `mark_presence()`: os objetos das linhas
+        apagadas saem da sessão junto com elas, para que um `get()` na mesma
+        sessão não devolva uma linha que já não existe.
         """
         statement = (
             delete(ImageModel)
@@ -1011,15 +1025,15 @@ class PostgresImageRepository(ImageRepository):
         )
 
     def count_by_device(self) -> dict[DeviceId, int]:
-        """One `GROUP BY device_id` for every device at once (RFC-031 section 4.3).
+        """Um `GROUP BY device_id` para todos os dispositivos de uma vez (RFC-031 §4.3).
 
-        A `COUNT(*)` per device would be N round trips behind a call that
-        looks like one, and `GET /api/v1/devices` renders every disk in
-        the sidebar -- so N is however many disks the user owns, on every
-        page load.
+        Um `COUNT(*)` por dispositivo seriam N idas e voltas atrás de uma
+        chamada que parece uma só, e `GET /api/v1/devices` mostra cada disco
+        na barra lateral -- então N é quantos discos o usuário tiver, a cada
+        carregamento da página.
 
-        Devices with no rows produce no group and are therefore absent
-        from the result, which is the contract: callers read it with
+        Dispositivos sem linhas não produzem grupo e, portanto, ficam de fora
+        do resultado, que é o contrato: quem chama o lê com
         `.get(device_id, 0)`.
         """
         statement = (
@@ -1035,38 +1049,38 @@ class PostgresImageRepository(ImageRepository):
     def count_by_path_prefixes(
         self, device_id: DeviceId, parent: JobScope
     ) -> dict[str, int]:
-        r"""One grouped query for every subfolder of `parent` (RFC-031 section 8.2).
+        r"""Uma consulta agrupada para cada subpasta de `parent` (RFC-031 §8.2).
 
-        The whole reason this method exists rather than a per-folder
-        `COUNT(*)`: a listing of forty folders must cost one query, not
-        forty.
+        A razão inteira de este método existir, em vez de um `COUNT(*)` por
+        pasta: uma listagem de quarenta pastas tem de custar uma consulta, e
+        não quarenta.
 
-        The grouping key is `split_part(substr(relative_path, cut), '/',
-        1)` -- everything after the parent prefix, up to the next
-        separator. `cut` is one past the `/` that follows the prefix, and
-        `1` for the whole-device scope, where the first part of
-        `relative_path` is already the answer.
+        A chave do agrupamento é `split_part(substr(relative_path, cut), '/',
+        1)` -- tudo depois do prefixo do pai, até o próximo separador. `cut`
+        é a posição logo depois da `/` que segue o prefixo, e `1` para o
+        escopo do dispositivo inteiro, onde a primeira parte de
+        `relative_path` já é a resposta.
 
-        **The `LIKE` is left-anchored on purpose and the trailing `/` is
-        load-bearing.** `'2018b' LIKE '2018%'` is true and `2018b` is a
-        different folder; `'2018b/x.jpg' LIKE '2018/%'` is false, which
-        is the behaviour RFC-029 section 10 requires and `JobScope`
-        enforces one layer up. `startswith(..., autoescape=True)` is used
-        rather than a hand-built pattern so that a folder whose name
-        contains `%` or `_` is matched literally instead of as a wildcard.
+        **O `LIKE` é ancorado à esquerda de propósito, e a `/` final sustenta
+        o resto.** `'2018b' LIKE '2018%'` é verdadeiro e `2018b` é outra
+        pasta; `'2018b/x.jpg' LIKE '2018/%'` é falso, que é o comportamento
+        que o RFC-029 §10 exige e que `JobScope` impõe uma camada acima.
+        Usa-se `startswith(..., autoescape=True)`, e não um padrão montado à
+        mão, para que uma pasta cujo nome contém `%` ou `_` case
+        literalmente, e não como curinga.
 
-        Whether an index serves this is measured rather than assumed --
-        see `experiments/rfc-031-devices-api/measure_folder_listing.log`
-        for the `EXPLAIN` and the cluster's collation, which decide
-        whether a B-tree on `(device_id, relative_path)` is usable for a
-        left-anchored `LIKE` at all.
+        Se um índice atende a isto é medido, e não suposto -- veja
+        `experiments/rfc-031-devices-api/measure_folder_listing.log` para o
+        `EXPLAIN` e a collation do cluster, que decidem se uma B-tree em
+        `(device_id, relative_path)` serve, afinal, para um `LIKE` ancorado à
+        esquerda.
 
-        The two kinds of key a caller must discard -- a file sitting
-        directly in `parent`, and a folder renamed on disk since it was
-        indexed -- are documented on the port and are deliberately not
-        filtered here: this query cannot tell a directory from a file
-        without touching the disk, and the caller already holds the
-        names the filesystem reported.
+        Os dois tipos de chave que quem chama precisa descartar -- um arquivo
+        direto em `parent`, e uma pasta renomeada no disco desde que foi
+        indexada -- estão documentados na porta e de propósito não são
+        filtrados aqui: esta consulta não distingue uma pasta de um arquivo
+        sem tocar no disco, e quem chama já tem os nomes que o sistema de
+        arquivos informou.
         """
         prefix = str(parent)
         cut = len(prefix) + 2 if parent.parts else 1
@@ -1097,16 +1111,17 @@ _ENTITY_COLUMNS = (
     ImageModel.longitude,
     ImageModel.position_source,
 )
-"""The columns an `Image` is built from: every one but the `embedding`.
+"""As colunas de que um `Image` é montado: todas, menos o `embedding`.
 
-Shared by the search and the listing, so that a photo found by a query and
-the same photo listed by date carry the same fields. `absolute_path` is not a
-column: the database does not know where a device is mounted (RFC-027 7).
+Compartilhadas pela busca e pela listagem, para que uma foto achada por uma
+consulta e a mesma foto listada por data tenham os mesmos campos.
+`absolute_path` não é coluna: o banco não sabe onde um dispositivo está
+montado (RFC-027 §7).
 """
 
 
 def _image_of(row: Any) -> Image:
-    """An `Image` from a row of `_ENTITY_COLUMNS`."""
+    """Um `Image` a partir de uma linha de `_ENTITY_COLUMNS`."""
     return Image(
         id=ImageId(row.id),
         device_id=DeviceId(row.device_id),
@@ -1122,25 +1137,26 @@ def _image_of(row: Any) -> Image:
 
 
 def _path_in_c() -> ColumnElement[str]:
-    """`relative_path COLLATE "C"`: compared by code point, as Python compares."""
+    """`relative_path COLLATE "C"`: comparado por code point, como o Python compara."""
     return ImageModel.relative_path.collate("C")
 
 
 def _after_clause(after: Image, order: ListingOrder) -> ColumnElement[bool]:
-    """Every row whose listing key is past `after`'s (RFC-044 section 5.2).
+    """Cada linha cuja chave de listagem vem depois da de `after` (RFC-044 §5.2).
 
-    With `after`'s key `(c, p, i)`:
+    Com a chave de `after` igual a `(c, p, i)`:
 
         after dated     captured_at < c                       (> c for OLDEST)
                         OR (captured_at = c AND (path, id) > (p, i))
                         OR captured_at IS NULL
         after undated   captured_at IS NULL AND (path, id) > (p, i)
 
-    The undated come after every dated row in both directions, so past a
-    dated cursor they are all still ahead, and past an undated one only the
-    undated with a greater path and id are. `(path, id) > (p, i)` is a row
-    comparison, which PostgreSQL evaluates lexicographically -- the path
-    `COLLATE "C"`, the id byte by byte, as the `ORDER BY` sorts them.
+    As sem data vêm depois de toda linha datada, nas duas direções, então,
+    depois de um cursor datado, todas elas ainda estão à frente, e, depois
+    de um sem data, só as sem data com caminho e id maiores. `(path, id) >
+    (p, i)` é uma comparação de linhas, que o PostgreSQL avalia
+    lexicograficamente -- o caminho `COLLATE "C"`, o id byte a byte, como o
+    `ORDER BY` os ordena.
     """
     rest = tuple_(_path_in_c(), ImageModel.id) > tuple_(
         literal(str(after.relative_path)), literal(after.id.value, ImageModel.id.type)
@@ -1161,19 +1177,19 @@ def _after_clause(after: Image, order: ListingOrder) -> ColumnElement[bool]:
 
 
 def _present() -> ColumnElement[bool]:
-    """`missing_since IS NULL`: the row's file was in the last scan (RFC-046)."""
+    """`missing_since IS NULL`: o arquivo da linha estava no último scan (RFC-046)."""
     return ImageModel.missing_since.is_(None)
 
 
 def _searchable() -> tuple[ColumnElement[bool], ...]:
-    """What a row needs to be shown at all: a vector, and its file on the disk.
+    """O que uma linha precisa para ser mostrada: um vetor, e o arquivo no disco.
 
-    The one place both conditions are written (RFC-046 section 6). The six
-    reads that serve the interface -- the search, the listing and its summary,
-    the two counts of excluded photos and the map -- call this, so that a new
-    read cannot remember one condition and forget the other. The two counts per
-    device and per folder take `_present()` alone: they count rows with or
-    without a vector, as they always did.
+    O único lugar em que as duas condições são escritas (RFC-046 §6). As seis
+    leituras que servem a interface -- a busca, a listagem e o resumo dela, as
+    duas contagens de fotos excluídas e o mapa -- chamam esta função, para que
+    uma leitura nova não possa lembrar de uma condição e esquecer a outra. As
+    duas contagens, por dispositivo e por pasta, usam só `_present()`: contam
+    linhas com ou sem vetor, como sempre contaram.
     """
     return (ImageModel.embedding.is_not(None), _present())
 
@@ -1184,14 +1200,14 @@ def _chunks(values: list[uuid.UUID], size: int) -> Iterator[list[uuid.UUID]]:
 
 
 def _device_clause(filters: SearchFilters) -> ColumnElement[bool]:
-    """The device-set predicate, shared by search, the counts and the map."""
+    """O predicado do conjunto de dispositivos, da busca, das contagens e do mapa."""
     return ImageModel.device_id.in_(
         [device_id.value for device_id in filters.device_ids]
     )
 
 
 def _date_clauses(filters: SearchFilters) -> tuple[ColumnElement[bool], ...]:
-    """The half-open capture-date range, shared by search, the counts and the map."""
+    """O intervalo semiaberto de data de captura, da busca, das contagens e do mapa."""
     date_range = filters.captured_between
     if date_range is None:
         return ()
@@ -1202,24 +1218,24 @@ def _date_clauses(filters: SearchFilters) -> tuple[ColumnElement[bool], ...]:
 
 
 def _circle_clauses(circle: GeoCircle) -> tuple[ColumnElement[bool], ...]:
-    """A circle as SQL: a disposable box, then the exact distance (RFC-032 §6).
+    """Um círculo em SQL: uma caixa descartável, depois a distância exata (RFC-032 §6).
 
-    **The last clause is the one that answers.** The box --
-    `latitude BETWEEN ... AND longitude BETWEEN ...` -- exists only so an
-    index *can* be used; the haversine distance against `radius_m` is the
-    filter. A box alone would be a square, returning corners 1.41 times the
-    requested radius away.
+    **A última cláusula é a que responde.** A caixa --
+    `latitude BETWEEN ... AND longitude BETWEEN ...` -- existe só para que um
+    índice *possa* ser usado; a distância haversine contra `radius_m` é o
+    filtro. Uma caixa sozinha seria um quadrado, devolvendo cantos a 1,41
+    vez o raio pedido.
 
-    **The box is omitted when it would be wrong** -- a circle over a pole,
-    or across the 180th meridian, for which `GeoCircle.bounding_box()`
-    returns `None` -- and then only the exact clause is emitted: slower,
-    and right.
+    **A caixa é omitida quando estaria errada** -- um círculo sobre um polo,
+    ou cruzando o meridiano 180, para o qual `GeoCircle.bounding_box()`
+    devolve `None` --, e então só a cláusula exata é emitida: mais lenta, e
+    certa.
 
-    No `IS NOT NULL`: a NULL latitude makes the box comparisons and the
-    distance NULL, which `WHERE` reads as false, so an image of unknown
-    position never matches, however large the circle (RFC-020). That holds
-    only because every step of the distance propagates NULL -- see the
-    clamp in `_distance_m()`, where the obvious `least()` did not.
+    Sem `IS NOT NULL`: uma latitude NULL torna NULL as comparações da caixa
+    e a distância, o que o `WHERE` lê como falso, então uma imagem de
+    posição desconhecida nunca casa, por maior que seja o círculo (RFC-020).
+    Isso só vale porque cada passo da distância propaga NULL -- veja o
+    limite em `_distance_m()`, onde o `least()` óbvio não propagava.
     """
     clauses: list[ColumnElement[bool]] = []
     box = circle.bounding_box()
@@ -1233,25 +1249,26 @@ def _circle_clauses(circle: GeoCircle) -> tuple[ColumnElement[bool], ...]:
 
 
 def _distance_m(circle: GeoCircle) -> ColumnElement[float]:
-    """The haversine distance from `circle.center` to each row, in metres.
+    """A distância haversine de `circle.center` a cada linha, em metros.
 
-    Term for term the formula of `app.domain.services.haversine`, with the
-    same `EARTH_RADIUS_M` and the same order of operations -- differences
-    taken before `radians()`, the clamp to 1 before `asin` -- so a
-    point near a circle's edge falls on the same side here as in the
-    in-memory implementations. Plain arithmetic over two columns; no
-    extension (RFC-032 section 5.1).
+    Termo a termo a fórmula de `app.domain.services.haversine`, com o mesmo
+    `EARTH_RADIUS_M` e a mesma ordem de operações -- as diferenças tomadas
+    antes de `radians()`, o limite em 1 antes do `asin` --, para que um
+    ponto perto da borda de um círculo caia do mesmo lado aqui e nas
+    implementações em memória. Aritmética simples sobre duas colunas; nenhuma
+    extensão (RFC-032 §5.1).
 
-    "Same side" up to the last bit of `sin` and `cos`, which come from the
-    database server's maths library and not Python's: two libraries may
-    round the same argument one unit apart. A point within a nanometre of
-    the edge is not something a contract test can pin, and none tries.
+    "Mesmo lado" até o último bit de `sin` e `cos`, que vêm da biblioteca de
+    matemática do servidor do banco, e não da do Python: duas bibliotecas
+    podem arredondar o mesmo argumento com uma unidade de diferença. Um ponto
+    a um nanômetro da borda não é algo que um teste de contrato consiga
+    fixar, e nenhum tenta.
 
-    Every function is typed `Double` on purpose. Untyped, SQLAlchemy treats
-    `radians(...) / 2` as a division of unknowns and renders the `2` as
-    `CAST(... AS NUMERIC)`; PostgreSQL would coerce it back, but the SQL
-    would no longer say what the Python says -- float arithmetic, start to
-    finish.
+    Toda função é tipada `Double` de propósito. Sem tipo, o SQLAlchemy trata
+    `radians(...) / 2` como uma divisão de desconhecidos e renderiza o `2`
+    como `CAST(... AS NUMERIC)`; o PostgreSQL o converteria de volta, mas o
+    SQL deixaria de dizer o que o Python diz -- aritmética de float, do
+    começo ao fim.
     """
     center = circle.center
 
@@ -1270,12 +1287,12 @@ def _distance_m(circle: GeoCircle) -> ColumnElement[float]:
     ) * double("cos", double("radians", ImageModel.latitude)) * squared_sine_of_half(
         longitude_delta
     )
-    # The clamp is a CASE and must stay one. `least(1, sqrt(h))` reads the
-    # same and is a bug: PostgreSQL's LEAST *ignores* NULL arguments, so a
-    # row with no position got `least(1, NULL) = 1` and a distance of
-    # pi * R -- about 20,015 km -- instead of NULL. Any circle without a
-    # pre-filter box and with a radius that large then matched every photo
-    # with no position. `test_an_unknown_position_never_matches` caught it.
+    # O limite é um CASE e tem de continuar sendo. `least(1, sqrt(h))` se lê
+    # igual e é um bug: o LEAST do PostgreSQL *ignora* argumentos NULL, então
+    # uma linha sem posição ganhava `least(1, NULL) = 1` e uma distância de
+    # pi * R -- uns 20.015 km -- em vez de NULL. Qualquer círculo sem caixa
+    # de pré-filtro e com um raio desse tamanho casava então com toda foto
+    # sem posição. `test_an_unknown_position_never_matches` pegou isso.
     root = double("sqrt", h)
     clamped: ColumnElement[float] = case(
         (root > literal(1.0, Double), literal(1.0, Double)), else_=root
@@ -1288,10 +1305,10 @@ def _source_value(source: CaptureSource | None) -> str | None:
 
 
 def _source_member(value: str | None) -> CaptureSource | None:
-    """Read a stored `capture_source` back, keeping NULL as `None`.
+    """Lê de volta um `capture_source` guardado, mantendo NULL como `None`.
 
-    Never maps NULL to `CaptureSource.UNKNOWN`: NULL is "never examined",
-    and the scan writes only rows in that state (RFC-028 section 4.2).
+    Nunca mapeia NULL para `CaptureSource.UNKNOWN`: NULL é "nunca
+    examinada", e o scan só escreve linhas nesse estado (RFC-028 §4.2).
     """
     return CaptureSource(value) if value is not None else None
 
@@ -1301,5 +1318,5 @@ def _position_value(source: PositionSource | None) -> str | None:
 
 
 def _position_member(value: str | None) -> PositionSource | None:
-    """Read a stored `position_source` back, keeping NULL as `None` (RFC-032 §4.4)."""
+    """Relê um `position_source` guardado, mantendo NULL como `None` (RFC-032 §4.4)."""
     return PositionSource(value) if value is not None else None

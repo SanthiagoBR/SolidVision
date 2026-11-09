@@ -1,4 +1,4 @@
-"""SQLAlchemy model for persisting image metadata."""
+"""Modelo SQLAlchemy para persistir os metadados de imagens."""
 
 from __future__ import annotations
 
@@ -28,15 +28,15 @@ from app.infrastructure.persistence.base import Base
 
 SHA256_HEX_LENGTH = 64
 
-# The projection width of the RFC-023 CLIP checkpoint, and therefore the
-# width of the `vector` column the RFC-023 migration created. Named here
-# rather than repeated as a literal because search has to validate query
-# vectors against the same number, and the two must not be able to drift.
+# A largura da projeção do checkpoint CLIP do RFC-023 e, portanto, a largura
+# da coluna `vector` que a migration do RFC-023 criou. Nomeada aqui em vez de
+# repetida como literal porque a busca tem de validar os vetores de consulta
+# contra o mesmo número, e os dois não podem ter como divergir.
 EMBEDDING_DIMENSION = 512
 
 
 class ImageModel(Base):
-    """SQLAlchemy representation of an image domain entity."""
+    """Representação SQLAlchemy de uma entidade de domínio de imagem."""
 
     __tablename__ = "images"
 
@@ -50,32 +50,33 @@ class ImageModel(Base):
         ForeignKey("devices.id", name="fk_images_device_id"),
         nullable=False,
     )
-    """Which volume this file lives on.
+    """Em qual volume este arquivo mora.
 
-    The half of the location that does not move. RFC-027 replaced the
-    absolute `path` column with this plus `relative_path`, because an
-    absolute path on Windows starts with a drive letter and a drive letter
-    is assigned by mount order -- so the same untouched file changed its
-    recorded location, and therefore its `uuid5` id, whenever the disk
-    happened to mount as `F:` instead of `D:` (RFC-027 section 2.1).
+    A metade da localização que não se move. O RFC-027 trocou a coluna
+    absoluta `path` por esta mais `relative_path`, porque um caminho absoluto
+    no Windows começa com uma letra de unidade, e a letra de unidade é
+    atribuída pela ordem de montagem -- então o mesmo arquivo intocado mudava
+    de localização registrada, e portanto de id `uuid5`, sempre que o disco
+    calhava de montar como `F:` em vez de `D:` (RFC-027 §2.1).
     """
 
     relative_path: Mapped[str] = mapped_column(String, nullable=False)
-    """Where the file sits within its device, e.g. `fotos/2018/DJI_0042.JPG`.
+    """Onde o arquivo fica dentro do seu dispositivo, ex.: `fotos/2018/DJI_0042.JPG`.
 
-    The other half. There is deliberately no absolute-path column beside
-    it: keeping both forms would invite one of them to go stale, and the
-    absolute one is precisely the one that cannot be kept correct, since
-    it changes without anybody writing anything.
+    A outra metade. De propósito, não há coluna de caminho absoluto ao lado:
+    manter as duas formas convidaria uma delas a ficar desatualizada, e a
+    absoluta é justamente a que não dá para manter correta, já que muda sem
+    ninguém escrever nada.
     """
 
     filename: Mapped[str] = mapped_column(String, nullable=False)
     extension: Mapped[str] = mapped_column(String, nullable=False)
-    # A module constant rather than `settings.embedding_dimension` because
-    # this is physical schema, pinned by a migration: it must not silently
-    # follow a runtime env var away from what the database actually holds.
-    # `test_image_model_embedding_column_matches_configured_dimension` asserts
-    # the two stay in agreement.
+    # Uma constante do módulo em vez de `settings.embedding_dimension` porque
+    # isto é schema físico, fixado por uma migration: não pode seguir em
+    # silêncio uma variável de ambiente de runtime para longe do que o banco
+    # de fato guarda.
+    # `test_image_model_embedding_column_matches_configured_dimension` afirma
+    # que os dois continuam de acordo.
     embedding: Mapped[list[float] | None] = mapped_column(
         Vector(EMBEDDING_DIMENSION), nullable=True
     )
@@ -83,11 +84,11 @@ class ImageModel(Base):
     file_modified_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # A hex-encoded SHA-256 digest is exactly 64 characters, so the length
-    # is physical schema rather than a guess. Nullable because RFC-024
-    # added the column without backfilling: rows indexed before it read
-    # back as NULL, which the skip decision treats as "unknown", never as
-    # "matches" (see `plan_indexing`).
+    # Um digest SHA-256 em hexadecimal tem exatamente 64 caracteres, então o
+    # comprimento é schema físico, não um palpite. Anulável porque o RFC-024
+    # acrescentou a coluna sem backfill: linhas indexadas antes dele voltam
+    # como NULL, o que a decisão de pular trata como "desconhecido", nunca
+    # como "confere" (ver `plan_indexing`).
     content_hash: Mapped[str | None] = mapped_column(
         String(SHA256_HEX_LENGTH), nullable=True
     )
@@ -95,123 +96,122 @@ class ImageModel(Base):
     captured_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=False), nullable=True
     )
-    """When the photograph was taken, as the camera clock read it (RFC-028).
+    """Quando a fotografia foi tirada, como o relógio da câmera marcava (RFC-028).
 
-    **`timezone=False`, two columns below a `file_modified_at` that is
-    `timezone=True` -- and the difference is the design, not an
-    inconsistency to tidy up.** `file_modified_at` comes from `st_mtime`,
-    an absolute instant, so it belongs in `TIMESTAMPTZ`. This column comes
-    from EXIF `DateTimeOriginal`, which is a local wall-clock reading with
-    no zone. Putting it in `TIMESTAMPTZ` would force a zone to be invented
-    -- UTC, or the zone of whichever machine ran the scan -- and either
-    one moves a photo taken at 22:00 on 31 December into the following
-    year for anyone reading it elsewhere (RFC-028 section 5). "Photos from
-    2018" is asked in camera-local time and is answered here with no
-    conversion at all.
+    **`timezone=False`, duas colunas abaixo de um `file_modified_at` que é
+    `timezone=True` -- e a diferença é o desenho, não uma inconsistência a
+    arrumar.** `file_modified_at` vem de `st_mtime`, um instante absoluto, então
+    pertence a `TIMESTAMPTZ`. Esta coluna vem do `DateTimeOriginal` do EXIF,
+    que é uma leitura de relógio de parede local, sem fuso. Pô-la em
+    `TIMESTAMPTZ` obrigaria a inventar um fuso -- UTC, ou o fuso da máquina
+    que rodou o scan --, e qualquer um dos dois leva uma foto tirada às 22:00
+    de 31 de dezembro para o ano seguinte para quem a lê em outro lugar
+    (RFC-028 §5). "Fotos de 2018" é perguntado no horário local da câmera e é
+    respondido aqui sem conversão nenhuma.
 
-    The accepted cost: shots from two different zones do not order
-    strictly against each other.
+    O custo aceito: fotos de dois fusos diferentes não se ordenam estritamente
+    entre si.
     """
 
     capture_source: Mapped[str | None] = mapped_column(String, nullable=True)
-    """Where `captured_at` came from -- a `CaptureSource` value, or NULL.
+    """De onde veio o `captured_at` -- um valor de `CaptureSource`, ou NULL.
 
-    Three states, and the first two must never be merged:
+    Três estados, e os dois primeiros nunca podem ser fundidos:
 
-    - NULL: the row was **never examined** -- it is older than RFC-028,
-      or its disk was scanned with extraction off;
-    - `'unknown'`: examined, and the file carries no usable date, so
-      `captured_at` is NULL;
-    - `'exif_original'` / `'exif_digitized'`: the EXIF tag the date was
-      read from.
+    - NULL: a linha **nunca foi examinada** -- é anterior ao RFC-028, ou o
+      disco dela foi varrido com a extração desligada;
+    - `'unknown'`: examinada, e o arquivo não traz data utilizável, então
+      `captured_at` é NULL;
+    - `'exif_original'` / `'exif_digitized'`: a tag EXIF de onde a data foi
+      lida.
 
-    The NULL / `'unknown'` split is what keeps re-scanning cheap. A scan
-    writes a capture date only for rows that are still NULL, so after the
-    first pass an unchanged collection costs no writes at all. If
-    "examined, no date" were stored as NULL too, every scan would reread
-    and rewrite every dateless file forever -- and dateless files are the
-    most numerous kind in exactly the collections RFC-028 worries about.
+    A separação entre NULL e `'unknown'` é o que mantém barato varrer de novo.
+    Um scan escreve a data de captura só para as linhas ainda NULL, então,
+    depois da primeira passada, uma coleção sem mudanças não custa escrita
+    nenhuma. Se "examinada, sem data" também fosse guardado como NULL, todo
+    scan releria e reescreveria cada arquivo sem data para sempre -- e
+    arquivos sem data são o tipo mais numeroso justamente nas coleções que
+    preocupam o RFC-028.
 
-    A plain `String`, not a PostgreSQL `ENUM`, so that adding a source
-    does not need a migration.
+    Uma `String` simples, não um `ENUM` do PostgreSQL, para que acrescentar
+    uma fonte não precise de migration.
     """
 
     thumbnail_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    """Where this image's thumbnail is kept, relative to the thumbnail cache (RFC-030).
+    """Onde fica a thumbnail desta imagem, relativo ao cache de thumbnails (RFC-030).
 
-    NULL means *no thumbnail*: the row predates RFC-030, or rendering
-    failed, or its bytes changed and the new thumbnail has not been made
-    yet. `GET /images/{id}/thumbnail` answers 404 for all three and the UI
-    shows a placeholder (RFC-030 section 7.2).
+    NULL quer dizer *sem thumbnail*: a linha é anterior ao RFC-030, ou a
+    renderização falhou, ou os bytes mudaram e a thumbnail nova ainda não foi
+    feita. O `GET /images/{id}/thumbnail` responde 404 nos três casos e a UI
+    mostra um placeholder (RFC-030 §7.2).
 
-    **Relative to `settings.thumbnail_directory`, never absolute** -- the
-    argument RFC-027 made for `relative_path`, one directory over. An
-    absolute location would bake the cache's current directory into every
-    row, so moving the cache would leave each one pointing at nothing.
+    **Relativo a `settings.thumbnail_directory`, nunca absoluto** -- o
+    argumento que o RFC-027 fez para `relative_path`, um diretório adiante.
+    Uma localização absoluta gravaria o diretório atual do cache em toda
+    linha, então mover o cache deixaria cada uma apontando para o nada.
 
-    **This column is why the cheap primary-key rewrite ends here** (RFC-030
-    section 7.3). The value is derived from `images.id`, and so is the
-    name of the file on disk; re-deriving the id after this point means
-    renaming files as well as updating rows. Recorded as an assumed
-    consequence, as RFC-029 section 11 anticipated.
+    **Esta coluna é o motivo de a reescrita barata da chave primária acabar
+    aqui** (RFC-030 §7.3). O valor é derivado de `images.id`, e o nome do
+    arquivo no disco também; derivar o id de novo depois deste ponto
+    significa renomear arquivos além de atualizar linhas. Registrado como
+    consequência assumida, como o RFC-029 §11 antecipou.
     """
 
     latitude: Mapped[float | None] = mapped_column(Double, nullable=True)
-    """North-south position where the photo was taken, decimal degrees (RFC-032).
+    """Posição norte-sul onde a foto foi tirada, em graus decimais (RFC-032).
 
-    **`double precision`, not `NUMERIC`.** 1e-7 degree is about a centimetre
-    and a `float8` carries ~15 significant digits: what is lost is orders
-    of magnitude below a drone's GNSS error, and many more below the
-    aircraft-to-subject offset the search radius absorbs (RFC-032 section
-    5). `NUMERIC` would buy decimal arithmetic to store noise.
+    **`double precision`, não `NUMERIC`.** 1e-7 grau é cerca de um centímetro
+    e um `float8` carrega ~15 dígitos significativos: o que se perde está
+    ordens de grandeza abaixo do erro do GNSS de um drone, e muitas mais
+    abaixo do deslocamento entre aeronave e alvo que o raio da busca absorve
+    (RFC-032 §5). `NUMERIC` compraria aritmética decimal para guardar ruído.
 
-    **Two columns, not one `point`.** The entity has two fields, the
-    response publishes two numbers, and the pairing CHECK below says in SQL
-    what `validate_position_fields()` says in Python. A `point` would turn
-    every `latitude` in every query, log and migration into
-    `(images.position)[1]`.
+    **Duas colunas, não um `point`.** A entidade tem dois campos, a resposta
+    publica dois números, e o CHECK de pareamento abaixo diz em SQL o que o
+    `validate_position_fields()` diz em Python. Um `point` transformaria todo
+    `latitude` em toda consulta, log e migration em `(images.position)[1]`.
 
-    Never called `location`: in this codebase that word is where the
-    *file* is (RFC-032 section 4.5).
+    Nunca chamada de `location`: neste código essa palavra é onde o *arquivo*
+    está (RFC-032 §4.5).
     """
 
     longitude: Mapped[float | None] = mapped_column(Double, nullable=True)
-    """East-west position where the photo was taken, decimal degrees; see `latitude`."""
+    """Posição leste-oeste onde a foto foi tirada, em graus decimais; ver `latitude`."""
 
     position_source: Mapped[str | None] = mapped_column(String, nullable=True)
-    """Where the position came from -- a `PositionSource` value, or NULL.
+    """De onde veio a posição -- um valor de `PositionSource`, ou NULL.
 
-    Three states, as `capture_source` has (RFC-032 section 4.4):
+    Três estados, como o `capture_source` tem (RFC-032 §4.4):
 
-    - NULL: **never examined** -- older than RFC-032, or scanned with
-      `extract_gps` off;
-    - `'unknown'`: examined, and the file has no usable position, so
-      `latitude` and `longitude` are NULL;
-    - `'exif_gps'`: read from the GPS IFD.
+    - NULL: **nunca examinada** -- anterior ao RFC-032, ou varrida com
+      `extract_gps` desligado;
+    - `'unknown'`: examinada, e o arquivo não tem posição utilizável, então
+      `latitude` e `longitude` são NULL;
+    - `'exif_gps'`: lida do GPS IFD.
 
-    A plain `String`, not an `ENUM`, so that `'manual'` and
-    `'subject_estimated'` -- named, and deliberately not members yet --
-    cost no migration when they arrive.
+    Uma `String` simples, não um `ENUM`, para que `'manual'` e
+    `'subject_estimated'` -- nomeados, e de propósito ainda não membros --
+    não custem migration quando chegarem.
     """
 
     missing_since: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    """When a whole-disk scan first failed to list this file, or NULL (RFC-046).
+    """Desde quando um scan do disco inteiro não lista o arquivo, ou NULL (RFC-046).
 
-    NULL is **present**. A date is *"not in the scan of this date"*: the row,
-    its vector and its thumbnail stay, every read that serves the interface
-    hides it, and the next scan that lists the file again sets it back to
-    NULL -- without inference, because the size and the date are the ones the
-    row holds (RFC-046 section 3).
+    NULL é **presente**. Uma data é *"fora do scan desta data"*: a
+    linha, o vetor e a thumbnail ficam, toda leitura que serve a interface a
+    esconde, e o próximo scan que listar o arquivo de novo a volta para NULL --
+    sem inferência, porque o tamanho e a data são os que a linha guarda
+    (RFC-046 §3).
 
-    **A date and not a boolean**, for two reasons (section 5.1): the card says
-    since when -- *"não encontradas no scan de 12/03"* -- and a purge by age,
-    if one ever exists, needs no other migration.
+    **Uma data e não um booleano**, por dois motivos (§5.1): o cartão diz
+    desde quando -- *"não encontradas no scan de 12/03"* -- e uma purga por
+    idade, se um dia existir, não precisa de outra migration.
 
-    `TIMESTAMPTZ`, like `file_modified_at`: it is an instant on this machine's
-    clock, not a camera's wall-clock reading. No index: the filter discards
-    almost nothing (section 6).
+    `TIMESTAMPTZ`, como `file_modified_at`: é um instante no relógio desta
+    máquina, não a leitura do relógio de parede de uma câmera. Sem índice: o
+    filtro descarta quase nada (§6).
     """
 
     __table_args__ = (
@@ -231,37 +231,39 @@ class ImageModel(Base):
             name="longitude_range",
         ),
     )
-    """One row per file per device, and never half a position.
+    """Uma linha por arquivo por dispositivo, e nunca meia posição.
 
-    The unique pair replaces the old `UNIQUE (path)`, which looked like it
-    prevented duplicates and prevented nothing: `D:/fotos/x.JPG` and
-    `F:/fotos/x.JPG` are two different strings, so the same file on the
-    same disk indexed under two drive letters satisfied the constraint
-    twice over. The pair does constrain what it claims to.
+    O par único substitui o antigo `UNIQUE (path)`, que parecia impedir
+    duplicatas e não impedia nada: `D:/fotos/x.JPG` e `F:/fotos/x.JPG` são
+    duas strings diferentes, então o mesmo arquivo no mesmo disco indexado
+    sob duas letras de unidade satisfazia a restrição duas vezes. O par de
+    fato restringe o que diz restringir.
 
-    The three CHECKs are the part of RFC-032's invariant that no future
-    writer can go around -- a manual `UPDATE`, a careless backfill, a test
-    fixture built by hand. The Domain still validates first and produces
-    the readable message; these make the database refuse what the Domain
-    was never asked about. Declared here as well as in the migration so a
-    schema built from the models (`Base.metadata.create_all`) has them too.
-    Their names are the short form because the naming convention in `base.py`
-    prefixes `ck_images_`: the database holds `ck_images_position_pairing`,
-    `ck_images_latitude_range` and `ck_images_longitude_range`.
+    Os três CHECKs são a parte do invariante do RFC-032 que nenhum escritor
+    futuro consegue contornar -- um `UPDATE` manual, um backfill descuidado,
+    uma fixture de teste montada à mão. O domínio ainda valida primeiro e
+    produz a mensagem legível; estes fazem o banco recusar o que nunca foi
+    perguntado ao domínio. Declarados aqui e também na migration para que um
+    schema montado a partir dos modelos (`Base.metadata.create_all`) os tenha
+    também. Os nomes são a forma curta porque a convenção de nomes em
+    `base.py` prefixa `ck_images_`: o banco guarda
+    `ck_images_position_pairing`, `ck_images_latitude_range` e
+    `ck_images_longitude_range`.
     """
 
     @classmethod
     def from_domain(cls, image: Image) -> ImageModel:
-        """Create an ORM model from a domain entity.
+        """Cria um modelo ORM a partir de uma entidade de domínio.
 
-        The Domain `Image` entity has no embedding or filesystem metadata
-        fields, so those persistence-only columns are left unset here; they
-        are populated separately by the indexing pipeline once it exists.
+        A entidade de domínio `Image` não tem campos de embedding nem de
+        metadados do sistema de arquivos, então essas colunas exclusivas da
+        persistência ficam sem valor aqui; elas são preenchidas à parte pelo
+        pipeline de indexação quando ele existir.
 
-        The capture date *is* copied, because since RFC-028 it is a field of
-        the entity: an attribute of the photograph rather than a change
-        signal for the pipeline. So is the position, since RFC-032, for the
-        same reason.
+        A data de captura *é* copiada, porque desde o RFC-028 ela é um campo
+        da entidade: um atributo da fotografia, e não um sinal de mudança
+        para o pipeline. A posição também, desde o RFC-032, pelo mesmo
+        motivo.
         """
         return cls(
             id=image.id.value,
@@ -287,14 +289,14 @@ class ImageModel(Base):
         )
 
     def to_domain(self) -> Image:
-        """Create a domain entity from this ORM model.
+        """Cria uma entidade de domínio a partir deste modelo ORM.
 
-        `absolute_path` is left `None`, and that is not an omission. The
-        row records where the file is on its *device*; where that device
-        is mounted right now is not in the database, on purpose, and is
-        not knowable from a row (RFC-027 section 7). Whoever needs a
-        usable path resolves the mount point and fills it in -- the
-        indexing worker while it scans, and RFC-030 per request.
+        `absolute_path` fica `None`, e isso não é uma omissão. A linha
+        registra onde o arquivo está no seu *dispositivo*; onde esse
+        dispositivo está montado agora não está no banco, de propósito, e não
+        dá para saber a partir de uma linha (RFC-027 §7). Quem precisa de um
+        caminho utilizável resolve o ponto de montagem e o preenche -- o
+        worker de indexação enquanto varre, e o RFC-030 por requisição.
         """
         return Image(
             id=ImageId(self.id),

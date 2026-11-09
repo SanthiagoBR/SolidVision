@@ -1,23 +1,23 @@
-"""What is plugged in, and what of it we already know (RFC-031 §5).
+"""O que está plugado, e o que disso já conhecemos (RFC-031 §5).
 
-The question that comes *before* registering a disk, and the reason
-`POST /api/v1/devices` never has to accept a path: the server enumerates
-the volumes and mints an opaque identifier for each one, and the client
-hands one of those back. The client never composes a location, and an
-identifier it invented resolves to nothing (RFC-031 section 5.1).
+A pergunta que vem *antes* de registrar um disco, e a razão de
+`POST /api/v1/devices` nunca precisar aceitar um caminho: o servidor enumera
+os volumes e cunha um identificador opaco para cada um, e o cliente devolve
+um deles. O cliente nunca compõe um local, e um identificador que ele
+inventou não resolve para nada (RFC-031 §5.1).
 
-`device_id` on each row is what lets the "add a device" screen show the
-disks it already knows as already-added, instead of letting a user
-register one twice and discover afterwards that nothing happened.
+O `device_id` de cada linha é o que deixa a tela de "adicionar um
+dispositivo" mostrar os discos que já conhece como já adicionados, em vez de
+deixar o usuário registrar um duas vezes e descobrir depois que nada
+aconteceu.
 
-**This route is deliberately the expensive one.** RFC-031 section 5 calls
-it *"a direct projection of `mounted_volumes()`"*; it is not.
-`mounted_volumes()` returns identities and mount points and knows
-neither the filesystem label nor the capacity, both of which are in the
-response body -- so this goes through `VolumeCatalog.list_mounted()`,
-which pays one identification call per volume. Section 4.1 of the build
-prompt records why that cost was given its own method rather than folded
-into the cheap one.
+**Esta rota é, de propósito, a cara.** O RFC-031 §5 a chama de *"a direct
+projection of `mounted_volumes()`"*; ela não é. `mounted_volumes()` devolve
+identidades e pontos de montagem e não conhece nem o rótulo do sistema de
+arquivos nem a capacidade, que estão os dois no corpo da resposta -- então
+isto passa por `VolumeCatalog.list_mounted()`, que paga uma chamada de
+identificação por volume. A §4.1 do build prompt registra por que esse custo
+ganhou um método próprio, em vez de ser dobrado no barato.
 """
 
 from __future__ import annotations
@@ -32,17 +32,17 @@ from app.domain.value_objects.mounted_volume import MountedVolume
 
 @dataclass(frozen=True)
 class CatalogedVolume:
-    """One attached volume, and the device it already is -- or `None`."""
+    """Um volume conectado, e o dispositivo que ele já é -- ou `None`."""
 
     volume: MountedVolume
 
     device_id: DeviceId | None
-    """The registered device for this volume, or `None` if it is new here.
+    """O dispositivo registrado para este volume, ou `None` se ele é novo aqui.
 
-    Not derived by hashing the identity, although the derivation is
-    deterministic and would give the same answer. `compute_device_id()`
-    says what a device *would* be called; this field says whether a row
-    exists, which is the question the screen is asking.
+    Não é derivado pelo hash da identidade, embora a derivação seja
+    determinística e desse a mesma resposta. `compute_device_id()` diz como
+    um dispositivo *seria* chamado; este campo diz se uma linha existe, que é
+    a pergunta que a tela está fazendo.
     """
 
     @property
@@ -51,7 +51,7 @@ class CatalogedVolume:
 
 
 class ListMountedVolumesUseCase:
-    """Enumerate the attached volumes and mark the ones already registered."""
+    """Enumera os volumes conectados e marca os que já estão registrados."""
 
     def __init__(
         self, volume_catalog: VolumeCatalog, device_repository: DeviceRepository
@@ -60,23 +60,23 @@ class ListMountedVolumesUseCase:
         self._devices = device_repository
 
     def execute(self) -> list[CatalogedVolume]:
-        """Return every mounted volume, sorted by where it is attached.
+        """Devolve todo volume montado, ordenado por onde está conectado.
 
-        One enumeration and one `SELECT`, crossed in memory on the volume
-        identity -- which is a key, compared for equality and nothing
-        else. No case folding and no normalisation: the value is opaque
-        above the adapter that minted it, and a repository that folded
-        case would merge two volumes on a platform whose identifiers are
-        case-sensitive (`DeviceRepository.get_by_volume_identity`).
+        Uma enumeração e um `SELECT`, cruzados em memória pela identidade do
+        volume -- que é uma chave, comparada por igualdade e nada mais. Sem
+        ignorar maiúsculas e sem normalização: o valor é opaco acima do
+        adaptador que o cunhou, e um repositório que ignorasse maiúsculas
+        fundiria dois volumes numa plataforma cujos identificadores
+        distinguem maiúsculas (`DeviceRepository.get_by_volume_identity`).
 
-        Volumes the platform refuses to describe never reach here; the
-        adapter skips them, exactly as RFC-027 decided a disk that will
-        not answer is no reason to stop reporting the ones that did.
+        Volumes que a plataforma se recusa a descrever nunca chegam aqui; o
+        adaptador os pula, exatamente como o RFC-027 decidiu que um disco que
+        não responde não é razão para parar de relatar os que responderam.
 
-        Sorted by mount point, because that is how the user sees them --
-        `D:`, `F:`, `G:` -- and because `list_mounted()` promises no
-        order. Sorting here rather than in the adapter keeps the choice
-        in the layer that knows it is being rendered.
+        Ordenado pelo ponto de montagem, porque é assim que o usuário os vê
+        -- `D:`, `F:`, `G:` -- e porque `list_mounted()` não promete ordem.
+        Ordenar aqui, e não no adaptador, deixa a escolha na camada que sabe
+        que está sendo desenhada.
         """
         known = {device.volume_identity: device.id for device in self._devices.list()}
         cataloged = [

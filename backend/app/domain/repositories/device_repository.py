@@ -1,4 +1,4 @@
-"""Abstract repository port for device persistence operations (RFC-027)."""
+"""Porta abstrata de repositório para a persistência dos dispositivos (RFC-027)."""
 
 from __future__ import annotations
 
@@ -10,98 +10,99 @@ from app.domain.value_objects.device_id import DeviceId, VolumeIdentity
 
 
 class DeviceRepository(ABC):
-    """Repository contract for managing `Device` domain entities.
+    """Contrato de repositório para gerenciar as entidades de domínio `Device`.
 
-    Sits beside `ImageRepository` rather than inside it: a device outlives
-    every image on it, is created by a different act (plugging a disk in),
-    and is looked up by a key -- the volume identity -- that no image
-    carries.
+    Fica ao lado de `ImageRepository`, e não dentro dele: um dispositivo
+    sobrevive a todas as imagens que tem, é criado por um ato diferente
+    (plugar um disco) e é procurado por uma chave -- a identidade do volume --
+    que nenhuma imagem carrega.
 
-    Nothing here reports whether a device is connected. That question has
-    no persistent answer (RFC-027 section 7); it is asked of
-    `VolumeIdentityProvider`, which enumerates what is mounted *now*, and
-    an implementation of this port that grew an `is_connected` column
-    would be answering it from a value that stopped being true the moment
-    the user unplugged the disk.
+    Nada aqui informa se um dispositivo está conectado. Essa pergunta não tem
+    resposta persistente (RFC-027 §7); ela é feita ao
+    `VolumeIdentityProvider`, que enumera o que está montado *agora*, e uma
+    implementação desta porta que ganhasse uma coluna `is_connected` a
+    responderia com um valor que deixou de ser verdade no momento em que o
+    usuário desplugou o disco.
     """
 
     @abstractmethod
     def save(self, device: Device) -> None:
-        """Create the device, or update the row that already has its id.
+        """Cria o dispositivo, ou atualiza a linha que já tem o id dele.
 
-        An upsert rather than a create-once, because the natural call site
-        is a worker starting a run against a disk it may or may not have
-        seen before, and every field except the identity is expected to
-        move between runs: `last_seen_at` always, `label` when the user
-        renames it, `total_bytes` when the volume grows, the scan counters
-        after every scan.
+        Um upsert, e não uma criação única, porque o lugar natural da chamada
+        é um worker começando uma execução contra um disco que ele pode ou não
+        ter visto antes, e todo campo, menos a identidade, deve mudar entre
+        execuções: `last_seen_at` sempre, `label` quando o usuário o renomeia,
+        `total_bytes` quando o volume cresce, os contadores do scan depois de
+        cada scan.
 
-        `id` is derived from `volume_identity`, so saving the same volume
-        twice updates one row rather than creating a second. An
-        implementation must therefore key on `id` and let the `UNIQUE`
-        constraint on the identity stay a backstop, not the mechanism.
+        O `id` é derivado de `volume_identity`, então salvar o mesmo volume
+        duas vezes atualiza uma linha, em vez de criar uma segunda. Uma
+        implementação tem, portanto, de usar o `id` como chave e deixar a
+        restrição `UNIQUE` sobre a identidade como rede de segurança, e não
+        como o mecanismo.
         """
 
     @abstractmethod
     def record_scan(
         self, device_id: DeviceId, file_count: int, scanned_at: datetime.datetime
     ) -> None:
-        """Write the result of a scan of the whole disk, and nothing else.
+        """Escreve o resultado de um scan do disco inteiro, e nada mais.
 
-        `last_scan_file_count` and `last_scan_at` -- the denominator of the
-        "% indexed" figure and its date (RFC-027 section 8) -- written by
-        the job of the whole disk when its listing ends (RFC-039 section
-        4.1).
+        `last_scan_file_count` e `last_scan_at` -- o denominador do número de
+        "% indexado" e a data dele (RFC-027 §8) --, escritos pelo job do disco
+        inteiro quando a listagem dele termina (RFC-039 §4.1).
 
-        **Two columns, and not a `save()`.** `save()` rewrites the whole
-        row from a copy, and the copy the executor holds is from the start
-        of the job: a rename made since -- the label is editable with the
-        disk in use (RFC-031 section 7) -- would be undone by a scan that
-        finished after it. This writes the two fields the scan owns, over
-        whatever the row says now.
+        **Duas colunas, e não um `save()`.** `save()` reescreve a linha
+        inteira a partir de uma cópia, e a cópia que o executor tem é do
+        começo do job: uma renomeação feita depois -- o rótulo é editável com
+        o disco em uso (RFC-031 §7) -- seria desfeita por um scan que
+        terminasse depois dela. Isto escreve os dois campos que o scan detém,
+        sobre o que quer que a linha diga agora.
 
-        An unknown id writes nothing and is not an error: a device can be
-        deleted while its job runs, and a scan of a disk nobody knows any
-        more has nowhere to go.
+        Um id desconhecido não escreve nada e não é erro: um dispositivo pode
+        ser apagado enquanto o job dele roda, e o scan de um disco que ninguém
+        mais conhece não tem para onde ir.
         """
 
     @abstractmethod
     def get(self, device_id: DeviceId) -> Device | None:
-        """Retrieve a device by its identifier, or `None` when unknown."""
+        """Busca um dispositivo pelo identificador, ou `None` se desconhecido."""
 
     @abstractmethod
     def get_by_volume_identity(self, identity: VolumeIdentity) -> Device | None:
-        """Retrieve the device for a volume the operating system just reported.
+        """Busca o dispositivo de um volume que o sistema operacional acabou de relatar.
 
-        The lookup that makes remounting free. A worker resolves the
-        identity of whatever it was pointed at, asks this, and either
-        finds the disk it indexed last month -- under a different drive
-        letter, and it does not matter -- or learns that this is a new one.
+        A consulta que torna remontar de graça. Um worker resolve a identidade
+        do que quer que lhe tenham apontado, pergunta isto, e ou acha o disco
+        que indexou no mês passado -- com outra letra de unidade, e isso não
+        importa -- ou descobre que é um disco novo.
 
-        Matching is exact on both halves of the identity, string and kind.
-        No case folding, no normalisation of separators: the value is
-        opaque above the adapter that minted it, and an implementation
-        that "helpfully" folded case would merge two volumes on a platform
-        whose identifiers are case-sensitive.
+        A comparação é exata nas duas metades da identidade, string e tipo.
+        Sem ignorar maiúsculas, sem normalizar separadores: o valor é opaco
+        acima do adaptador que o cunhou, e uma implementação que, "para
+        ajudar", ignorasse maiúsculas fundiria dois volumes numa plataforma
+        cujos identificadores distinguem maiúsculas.
         """
 
     @abstractmethod
     def list(self) -> list[Device]:
-        """Return every device known to the repository.
+        """Devolve todo dispositivo que o repositório conhece.
 
-        Order is not part of the contract. Callers that render a device
-        list -- a sidebar, say -- sort by whatever they display.
+        A ordem não faz parte do contrato. Os chamadores que desenham uma
+        lista de dispositivos -- uma barra lateral, por exemplo -- ordenam pelo
+        que exibem.
         """
 
     @abstractmethod
     def delete(self, device_id: DeviceId) -> None:
-        """Remove a device from the repository.
+        """Remove um dispositivo do repositório.
 
-        Does nothing when no such device exists. Implementations must not
-        cascade into `images`: an image row is an embedding that cost real
-        inference time, and RFC-027 section 6.3 is explicit that rows for
-        an absent disk are a record of something to plug in, never
-        something to delete quietly. A repository backed by a database
-        with a foreign key will therefore refuse the delete while images
-        remain, and that refusal is the correct behaviour.
+        Não faz nada quando o dispositivo não existe. As implementações não
+        podem propagar a exclusão para `images`: uma linha de imagem é um
+        embedding que custou tempo real de inferência, e o RFC-027 §6.3 é
+        explícito: as linhas de um disco ausente são o registro de algo a
+        plugar, nunca algo a apagar em silêncio. Um repositório apoiado num
+        banco com chave estrangeira vai, portanto, recusar a exclusão enquanto
+        houver imagens, e essa recusa é o comportamento correto.
         """

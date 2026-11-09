@@ -1,20 +1,21 @@
-"""Great-circle distance between two positions, in metres (RFC-032 section 6).
+"""Distância de grande círculo entre duas posições, em metros (RFC-032 §6).
 
-**One implementation**, shared by both in-process `ImageRepository` doubles,
-and one constant shared with the PostgreSQL clause that computes the same
-formula in SQL. Two hand-written haversines would be two chances to drift
-from the database, and the contract test holds all three to one answer --
-which only works if the radius of the Earth is the same number everywhere.
+**Uma implementação**, compartilhada pelos dois dublês de `ImageRepository`
+em processo, e uma constante compartilhada com a cláusula do PostgreSQL que
+calcula a mesma fórmula em SQL. Duas haversines escritas à mão seriam duas
+chances de se afastar do banco, e o teste de contrato prende as três a uma
+resposta só -- o que só funciona se o raio da Terra for o mesmo número em
+todo lugar.
 
-Haversine rather than the spherical law of cosines because it stays exact
-at short distances: the law of cosines takes `acos` of a value within
-rounding error of 1 for two points metres apart, and the photos this filter
-exists for are tens of metres apart.
+Haversine, e não a lei esférica dos cossenos, porque ela continua exata em
+distâncias curtas: a lei dos cossenos tira o `acos` de um valor a um erro de
+arredondamento de 1 para dois pontos a metros um do outro, e as fotos para as
+quais este filtro existe estão a dezenas de metros umas das outras.
 
-A sphere rather than the WGS 84 ellipsoid. The error is under 0.5% of the
-distance, and the uncertainty this filter has to absorb is the offset
-between the aircraft and the photographed ground -- tens to hundreds of
-metres (RFC-032 section 2.2) -- not the flattening of the planet.
+Uma esfera, e não o elipsoide WGS 84. O erro fica abaixo de 0,5% da
+distância, e a incerteza que este filtro precisa absorver é o deslocamento
+entre a aeronave e o chão fotografado -- dezenas a centenas de metros
+(RFC-032 §2.2) -- e não o achatamento do planeta.
 """
 
 from __future__ import annotations
@@ -24,26 +25,26 @@ import math
 from app.domain.value_objects.position import Position
 
 EARTH_RADIUS_M = 6_371_008.8
-"""The IUGG mean radius of the Earth, in metres.
+"""O raio médio da Terra segundo a IUGG, em metros.
 
-Imported by `PostgresImageRepository` for its SQL expression, never retyped
-there: a contract test whose three implementations disagree by the
-difference between 6371 km and 6378 km would fail only for circles drawn
-near their edge, which is the hardest failure to read.
+Importado por `PostgresImageRepository` para a expressão SQL dele, nunca
+redigitado lá: um teste de contrato cujas três implementações discordassem
+pela diferença entre 6371 km e 6378 km falharia só para círculos desenhados
+perto da borda, que é a falha mais difícil de ler.
 """
 
 
 def haversine_m(first: Position, second: Position) -> float:
-    """Return the great-circle distance between two positions, in metres.
+    """Devolve a distância de grande círculo entre duas posições, em metros.
 
-    The longitude difference is taken *before* converting to radians, and
-    the PostgreSQL expression does the same. The two orders are equal in
-    exact arithmetic and differ in the last bits of a float; matching them
-    keeps the in-memory doubles and the database in agreement for a point
-    sitting almost exactly on a circle's edge.
+    A diferença de longitude é tirada *antes* da conversão para radianos, e a
+    expressão do PostgreSQL faz o mesmo. As duas ordens são iguais em
+    aritmética exata e diferem nos últimos bits de um float; fazê-las
+    coincidir mantém os dublês em memória e o banco de acordo para um ponto
+    quase exatamente na borda de um círculo.
 
-    `min(1.0, ...)` guards `asin` against a rounding error pushing its
-    argument a hair above 1 for antipodal points.
+    `min(1.0, ...)` protege o `asin` de um erro de arredondamento que empurre
+    o argumento dele um fio acima de 1 para pontos antípodas.
     """
     first_latitude = math.radians(first.latitude)
     second_latitude = math.radians(second.latitude)
@@ -57,6 +58,6 @@ def haversine_m(first: Position, second: Position) -> float:
 
 
 def _squared_sine_of_half(angle: float) -> float:
-    """`sin(angle / 2)` squared, by multiplication -- as the SQL computes it."""
+    """`sin(angle / 2)` ao quadrado, por multiplicação -- como o SQL o calcula."""
     sine = math.sin(angle / 2.0)
     return sine * sine

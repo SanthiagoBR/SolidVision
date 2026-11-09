@@ -1,1 +1,1 @@
-"""Configuration infrastructure package."""
+"""Pacote de infraestrutura de configuração."""

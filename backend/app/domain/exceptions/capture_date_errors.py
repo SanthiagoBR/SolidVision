@@ -1,15 +1,15 @@
-"""Capture-date domain exceptions (RFC-028)."""
+"""Exceções de domínio da data de captura (RFC-028)."""
 
 from app.domain.exceptions.domain_error import DomainError
 
 
 class InvalidCaptureDateError(DomainError):
-    """Raised when a capture date and its source do not describe one fact.
+    """Levantada quando uma data de captura e a sua fonte não descrevem um só fato.
 
-    Most often: a zone-aware `datetime`. EXIF records the camera's local
-    wall-clock time and no zone (RFC-028 section 5), so an aware value
-    means some layer invented one, and the invented zone is exactly what
-    moves a New Year's Eve photo into the wrong year.
+    No mais das vezes: um `datetime` com fuso. O EXIF registra a hora local do
+    relógio da câmera, sem fuso (RFC-028 §5), então um valor com fuso quer
+    dizer que alguma camada inventou um, e o fuso inventado é exatamente o que
+    leva uma foto do réveillon para o ano errado.
     """
 
     def __init__(self, message: str = "Invalid capture date.") -> None:
@@ -17,13 +17,13 @@ class InvalidCaptureDateError(DomainError):
 
 
 class InvalidDateRangeError(DomainError):
-    """Raised when a capture-date range cannot be evaluated as asked.
+    """Levantada quando um intervalo de datas não pode ser avaliado como pedido.
 
-    A subclass of `DomainError`, so the HTTP layer answers 400 without a
-    handler of its own: an inverted range, or one bound sent with a UTC
-    offset, is a well-formed request the application refuses -- which is
-    what 400 means there, as opposed to FastAPI's 422 for a request that
-    does not parse at all.
+    Uma subclasse de `DomainError`, para que a camada HTTP responda 400 sem
+    um handler próprio: um intervalo invertido, ou um limite enviado com
+    deslocamento de UTC, é um pedido bem formado que a aplicação recusa --
+    que é o que 400 quer dizer lá, ao contrário do 422 do FastAPI para um
+    pedido que nem é interpretável.
     """
 
     def __init__(self, message: str = "Invalid date range.") -> None:

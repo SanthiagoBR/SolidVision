@@ -1,4 +1,4 @@
-"""What the listing of a whole disk found, handed to the observer (RFC-046)."""
+"""O que a listagem de um disco inteiro achou, entregue ao observador (RFC-046)."""
 
 from __future__ import annotations
 
@@ -7,28 +7,29 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RootListing:
-    """The supported files of a whole root, and the folders that could not be read.
+    """Os arquivos suportados de uma raiz inteira, e as pastas que não deu para ler.
 
-    What `IndexingObserver.listed()` receives since RFC-046 section 5.3, in
-    place of the bare count RFC-039 section 4.1 gave it. Three fields:
+    O que `IndexingObserver.listed()` recebe desde o RFC-046 §5.3, no lugar
+    da contagem simples que o RFC-039 §4.1 lhe dava. Três campos:
 
-    * `file_count` -- the denominator of "% indexed", counting **only files**:
-      the walk knows a folder from a file without a `stat`, so a folder named
-      `x.jpg` no longer counts (RFC-046 section 5.2);
-    * `files` -- each of those files relative to the root, as text in the posix
-      form `ImagePath` keeps. Text and not `PurePath`, for the memory: a disk
-      of 116,396 photos holds this list from the listing to the end of the job
-      (RFC-046 sections 5.3 and 8);
-    * `unreadable` -- the folders the walk could not read, relative to the
-      root, in the same form. Nothing under them was listed, so nothing under
-      them may be called missing (section 2).
+    * `file_count` -- o denominador do "% indexado", contando **só
+      arquivos**: a varredura distingue uma pasta de um arquivo sem um
+      `stat`, então uma pasta chamada `x.jpg` não conta mais (RFC-046 §5.2);
+    * `files` -- cada um desses arquivos relativo à raiz, como texto na forma
+      posix que `ImagePath` guarda. Texto, e não `PurePath`, pela memória: um
+      disco de 116.396 fotos guarda esta lista da listagem até o fim do job
+      (RFC-046 §5.3 e §8);
+    * `unreadable` -- as pastas que a varredura não conseguiu ler, relativas
+      à raiz, na mesma forma. Nada abaixo delas foi listado, então nada
+      abaixo delas pode ser chamado de ausente (§2).
 
-    **No device and no id.** The provider that builds this knows neither; the
-    job runner mints the ids from `files` at the end of the job, with the one
-    function that mints them during indexing (section 5.5).
+    **Sem dispositivo e sem id.** O provider que constrói isto não conhece
+    nenhum dos dois; o job runner cunha os ids a partir de `files` no fim do
+    job, com a mesma função que os cunha durante a indexação (§5.5).
 
-    `file_count` is a field, and always `len(files)`: the two are the same set,
-    and a listing whose count and files disagree is refused at construction.
+    `file_count` é um campo, e sempre `len(files)`: os dois são o mesmo
+    conjunto, e uma listagem cuja contagem e cujos arquivos discordam é
+    recusada na construção.
     """
 
     file_count: int

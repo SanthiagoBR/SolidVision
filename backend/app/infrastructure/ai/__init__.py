@@ -1,19 +1,19 @@
-"""AI infrastructure package.
+"""Pacote de infraestrutura de IA.
 
-**The first thing this package does is set the environment of the model
-libraries** (RFC-035 section 5.2): the offline mode, and where `huggingface_hub`
-and `torch` may write. Python runs a package's `__init__` before any of its
-submodules, and `torch` and `transformers` are imported nowhere in
-`backend/app` but here, so no code path of the app reaches `huggingface_hub`
-without passing through these lines first. They come before every other
-import below, on purpose.
+**A primeira coisa que este pacote faz é preparar o ambiente das bibliotecas
+de modelo** (RFC-035 §5.2): o modo offline, e onde `huggingface_hub` e
+`torch` podem escrever. O Python roda o `__init__` de um pacote antes de
+qualquer submódulo dele, e `torch` e `transformers` não são importados em
+nenhum lugar de `backend/app` a não ser aqui, então nenhum caminho do app
+chega a `huggingface_hub` sem passar antes por estas linhas. Elas vêm antes
+de todos os outros imports abaixo, de propósito.
 
-`ClipEmbeddingModel` is deliberately NOT re-exported here. This package's
-`__init__` runs on any `from app.infrastructure.ai...` import, including the
-`FakeEmbeddingModel` imports scattered through the fast test suite, and
-re-exporting the CLIP adapter would drag `torch` and `transformers` into
-every one of those imports for no benefit. Import it by its full module path
-instead: `from app.infrastructure.ai.clip_embedding_model import
+`ClipEmbeddingModel`, deliberadamente, NÃO é reexportado aqui. O
+`__init__` deste pacote roda em qualquer import `from app.infrastructure.ai...`,
+inclusive nos imports de `FakeEmbeddingModel` espalhados pela suíte rápida
+de testes, e reexportar o adaptador CLIP arrastaria `torch` e `transformers`
+para cada um desses imports sem ganho nenhum. Importe-o pelo caminho
+completo do módulo: `from app.infrastructure.ai.clip_embedding_model import
 ClipEmbeddingModel`.
 """
 

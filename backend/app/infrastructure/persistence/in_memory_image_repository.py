@@ -1,4 +1,4 @@
-"""In-memory image repository implementation for development and dependency wiring."""
+"""Repositório de imagens em memória, para desenvolvimento e ligação de dependências."""
 
 from __future__ import annotations
 
@@ -47,25 +47,26 @@ def cosine_search(
     indexed: Iterable[tuple[Image, EmbeddingVector]],
     limit: int,
 ) -> SearchHits:
-    """Rank `indexed` against `query` the way PostgreSQL would, in Python.
+    """Ordena `indexed` contra `query` como o PostgreSQL faria, em Python.
 
-    Shared by the two in-process `ImageRepository` doubles -- this module's
-    and `tests/application/fakes.py`'s -- rather than written twice. The
-    whole reason they implement search at all is to be held to the same
-    contract test as `PostgresImageRepository`, and two hand-rolled cosine
-    loops would be two chances to drift from it and from each other.
+    Compartilhada pelos dois doubles em processo de `ImageRepository` -- o
+    deste módulo e o de `tests/application/fakes.py` --, em vez de escrita
+    duas vezes. A única razão de eles implementarem busca é serem presos ao
+    mesmo teste de contrato que o `PostgresImageRepository`, e dois loops de
+    cosseno escritos à mão seriam duas chances de divergir dele e um do
+    outro.
 
-    Deliberately computes the full cosine, dividing by both norms, instead
-    of a bare dot product. Callers happen to store L2-normalized vectors
-    today because `ClipEmbeddingModel` normalizes, but pgvector's `<=>`
-    does not assume that, and a double that silently required it would
-    disagree with PostgreSQL the first time a test used a hand-built
-    vector of any other length.
+    Calcula de propósito o cosseno completo, dividindo pelas duas normas, em
+    vez de um produto escalar puro. Quem chama guarda vetores normalizados
+    em L2 hoje, porque o `ClipEmbeddingModel` normaliza, mas o `<=>` do
+    pgvector não supõe isso, e um double que o exigisse em silêncio
+    discordaria do PostgreSQL na primeira vez em que um teste usasse um
+    vetor montado à mão com qualquer outra norma.
 
-    Ties break on the image id, matching the ORDER BY in
-    `PostgresImageRepository.search_similar()`: PostgreSQL compares UUIDs
-    byte by byte and Python compares `UUID.int`, which is the same
-    ordering over the same 16 bytes.
+    O desempate é pelo id da imagem, como o ORDER BY de
+    `PostgresImageRepository.search_similar()`: o PostgreSQL compara UUIDs
+    byte a byte e o Python compara `UUID.int`, que é a mesma ordem sobre os
+    mesmos 16 bytes.
     """
     _require_indexed_dimension(query)
 
@@ -78,33 +79,34 @@ def cosine_search(
 
 
 def matches_filters(image: Image, filters: SearchFilters | None) -> bool:
-    """Return whether `image` survives `filters`, for an in-process ranking.
+    """Diz se `image` passa por `filters`, para uma ordenação em processo.
 
-    Shared by both in-process `ImageRepository` doubles for the same
-    reason `cosine_search()` is: one predicate written once cannot drift
-    from the other, and both are held to the PostgreSQL contract by
+    Compartilhada pelos dois doubles em processo de `ImageRepository` pela
+    mesma razão que `cosine_search()`: um predicado escrito uma vez não pode
+    divergir do outro, e os dois são presos ao contrato do PostgreSQL por
     `test_search_similar_contract.py`.
 
-    `None` and an empty `SearchFilters()` both mean "no narrowing", never
-    "an empty set of devices". Getting that backwards would make a
-    defaulted argument silently return nothing at all.
+    `None` e um `SearchFilters()` vazio significam, os dois, "sem
+    restrição", nunca "um conjunto vazio de dispositivos". Inverter isso
+    faria um argumento com valor padrão devolver nada, em silêncio.
 
-    Each field narrows on its own and only when set, as each adds its own
-    `WHERE` clause in PostgreSQL.
+    Cada campo restringe por conta própria, e só quando preenchido, como
+    cada um acrescenta sua própria cláusula `WHERE` no PostgreSQL.
 
-    The `captured_at is not None` check is explicit on purpose, and it is
-    the line most likely to be "simplified" away. PostgreSQL gets the
-    RFC-020 rule for free -- a comparison with NULL is never true -- but
-    Python does not: `start <= None` raises `TypeError` instead of
-    returning `False`, so without the check an unknown date would crash
-    the in-memory search where the database quietly excludes the row.
+    A verificação `captured_at is not None` é explícita de propósito, e é a
+    linha com mais chance de ser "simplificada" e sumir. O PostgreSQL ganha
+    a regra do RFC-020 de graça -- uma comparação com NULL nunca é
+    verdadeira --, mas o Python não: `start <= None` levanta `TypeError` em
+    vez de devolver `False`, então, sem a verificação, uma data
+    desconhecida derrubaria a busca em memória onde o banco apenas exclui a
+    linha, em silêncio.
 
-    The position check is explicit for the same reason (RFC-032 section
-    6): `haversine(None, ...)` raises where SQL compares NULL as false.
-    **An unknown position never matches a circle, however large.** The
-    circle is tested by exact distance alone -- there is no index here for
-    a bounding box to help, and adding one would only be a second place
-    for the answer to differ from the exact one.
+    A verificação da posição é explícita pela mesma razão (RFC-032 §6):
+    `haversine(None, ...)` levanta erro onde o SQL compara NULL como falso.
+    **Uma posição desconhecida nunca casa com um círculo, por maior que
+    seja.** O círculo é testado só pela distância exata -- não há aqui
+    índice que uma caixa delimitadora ajudasse, e acrescentar uma seria só
+    mais um lugar em que a resposta poderia diferir da exata.
     """
     if filters is None or filters.is_empty():
         return True
@@ -125,16 +127,17 @@ def matches_filters(image: Image, filters: SearchFilters | None) -> bool:
 
 
 def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters) -> int:
-    """Count what a date range hid for having no date, over searchable images.
+    """Conta o que um intervalo de datas escondeu por não ter data, entre as buscáveis.
 
-    `indexed` must already be restricted to images with an embedding,
-    exactly as `cosine_search()` expects. Every other clause -- the device
-    set and, since RFC-032, the circle -- is applied through
-    `matches_filters()` with the date range removed, so the definition of
-    "every other clause" cannot drift from the search predicate.
+    `indexed` já deve estar restrito às imagens com embedding, exatamente
+    como `cosine_search()` espera. Todas as outras cláusulas -- o conjunto
+    de dispositivos e, desde o RFC-032, o círculo -- são aplicadas por
+    `matches_filters()` com o intervalo de datas removido, para que a
+    definição de "todas as outras cláusulas" não possa divergir do
+    predicado da busca.
 
-    Shared by both in-process doubles for the reason `matches_filters()`
-    is.
+    Compartilhada pelos dois doubles em processo pela razão de
+    `matches_filters()`.
     """
     if filters.captured_between is None:
         return 0
@@ -147,13 +150,13 @@ def count_unknown_capture_date(indexed: Iterable[Image], filters: SearchFilters)
 
 
 def count_unknown_position(indexed: Iterable[Image], filters: SearchFilters) -> int:
-    """Count the searchable images with no position, under every other clause.
+    """Conta as imagens buscáveis sem posição, sob todas as outras cláusulas.
 
-    `count_unknown_capture_date()`'s twin for RFC-032 section 6.2, with the
-    one difference the port documents: no short-circuit to 0 without a
-    circle, because the map asks the same question with none. The circle
-    itself is removed before `matches_filters()` -- it is the clause whose
-    victims are being counted.
+    A gêmea de `count_unknown_capture_date()` para o RFC-032 §6.2, com a
+    única diferença que a porta documenta: nada de devolver 0 direto sem um
+    círculo, porque o mapa faz a mesma pergunta sem nenhum. O próprio
+    círculo é removido antes de `matches_filters()` -- é a cláusula cujas
+    vítimas estão sendo contadas.
     """
     without_circle = dataclasses.replace(filters, taken_within=None)
     return sum(
@@ -164,15 +167,15 @@ def count_unknown_position(indexed: Iterable[Image], filters: SearchFilters) -> 
 
 
 def round_to_cell(value: float, precision: int) -> float:
-    """Round a coordinate the way `round(value::numeric, precision)` does in PostgreSQL.
+    """Arredonda uma coordenada como `round(value::numeric, precision)` no PostgreSQL.
 
-    Not Python's `round()`, which rounds the *binary* float half to even:
-    `round(2.675, 2)` is 2.67 because 2.675 is stored as 2.67499999...
-    PostgreSQL casts a `double precision` to `numeric` through its 15
-    significant decimal digits and then rounds that decimal half away from
-    zero. A photo exactly on a cell boundary must land in the same cell in
-    all three implementations, so this reproduces the cast and the rule
-    rather than approximating them.
+    Não o `round()` do Python, que arredonda o float *binário* metade para o
+    par: `round(2.675, 2)` dá 2.67 porque 2.675 é guardado como
+    2.67499999... O PostgreSQL converte um `double precision` em `numeric`
+    pelos seus 15 dígitos decimais significativos e então arredonda esse
+    decimal metade para longe do zero. Uma foto exatamente na borda de uma
+    célula precisa cair na mesma célula nas três implementações, então isto
+    reproduz a conversão e a regra em vez de aproximá-las.
     """
     decimal = Decimal(format(value, ".15g"))
     step = Decimal(1).scaleb(-precision)
@@ -186,17 +189,18 @@ def aggregate_positions(
     precision: int,
     cell_limit: int | None,
 ) -> PositionCells:
-    """Group searchable images in `area` into cells, as the `GROUP BY` does.
+    """Agrupa em células as imagens buscáveis de `area`, como faz o `GROUP BY`.
 
-    `indexed` must already be restricted to images with an embedding. The
-    device and date clauses come from `matches_filters()` with the circle
-    removed, and the area is tested edges-included, so this agrees with
-    PostgreSQL's `BETWEEN`s. Ordered by latitude then longitude, and cut at
-    `cell_limit`, for the same deterministic truncation.
+    `indexed` já deve estar restrito às imagens com embedding. As cláusulas
+    de dispositivo e de data vêm de `matches_filters()` com o círculo
+    removido, e a área é testada com as bordas incluídas, para que isto
+    concorde com os `BETWEEN`s do PostgreSQL. Ordenadas por latitude e
+    depois longitude, e cortadas em `cell_limit`, para o mesmo truncamento
+    determinístico.
 
-    Shared by both in-process doubles for the reason `matches_filters()`
-    is: `test_position_filter_contract.py` holds all three implementations
-    to one answer.
+    Compartilhada pelos dois doubles em processo pela razão de
+    `matches_filters()`: `test_position_filter_contract.py` prende as três
+    implementações a uma só resposta.
     """
     universe = dataclasses.replace(filters, taken_within=None)
     counts: dict[tuple[float, float], int] = {}
@@ -223,17 +227,19 @@ _ONE_MICROSECOND = datetime.timedelta(microseconds=1)
 
 
 def listing_key(image: Image, order: ListingOrder) -> tuple[int, int, str, int]:
-    """The sort key of RFC-044 section 5.2, as one comparable tuple.
+    """A chave de ordenação do RFC-044 §5.2, como uma tupla comparável.
 
-    `(undated, date, path, id)`: the undated after every dated image in both
-    directions, the date in the direction of `order`, then the path and the
-    id, always ascending. The date is whole microseconds from `datetime.min`
-    -- an integer, so negating it for `NEWEST` is exact, where a float of
-    seconds would round the microseconds of a year-9999 date away.
+    `(undated, date, path, id)`: as sem data depois de toda imagem datada,
+    nas duas direções; a data na direção de `order`; depois o caminho e o
+    id, sempre ascendentes. A data é em microssegundos inteiros desde
+    `datetime.min` -- um inteiro, então negá-lo para `NEWEST` é exato, onde
+    um float de segundos arredondaria e perderia os microssegundos de uma
+    data do ano 9999.
 
-    The path is compared as `str`, by code point, which is the order of the
-    `COLLATE "C"` the PostgreSQL implementation sorts by; the id as
-    `UUID.int`, which is PostgreSQL's byte order over the same 16 bytes.
+    O caminho é comparado como `str`, por code point, que é a ordem do
+    `COLLATE "C"` pela qual a implementação do PostgreSQL ordena; o id, como
+    `UUID.int`, que é a ordem de bytes do PostgreSQL sobre os mesmos 16
+    bytes.
     """
     path = str(image.relative_path)
     identity = image.id.value.int
@@ -250,15 +256,16 @@ def list_by_filters(
     limit: int,
     after: Image | None,
 ) -> ListedImages:
-    """One page of the listing, as the `ORDER BY` and the cursor clause give it.
+    """Uma página da listagem, como o `ORDER BY` e a cláusula do cursor a dão.
 
-    `indexed` must already be restricted to images with an embedding. The
-    filters are `matches_filters()`, the search's own predicate; the cursor is
-    "every key past `after`'s", with `after`'s key computed by the same
-    function -- so the order and the cursor cannot disagree, which is the
-    property the contract test pages through.
+    `indexed` já deve estar restrito às imagens com embedding. Os filtros
+    são `matches_filters()`, o próprio predicado da busca; o cursor é "toda
+    chave depois da de `after`", com a chave de `after` calculada pela mesma
+    função -- então a ordem e o cursor não podem discordar, que é a
+    propriedade que o teste de contrato percorre, página a página.
 
-    Shared by both in-process doubles for the reason `matches_filters()` is.
+    Compartilhada pelos dois doubles em processo pela razão de
+    `matches_filters()`.
     """
     start = None if after is None else listing_key(after, order)
     page = sorted(
@@ -276,7 +283,7 @@ def list_by_filters(
 def summarize_listing(
     indexed: Iterable[Image], filters: SearchFilters
 ) -> ListingSummary:
-    """`count(*)`, the undated, `min` and `max` of the date, over the listing."""
+    """`count(*)`, as sem data, o `min` e o `max` da data, sobre a listagem."""
     listed = [image for image in indexed if matches_filters(image, filters)]
     dates = [image.captured_at for image in listed if image.captured_at is not None]
     return ListingSummary(
@@ -288,15 +295,16 @@ def summarize_listing(
 
 
 def count_images_by_device(images: Iterable[Image]) -> dict[DeviceId, int]:
-    """Group images by device, the way a `GROUP BY device_id` does.
+    """Agrupa as imagens por dispositivo, como faz um `GROUP BY device_id`.
 
-    Shared by both in-process doubles for the reason `cosine_search()` is
-    shared: `test_image_counting_contract.py` holds all three
-    implementations to one answer, and two hand-written tallies would be
-    two chances to drift from PostgreSQL and from each other.
+    Compartilhada pelos dois doubles em processo pela razão de
+    `cosine_search()` ser compartilhada: `test_image_counting_contract.py`
+    prende as três implementações a uma só resposta, e duas contagens
+    escritas à mão seriam duas chances de divergir do PostgreSQL e uma da
+    outra.
 
-    Devices with no images simply do not appear, because a `GROUP BY`
-    produces no row for them either (RFC-031 section 4.3).
+    Dispositivos sem imagens simplesmente não aparecem, porque um `GROUP BY`
+    também não produz linha para eles (RFC-031 §4.3).
     """
     counts: dict[DeviceId, int] = {}
     for image in images:
@@ -309,12 +317,12 @@ def change_signals_of(
     metadata: Mapping[uuid.UUID, IndexMetadata],
     device_id: DeviceId,
 ) -> dict[ImageId, ChangeSignals]:
-    """The stored size and mtime of every image of one device (RFC-045 section 5.2).
+    """O tamanho e o mtime guardados de cada imagem de um dispositivo (RFC-045 §5.2).
 
-    Shared by both in-process doubles, for the reason the tallies above are:
-    `test_change_signals_contract.py` holds them and PostgreSQL to one
-    answer. A row with no metadata yet gives two `None`s, as the columns
-    would read back.
+    Compartilhada pelos dois doubles em processo, pela razão das contagens
+    acima: `test_change_signals_contract.py` prende eles e o PostgreSQL a
+    uma só resposta. Uma linha ainda sem metadados dá dois `None`s, como as
+    colunas seriam lidas de volta.
     """
     signals: dict[ImageId, ChangeSignals] = {}
     for image in images:
@@ -331,11 +339,12 @@ def change_signals_of(
 def visible_images(
     images: Iterable[Image], marks: Mapping[uuid.UUID, datetime.datetime]
 ) -> list[Image]:
-    """The images no scan has marked missing (RFC-046 section 6).
+    """As imagens que nenhum scan marcou como ausentes (RFC-046 §6).
 
-    Shared by both in-process doubles, so that what they hide cannot drift
-    from each other; `test_missing_images_contract.py` holds them and
-    PostgreSQL to one answer.
+    Compartilhada pelos dois doubles em processo, para que o que eles
+    escondem não possa divergir de um para o outro;
+    `test_missing_images_contract.py` prende eles e o PostgreSQL a uma só
+    resposta.
     """
     return [image for image in images if image.id.value not in marks]
 
@@ -345,10 +354,11 @@ def presence_of(
     marks: Mapping[uuid.UUID, datetime.datetime],
     device_id: DeviceId,
 ) -> Presences:
-    """`list_presence()` over the doubles' storage: every image of the device.
+    """`list_presence()` sobre o armazenamento dos doubles: toda imagem do dispositivo.
 
-    Taken whole before it is handed out, so that a caller writing while it
-    iterates -- which the sweep does not -- would not see its own writes.
+    Tirada inteira antes de ser entregue, para que quem chama, se escrevesse
+    enquanto itera -- o que a varredura não faz --, não visse as próprias
+    escritas.
     """
     return iter(
         [
@@ -370,12 +380,12 @@ def marks_after(
     present: Collection[ImageId],
     since: datetime.datetime,
 ) -> dict[uuid.UUID, datetime.datetime]:
-    """The marks once `mark_presence()` has applied, as a new mapping.
+    """As marcas depois de aplicado o `mark_presence()`, como um mapeamento novo.
 
-    A new mapping rather than an edit in place, so that a refusal leaves the
-    double as it was -- the transaction the PostgreSQL implementation rolls
-    back. An image already marked keeps its date; an id with no image is
-    skipped, as the `UPDATE` skips it.
+    Um mapeamento novo, e não uma edição no lugar, para que uma recusa deixe
+    o double como estava -- a transação que a implementação do PostgreSQL
+    desfaz. Uma imagem já marcada mantém a data; um id sem imagem é pulado,
+    como o `UPDATE` o pula.
     """
     missing_ids = {image_id.value for image_id in missing}
     present_ids = {image_id.value for image_id in present}
@@ -393,7 +403,7 @@ def marks_after(
 def count_missing_images(
     images: Iterable[Image], marks: Mapping[uuid.UUID, datetime.datetime]
 ) -> dict[DeviceId, MissingImages]:
-    """`count_missing_by_device()`: marked images per device, and the oldest mark."""
+    """`count_missing_by_device()`: marcadas por dispositivo, e a marca mais antiga."""
     tallies: dict[DeviceId, MissingImages] = {}
     for image in images:
         since = marks.get(image.id.value)
@@ -413,7 +423,7 @@ def marked_on_device(
     marks: Mapping[uuid.UUID, datetime.datetime],
     device_id: DeviceId,
 ) -> set[uuid.UUID]:
-    """The ids `purge_missing()` deletes: the marked images of one device."""
+    """Os ids que `purge_missing()` apaga: as imagens marcadas de um dispositivo."""
     return {
         image.id.value
         for image in images
@@ -424,20 +434,20 @@ def marked_on_device(
 def count_images_by_path_prefix(
     images: Iterable[Image], device_id: DeviceId, parent: JobScope
 ) -> dict[str, int]:
-    """Group a device's images by the first path part below `parent`.
+    """Agrupa as imagens de um dispositivo pela primeira parte do caminho sob `parent`.
 
-    The in-process twin of the `split_part(substr(...))` grouping in
-    `PostgresImageRepository`, and it has to agree with it on the two
-    edge cases the port's docstring names -- an image sitting directly in
-    `parent`, which lands under its own filename, and a folder renamed on
-    disk, which lands under the name the rows still carry. Both are
-    discarded by the caller rather than here.
+    A gêmea em processo do agrupamento por `split_part(substr(...))` do
+    `PostgresImageRepository`, e precisa concordar com ele nos dois casos de
+    borda que a docstring da porta nomeia -- uma imagem direto em `parent`,
+    que cai sob o próprio nome de arquivo, e uma pasta renomeada no disco,
+    que cai sob o nome que as linhas ainda carregam. Os dois são descartados
+    por quem chama, e não aqui.
 
-    The separator appended to the prefix is the whole correctness
-    argument: without it `2018` would match `2018b`, which is a different
-    folder (RFC-029 section 10). The whole-device scope renders as `""`
-    and therefore appends nothing, which is right -- every path is below
-    the device root.
+    O separador acrescentado ao prefixo é todo o argumento de correção: sem
+    ele, `2018` casaria com `2018b`, que é outra pasta (RFC-029 §10). O
+    escopo do dispositivo inteiro é renderizado como `""` e, portanto, não
+    acrescenta nada, o que está certo -- todo caminho está abaixo da raiz
+    do dispositivo.
     """
     lead = f"{parent}/" if parent.parts else ""
     counts: dict[str, int] = {}
@@ -455,12 +465,12 @@ def count_images_by_path_prefix(
 
 
 def store_thumbnail(thumbnails: dict[uuid.UUID, str], record: IndexingRecord) -> None:
-    """Apply a record's thumbnail location the way `save_indexed()` writes it.
+    """Aplica o local da thumbnail de um registro como `save_indexed()` o escreve.
 
-    `None` removes the stored location instead of leaving it, because the
-    record carries new bytes and a thumbnail of the old ones no longer
-    depicts the file -- the PostgreSQL implementation writes the NULL.
-    Shared by both in-process doubles so they cannot disagree about it.
+    `None` remove o local guardado em vez de mantê-lo, porque o registro
+    traz bytes novos e uma thumbnail dos antigos não retrata mais o arquivo
+    -- a implementação do PostgreSQL escreve o NULL. Compartilhada pelos
+    dois doubles em processo, para que não possam discordar nisso.
     """
     if record.thumbnail_path is None:
         thumbnails.pop(record.image.id.value, None)
@@ -469,18 +479,18 @@ def store_thumbnail(thumbnails: dict[uuid.UUID, str], record: IndexingRecord) ->
 
 
 def with_capture_date(image: Image, capture: CaptureDate) -> Image:
-    """Return `image` carrying `capture`, for the frozen entity's two fields."""
+    """Devolve `image` com `capture`, para os dois campos da entidade congelada."""
     return dataclasses.replace(
         image, captured_at=capture.captured_at, capture_source=capture.source
     )
 
 
 def with_position(image: Image, reading: PositionReading) -> Image:
-    """Return `image` carrying `reading`, for the frozen entity's three fields.
+    """Devolve `image` com `reading`, para os três campos da entidade congelada.
 
-    All three in one `replace()`, as the PostgreSQL `UPDATE` writes them in
-    one statement: `Image` validates the pairing on construction, so a
-    double that set them one at a time would refuse a legal write.
+    Os três num só `replace()`, como o `UPDATE` do PostgreSQL os escreve num
+    só comando: `Image` valida o par na construção, então um double que os
+    preenchesse um de cada vez recusaria uma escrita válida.
     """
     return dataclasses.replace(
         image,
@@ -491,14 +501,14 @@ def with_position(image: Image, reading: PositionReading) -> Image:
 
 
 def _require_indexed_dimension(query: EmbeddingVector) -> None:
-    """Reject a query vector that cannot be compared with the stored ones.
+    """Recusa um vetor de consulta que não pode ser comparado com os guardados.
 
-    Checked against the configured dimension rather than against whatever
-    happens to be stored, so that the error does not depend on the
-    repository being non-empty: PostgreSQL rejects a mismatched vector at
-    the `vector(512)` column whether or not any row exists, and a double
-    that answered `[]` for an empty store would be the more permissive of
-    the two exactly where a test is least likely to notice.
+    Verificado contra a dimensão configurada, e não contra o que estiver
+    guardado, para que o erro não dependa de o repositório ter algo: o
+    PostgreSQL recusa um vetor de dimensão errada na coluna `vector(512)`
+    exista ou não alguma linha, e um double que respondesse `[]` com o
+    armazenamento vazio seria o mais permissivo dos dois justamente onde um
+    teste tem menos chance de notar.
     """
     if len(query.values) != settings.embedding_dimension:
         raise EmbeddingDimensionMismatchError(
@@ -508,15 +518,15 @@ def _require_indexed_dimension(query: EmbeddingVector) -> None:
 
 
 def _cosine_similarity(left: EmbeddingVector, right: EmbeddingVector) -> float:
-    """Return cosine similarity in [-1, 1], never a truncated approximation.
+    """Devolve a similaridade de cosseno em [-1, 1], nunca uma aproximação truncada.
 
-    The length check is why this is a function rather than an inline
-    expression. `zip` stops at the shorter operand, so comparing a
-    3-dimensional vector with a 512-dimensional one would otherwise return
-    a plausible number computed from three dimensions -- a wrong answer
-    that looks exactly like a right one. `save_indexed_many()` below
-    documents the same class of hazard for atomicity: a double must not be
-    quietly more forgiving than the database it stands in for.
+    A verificação do comprimento é a razão de isto ser uma função, e não uma
+    expressão inline. `zip` para no operando mais curto, então comparar um
+    vetor de 3 dimensões com um de 512 devolveria, sem ela, um número
+    plausível calculado com três dimensões -- uma resposta errada idêntica a
+    uma certa. `save_indexed_many()`, abaixo, documenta o mesmo tipo de
+    risco para a atomicidade: um double não pode ser, em silêncio, mais
+    tolerante que o banco de que faz as vezes.
     """
     if len(left.values) != len(right.values):
         raise EmbeddingDimensionMismatchError(
@@ -531,22 +541,23 @@ def _cosine_similarity(left: EmbeddingVector, right: EmbeddingVector) -> float:
 
 
 class InMemoryImageRepository(ImageRepository):
-    """Repository implementation backed by an in-memory list."""
+    """Implementação do repositório sobre uma lista em memória."""
 
     def __init__(self) -> None:
         self._images: list[Image] = []
         self._metadata: dict[uuid.UUID, IndexMetadata] = {}
-        # Kept apart from `_images` because not every image has one:
-        # `save()` creates a row with no embedding, exactly as the
-        # PostgreSQL column is nullable, and search must skip those.
+        # Separado de `_images` porque nem toda imagem tem um: `save()` cria
+        # uma linha sem embedding, exatamente como a coluna do PostgreSQL
+        # aceita nulo, e a busca precisa pular essas.
         self._embeddings: dict[uuid.UUID, EmbeddingVector] = {}
-        # Apart from `_metadata` too, although it travels back inside an
-        # `IndexMetadata`: `update_index_metadata()` replaces that entry
-        # wholesale with whatever the caller built, and a caller refreshing
-        # change signals never knows the thumbnail. Kept in `_metadata`, a
-        # refresh would erase it; the PostgreSQL `UPDATE` does not.
+        # Separado de `_metadata` também, embora volte dentro de um
+        # `IndexMetadata`: `update_index_metadata()` troca essa entrada
+        # inteira pelo que quem chama montou, e quem chama para atualizar os
+        # sinais de mudança nunca conhece a thumbnail. Guardada em
+        # `_metadata`, uma atualização a apagaria; o `UPDATE` do PostgreSQL,
+        # não.
         self._thumbnails: dict[uuid.UUID, str] = {}
-        # `images.missing_since` (RFC-046): absent is present.
+        # `images.missing_since` (RFC-046): ausente da chave é presente.
         self._missing: dict[uuid.UUID, datetime.datetime] = {}
 
     def save(self, image: Image) -> None:
@@ -572,12 +583,12 @@ class InMemoryImageRepository(ImageRepository):
         return list(self._images)
 
     def save_indexed(self, record: IndexingRecord) -> None:
-        """Store the image, its metadata, and -- since RFC-025 -- its embedding.
+        """Guarda a imagem, os metadados e -- desde o RFC-025 -- o embedding.
 
-        The embedding used to be dropped on the floor here, which was
-        harmless while nothing read one back and became a lie the moment
-        `search_similar()` existed: a repository that accepts a vector and
-        then finds nothing is not a stand-in for one that can.
+        O embedding era descartado aqui, o que não fazia mal enquanto nada
+        lia um de volta e virou mentira no momento em que `search_similar()`
+        passou a existir: um repositório que aceita um vetor e depois não
+        acha nada não faz as vezes de um que acha.
         """
         self._images = [image for image in self._images if image.id != record.image.id]
         self._images.append(record.image)
@@ -591,14 +602,14 @@ class InMemoryImageRepository(ImageRepository):
         self._missing.pop(record.image.id.value, None)
 
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
-        """Persist every record, or none of them.
+        """Persiste todos os registros, ou nenhum.
 
-        A dict and a list have no transaction to commit, so atomicity has
-        to be arranged by hand: the writes are applied to copies and only
-        swapped in once all of them have succeeded. Skipping that would
-        make this implementation quietly more forgiving than the real one,
-        and the per-row fallback it exists to trigger would then go
-        untested everywhere except against PostgreSQL.
+        Um dict e uma lista não têm transação para fazer commit, então a
+        atomicidade tem de ser arranjada à mão: as escritas são aplicadas a
+        cópias, que só entram no lugar depois que todas deram certo. Pular
+        isso faria esta implementação, em silêncio, mais tolerante que a
+        real, e o fallback linha a linha que ela existe para disparar ficaria
+        sem teste em todo lugar, menos contra o PostgreSQL.
         """
         images = list(self._images)
         metadata = dict(self._metadata)
@@ -630,22 +641,21 @@ class InMemoryImageRepository(ImageRepository):
         limit: int,
         filters: SearchFilters | None = None,
     ) -> SearchHits:
-        """Rank every stored embedding against `embedding`, in Python.
+        """Ordena cada embedding guardado contra `embedding`, em Python.
 
-        Scoring the whole store on every call is fine here and would not
-        be fine in production: this implementation exists for tests and
-        for wiring an application together before a database is up, where
-        the store holds tens of images. `PostgresImageRepository` is the
-        real path, and it ranks in the database precisely so that 100,000
-        vectors never cross into this process.
+        Pontuar o armazenamento inteiro a cada chamada serve aqui e não
+        serviria em produção: esta implementação existe para testes e para
+        montar uma aplicação antes de haver banco, quando o armazenamento
+        tem dezenas de imagens. O `PostgresImageRepository` é o caminho
+        real, e ordena no banco justamente para que 100.000 vetores nunca
+        entrem neste processo.
 
-        The filters are applied *before* ranking, matching a `WHERE`
-        clause rather than a post-hoc trim of the top-K. Filtering
-        afterwards would return fewer than `limit` rows whenever the
-        excluded images happened to rank high -- which is exactly the
-        HNSW recall hazard RFC-027 section 9.1 describes, and a test
-        double must not reproduce a physical-index artefact as if it were
-        contract.
+        Os filtros são aplicados *antes* da ordenação, como uma cláusula
+        `WHERE`, e não como um corte do top-K depois. Filtrar depois
+        devolveria menos de `limit` linhas sempre que as imagens excluídas
+        ficassem bem colocadas -- que é exatamente o risco de recall do HNSW
+        que o RFC-027 §9.1 descreve, e um double de teste não pode
+        reproduzir um artefato do índice físico como se fosse contrato.
         """
         return cosine_search(
             embedding,
@@ -687,7 +697,7 @@ class InMemoryImageRepository(ImageRepository):
         return summarize_listing(self._indexed(), filters)
 
     def _indexed(self) -> Sequence[Image]:
-        """The images a search could return: an embedding, and no mark (RFC-046)."""
+        """O que uma busca poderia devolver: com embedding e sem marca (RFC-046)."""
         return [
             image
             for image in visible_images(self._images, self._missing)
@@ -698,14 +708,14 @@ class InMemoryImageRepository(ImageRepository):
         return self._embeddings.get(image_id.value)
 
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
-        """Return the stored change signals plus the image's capture source.
+        """Devolve os sinais de mudança guardados mais a origem da data de captura.
 
-        The capture source is read off the stored `Image`, not kept in
-        `_metadata` as well. The entity is where the capture date lives in
-        this implementation; a second copy here would be free to disagree
-        with it -- for instance after `update_index_metadata()` stored a
-        caller's `IndexMetadata` that never had a source in it. The position
-        source (RFC-032) is read off the entity for the same reason.
+        A origem da data de captura é lida do `Image` guardado, e não mantida
+        também em `_metadata`. A entidade é onde a data de captura mora nesta
+        implementação; uma segunda cópia aqui estaria livre para discordar
+        dela -- por exemplo, depois que `update_index_metadata()` guardasse
+        um `IndexMetadata` de quem chama que nunca teve origem nenhuma. A
+        origem da posição (RFC-032) é lida da entidade pela mesma razão.
         """
         image = self.get(image_id)
         if image is None:
@@ -723,12 +733,12 @@ class InMemoryImageRepository(ImageRepository):
     def get_index_metadata_many(
         self, image_ids: Sequence[ImageId]
     ) -> dict[ImageId, IndexMetadata]:
-        """Return metadata for every supplied id that has a row.
+        """Devolve os metadados de cada id fornecido que tenha linha.
 
-        Composed from `get_index_metadata()` rather than reimplemented, so
-        the two can never disagree. There is nothing to batch in a dict
-        lookup: the bulk method exists to collapse *network* round trips,
-        which this implementation does not make.
+        Composto a partir de `get_index_metadata()`, e não reimplementado,
+        para que os dois nunca possam discordar. Não há o que agrupar em lote
+        numa consulta a um dict: o método em lote existe para reduzir idas e
+        voltas *de rede*, que esta implementação não faz.
         """
         found = {}
         for image_id in image_ids:
@@ -749,11 +759,11 @@ class InMemoryImageRepository(ImageRepository):
         self.update_capture_date_many({image_id: capture})
 
     def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
-        """Replace each named image with a copy carrying its capture date.
+        """Troca cada imagem nomeada por uma cópia com a sua data de captura.
 
-        `Image` is frozen, so "updating a column" is swapping the entity
-        for `dataclasses.replace()` of it. Ids with no image are skipped,
-        as they are by the PostgreSQL `UPDATE`.
+        `Image` é congelada, então "atualizar uma coluna" é trocar a entidade
+        por um `dataclasses.replace()` dela. Ids sem imagem são pulados, como
+        são pelo `UPDATE` do PostgreSQL.
         """
         self._images = [
             (
@@ -768,7 +778,7 @@ class InMemoryImageRepository(ImageRepository):
         self.update_position_many({image_id: reading})
 
     def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
-        """Replace each named image with a copy carrying its position; skip the rest."""
+        """Troca cada imagem nomeada por uma cópia com a sua posição; pula o resto."""
         self._images = [
             with_position(image, readings[image.id]) if image.id in readings else image
             for image in self._images
@@ -778,7 +788,7 @@ class InMemoryImageRepository(ImageRepository):
         self.update_thumbnail_path_many({image_id: location})
 
     def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
-        """Record each location whose image exists; skip the rest."""
+        """Registra cada local cuja imagem existe; pula o resto."""
         known = {image.id for image in self._images}
         for image_id, location in locations.items():
             if image_id in known:

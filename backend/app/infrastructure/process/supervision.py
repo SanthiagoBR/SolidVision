@@ -1,19 +1,19 @@
-"""What a supervised program owes the launcher, and how it is asked to stop (RFC-036).
+"""O que um programa supervisionado deve ao launcher, e como lhe pedem que pare.
 
-Two halves of one contract, both on the side of the child:
+Segue o RFC-036. Duas metades de um contrato, as duas do lado do filho:
 
-* **How it says it cannot start.** One line on stderr and exit code 78
-  (`refuse_to_start`), where it used to be the same line and exit code 1. The
-  line is for a person, and is unchanged; the code is for the launcher, which
-  does not restart a program that left with it (section 6.1).
-* **How it hears it is asked to stop.** The launcher closes the program's
-  stdin, and `stop_on_stdin_eof()` turns the end of file into the Ctrl+C the
-  program already handles (section 7.1): the job runner returns its job to the
-  queue, uvicorn finishes the requests in flight.
+* **Como ele diz que não consegue iniciar.** Uma linha no stderr e o código de
+  saída 78 (`refuse_to_start`), onde antes eram a mesma linha e o código 1. A
+  linha é para uma pessoa, e não mudou; o código é para o launcher, que não
+  reinicia um programa que saiu com ele (§6.1).
+* **Como ele fica sabendo que lhe pedem que pare.** O launcher fecha o stdin
+  do programa, e `stop_on_stdin_eof()` transforma o fim do arquivo no Ctrl+C
+  que o programa já trata (§7.1): o job runner devolve o job à fila, o uvicorn
+  termina as requisições em andamento.
 
-Standard library only, and nothing of the project but the constants. The
-`Settings` singleton refuses through `refuse_to_start`, so this module can
-import neither it nor the logger, which imports it.
+Só biblioteca padrão, e nada do projeto além das constantes. O singleton
+`Settings` recusa por meio de `refuse_to_start`, então este módulo não pode
+importar nem ele nem o logger, que o importa.
 """
 
 from __future__ import annotations
@@ -31,25 +31,26 @@ from typing import Any, NoReturn
 from app.infrastructure.config.constants import EXIT_CANNOT_START
 
 SUPERVISED_FLAG = "--supervised"
-"""The argument that turns the stdin watch on, in every supervised program.
+"""O argumento que liga a vigia do stdin, em todo programa supervisionado.
 
-An argument and not a variable of the environment: installed, the environment
-is not a source of anything (RFC-034 section 5.2), and an argument shows in the
-process list for whoever investigates (RFC-036 section 7.1).
+Um argumento, e não uma variável de ambiente: instalado, o ambiente não é fonte
+de nada (RFC-034 §5.2), e um argumento aparece na lista de processos para quem
+for investigar (RFC-036 §7.1).
 """
 
 POLL_SECONDS = 0.1
-"""How often a stdin pipe is asked whether its other end is still open."""
+"""De quanto em quanto tempo se pergunta a um pipe do stdin se a outra ponta
+ainda está aberta."""
 
 _FILE_TYPE_PIPE = 0x0003
 
 
 class CannotStart(SystemExit):
-    """`SystemExit` with code 78, carrying the line that was printed.
+    """`SystemExit` com código 78, levando a linha que foi impressa.
 
-    Uncaught, it ends the process with 78 and nothing more, because the line is
-    already on stderr. Caught -- the launcher does it around its own import of
-    the `Settings` -- the line is still at hand, for the `failed` event.
+    Não capturada, encerra o processo com 78 e nada mais, porque a linha já está
+    no stderr. Capturada -- o launcher faz isso em volta do próprio import do
+    `Settings` --, a linha continua à mão, para o evento `failed`.
     """
 
     def __init__(self, line: str) -> None:
@@ -58,10 +59,10 @@ class CannotStart(SystemExit):
 
 
 def refuse_to_start(line: str) -> NoReturn:
-    """Print `line` on stderr and exit with 78: restarting will not fix this.
+    """Imprime `line` no stderr e sai com 78: reiniciar não vai resolver.
 
-    No traceback (RFC-034 section 5.5): the line already names the file, the
-    key, the model, and what to do.
+    Sem traceback (RFC-034 §5.5): a linha já nomeia o arquivo, a chave, o
+    modelo, e o que fazer.
     """
     if sys.stderr is not None:
         sys.stderr.write(line + "\n")
@@ -70,51 +71,51 @@ def refuse_to_start(line: str) -> NoReturn:
 
 
 def stop_on_stdin_eof(stdin: int | None = None) -> threading.Thread:
-    """Read stdin to its end in a daemon thread, then raise SIGINT in the process.
+    """Lê o stdin até o fim numa thread daemon, e então levanta SIGINT no processo.
 
-    What the main thread receives is a Ctrl+C, and it is the pilot's fastest
-    path to one (RFC-036 section 2.2): `signal.raise_signal` goes through the C
-    handler, which also wakes a `time.sleep()` in the middle -- measured at
-    0.000 s -- where `_thread.interrupt_main()` waits for the sleep to end.
+    O que a thread principal recebe é um Ctrl+C, e este é o caminho mais rápido
+    do piloto até um (RFC-036 §2.2): `signal.raise_signal` passa pelo handler
+    em C, que também acorda um `time.sleep()` no meio -- medido em 0,000 s --,
+    onde `_thread.interrupt_main()` espera o sleep terminar.
 
-    **The request comes first, and the thread does nothing after it.** Every
-    step that needs the GIL is one more wait for a main thread that may hold
-    it: when the pilot's watcher wrote its own record before asking, the stop
-    took 8.48 s instead of 0.289 s.
+    **O pedido vem primeiro, e a thread não faz nada depois dele.** Cada passo
+    que precisa do GIL é mais uma espera por uma thread principal que pode
+    estar com ele: quando o vigia do piloto escrevia o próprio registro antes
+    de pedir, a parada levou 8,48 s em vez de 0,289 s.
 
-    **A pipe is never read while nothing is in it: it is asked, every
-    `POLL_SECONDS`, whether its other end is still open** (`PeekNamedPipe`,
-    which does not wait). Measured while implementing RFC-036, both ways of
-    reading it failed on Windows:
+    **Um pipe nunca é lido enquanto não há nada nele: a cada `POLL_SECONDS`,
+    pergunta-se a ele se a outra ponta ainda está aberta** (`PeekNamedPipe`,
+    que não espera). Medido na implementação do RFC-036, os dois jeitos de
+    lê-lo falharam no Windows:
 
-    * A synchronous read left pending on the pipe makes Windows hold every
-      other call on that handle until it completes -- and loading a DLL whose
-      runtime initialization looks at the standard handles is such a call.
-      With a thread blocked in `os.read(0, 1)`, `import numpy` (and so
-      `import torch`) hung for as long as stdin stayed open: more than 40 s in
-      the reproduction, for ever under the launcher, against 0.27 s without
-      the thread.
-    * Through `sys.stdin.buffer`, the reader's lock is held for the whole
-      read, and a program that ends on its own -- uvicorn exiting with 3 over
-      a taken port -- cannot close stdin at the interpreter's shutdown:
-      *"Fatal Python error: _enter_buffered_busy: could not acquire lock for
-      <_io.BufferedReader name='<stdin>'>"*, and `0xC0000005` instead of 3.
+    * Uma leitura síncrona deixada pendente no pipe faz o Windows segurar toda
+      outra chamada naquele handle até ela terminar -- e carregar uma DLL cuja
+      inicialização de runtime olha os handles padrão é uma chamada dessas.
+      Com uma thread bloqueada em `os.read(0, 1)`, `import numpy` (e, portanto,
+      `import torch`) travou enquanto o stdin ficou aberto: mais de 40 s na
+      reprodução, para sempre sob o launcher, contra 0,27 s sem a thread.
+    * Por `sys.stdin.buffer`, o lock do leitor fica tomado a leitura inteira, e
+      um programa que termina por conta própria -- o uvicorn saindo com 3 por
+      uma porta ocupada -- não consegue fechar o stdin no desligamento do
+      interpretador: *"Fatal Python error: _enter_buffered_busy: could not
+      acquire lock for <_io.BufferedReader name='<stdin>'>"*, e `0xC0000005` em
+      vez de 3.
 
-    The poll costs a stop up to `POLL_SECONDS` of the pilot's 0.000 s. A stdin
-    that is not a pipe -- `NUL`, a file -- is read to its end, which for those
-    does not wait. And once the program is exiting, a request to stop is moot:
-    from then on SIGINT is ignored, so that one arriving during the shutdown
-    is not a traceback.
+    A consulta custa a uma parada até `POLL_SECONDS` além dos 0,000 s do
+    piloto. Um stdin que não é pipe -- `NUL`, um arquivo -- é lido até o fim, o
+    que para esses não espera. E, uma vez que o programa está saindo, um pedido
+    de parada perde o sentido: daí em diante o SIGINT é ignorado, para que um
+    que chegue durante o desligamento não vire um traceback.
 
-    The end of file arrives in two ways, and both are a request to stop: the
-    launcher closes the pipe, or the launcher dies and Windows closes its end
-    (section 7.4). A process without a stdin at all has nobody holding it, and
-    stops at once.
+    O fim do arquivo chega de dois jeitos, e os dois são um pedido de parada: o
+    launcher fecha o pipe, ou o launcher morre e o Windows fecha a ponta dele
+    (§7.4). Um processo sem stdin nenhum não tem ninguém segurando-o, e para na
+    hora.
 
-    Only called with `--supervised`: a developer running a program by hand in
-    a terminal does not want it to stop when the terminal's stdin ends. Call
-    it inside the `try` that handles the `KeyboardInterrupt`: a stdin already
-    at its end raises the signal before this function has returned.
+    Só chamada com `--supervised`: um desenvolvedor rodando um programa à mão
+    num terminal não quer que ele pare quando o stdin do terminal acabar.
+    Chame-a dentro do `try` que trata o `KeyboardInterrupt`: um stdin que já
+    está no fim levanta o sinal antes de esta função ter retornado.
     """
     descriptor = stdin if stdin is not None else _stdin_descriptor()
     atexit.register(_ignore_interrupts)
@@ -147,14 +148,14 @@ def _stop_at_end_of(descriptor: int | None) -> None:
             else:
                 _wait_for_the_other_end_to_close(handle, descriptor)
         except OSError:
-            # A handle that went away: the same news as the end of file,
-            # nobody holds the other end.
+            # Um handle que sumiu: a mesma notícia que o fim do arquivo,
+            # ninguém segura a outra ponta.
             pass
     signal.raise_signal(signal.SIGINT)
 
 
 def _pipe_handle(descriptor: int) -> int | None:
-    """The Windows handle behind `descriptor`, when it is a pipe."""
+    """O handle do Windows por trás de `descriptor`, quando ele é um pipe."""
     if sys.platform != "win32":
         return None
     import msvcrt
@@ -166,11 +167,11 @@ def _pipe_handle(descriptor: int) -> int | None:
 
 
 def _wait_for_the_other_end_to_close(handle: int, descriptor: int) -> None:
-    """Return when the pipe is broken: its writer closed it, or died.
+    """Retorna quando o pipe se rompe: quem escrevia nele o fechou, ou morreu.
 
-    `PeekNamedPipe` fails with `ERROR_BROKEN_PIPE` then, and any other failure
-    is taken the same way -- there is nobody left to listen to. Bytes in the
-    pipe, which the launcher never sends, are read without waiting and dropped.
+    `PeekNamedPipe` falha então com `ERROR_BROKEN_PIPE`, e qualquer outra falha
+    é tomada do mesmo jeito -- não sobrou ninguém a quem ouvir. Bytes no pipe,
+    que o launcher nunca manda, são lidos sem esperar e descartados.
     """
     kernel32 = _kernel32()
     available = wintypes.DWORD()
@@ -186,7 +187,7 @@ def _ignore_interrupts() -> None:
 
 
 def _kernel32() -> Any:
-    """`kernel32` with the two signatures used here; 64-bit handles whole."""
+    """`kernel32` com as duas assinaturas usadas aqui; handles de 64 bits inteiros."""
     kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.GetFileType.argtypes = [wintypes.HANDLE]
     kernel32.GetFileType.restype = wintypes.DWORD

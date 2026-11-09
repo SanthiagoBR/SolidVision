@@ -1,9 +1,9 @@
-"""Response shape of `GET /api/v1/images/browse` (RFC-044 sections 5.1 and 5.3).
+"""Formato da resposta de `GET /api/v1/images/browse` (RFC-044 §5.1 e §5.3).
 
-The photos are `ImageSchema` -- the body of `GET /images/{id}`, field for field,
-by the same `image_fields()` -- and **nothing more**: no `similarity`, because a
-listing compared nothing (RFC-025 section 4.1). The rest is how to ask for the
-next page, and, on the first page only, the list at a glance.
+As fotos são `ImageSchema` -- o corpo de `GET /images/{id}`, campo a campo, pelo
+mesmo `image_fields()` -- e **nada mais**: sem `similarity`, porque uma listagem
+não comparou nada (RFC-025 §4.1). O resto é como pedir a próxima página e, só na
+primeira página, a lista num relance.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from app.presentation.schemas.image_schema import ImageSchema
 
 
 class ListingSummarySchema(BaseModel):
-    """The whole list under the filters, not this page (RFC-044 section 5.3)."""
+    """A lista inteira sob os filtros, não esta página (RFC-044 §5.3)."""
 
     total: int = Field(
         description="How many photos the whole list has, the undated included"
@@ -70,12 +70,12 @@ class ListingSummarySchema(BaseModel):
 
 
 class BrowseResponseSchema(BaseModel):
-    """One page of every photo under the filters, by capture date.
+    """Uma página de todas as fotos sob os filtros, por data de captura.
 
-    `limit` echoes the page size applied, as the searches do (RFC-026).
-    `summary` is the first page's and `null` on the pages after it, so that
-    inside it `null` keeps meaning "there was no such filter" and never
-    "this page did not count".
+    `limit` devolve o tamanho de página aplicado, como as buscas fazem
+    (RFC-026). `summary` é da primeira página e `null` nas páginas seguintes,
+    para que, dentro dele, `null` continue querendo dizer "não houve esse
+    filtro", e nunca "esta página não contou".
     """
 
     order: ListingOrder = Field(description="The direction of the capture date")
@@ -101,12 +101,12 @@ class BrowseResponseSchema(BaseModel):
     def from_listing(
         cls, listing: ImageListing, locations: Sequence[LocatedImage]
     ) -> BrowseResponseSchema:
-        """Shape one page for the wire, in the repository's order.
+        """Monta uma página para a resposta, na ordem do repositório.
 
-        `locations` is `ResolveImageLocationUseCase`'s answer for the page's
-        images, in the same order -- it keeps order by contract -- and the
-        pairing is checked, so a mismatch is an error rather than one photo
-        published under another's path.
+        `locations` é a resposta de `ResolveImageLocationUseCase` para as
+        imagens da página, na mesma ordem -- ele mantém a ordem por contrato --
+        e o pareamento é conferido, então um descompasso é um erro, e não uma
+        foto publicada sob o caminho de outra.
         """
         results = []
         for image, located in zip(listing.images, locations, strict=True):

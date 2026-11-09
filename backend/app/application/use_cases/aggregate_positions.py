@@ -1,22 +1,22 @@
-"""Where the photos are, as cells a map can draw (RFC-032 section 7).
+"""Onde estão as fotos, em células que um mapa consegue desenhar (RFC-032 §7).
 
-A map cannot be drawn from what search returns. Search hands back at most
-`MAX_SEARCH_LIMIT` ranked hits, so a map built from them would show where the
-hundred photos *most like the query* are -- which does not answer "where are
-my photos". And fetching 100,000 points for the client to cluster moves the
-collection across the wire to answer a question `GROUP BY` answers in the
-database.
+Um mapa não se desenha com o que a busca devolve. A busca entrega no máximo
+`MAX_SEARCH_LIMIT` resultados ranqueados, e um mapa feito com eles mostraria onde
+estão as cem fotos *mais parecidas com a consulta* -- o que não responde "onde
+estão as minhas fotos". E buscar 100 000 pontos para o cliente agrupar faz a
+coleção atravessar a rede para responder a uma pergunta que um `GROUP BY` responde
+no banco.
 
-**This use case ignores the query text, and that is the decision that has to
-be written down**, because the alternative looks better and is not: a map that
-reflected the query could only aggregate the top K, and the top 100 of a
-100,000-image index describes nothing about geography. The map shows where the
-photos *the filters allow* are; ranking stays the search's job. Two questions,
-two endpoints.
+**Este caso de uso ignora o texto da consulta, e essa é a decisão que precisa
+ficar escrita**, porque a alternativa parece melhor e não é: um mapa que
+refletisse a consulta só poderia agregar o top K, e o top 100 de um índice de
+100 000 imagens não descreve nada da geografia. O mapa mostra onde estão as fotos
+*que os filtros permitem*; ranquear continua sendo trabalho da busca. Duas
+perguntas, dois endpoints.
 
-Since RFC-040 (section 4.1) the answer also says how many photos a date range
-left off the map for having no date: the count search already makes, by the
-same function, over the map's universe.
+Desde o RFC-040 (§4.1), a resposta diz também quantas fotos um intervalo de datas
+deixou fora do mapa por não terem data: a contagem que a busca já faz, pela mesma
+função, sobre o universo do mapa.
 """
 
 from __future__ import annotations
@@ -30,43 +30,44 @@ from app.domain.value_objects.position import BoundingBox, PositionCell
 from app.domain.value_objects.search_filters import SearchFilters
 
 DEFAULT_MAP_PRECISION = 3
-"""Decimal places of a degree when the client does not ask: ~100 m cells.
+"""Casas decimais de um grau quando o cliente não pede: células de ~100 m.
 
-The cell size RFC-032 section 2.3 measured the pilot with -- 40 photos in 24
-cells -- and the order of magnitude of the aircraft offset the search radius
-has to absorb, so a cell is about as precise as a position is worth.
+O tamanho de célula com que o RFC-032 §2.3 mediu o piloto -- 40 fotos em 24
+células -- e a ordem de grandeza do deslocamento da aeronave que o raio da busca
+precisa absorver; assim, uma célula é mais ou menos tão precisa quanto uma
+posição merece.
 """
 
 MAX_MAP_PRECISION = 6
-"""The finest cell offered: ~0.1 m, already below what a drone's GNSS knows.
+"""A célula mais fina oferecida: ~0,1 m, já abaixo do que o GNSS de um drone sabe.
 
-A request for more is served at this precision and says so through
-`precision_applied`, the way an over-fine request is answered everywhere else
-in this use case -- the response echoes what was applied, rather than
-refusing a number that could only ever make the cells meaningless.
+Um pedido acima disso é atendido nesta precisão e o diz por `precision_applied`,
+como um pedido fino demais é respondido em todo o resto deste caso de uso -- a
+resposta ecoa o que foi aplicado, em vez de recusar um número que só poderia
+tornar as células sem sentido.
 """
 
 
 @dataclass(frozen=True)
 class PositionMap:
-    """One map answer: the cells, the precision they were cut at, and what is missing.
+    """Uma resposta do mapa: as células, a precisão do corte e o que falta.
 
-    `precision_applied` echoes the precision actually used, as `limit` does
-    for search (RFC-026): without it, a client that asked for 100 m cells and
-    received 10 km ones could not tell a sparse collection from a reduced
-    answer.
+    `precision_applied` ecoa a precisão de fato usada, como `limit` faz na
+    busca (RFC-026): sem ele, um cliente que pediu células de 100 m e recebeu
+    células de 10 km não teria como distinguir uma coleção esparsa de uma
+    resposta reduzida.
 
-    `excluded_unknown_position` is the number of photos under the same
-    filters that have no coordinates and so cannot be on any map -- the
-    number of RFC-032 section 6.2, in the place the map needs it.
+    `excluded_unknown_position` é o número de fotos sob os mesmos filtros que
+    não têm coordenadas e, por isso, não podem estar em mapa nenhum -- o número
+    do RFC-032 §6.2, no lugar em que o mapa precisa dele.
 
-    `excluded_unknown_date` is its twin for a date range (RFC-040 section
-    4.1): how many photos under the device filter have no capture date, and
-    so were hidden by the range -- `None` with no range, as in search
-    (RFC-028 section 8.2). Neither count is restricted to the area: both are
-    of the collection under the filters, and do not change with every pan.
-    A photo with neither a date nor a position is in this one only: the
-    position count's universe has the date clause, which it fails.
+    `excluded_unknown_date` é o seu gêmeo para um intervalo de datas (RFC-040
+    §4.1): quantas fotos sob o filtro de dispositivo não têm data de captura e,
+    por isso, foram escondidas pelo intervalo -- `None` sem intervalo, como na
+    busca (RFC-028 §8.2). Nenhuma das contagens se restringe à área: as duas são
+    da coleção sob os filtros e não mudam a cada arrasto do mapa. Uma foto sem
+    data e sem posição entra só nesta: o universo da contagem de posição tem a
+    cláusula de data, na qual ela não passa.
     """
 
     precision_requested: int
@@ -77,12 +78,12 @@ class PositionMap:
 
 
 class AggregatePositionsUseCase:
-    """Group the photos in a viewport into at most `max_cells` map cells.
+    """Agrupa as fotos de uma área visível em no máximo `max_cells` células.
 
-    `max_cells` is injected from `settings.max_map_cells` by the composition
-    root, never read from settings here, for the reason `MAX_SEARCH_LIMIT`'s
-    neighbour `default_limit` is: the Application layer does not import
-    configuration, and `test_application_architecture.py` enforces it.
+    `max_cells` é injetado de `settings.max_map_cells` pela raiz de composição,
+    nunca lido das configurações aqui, pelo mesmo motivo do `default_limit`,
+    vizinho de `MAX_SEARCH_LIMIT`: a camada de aplicação não importa
+    configuração, e `test_application_architecture.py` garante isso.
     """
 
     def __init__(self, repository: ImageRepository, max_cells: int) -> None:
@@ -97,31 +98,31 @@ class AggregatePositionsUseCase:
         filters: SearchFilters | None = None,
         precision: int | None = None,
     ) -> PositionMap:
-        """Return the cells of `area` under `filters`, coarsening until they fit.
+        """Devolve as células de `area` sob `filters`, engrossando até caberem.
 
-        **The universe is the filters'.** Images with an embedding -- the
-        ones a search could return -- on the requested devices, in the
-        requested date range, with a position inside `area`. A circle in
-        `filters` is dropped rather than applied: the viewport is the map's
-        area, and "near here" is the search's question (RFC-032 section 9).
+        **O universo é o dos filtros.** Imagens com embedding -- as que uma
+        busca poderia devolver -- nos dispositivos pedidos, no intervalo de
+        datas pedido, com posição dentro de `area`. Um círculo em `filters` é
+        descartado em vez de aplicado: a área visível é a área do mapa, e
+        "perto daqui" é a pergunta da busca (RFC-032 §9).
 
-        **Above `max_cells`, precision drops one decimal place at a time**
-        until the cells fit, and the response says which precision it
-        landed on. Coarser cells hide no photo -- every one is still
-        counted, in a bigger square -- where truncating the list would hide
-        whole places. Each step is one grouped query; most viewports fit on
-        the first.
+        **Acima de `max_cells`, a precisão cai uma casa decimal por vez** até as
+        células caberem, e a resposta diz em que precisão parou. Células mais
+        grossas não escondem nenhuma foto -- todas continuam contadas, num
+        quadrado maior --, enquanto truncar a lista esconderia lugares
+        inteiros. Cada passo é uma consulta agrupada; a maioria das áreas
+        visíveis cabe na primeira.
 
-        At precision 0 (1-degree cells) there is nothing coarser to fall back
-        to, and every cell is returned even if that exceeds `max_cells`: at
-        most 181 x 361 by geometry, and for a collection that fits in one
-        country, a handful. Exceeding the ceiling there is the honest
-        failure; dropping photos to honour it would not be.
+        Na precisão 0 (células de 1 grau) não há nada mais grosso para onde
+        recuar, e todas as células são devolvidas, mesmo que passem de
+        `max_cells`: no máximo 181 x 361 pela geometria e, para uma coleção que
+        cabe num país, um punhado. Passar do teto ali é a falha honesta;
+        descartar fotos para respeitá-lo não seria.
 
-        **The photos a date range hid are counted as search counts them**
-        (RFC-040 section 4.1): `count_hidden_by_unknown_date()`, the function
-        both search use cases call, over this universe, which has no circle.
-        No range, no query, and `None`.
+        **As fotos que um intervalo de datas escondeu são contadas como a busca
+        as conta** (RFC-040 §4.1): `count_hidden_by_unknown_date()`, a função
+        que os dois casos de uso de busca chamam, sobre este universo, que não
+        tem círculo. Sem intervalo, não há consulta, e o valor é `None`.
         """
         requested = DEFAULT_MAP_PRECISION if precision is None else precision
         if requested < 0:

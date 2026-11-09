@@ -1,18 +1,18 @@
-"""The environment of the model libraries, set before they are imported (RFC-035 5.2).
+"""O ambiente das bibliotecas de modelo, preparado antes do import delas (RFC-035 5.2).
 
-`huggingface_hub` reads `HF_HUB_OFFLINE` and `HF_HOME` once, when it is first
-imported, into module constants (`huggingface_hub/constants.py`); putting
-either in the environment afterwards changes nothing (section 2.3). The torch
-inductor reads `TORCHINDUCTOR_CACHE_DIR` on every call, and creates
-`%TEMP%\\torchinductor_<user>` when the variable is missing. So the package
-`__init__` calls this before any other import of the package, and the only
-importers of `torch` and `transformers` in `backend/app` are inside the
-package (`tests/test_model_imports_architecture.py` keeps it that way).
+O `huggingface_hub` lê `HF_HUB_OFFLINE` e `HF_HOME` uma vez, no primeiro
+import, para constantes do módulo (`huggingface_hub/constants.py`); pôr
+qualquer uma das duas no ambiente depois não muda nada (§2.3). O inductor do
+torch lê `TORCHINDUCTOR_CACHE_DIR` a cada chamada, e cria
+`%TEMP%\\torchinductor_<user>` quando a variável falta. Por isso o `__init__`
+do pacote chama isto antes de qualquer outro import do pacote, e os únicos
+que importam `torch` e `transformers` em `backend/app` estão dentro do
+pacote (`tests/test_model_imports_architecture.py` mantém assim).
 
-`os.environ` outside `config/`, which RFC-004 reserves for reading the
-configuration: this is not the app's configuration, it is the environment of
-a library, and it lives in the package of the adapter that uses it -- the
-precedent is `discard_libpq_environment()` of RFC-034.
+`os.environ` fora de `config/`, que o RFC-004 reserva para ler a
+configuração: isto não é a configuração do app, é o ambiente de uma
+biblioteca, e mora no pacote do adaptador que a usa -- o precedente é o
+`discard_libpq_environment()` do RFC-034.
 """
 
 from __future__ import annotations
@@ -26,29 +26,28 @@ OFFLINE_VARIABLE = "HF_HUB_OFFLINE"
 
 
 def huggingface_home(where: Layout) -> Path:
-    """What `huggingface_hub` may write: probably nothing, with the offline mode on."""
+    """O que o `huggingface_hub` pode escrever: talvez nada, com o modo offline."""
     return where.cache_directory / "huggingface"
 
 
 def inductor_cache(where: Layout) -> Path:
-    """The folder `torch` creates when a model is loaded through `transformers`."""
+    """A pasta que o `torch` cria quando um modelo é carregado pelo `transformers`."""
     return where.cache_directory / "torchinductor"
 
 
 def prepare_model_environment(where: Layout) -> None:
-    """Turn the network off and keep the libraries' writes in the data root.
+    """Desliga a rede e mantém as escritas das bibliotecas na raiz de dados.
 
-    **Overwrites, without looking at what was there.** Installed, the
-    environment is not a source of configuration (RFC-034 section 5.2), and an
-    `HF_HUB_OFFLINE=0` left by another program must not turn the network back
-    on. In a checkout it overwrites by the same rule, so that a path that
-    reaches the Hub breaks where somebody reads the traceback, and not only on
-    a user's machine (RFC-035 section 5.3).
+    **Sobrescreve, sem olhar o que havia.** Instalado, o ambiente não é fonte
+    de configuração (RFC-034 §5.2), e um `HF_HUB_OFFLINE=0` deixado por outro
+    programa não pode religar a rede. Num checkout, sobrescreve pela mesma
+    regra, para que um caminho que chega ao Hub quebre onde alguém lê o
+    traceback, e não só na máquina de um usuário (RFC-035 §5.3).
 
-    Three assignments and nothing else: no directory is created and the disk
-    is not touched, because this runs on every import of the package -- the
-    `FakeEmbeddingModel` of the fast suite included. The libraries create
-    their folders when they need them.
+    Três atribuições e mais nada: nenhum diretório é criado e o disco não é
+    tocado, porque isto roda em todo import do pacote -- inclusive no do
+    `FakeEmbeddingModel` da suíte rápida. As bibliotecas criam as pastas
+    delas quando precisam.
     """
     os.environ[OFFLINE_VARIABLE] = "1"
     os.environ["HF_HOME"] = str(huggingface_home(where))

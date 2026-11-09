@@ -1,1 +1,1 @@
-"""The side of each program that a supervisor depends on (RFC-036)."""
+"""O lado de cada programa de que um supervisor depende (RFC-036)."""

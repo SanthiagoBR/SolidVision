@@ -1,16 +1,16 @@
-"""Production CLIP embedding adapter (RFC-023).
+"""Adaptador de embedding CLIP de produção (RFC-023).
 
-Implements `EmbeddingModelPort` with `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`,
-the checkpoint the RFC-023 bake-off selected. Every CLIP, torch, and
-transformers detail is confined to this package: Domain and Application see
-only `EmbeddingModelPort`, `Image`, and `EmbeddingVector`, so a future RFC can
-swap in a fine-tuned CLIP, SigLIP, or an ONNX backend without touching a
-single contract above Infrastructure.
+Implementa `EmbeddingModelPort` com `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`,
+o checkpoint que o bake-off do RFC-023 escolheu. Todo detalhe de CLIP, torch
+e transformers fica confinado a este pacote: Domain e Application só veem
+`EmbeddingModelPort`, `Image` e `EmbeddingVector`, então um RFC futuro pode
+trocar por um CLIP com fine-tuning, pelo SigLIP ou por um backend ONNX sem
+mexer em nenhum contrato acima da Infrastructure.
 
-Since RFC-035 the checkpoint is loaded from a directory and never by name:
-the snapshot the lockfile pins, materialized in `runtime\\models` and checked
-by `model_runtime` before the first load. Which model this is, is decided by
-the lockfile, and so by the version of the code.
+Desde o RFC-035, o checkpoint é carregado de um diretório, e nunca pelo nome:
+o snapshot que o lockfile fixa, materializado em `runtime\\models` e
+verificado por `model_runtime` antes da primeira carga. Qual modelo é este
+quem decide é o lockfile, e portanto a versão do código.
 """
 
 from __future__ import annotations
@@ -37,45 +37,45 @@ from app.infrastructure.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Fixed by the bake-off, not a tunable. `a photo of {query}` scored 60.0%
-# strict-EN / 80.4% pairwise-EN on the selected checkpoint against 56.0% /
-# 78.8% for the bare query and 52.0% / 73.5% for `an aerial photo of {query}`
-# (`clip_template_run_output.log`). Despite this being an aerial-imagery
-# product, the aerial-specific template was the worst of the three.
+# Fixado pelo bake-off, não é um parâmetro ajustável. `a photo of {query}` fez
+# 60,0% strict-EN / 80,4% pairwise-EN no checkpoint escolhido, contra 56,0% /
+# 78,8% da consulta pura e 52,0% / 73,5% de `an aerial photo of {query}`
+# (`clip_template_run_output.log`). Embora este seja um produto de imagens
+# aéreas, o template específico para fotos aéreas foi o pior dos três.
 TEXT_PROMPT_TEMPLATE = "a photo of {query}"
 
 IMAGE_PROCESSOR_BACKEND = "torchvision"
-"""The image processor, asked for by name (RFC-041 section 5.5).
+"""O processor de imagem, pedido pelo nome (RFC-041 §5.5).
 
-Without a name, `transformers` 5.15 picks `torchvision` when the package is
-installed and PIL's when it is not, and the two resize differently: on ten
-demo images their pixels differ by up to 0.015 (RFC-041 section 14). Every
-vector of the project came from `torchvision`'s, which the app never imports,
-so a tree without it would encode other vectors without a word. Asked for by
-name, and checked after the load: `transformers` falls back to PIL even then.
+Sem nome, o `transformers` 5.15 escolhe o `torchvision` quando o pacote está
+instalado e o do PIL quando não está, e os dois redimensionam diferente: em
+dez imagens de demo, os pixels deles diferem em até 0,015 (RFC-041 §14). Todo
+vetor do projeto veio do `torchvision`, que o app nunca importa, então uma
+árvore sem ele codificaria outros vetores sem dizer nada. Pedido pelo nome, e
+conferido depois da carga: o `transformers` cai para o PIL mesmo assim.
 """
 
 
 DRAFT_TARGET_EDGE = 1000
-"""Fixed by RFC-045's measurement, not a tunable: another value, other vectors.
+"""Fixado pela medição do RFC-045, não é ajustável: outro valor, outros vetores.
 
-Asked of the JPEG decoder before the decode (`draft("RGB", (1000, 1000))`):
-Pillow then picks the largest DCT reduction -- 1/2, 1/4 or 1/8 -- that leaves
-both sides at least this long, and none when the shorter side is under twice
-it. On the drone photos of 12 MP that is 1/2, which took preprocessing from
-163 to 94 ms; photos that are not reduced -- the small ones, every PNG and
-TIFF, the whole demo corpus -- give exactly the vector they gave before
-(RFC-045 section 2.2). Not in `Settings`, for the reason the text template
-and the processor backend are not: changing it changes every vector, and the
-index restarts from zero when vectors change (section 5.9).
+Pedido ao decodificador JPEG antes da decodificação (`draft("RGB", (1000,
+1000))`): o Pillow escolhe então a maior redução DCT -- 1/2, 1/4 ou 1/8 -- que
+deixa os dois lados com pelo menos este tamanho, e nenhuma quando o lado menor
+tem menos que o dobro dele. Nas fotos de drone de 12 MP isso dá 1/2, o que
+levou o pré-processamento de 163 para 94 ms; fotos que não são reduzidas -- as
+pequenas, todo PNG e TIFF, o corpus de demo inteiro -- dão exatamente o vetor
+que davam antes (RFC-045 §2.2). Fora de `Settings`, pelo mesmo motivo do
+template de texto e do backend do processor: mudá-lo muda todo vetor, e o
+índice recomeça do zero quando os vetores mudam (§5.9).
 """
 
 
 def image_processor_backend(processor: object) -> str | None:
-    """`torchvision` or `pil`: which backend the processor's images go through.
+    """`torchvision` ou `pil`: por qual backend passam as imagens do processor.
 
-    Read from the class's ancestry by name, so that nothing here imports the
-    backend classes, one of which needs `torchvision`.
+    Lido da ancestralidade da classe, pelo nome, para que nada aqui importe as
+    classes de backend, uma das quais precisa de `torchvision`.
     """
     image_processor = getattr(processor, "image_processor", None)
     ancestry = {cls.__name__ for cls in type(image_processor).__mro__}
@@ -87,25 +87,25 @@ def image_processor_backend(processor: object) -> str | None:
 
 
 class ClipEmbeddingModel(EmbeddingModelPort):
-    """Encode images and text into one 512-dimensional CLIP similarity space.
+    """Codifica imagens e texto num mesmo espaço de similaridade CLIP de 512 dims.
 
-    Both models are loaded lazily on first use and then reused for the life
-    of the instance, so constructing the adapter -- which the dependency
-    wiring does at import-adjacent time -- costs nothing and never touches
-    the disk (RFC-023 section 10). `model_directory` is called on that first
-    load, and is where the files are checked against the lockfile (RFC-035
-    section 6); the translator gets its own, for its own first load.
+    Os dois modelos são carregados sob demanda no primeiro uso e reaproveitados
+    pela vida da instância, então construir o adaptador -- o que a ligação das
+    dependências faz quase na hora do import -- não custa nada e nunca toca o
+    disco (RFC-023 §10). `model_directory` é chamado nessa primeira carga, e é
+    onde os arquivos são conferidos com o lockfile (RFC-035 §6); o tradutor
+    recebe o seu, para a sua própria primeira carga.
 
-    Errors from Pillow and from model inference deliberately propagate.
-    `IndexingWorker.run()` already isolates failures per file, so a second
-    generic `except` here would only hide which file failed and why. The one
-    exception is the load itself, which becomes a `ModelUnavailableError`:
-    a line for the user, and the traceback for the log.
+    Erros do Pillow e da inferência do modelo propagam de propósito.
+    `IndexingWorker.run()` já isola as falhas por arquivo, então um segundo
+    `except` genérico aqui só esconderia qual arquivo falhou e por quê. A
+    única exceção é a própria carga, que vira um `ModelUnavailableError`: uma
+    linha para o usuário, e o traceback para o log.
 
-    `query_adapter`, when given, is RFC-042's level A matrix. It is called on
-    the first load too, and only `encode_text()` applies what it returns.
-    Without it, a query's vector is CLIP's own, which is what the experiments
-    and the reference vectors of RFC-035 compare against.
+    `query_adapter`, quando dado, é a matriz do nível A do RFC-042. Também é
+    chamado na primeira carga, e só `encode_text()` aplica o que ele devolve.
+    Sem ele, o vetor de uma consulta é o do próprio CLIP, que é contra o que
+    os experimentos e os vetores de referência do RFC-035 comparam.
     """
 
     def __init__(
@@ -126,15 +126,15 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         self._model: CLIPModel | None = None
         self._processor: ProcessorMixin | None = None
         self._load_lock = threading.Lock()
-        """One load at a time; see `_ensure_loaded()`."""
+        """Uma carga por vez; ver `_ensure_loaded()`."""
 
     def encode_image(
         self, image: Image, content: bytes | None = None
     ) -> EmbeddingVector:
-        """Decode the image's pixels and return their CLIP embedding.
+        """Decodifica os pixels da imagem e devolve o embedding CLIP deles.
 
-        From `content` when the caller already read the file (RFC-045
-        section 5.3), from the file otherwise; the vector is the same.
+        De `content` quando quem chama já leu o arquivo (RFC-045 §5.3), do
+        arquivo nos outros casos; o vetor é o mesmo.
         """
         model, processor = self._ensure_loaded()
         pixel_values = self._preprocess(processor, image, content)
@@ -151,31 +151,31 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         images: Sequence[Image],
         contents: Sequence[bytes | None] | None = None,
     ) -> list[EmbeddingVector]:
-        """Encode several images in one forward pass (RFC-024 section 5).
+        """Codifica várias imagens numa só passada pelo modelo (RFC-024 §5).
 
-        Overrides the port's per-image default because CLIP genuinely does
-        have a faster way to do this: measured on the demo corpus on CPU, a
-        batch of 8 runs at 1.40x the throughput of a batch of 1, with the
-        embeddings unchanged to within floating point.
+        Sobrescreve o default por imagem da porta porque o CLIP de fato tem
+        um jeito mais rápido de fazer isso: medido no corpus de demo em CPU,
+        um lote de 8 roda a 1,40x a vazão de um lote de 1, com os embeddings
+        iguais dentro da precisão de ponto flutuante.
 
-        Preprocessing is deliberately a loop, not a single
-        `processor(images=[...])` call. Each iteration decodes one file to
-        full size, shrinks it to the model's fixed input, and drops the
-        full-size copy before the next file is opened, so what accumulates
-        across the batch is N small tensors rather than N decoded photos.
-        That distinction is invisible on the 1024x768 demo corpus (~1.8 MB
-        each) and decides whether the pipeline survives a directory of
-        24-megapixel photos, where the decoded originals would be ~72 MB
-        apiece (RFC-024 section 9).
+        O pré-processamento é um laço de propósito, e não uma única chamada
+        `processor(images=[...])`. Cada iteração decodifica um arquivo em
+        tamanho cheio, reduz para a entrada fixa do modelo e descarta a cópia
+        em tamanho cheio antes de abrir o arquivo seguinte, então o que se
+        acumula no lote são N tensores pequenos, e não N fotos decodificadas.
+        Essa diferença não aparece no corpus de demo de 1024x768 (~1,8 MB
+        cada) e decide se o pipeline sobrevive a uma pasta de fotos de 24
+        megapixels, em que cada original decodificado teria ~72 MB (RFC-024
+        §9).
 
-        Errors propagate, exactly as in `encode_image()`. One unreadable
-        file therefore fails the whole batch, which is intentional: the
-        caller retries the batch one image at a time to find out which file
-        it was, and RFC-023 section 4's decision that this adapter swallows
-        nothing still stands.
+        Erros propagam, exatamente como em `encode_image()`. Um arquivo
+        ilegível, portanto, faz o lote inteiro falhar, e isso é intencional:
+        quem chama tenta o lote de novo uma imagem por vez para descobrir qual
+        arquivo foi, e a decisão do RFC-023 §4 de que este adaptador não
+        engole nada continua valendo.
 
-        `contents` pairs each image with its bytes, or with `None` to read
-        the file (RFC-045 section 5.3), as the port describes.
+        `contents` junta cada imagem aos seus bytes, ou a `None` para ler o
+        arquivo (RFC-045 §5.3), como a porta descreve.
         """
         if contents is not None and len(contents) != len(images):
             raise ValueError(
@@ -207,34 +207,34 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         image: Image,
         content: bytes | None = None,
     ) -> torch.Tensor:
-        """Reduce one file on disk to the fixed-size tensor the model consumes.
+        """Reduz um arquivo do disco ao tensor de tamanho fixo que o modelo consome.
 
-        CLIP was trained on 3-channel RGB. Converting explicitly here rather
-        than leaning on processor internals puts the RFC-022 6.2 hard cases
-        -- grayscale, CMYK, 16-bit TIFF, RGBA -- on one documented path.
-        `convert()` also forces the decode that Pillow's lazy `open()`
-        defers, so a zero-byte or truncated file fails here rather than
-        somewhere deeper in the model.
+        O CLIP foi treinado em RGB de 3 canais. Converter aqui, explicitamente,
+        em vez de depender dos internos do processor, põe os casos difíceis do
+        RFC-022 6.2 -- tons de cinza, CMYK, TIFF de 16 bits, RGBA -- num único
+        caminho documentado. `convert()` também força a decodificação que o
+        `open()` preguiçoso do Pillow adia, então um arquivo de zero bytes ou
+        truncado falha aqui, e não em algum ponto mais fundo do modelo.
 
-        The full-size decoded image is a local of this method and nothing
-        else, so it becomes unreachable the moment the method returns. That
-        is the whole memory strategy: only the returned tensor -- fixed at
-        the model's input resolution, regardless of the source photo -- is
-        allowed to outlive one file.
+        A imagem decodificada em tamanho cheio é uma variável local deste
+        método e de mais nada, então fica inalcançável no instante em que o
+        método retorna. Essa é toda a estratégia de memória: só o tensor
+        devolvido -- fixo na resolução de entrada do modelo, seja qual for a
+        foto de origem -- pode sobreviver a um arquivo.
 
-        **The bytes come from `content` when there are some** (RFC-045
-        section 5.3): the read-ahead read the file for its hash, and
-        decoding those bytes gives the same tensor as decoding the file.
+        **Os bytes vêm de `content` quando há** (RFC-045 §5.3): a leitura
+        antecipada leu o arquivo para o hash, e decodificar esses bytes dá o
+        mesmo tensor que decodificar o arquivo.
 
-        **The decoder is asked for a reduced draft first**
-        (`DRAFT_TARGET_EDGE`, RFC-045 section 5.6), with no condition
-        around the call: it is a no-op for every format but JPEG, and for
-        a JPEG whose shorter side is under 2,000 px. An MPO -- how Pillow
-        opens a DJI photo -- is a `JpegImageFile`, and the draft applies to
-        its first frame, the one read here. `POST /images/search/by-image`
-        comes through this method too, so a query photo is reduced by the
-        same rule as the photos of the index. It has to be asked before
-        `convert()`, which is what decodes.
+        **Ao decodificador se pede antes um rascunho reduzido**
+        (`DRAFT_TARGET_EDGE`, RFC-045 §5.6), sem condição em volta da
+        chamada: ela não faz nada em formato nenhum além de JPEG, nem num JPEG
+        cujo lado menor tenha menos de 2.000 px. Um MPO -- como o Pillow abre
+        uma foto DJI -- é um `JpegImageFile`, e o rascunho vale para o
+        primeiro quadro dele, o que é lido aqui. `POST /images/search/by-image`
+        também passa por este método, então uma foto de consulta é reduzida
+        pela mesma regra que as fotos do índice. O pedido tem de vir antes de
+        `convert()`, que é quem decodifica.
         """
         source = (
             io.BytesIO(content)
@@ -251,14 +251,14 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         return inputs["pixel_values"]
 
     def encode_text(self, text: str) -> EmbeddingVector:
-        """Encode a user query into the same space `encode_image` writes into.
+        """Codifica uma consulta no mesmo espaço em que `encode_image` escreve.
 
-        CLIP reads at most 77 tokens. A longer prompt -- a long query, or a
-        translation where Marian repeats itself -- is cut to that length
-        instead of failing the search.
+        O CLIP lê no máximo 77 tokens. Um prompt mais longo -- uma consulta
+        longa, ou uma tradução em que o Marian se repete -- é cortado nesse
+        tamanho, em vez de fazer a busca falhar.
 
-        With a query adapter, the normalized vector goes through it last
-        (RFC-042 level A). The photos' vectors are never adapted.
+        Com um adaptador de consulta, o vetor normalizado passa por ele por
+        último (RFC-042 nível A). Os vetores das fotos nunca são adaptados.
         """
         model, processor = self._ensure_loaded()
 
@@ -277,43 +277,42 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         )[0]
 
     def build_prompt(self, text: str) -> str:
-        """Return the exact English string handed to CLIP's text encoder.
+        """Devolve a string exata, em inglês, entregue ao encoder de texto do CLIP.
 
-        The full query pipeline in one line: detect the language, translate
-        Portuguese to English, then apply the template. Public so the prompt
-        and translation behavior can be asserted without loading CLIP itself.
+        O pipeline inteiro da consulta numa linha: detecta o idioma, traduz
+        português para inglês e aplica o template. Público para que o prompt
+        e a tradução possam ser verificados sem carregar o próprio CLIP.
         """
         return TEXT_PROMPT_TEMPLATE.format(query=self._translator.to_english(text))
 
     def warm_up(self) -> None:
-        """Load the CLIP checkpoint now, without touching the translator.
+        """Carrega o checkpoint CLIP agora, sem tocar no tradutor.
 
-        `encode_text()` would also load it, and would drag the translation
-        model in behind it (`build_prompt` detects the language first) --
-        600 MB the job executor is never going to use, because a worker
-        encodes images and never queries. So this loads the one tower it
-        needs.
+        `encode_text()` também o carregaria, e arrastaria junto o modelo de
+        tradução (`build_prompt` detecta o idioma antes) -- 600 MB que o
+        executor de jobs nunca vai usar, porque um worker codifica imagens e
+        nunca consultas. Então isto carrega só a torre de que precisa.
         """
         self._ensure_loaded()
 
     def _ensure_loaded(self) -> tuple[CLIPModel, ProcessorMixin]:
-        """Load the checkpoint on first use and reuse it on every later call.
+        """Carrega o checkpoint no primeiro uso e o reaproveita nas chamadas seguintes.
 
-        The directory comes first, checked: nothing is deserialized until
-        every file is the one the lockfile names (RFC-035 section 6.2).
-        `local_files_only` is written on the call rather than left to the
-        offline mode, so it holds even if the variable came too late (section
-        5.1): an optional file the directory does not have is then simply
-        absent, and never looked for on the Hub.
+        O diretório vem primeiro, conferido: nada é desserializado antes de
+        cada arquivo ser o que o lockfile nomeia (RFC-035 §6.2).
+        `local_files_only` é escrito na chamada, em vez de ficar a cargo do
+        modo offline, para valer mesmo se a variável chegou tarde demais
+        (§5.1): um arquivo opcional que o diretório não tem fica simplesmente
+        ausente, e nunca é procurado no Hub.
 
-        **Once, under a lock, with the check repeated inside it** (RFC-036
-        section 5.3). Two first requests that both find the model unloaded
-        -- the race of RFC-026 section 9.1, which a warm-up that blocked the
-        port used to keep away -- would otherwise both load the checkpoint.
-        Since the warm-up runs in a thread beside the open port, a search
-        that arrives during it waits for the load in progress instead of
-        starting a second one. Once loaded, the check outside the lock is
-        all a call pays.
+        **Uma vez, sob um lock, com a verificação repetida dentro dele**
+        (RFC-036 §5.3). Duas primeiras requisições que achem o modelo
+        descarregado -- a corrida do RFC-026 §9.1, que um warm-up que
+        bloqueava a porta mantinha longe -- carregariam, as duas, o
+        checkpoint. Como o warm-up roda numa thread ao lado da porta aberta,
+        uma busca que chega durante ele espera a carga em andamento em vez de
+        começar uma segunda. Depois de carregado, a verificação fora do lock
+        é tudo o que uma chamada paga.
         """
         if self._model is None or self._processor is None:
             with self._load_lock:
@@ -326,12 +325,12 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         logger.info("Loading CLIP model from %s onto %s", directory, self._device)
         try:
             model = CLIPModel.from_pretrained(directory, local_files_only=True)
-            # Three upstream typing gaps in transformers 5.15, not real type
-            # errors: `nn.Module.eval` is unannotated, `PreTrainedModel.to` is
-            # wrapped in a decorator whose signature mypy reads as taking the
-            # model itself, and `AutoProcessor.from_pretrained` is
-            # unannotated. `warn_unused_ignores` will flag each of these the
-            # moment a release types them properly.
+            # Três lacunas de tipagem do transformers 5.15, não erros de tipo
+            # de verdade: `nn.Module.eval` não tem anotação, `PreTrainedModel.to`
+            # está embrulhado num decorator cuja assinatura o mypy lê como se
+            # recebesse o próprio modelo, e `AutoProcessor.from_pretrained` não
+            # tem anotação. `warn_unused_ignores` vai apontar cada um no momento
+            # em que uma versão os tipar direito.
             model.eval()  # type: ignore[no-untyped-call]
             loaded = model.to(self._device)  # type: ignore[arg-type]
             processor = AutoProcessor.from_pretrained(  # type: ignore[no-untyped-call]
@@ -366,30 +365,31 @@ class ClipEmbeddingModel(EmbeddingModelPort):
         expected_rows: int,
         adapter: QueryAdapter | None = None,
     ) -> list[EmbeddingVector]:
-        """Validate, L2-normalize, and lift CLIP features into the domain type.
+        """Valida, normaliza em L2 e eleva as features do CLIP ao tipo do domínio.
 
-        Takes `expected_rows` rather than assuming one, so that a batch of
-        N and a batch of 1 are validated and normalized by the same code.
-        `normalize(..., dim=-1)` is per-row, so batching cannot change any
-        individual embedding -- which is what makes RFC-024's equivalence
-        requirement a property of the arithmetic rather than a hope.
+        Recebe `expected_rows` em vez de supor uma, para que um lote de N e
+        um lote de 1 sejam validados e normalizados pelo mesmo código.
+        `normalize(..., dim=-1)` é por linha, então o lote não muda nenhum
+        embedding individual -- e é isso que faz da exigência de equivalência
+        do RFC-024 uma propriedade da aritmética, e não uma esperança.
 
-        Two transformers-version-specific facts drive this method, both
-        verified against the installed transformers 5.15 rather than copied
-        from an example:
+        Dois fatos específicos da versão do transformers guiam este método,
+        os dois conferidos no transformers 5.15 instalado, e não copiados de
+        um exemplo:
 
-        1. `get_image_features()` / `get_text_features()` do NOT return a
-           tensor. They return a `BaseModelOutputWithPooling` whose
-           `.pooler_output` the method has overwritten with the projected
-           embedding. `.last_hidden_state` on that same object is the
-           pre-projection 768-d encoder state -- the wrong space entirely,
-           and silently the wrong size.
-        2. Neither output is normalized: measured L2 norms are ~11.6 for
-           images and ~8.5 for text. Cosine similarity is the metric the
-           HNSW index is built for (`vector_cosine_ops`), so normalizing is
-           required, and it belongs here rather than in `EmbeddingVector` --
-           that value object is model-agnostic and must not impose one
-           embedding space's convention on every future model (RFC-023 6).
+        1. `get_image_features()` / `get_text_features()` NÃO devolvem um
+           tensor. Devolvem um `BaseModelOutputWithPooling` cujo
+           `.pooler_output` o método sobrescreveu com o embedding projetado.
+           `.last_hidden_state` nesse mesmo objeto é o estado do encoder de
+           768 dims antes da projeção -- o espaço errado, e, em silêncio, o
+           tamanho errado.
+        2. Nenhuma das saídas vem normalizada: as normas L2 medidas são ~11,6
+           para imagens e ~8,5 para texto. Similaridade de cosseno é a
+           métrica para a qual o índice HNSW é construído
+           (`vector_cosine_ops`), então normalizar é obrigatório, e o lugar é
+           aqui, e não em `EmbeddingVector` -- esse value object não depende
+           de modelo e não pode impor a convenção de um espaço de embedding a
+           todo modelo futuro (RFC-023 6).
         """
         if features.ndim != 2 or features.shape[0] != expected_rows:
             wanted = (

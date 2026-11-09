@@ -1,70 +1,70 @@
-"""What the embedded cluster adapter raises (RFC-033).
+"""O que o adaptador do cluster embarcado levanta (RFC-033).
 
-Infrastructure failures, not `DomainError`s: the domain has no opinion about
-`pg_ctl`. Every message says what was observed and, where there is one, what
-to do -- these reach a photographer's screen through the launcher of RFC-036,
-and a refusal that does not say why is a support call.
+Falhas de infraestrutura, não `DomainError`s: o domínio não tem opinião sobre
+o `pg_ctl`. Toda mensagem diz o que foi observado e, quando há, o que fazer --
+elas chegam à tela de um fotógrafo pelo launcher do RFC-036, e uma recusa que
+não diz por quê é um chamado de suporte.
 """
 
 from __future__ import annotations
 
 
 class EmbeddedPostgresError(RuntimeError):
-    """The embedded cluster could not be brought to the state asked of it."""
+    """O cluster embarcado não pôde ser levado ao estado pedido."""
 
 
 class RuntimeInvalidError(EmbeddedPostgresError):
-    """The runtime directory is not one `scripts/vendor_postgres.py` produced.
+    """O diretório do runtime não é um que o `scripts/vendor_postgres.py` gerou.
 
-    Raised for a missing manifest as much as for a missing binary: pointing
-    the adapter at an arbitrary PostgreSQL installation -- EnterpriseDB's in
-    `Program Files`, say -- fails here, explicitly, instead of working with
-    another version (RFC-033 section 5.2).
+    Levantado tanto por um manifesto ausente quanto por um binário ausente:
+    apontar o adaptador para uma instalação qualquer do PostgreSQL -- a da
+    EnterpriseDB em `Program Files`, por exemplo -- falha aqui,
+    explicitamente, em vez de funcionar com outra versão (RFC-033 §5.2).
     """
 
 
 class ClusterRefusedError(EmbeddedPostgresError):
-    """The cluster exists, and the adapter will not touch it.
+    """O cluster existe, e o adaptador não vai tocar nele.
 
-    Another major version, a cluster held by another runtime, a password the
-    cluster rejects, a schema newer than the code, facts that are not the
-    ones RFC-033a measured. In every case the safe action is to do nothing,
-    and the message says which of them it was.
+    Outra versão major, um cluster preso a outro runtime, uma senha que o
+    cluster rejeita, um schema mais novo que o código, fatos que não são os
+    que o RFC-033a mediu. Em todos os casos a ação segura é não fazer nada, e
+    a mensagem diz qual deles foi.
     """
 
 
 class ClusterNotRunningError(EmbeddedPostgresError):
-    """`locate()` found no server ready to be connected to (RFC-034 section 7.2).
+    """O `locate()` não achou servidor pronto para conexão (RFC-034 §7.2).
 
-    `locate()` only reads: it starts nothing, so anything other than a ready
-    cluster is this error, saying what was found instead and who starts it.
-    The engine turns it into a connection error (section 7.3), and it is
-    never answered by trying `DATABASE_*` instead (section 7.4).
+    O `locate()` só lê: não sobe nada, então qualquer coisa que não seja um
+    cluster pronto é este erro, dizendo o que foi achado no lugar e quem o
+    sobe. O engine o transforma num erro de conexão (§7.3), e ele nunca é
+    respondido tentando `DATABASE_*` no lugar (§7.4).
     """
 
 
 class StartupFailedError(EmbeddedPostgresError):
-    """The server did not start, for a reason that retrying will not change.
+    """O servidor não subiu, por um motivo que tentar de novo não muda.
 
-    Carries what the server logged, which is where it says why (RFC-033
-    section 8.1).
+    Carrega o que o servidor registrou no log, que é onde ele diz por quê
+    (RFC-033 §8.1).
     """
 
 
 class ServerNotReadyError(StartupFailedError):
-    """The server is up and says it cannot take connections yet.
+    """O servidor está de pé e diz que ainda não aceita conexões.
 
-    The one refusal that waiting does change. `postmaster.pid` is rewritten
-    when the server starts and when it stops, but **not** when it
-    reinitializes after one of its own processes dies: for those seconds the
-    file still says `ready`, and only a connection attempt is told "the
-    database system is in recovery mode" (measured, RFC-033 section 18).
+    A única recusa que esperar muda. O `postmaster.pid` é reescrito quando o
+    servidor sobe e quando para, mas **não** quando ele se reinicializa
+    depois que um dos seus próprios processos morre: nesses segundos o
+    arquivo ainda diz `ready`, e só uma tentativa de conexão ouve "the
+    database system is in recovery mode" (medido, RFC-033 §18).
     """
 
 
 class StopFailedError(EmbeddedPostgresError):
-    """Neither the `fast` nor the `immediate` shutdown stopped the server.
+    """Nem o desligamento `fast` nem o `immediate` pararam o servidor.
 
-    The adapter never kills the postmaster (RFC-033 section 8.5): deciding
-    whether that is worth the orphans it leaves is the launcher's call.
+    O adaptador nunca mata o postmaster (RFC-033 §8.5): decidir se isso vale
+    os órfãos que deixa é escolha do launcher.
     """

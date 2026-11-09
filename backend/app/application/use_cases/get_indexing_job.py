@@ -1,10 +1,10 @@
-"""Reading one job's progress, which is how a client follows a long run.
+"""Ler o progresso de um job, que é como um cliente acompanha uma execução longa.
 
-Polling rather than a push channel (RFC-029 section 7.2): the client is a
-local UI asking for a number that moves every few seconds, and a
-persistent connection would add connection management, reconnection and an
-asynchronous path through the API to save requests that cost almost
-nothing on localhost.
+Polling em vez de um canal de push (RFC-029 §7.2): o cliente é uma interface
+local pedindo um número que muda a cada poucos segundos, e uma conexão
+persistente acrescentaria gerenciamento de conexão, reconexão e um caminho
+assíncrono pela API para economizar requisições que quase não custam nada em
+localhost.
 """
 
 from __future__ import annotations
@@ -16,17 +16,17 @@ from app.domain.value_objects.job_id import JobId
 
 
 class GetIndexingJobUseCase:
-    """Return one job, or say plainly that there is no such job."""
+    """Devolve um job, ou diz claramente que esse job não existe."""
 
     def __init__(self, job_repository: IndexingJobRepository) -> None:
         self._jobs = job_repository
 
     def execute(self, job_id: JobId) -> IndexingJob:
-        """Return the job, raising when the id names nothing.
+        """Devolve o job, levantando exceção quando o id não nomeia nada.
 
-        A missing job is an error rather than an empty answer, and the
-        distinction is what lets a client tell "not finished yet" from
-        "that id was never a job" while polling.
+        Um job inexistente é um erro, e não uma resposta vazia, e é essa
+        distinção que permite a um cliente diferenciar "ainda não terminou" de
+        "esse id nunca foi um job" durante o polling.
         """
         job = self._jobs.get(job_id)
         if job is None:

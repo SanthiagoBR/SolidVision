@@ -11,37 +11,37 @@ export interface paths {
         };
         /**
          * What this installation supports
-         * @description Report the six things a client draws differently because of.
+         * @description Informa as seis coisas por causa das quais um cliente desenha diferente.
          *
-         *     `local_file_actions` mirrors `settings.allow_local_file_actions`
-         *     exactly, including when it is `False` -- a `200` saying "no" is the
-         *     whole reason this route exists, and is why the configuration guard is
-         *     not on it.
+         *     `local_file_actions` espelha `settings.allow_local_file_actions`
+         *     exatamente, inclusive quando é `False` -- um `200` dizendo "não" é a razão
+         *     inteira de esta rota existir, e é por isso que a guarda de configuração
+         *     não está nela.
          *
-         *     `platform` is `sys.platform`, read here rather than inferred from
-         *     anything: only the Windows volume adapter and the Windows file
-         *     revealer ship, and a client is entitled to know which operating
-         *     system answered (RFC-027 section 4.1).
+         *     `platform` é `sys.platform`, lido aqui em vez de inferido de qualquer
+         *     coisa: só o adaptador de volumes do Windows e o revelador de arquivos do
+         *     Windows são distribuídos, e um cliente tem direito de saber qual sistema
+         *     operacional respondeu (RFC-027 §4.1).
          *
-         *     `version` is `settings.project_version` -- the package version, which
-         *     is `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the
-         *     sprint number, and the sprint number is not the version of anything
-         *     that ships. The setting is reported as it stands rather than the
-         *     project being renumbered to match an illustration.
+         *     `version` é `settings.project_version` -- a versão do pacote, que é
+         *     `0.1.0`. O exemplo do RFC-031 §9 mostra `0.5.0`; esse é o número da
+         *     sprint, e o número da sprint não é a versão de nada que é distribuído. A
+         *     configuração é informada como está, em vez de o projeto ser renumerado
+         *     para bater com uma ilustração.
          *
-         *     `max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),
-         *     and each passes the bar: the size *"Mostrar mais"* asks for, and the
-         *     smallest radius of the list. Both are policy the API already enforces
-         *     -- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the
-         *     user's file -- and a copy of either in the interface is the copy RFC-026
-         *     section 8.2 refused to put in the route's signature: it would drift.
+         *     `max_search_limit` e `min_radius_m` vieram com o RFC-038 (§2.4), e cada um
+         *     passa pelo critério: o tamanho que o *"Mostrar mais"* pede, e o menor raio
+         *     da lista. Os dois são política que a API já impõe -- `MAX_SEARCH_LIMIT` no
+         *     caso de uso, `settings.min_radius_m` do arquivo do usuário -- e uma cópia
+         *     de qualquer um deles na interface é a cópia que o RFC-026 §8.2 se recusou
+         *     a pôr na assinatura da rota: ela divergiria.
          *
-         *     `address_search` came with RFC-043: the address field is drawn only
-         *     when `/geocode` answers.
+         *     `address_search` veio com o RFC-043: o campo de endereço só é desenhado
+         *     quando o `/geocode` responde.
          *
-         *     The bar for a seventh field is *the UI draws something different
-         *     because of it*. Without a criterion this becomes a configuration
-         *     dump, which is the risk RFC-031 section 15 names.
+         *     O critério para um sétimo campo é *a UI desenha algo diferente por causa
+         *     dele*. Sem um critério isto vira um despejo de configuração, que é o risco
+         *     que o RFC-031 §15 nomeia.
          */
         get: operations["get_capabilities_api_v1_capabilities_get"];
         put?: never;
@@ -61,65 +61,63 @@ export interface paths {
         };
         /**
          * List every known device, with connection resolved right now
-         * @description Return every disk the system knows, connected or in a drawer.
+         * @description Retorna todo disco que o sistema conhece, conectado ou na gaveta.
          *
-         *     `connected` and `mount_point` describe **this instant** and are
-         *     resolved per request from a single enumeration of the mounted
-         *     volumes, however many devices there are. That bound is the design
-         *     (RFC-031 section 4.1): the obvious implementation asks the locator
-         *     once per device, which is right for a page of search hits and is N
-         *     enumerations of the same filesystem here.
+         *     `connected` e `mount_point` descrevem **este instante** e são resolvidos
+         *     por requisição a partir de uma única enumeração dos volumes montados,
+         *     quantos dispositivos houver. Esse limite é o desenho (RFC-031 §4.1): a
+         *     implementação óbvia pergunta ao locator uma vez por dispositivo, o que é
+         *     certo para uma página de resultados de busca e aqui são N enumerações do
+         *     mesmo sistema de arquivos.
          *
-         *     `connected: false` is a normal answer, not a failure. The row exists,
-         *     every photo on that disk is still searchable, and its thumbnails are
-         *     still served (RFC-030 section 4.1) -- what the user is missing is the
-         *     bytes.
+         *     `connected: false` é uma resposta normal, não uma falha. A linha existe,
+         *     toda foto daquele disco continua buscável, e as suas thumbnails continuam
+         *     servidas (RFC-030 §4.1) -- o que falta ao usuário são os bytes.
          *
-         *     No `percent_indexed`. The response carries `indexed_images`,
-         *     `last_scan_file_count` and `last_scan_at` separately, so that nobody
-         *     can render the ratio without having the scan date in hand
-         *     (ARCHITECTURE.md section 15, RFC-031 section 4.2).
+         *     Nada de `percent_indexed`. A resposta traz `indexed_images`,
+         *     `last_scan_file_count` e `last_scan_at` separados, para que ninguém consiga
+         *     desenhar a razão sem ter a data do scan em mãos (ARCHITECTURE.md §15,
+         *     RFC-031 §4.2).
          */
         get: operations["list_devices_api_v1_devices_get"];
         put?: never;
         /**
          * Register a mounted volume as a device, by identity
-         * @description Register the volume with this identity, or return the device it already is.
+         * @description Cadastra o volume com esta identidade, ou retorna o dispositivo que ele já é.
          *
-         *     **201 the first time, 200 the second, and the difference is
-         *     load-bearing.** `DeviceId` is `uuid5` over the volume identity, so
-         *     registering a known disk lands on the existing row: nothing was
-         *     created, and a client counting creations would be counting wrong. It
-         *     is not a 409 either -- a conflict describes a request the current
-         *     state refuses, and this one is not refused, it is already satisfied
-         *     (RFC-031 section 6.1). The use case reports which happened; this
-         *     function only chooses the number.
+         *     **201 na primeira vez, 200 na segunda, e a diferença importa.** `DeviceId`
+         *     é `uuid5` sobre a identidade do volume, então cadastrar um disco conhecido
+         *     cai na linha existente: nada foi criado, e um cliente que contasse criações
+         *     contaria errado. Também não é um 409 -- um conflito descreve um pedido que o
+         *     estado atual recusa, e este não é recusado, já está satisfeito
+         *     (RFC-031 §6.1). O caso de uso informa o que aconteceu; esta função só
+         *     escolhe o número.
          *
-         *     A `label` sent on a second registration **is** applied. `save()` is
-         *     an upsert by design, and the alternative -- ignoring it in silence --
-         *     would leave a user renaming a disk with no effect.
+         *     Um `label` enviado num segundo cadastro **é** aplicado. `save()` é um
+         *     upsert por desenho, e a alternativa -- ignorá-lo em silêncio -- deixaria um
+         *     usuário renomeando um disco sem efeito.
          *
-         *     **Neither `response` nor `describer` is client input.** FastAPI
-         *     injects the first so the status can be lowered to 200 and resolves
-         *     the second as a dependency; nothing a client sends can reach either.
-         *     The signature test asserts the parameter list is exactly these four
-         *     names, so a path parameter added later has nowhere to hide.
+         *     **Nem `response` nem `describer` são entrada do cliente.** O FastAPI
+         *     injeta o primeiro para que o status possa baixar para 200 e resolve o
+         *     segundo como dependência; nada que um cliente envia alcança nenhum dos
+         *     dois. O teste de assinatura afirma que a lista de parâmetros é exatamente
+         *     esses quatro nomes, então um parâmetro de caminho acrescentado depois não
+         *     tem onde se esconder.
          *
-         *     The `describer` is composed here rather than inside the registration
-         *     for the reason the search route composes `SearchImagesUseCase` with
-         *     `ResolveImageLocationUseCase`: resolving where a disk is mounted and
-         *     how much of it is indexed is not registering it, and the CLI path
-         *     through `RegisterDeviceUseCase.register()` must stay free of both.
-         *     It is what makes this response say `connected: true` with a real
-         *     mount point, rather than reporting a disk the server has this
-         *     instant found mounted as absent.
+         *     O `describer` é composto aqui, e não dentro do cadastro, pela razão por que
+         *     a rota de busca compõe `SearchImagesUseCase` com
+         *     `ResolveImageLocationUseCase`: resolver onde um disco está montado e quanto
+         *     dele está indexado não é cadastrá-lo, e o caminho da CLI por
+         *     `RegisterDeviceUseCase.register()` tem de ficar livre dos dois. É o que faz
+         *     esta resposta dizer `connected: true` com um ponto de montagem real, em vez
+         *     de informar como ausente um disco que o servidor acabou de achar montado.
          *
-         *     An identity nobody is holding is a 409 naming what to do about it --
-         *     plug the disk in -- and **nothing is written**. An invented identity
-         *     is not a location: it is looked up in a mapping the server produced
-         *     seconds ago, and what is not in it does not exist. A path, by
-         *     contrast, *is* a location whether or not anyone meant it to be, which
-         *     is the whole of RFC-031 section 5.1.
+         *     Uma identidade que ninguém detém é um 409 dizendo o que fazer a respeito --
+         *     plugar o disco -- e **nada é escrito**. Uma identidade inventada não é uma
+         *     localização: é procurada num mapeamento que o servidor produziu segundos
+         *     atrás, e o que não está nele não existe. Um caminho, ao contrário, *é* uma
+         *     localização, quer alguém tenha querido isso ou não, que é todo o RFC-031
+         *     §5.1.
          */
         post: operations["register_device_api_v1_devices_post"];
         delete?: never;
@@ -143,25 +141,23 @@ export interface paths {
         head?: never;
         /**
          * Rename a device
-         * @description Change the disk's label. Nothing else about a device is editable.
+         * @description Muda o rótulo do disco. Nada mais de um dispositivo é editável.
          *
-         *     **Works with the disk in a drawer**, and that is the whole point of
-         *     the rename requiring no bytes: a name is a fact about our table, and
-         *     RFC-027 section 2.3 is explicit that an unplugged disk is a device
-         *     the system knows perfectly well. The response still *reports*
-         *     whether the disk is here, and reporting `false` is as successful an
-         *     outcome as reporting `true`.
+         *     **Funciona com o disco na gaveta**, e essa é toda a razão de o renomear
+         *     não exigir bytes: um nome é um fato da nossa tabela, e o RFC-027 §2.3 é
+         *     explícito em que um disco desplugado é um dispositivo que o sistema
+         *     conhece perfeitamente. A resposta ainda *informa* se o disco está aqui, e
+         *     informar `false` é um desfecho tão bem-sucedido quanto informar `true`.
          *
-         *     A body carrying anything but `label` is a **422**, not a quietly
-         *     ignored field. `last_scan_file_count` is the plausible thing to send
-         *     and the exact thing that must not be writable: it is the declared
-         *     denominator of "% indexed", so an editable one is an invented number
-         *     with the appearance of a measurement (RFC-031 section 7).
+         *     Um corpo que traga qualquer coisa além de `label` é um **422**, não um
+         *     campo ignorado em silêncio. `last_scan_file_count` é a coisa plausível de
+         *     enviar e exatamente a que não pode ser gravável: é o denominador declarado
+         *     do "% indexado", então um editável é um número inventado com aparência de
+         *     medição (RFC-031 §7).
          *
-         *     The response is the shape `GET /devices` returns, resolved the same
-         *     way, so a client can drop it straight into the row it renamed rather
-         *     than re-reading the list to learn whether anything else about the
-         *     disk still holds.
+         *     A resposta tem o formato que o `GET /devices` retorna, resolvido do mesmo
+         *     jeito, para que um cliente possa colocá-la direto na linha que renomeou em
+         *     vez de reler a lista para saber se mais alguma coisa do disco ainda vale.
          */
         patch: operations["rename_device_api_v1_devices__device_id__patch"];
         trace?: never;
@@ -175,33 +171,30 @@ export interface paths {
         };
         /**
          * List one level of a device's folders, with each folder's state
-         * @description Return the folders directly inside `path`, each with its indexing state.
+         * @description Retorna as pastas logo dentro de `path`, cada uma com o seu estado de indexação.
          *
-         *     **One level per request.** Not a flat first level, which would turn
-         *     "index the wedding" into "index all of 2018" -- five hours of
-         *     inference to reach three hundred photos -- and not the whole tree,
-         *     which costs the size of the disk every time the screen opens
-         *     (RFC-031 section 8.1).
+         *     **Um nível por requisição.** Não um primeiro nível achatado, que
+         *     transformaria "indexar o casamento" em "indexar todo 2018" -- cinco horas
+         *     de inferência para chegar a trezentas fotos -- nem a árvore inteira, que
+         *     custa o tamanho do disco toda vez que a tela abre (RFC-031 §8.1).
          *
-         *     **The paths that come back are the filesystem's spelling, not the
-         *     one that was asked for.** A request for `?path=FOTOS/2018` against a
-         *     folder called `Fotos/2018` answers `"path": "Fotos/2018"`, because
-         *     that is the string the client will send in `scopes[]` and `POST
-         *     /jobs` compares path parts exactly.
+         *     **Os caminhos que voltam têm a grafia do sistema de arquivos, não a que
+         *     foi pedida.** Uma requisição de `?path=FOTOS/2018` contra uma pasta chamada
+         *     `Fotos/2018` responde `"path": "Fotos/2018"`, porque esse é o texto que o
+         *     cliente vai enviar em `scopes[]`, e o `POST /jobs` compara as partes do
+         *     caminho exatamente.
          *
-         *     **Requires the disk to be plugged in: 409, naming it.** Unlike the
-         *     rename above, this one needs bytes, and *which disk to plug in* is
-         *     more useful than being told a folder is not there.
+         *     **Exige o disco plugado: 409, dizendo qual.** Ao contrário do renomear
+         *     acima, este precisa de bytes, e *qual disco plugar* é mais útil do que
+         *     ouvir que uma pasta não está lá.
          *
-         *     No count of files on the disk and no percentage per folder. There is
-         *     no denominator, and getting one means walking the subtree -- the read
-         *     RFC-029 section 7.2 measured as dominant on a cold mechanical disk.
-         *     `indexed_images` is exact and is what to render (RFC-031 section
-         *     2.3).
+         *     Nenhuma contagem de arquivos no disco e nenhuma porcentagem por pasta. Não
+         *     há denominador, e obter um significa percorrer a subárvore -- a leitura que
+         *     o RFC-029 §7.2 mediu como dominante num disco mecânico frio.
+         *     `indexed_images` é exato e é o que desenhar (RFC-031 §2.3).
          *
-         *     Not paginated. A folder with thousands of subfolders returns all of
-         *     them; the debt is declared in RFC-031 section 8.3 and measured before
-         *     it is paid.
+         *     Sem paginação. Uma pasta com milhares de subpastas retorna todas; a dívida
+         *     está declarada no RFC-031 §8.3 e será medida antes de ser paga.
          */
         get: operations["list_device_folders_api_v1_devices__device_id__folders_get"];
         put?: never;
@@ -224,23 +217,22 @@ export interface paths {
         post?: never;
         /**
          * Remove from the index the photos a scan no longer found on a disk
-         * @description Delete the photos of this disk that a scan marked as not found (RFC-046).
+         * @description Apaga as fotos deste disco que um scan marcou como não achadas (RFC-046).
          *
-         *     **The one route that deletes rows of the index**, and only these: the
-         *     ones a scan of the whole disk did not find, and that are hidden from
-         *     every read since. The rows go in one transaction, and only then their
-         *     thumbnails, from the application's own cache. **Irreversible**, which is
-         *     why the interface asks first, with the number.
+         *     **A única rota que apaga linhas do índice**, e só estas: as que um scan do
+         *     disco inteiro não achou, e que estão escondidas de toda leitura desde
+         *     então. As linhas saem numa transação, e só depois as suas thumbnails, do
+         *     cache do próprio aplicativo. **Irreversível**, e é por isso que a interface
+         *     pergunta antes, com o número.
          *
-         *     **409 while the disk has a job**, pending or running: the job ends by
-         *     unmarking the photos it found again, and this would delete them first.
-         *     The request is legitimate and the state does not allow it -- RFC-030's
-         *     409.
+         *     **409 enquanto o disco tem um job**, pendente ou rodando: o job termina
+         *     desmarcando as fotos que achou de novo, e isto as apagaria antes. O pedido
+         *     é legítimo e o estado não o permite -- o 409 do RFC-030.
          *
-         *     **The disk does not have to be connected.** The marks came from a scan
-         *     that was checked when it ran, and forgetting what is no longer on a disk
-         *     needs nothing from the disk. Nothing in the user's file system is
-         *     touched, so none of RFC-030's guards apply.
+         *     **O disco não precisa estar conectado.** As marcas vieram de um scan que foi
+         *     verificado quando rodou, e esquecer o que não está mais num disco não
+         *     precisa de nada do disco. Nada no sistema de arquivos do usuário é tocado,
+         *     então nenhuma das guardas do RFC-030 se aplica.
          */
         delete: operations["purge_missing_images_api_v1_devices__device_id__missing_images_delete"];
         options?: never;
@@ -274,28 +266,27 @@ export interface paths {
         };
         /**
          * Every photo under the filters, by capture date, a page at a time
-         * @description *"Ver todas as fotos daqui, por data"*: the photos of a place, in time (RFC-044).
+         * @description *"Ver todas as fotos daqui, por data"*: as fotos de um lugar, no tempo (RFC-044).
          *
-         *     **No query and no model.** The use case's provider does not depend on
-         *     `get_embedding_model()`, which would import `torch` for a route that never
-         *     encodes anything; so this answers with search `unavailable`, which is the
-         *     only way to see a place's photos without the model. No 503.
+         *     **Sem consulta e sem modelo.** O provider do caso de uso não depende de
+         *     `get_embedding_model()`, que importaria o `torch` para uma rota que nunca
+         *     codifica nada; então isto responde com a busca `unavailable`, que é o único
+         *     jeito de ver as fotos de um lugar sem o modelo. Nada de 503.
          *
-         *     **Declared before `/{image_id}`**, beside `/search` and `/map`, by the rule
-         *     of this file: after it, `/images/browse` would be `image_id="browse"` and a
-         *     422. `test_browse_api.py` asks for it and requires a 200.
+         *     **Declarada antes de `/{image_id}`**, ao lado de `/search` e `/map`, pela
+         *     regra deste arquivo: depois dela, `/images/browse` seria `image_id="browse"`
+         *     e um 422. `test_browse_api.py` a pede e exige um 200.
          *
-         *     The filters are the search's, by the same dependency and the same rules and
-         *     400s. Any set is accepted, the empty one included: the whole collection by
-         *     date is a valid question. `after` is an id and never a path (RFC-030
-         *     section 5.1): the cursor's key is read from the database. An `after` that
-         *     names no row is a 404 -- the photo left the index since the page before.
+         *     Os filtros são os da busca, pela mesma dependência, com as mesmas regras e
+         *     os mesmos 400. Qualquer conjunto é aceito, o vazio inclusive: a coleção
+         *     inteira por data é uma pergunta válida. `after` é um id e nunca um caminho
+         *     (RFC-030 §5.1): a chave do cursor é lida do banco. Um `after` que não nomeia
+         *     linha nenhuma é um 404 -- a foto saiu do índice desde a página anterior.
          *
-         *     One INFO line per request, with the direction, the sizes, whether there
-         *     was a cursor, how many devices and whether there was a range or a circle --
-         *     **never the coordinates, the dates of the range or the cursor's id**: where
-         *     someone looks is the query of this route (RFC-026 section 16.1, RFC-040
-         *     section 2.7).
+         *     Uma linha INFO por requisição, com a direção, os tamanhos, se havia cursor,
+         *     quantos dispositivos e se havia faixa ou círculo -- **nunca as coordenadas,
+         *     as datas da faixa ou o id do cursor**: onde alguém olha é a consulta desta
+         *     rota (RFC-026 §16.1, RFC-040 §2.7).
          */
         get: operations["browse_images_api_v1_images_browse_get"];
         put?: never;
@@ -315,25 +306,25 @@ export interface paths {
         };
         /**
          * Where the photos are: counts per map cell inside an area
-         * @description Count the photos in a viewport, cell by cell (RFC-032 section 7).
+         * @description Conta as fotos numa viewport, célula por célula (RFC-032 §7).
          *
-         *     **Declared before `/{image_id}`, beside `/search`, and that order is the
-         *     point.** Declared after it, `/images/map` would be matched as
-         *     `image_id="map"` and refused with a 422 -- for a route that exists.
-         *     `tests/presentation/test_map_api.py` asks for it and requires a 200.
+         *     **Declarada antes de `/{image_id}`, ao lado de `/search`, e essa ordem é
+         *     a questão.** Declarada depois, `/images/map` casaria como
+         *     `image_id="map"` e seria recusada com um 422 -- para uma rota que existe.
+         *     `tests/presentation/test_map_api.py` a pede e exige um 200.
          *
-         *     **The query text is ignored -- there is no `q` -- by design.** A map
-         *     that reflected the query could only aggregate the top K, and the top 100
-         *     of a 100,000-image index says nothing about geography. The map shows
-         *     where the photos the *filters* allow are; ranking is `/search`'s job.
-         *     The filters are search's own -- `device_id`, `captured_from`,
-         *     `captured_to`, by the same parameters and the same rules -- and a circle
-         *     is not one of them: the area is the viewport.
+         *     **O texto da consulta é ignorado -- não há `q` -- por desenho.** Um mapa
+         *     que refletisse a consulta só poderia agregar o top K, e o top 100 de um
+         *     índice de 100.000 imagens não diz nada sobre geografia. O mapa mostra onde
+         *     estão as fotos que os *filtros* permitem; ordenar é trabalho do `/search`.
+         *     Os filtros são os da própria busca -- `device_id`, `captured_from`,
+         *     `captured_to`, pelos mesmos parâmetros e pelas mesmas regras -- e um
+         *     círculo não é um deles: a área é a viewport.
          *
-         *     An area whose `min` exceeds its `max` is a 400 -- on longitude that is
-         *     either swapped corners or a viewport across the 180th meridian, which
-         *     this endpoint does not support (RFC-032 section 11). A synchronous `def`,
-         *     like `/search`, because the grouping is a blocking database call.
+         *     Uma área cujo `min` excede o seu `max` é um 400 -- na longitude, isso é ou
+         *     cantos trocados ou uma viewport que cruza o meridiano 180, que este
+         *     endpoint não suporta (RFC-032 §11). Um `def` síncrono, como o `/search`,
+         *     porque o agrupamento é uma chamada bloqueante ao banco.
          */
         get: operations["map_images_api_v1_images_map_get"];
         put?: never;
@@ -353,97 +344,95 @@ export interface paths {
         };
         /**
          * Search indexed images by natural-language query
-         * @description Return the indexed images that best match `q`, most similar first.
+         * @description Retorna as imagens indexadas que melhor casam com `q`, as mais similares antes.
          *
-         *     Synchronous `def`, not `async def`, and that is a decision rather than
-         *     a default: everything below this line blocks. Encoding the query is
-         *     ~90 ms of CPU for English and ~400 ms for Portuguese including
-         *     translation (RFC-025 section 12), and the ranking is a blocking DBAPI
-         *     call. FastAPI runs a `def` endpoint in a threadpool and an `async def`
-         *     endpoint on the event loop, so declaring this coroutine would stall
-         *     every concurrent request -- `/health` included -- for the length of a
-         *     forward pass.
+         *     `def` síncrono, não `async def`, e isso é uma decisão, não um padrão: tudo
+         *     abaixo desta linha bloqueia. Codificar a consulta são ~90 ms de CPU em
+         *     inglês e ~400 ms em português, com a tradução (RFC-025 §12), e o ranking é
+         *     uma chamada DBAPI bloqueante. O FastAPI roda um endpoint `def` num
+         *     threadpool e um endpoint `async def` no event loop, então declarar isto
+         *     como corrotina travaria toda requisição concorrente -- `/health` inclusive
+         *     -- pela duração de um forward pass.
          *
-         *     `limit` carries no `ge`/`le` constraint on purpose. `MAX_SEARCH_LIMIT`
-         *     already states that policy once, in `search_images.py`, with a comment
-         *     saying it is application policy rather than a database bound. Copying
-         *     `100` into this signature would create a second copy that drifts
-         *     silently: raising the constant to 200 would leave the endpoint
-         *     rejecting 101 with a 422 while every use-case test still passed. The
-         *     cost is that an out-of-range limit comes back as 400 instead of 422,
-         *     which is the more accurate status anyway -- `limit=101` is a
-         *     well-formed request that policy refuses.
+         *     `limit` não leva restrição `ge`/`le` de propósito. `MAX_SEARCH_LIMIT` já
+         *     enuncia essa política uma vez, em `search_images.py`, com um comentário
+         *     dizendo que é política da aplicação, e não um limite do banco. Copiar
+         *     `100` para esta assinatura criaria uma segunda cópia que diverge em
+         *     silêncio: subir a constante para 200 deixaria o endpoint rejeitando 101
+         *     com um 422 enquanto todo teste de caso de uso continuaria passando. O custo
+         *     é que um limite fora da faixa volta como 400 em vez de 422, que é o status
+         *     mais preciso de todo modo -- `limit=101` é uma requisição bem formada que a
+         *     política recusa.
          *
-         *     The default is resolved here rather than left to the use case so that
-         *     the response can echo the value actually applied. Nothing is
-         *     duplicated by doing so: the resolved number is what gets passed to
-         *     `execute()`, so what the client is told and what the search used
-         *     cannot disagree.
+         *     O padrão é resolvido aqui, em vez de deixado para o caso de uso, para que a
+         *     resposta possa ecoar o valor de fato aplicado. Nada é duplicado com isso: o
+         *     número resolvido é o que é passado a `execute()`, então o que o cliente
+         *     ouve e o que a busca usou não podem discordar.
          *
-         *     Neither the query text nor the embedding is logged (RFC-026 section
-         *     16.1). Query length is enough to correlate a slow request with a long
-         *     query; the text is a user's search history, and this is a local-first
-         *     product whose premise is that it stays theirs. The device count is
-         *     logged rather than the ids for the same reason -- how many disks a
-         *     search was narrowed to is enough to explain a fast or an empty
-         *     response.
+         *     Nem o texto da consulta nem o embedding vão para o log (RFC-026 §16.1). O
+         *     tamanho da consulta basta para correlacionar uma requisição lenta com uma
+         *     consulta longa; o texto é o histórico de buscas de um usuário, e este é um
+         *     produto local-first cuja premissa é que ele continue sendo dele. A contagem
+         *     de dispositivos vai para o log, e não os ids, pela mesma razão -- a quantos
+         *     discos uma busca foi restrita basta para explicar uma resposta rápida ou
+         *     vazia.
          *
-         *     `device_id` repeats for several devices (`?device_id=A&device_id=B`)
-         *     and is omitted for all of them. Omitted must mean *all*, never *none*:
-         *     an absent parameter that produced an empty `IN ()` would turn every
-         *     unfiltered search into zero results, so the empty case is carried as
-         *     an empty `SearchFilters` that adds no clause at all.
+         *     `device_id` se repete para vários dispositivos (`?device_id=A&device_id=B`)
+         *     e é omitido para todos eles. Omitido tem de significar *todos*, nunca
+         *     *nenhum*: um parâmetro ausente que produzisse um `IN ()` vazio
+         *     transformaria toda busca sem filtro em zero resultados, então o caso vazio
+         *     é levado como um `SearchFilters` vazio, que não acrescenta cláusula
+         *     nenhuma.
          *
-         *     An unknown device id is not rejected. The filter restricts a
-         *     candidate set rather than asserting that its members exist, so a
-         *     search naming a disk the system has never seen correctly matches
-         *     nothing (RFC-027 section 9). Whether the named disks are *connected*
-         *     is not asked here either, and could not usefully be: search ranks what
-         *     is indexed, and a hit on a disk in a drawer is the answer the product
-         *     exists to give.
+         *     Um id de dispositivo desconhecido não é rejeitado. O filtro restringe um
+         *     conjunto de candidatos em vez de afirmar que os seus membros existem, então
+         *     uma busca que nomeia um disco que o sistema nunca viu corretamente não
+         *     casa com nada (RFC-027 §9). Se os discos nomeados estão *conectados*
+         *     também não é perguntado aqui, e nem poderia ser com proveito: a busca
+         *     ordena o que está indexado, e um resultado num disco na gaveta é a resposta
+         *     que o produto existe para dar.
          *
-         *     Since RFC-030 every hit carries its device, its `relative_path`, and
-         *     its `absolute_path` when the disk is plugged in. Resolving that is a
-         *     second use case called after the search rather than a step inside it:
-         *     where a file is has nothing to do with how well it matched, and
-         *     `GET /images/{id}` needs the same answer with no search at all. The
-         *     operating system is asked once per distinct disk on the page, not once
-         *     per hit (RFC-030 section 4.2).
+         *     Desde o RFC-030, todo resultado traz o seu dispositivo, o seu
+         *     `relative_path` e o seu `absolute_path` quando o disco está plugado.
+         *     Resolver isso é um segundo caso de uso chamado depois da busca, e não um
+         *     passo dentro dela: onde um arquivo está não tem nada a ver com o quanto ele
+         *     casou, e `GET /images/{id}` precisa da mesma resposta sem busca nenhuma. O
+         *     sistema operacional é perguntado uma vez por disco distinto na página, não
+         *     uma vez por resultado (RFC-030 §4.2).
          *
-         *     `captured_from` / `captured_to` (RFC-028) are the two ends of a
-         *     half-open range, `[from, to)`, and either may be sent alone. An
-         *     omitted end becomes `datetime.min` or `datetime.max` *here*, so that
-         *     `DateRange` stays a value with two required bounds instead of growing
-         *     a `None` every consumer below would have to handle. Omitting both is
-         *     not an unbounded range; it is no date filter at all, because
-         *     `[min, max)` would silently drop every photo with an unknown date.
+         *     `captured_from` / `captured_to` (RFC-028) são as duas pontas de uma faixa
+         *     semiaberta, `[from, to)`, e qualquer uma pode ser enviada sozinha. Uma
+         *     ponta omitida vira `datetime.min` ou `datetime.max` *aqui*, para que
+         *     `DateRange` continue um valor com dois limites obrigatórios em vez de
+         *     ganhar um `None` que todo consumidor abaixo teria de tratar. Omitir as duas
+         *     não é uma faixa sem limites; é nenhum filtro de data, porque `[min, max)`
+         *     descartaria em silêncio toda foto com data desconhecida.
          *
-         *     **A bound with a zone or an offset is refused, never converted.**
-         *     Pydantic parses `2018-01-01T00:00:00Z`, `...-03:00`, and even a bare
-         *     Unix timestamp into an aware `datetime`, and `DateRange` rejects it
-         *     with a `DomainError`, which the app-wide handler answers with 400 and
-         *     a message naming the zone. Converting would have to pick a zone to
-         *     convert *into*, and the capture date is camera-local precisely
-         *     because no such zone exists (RFC-028 section 5). An inverted range
-         *     is refused the same way. A value that is not a date at all is a 422
-         *     from FastAPI, as for any malformed parameter.
+         *     **Um limite com fuso ou offset é recusado, nunca convertido.** O Pydantic
+         *     interpreta `2018-01-01T00:00:00Z`, `...-03:00` e até um timestamp Unix puro
+         *     como um `datetime` aware, e `DateRange` o rejeita com um `DomainError`, que
+         *     o handler global do app responde com 400 e uma mensagem nomeando o fuso.
+         *     Converter exigiria escolher um fuso *para o qual* converter, e a data de
+         *     captura é local da câmera justamente porque esse fuso não existe
+         *     (RFC-028 §5). Uma faixa invertida é recusada do mesmo jeito. Um valor que
+         *     nem é data é um 422 do FastAPI, como para qualquer parâmetro malformado.
          *
-         *     `excluded_unknown_date` is only computed when a range was sent. It is
-         *     a second query, and an unfiltered search must not pay for it.
+         *     `excluded_unknown_date` só é calculado quando uma faixa foi enviada. É uma
+         *     segunda consulta, e uma busca sem filtro não deve pagar por ela.
          *
-         *     `near_lat` / `near_lon` / `radius_m` (RFC-032 section 6) are **all or
-         *     nothing**: two of three is a malformed request and answers 400 naming
-         *     what is missing. Completing an absent radius with a default would invent
-         *     the user's intention in exactly the quantity RFC-032 section 2.2 showed
-         *     is critical. A coordinate off the planet, a radius that is not positive,
-         *     or one below `settings.min_radius_m` is a 400 with the domain's message;
-         *     a value that is not a number is FastAPI's 422. Metres, never kilometres:
-         *     one unit across the whole stack. `excluded_unknown_position` follows the
-         *     rule of its date twin -- computed only when a circle was sent.
+         *     `near_lat` / `near_lon` / `radius_m` (RFC-032 §6) são **tudo ou nada**:
+         *     dois de três é uma requisição malformada e responde 400 nomeando o que
+         *     falta. Completar um raio ausente com um padrão inventaria a intenção do
+         *     usuário exatamente na grandeza que o RFC-032 §2.2 mostrou ser crítica. Uma
+         *     coordenada fora do planeta, um raio que não é positivo, ou um abaixo de
+         *     `settings.min_radius_m` é um 400 com a mensagem do domínio; um valor que
+         *     não é número é o 422 do FastAPI. Metros, nunca quilômetros: uma unidade
+         *     na stack inteira. `excluded_unknown_position` segue a regra do seu gêmeo
+         *     de data -- calculado só quando um círculo foi enviado.
          *
-         *     Neither the query nor the coordinates are logged: where a user searched
-         *     near is as private as what they searched for (RFC-026 section 16.1), so
-         *     the log says only that a circle was present.
+         *     Nem a consulta nem as coordenadas vão para o log: perto de onde um usuário
+         *     buscou é tão privado quanto o que ele buscou (RFC-026 §16.1), então o log
+         *     diz só que havia um círculo.
          */
         get: operations["search_images_api_v1_images_search_get"];
         put?: never;
@@ -465,27 +454,28 @@ export interface paths {
         put?: never;
         /**
          * Search indexed images by an example picture
-         * @description Rank the index against a picture the user dropped (RFC-038 section 4.2).
+         * @description Ordena o índice contra uma imagem que o usuário soltou (RFC-038 §4.2).
          *
-         *     `execute_similar_to()`, as the CLI's `--image` runs it, over the same
-         *     transient `Image` (`query_image()`): the picture's own CLIP embedding is
-         *     the query. It needs the image encoder, and not the translator.
+         *     `execute_similar_to()`, como o `--image` da CLI o roda, sobre a mesma
+         *     `Image` transitória (`query_image()`): o próprio embedding CLIP da imagem é
+         *     a consulta. Precisa do codificador de imagem, e não do tradutor.
          *
-         *     **The bytes are the body, and no path comes in** (RFC-030 section 5.1).
-         *     `query_image_file` refuses a wrong type (415), more than 50 MB (413) and
-         *     a picture Pillow cannot decode (400), in that order and before the use
-         *     case is composed -- so a refused upload never imports `torch` -- and
-         *     deletes its temporary file however the request ends.
+         *     **Os bytes são o corpo, e nenhum caminho entra** (RFC-030 §5.1).
+         *     `query_image_file` recusa um tipo errado (415), mais de 50 MB (413) e uma
+         *     imagem que o Pillow não consegue decodificar (400), nessa ordem e antes de
+         *     o caso de uso ser composto -- então um upload recusado nunca importa o
+         *     `torch` -- e apaga o seu arquivo temporário como quer que a requisição
+         *     termine.
          *
-         *     **Declared beside `/search`, before `/{image_id}`**, by the rule of this
-         *     file. A `POST` of two segments could only collide with
-         *     `/{image_id}/reveal`, and `by-image` is not `reveal`; it is here for the
-         *     reading. `test_search_by_image_api.py` asks for it and requires a 200.
+         *     **Declarada ao lado de `/search`, antes de `/{image_id}`**, pela regra
+         *     deste arquivo. Um `POST` de dois segmentos só poderia colidir com
+         *     `/{image_id}/reveal`, e `by-image` não é `reveal`; está aqui pela leitura.
+         *     `test_search_by_image_api.py` a pede e exige um 200.
          *
-         *     The filters are `/search`'s, by the same parameters. Nothing of the
-         *     picture is logged but its size and type, and of the filters only which
-         *     are present (RFC-026 section 16.1). The response is `/search`'s without a
-         *     `query`: the picture is not indexed, so there is nothing to take out.
+         *     Os filtros são os do `/search`, pelos mesmos parâmetros. Nada da imagem vai
+         *     para o log além do tamanho e do tipo, e dos filtros só quais estão
+         *     presentes (RFC-026 §16.1). A resposta é a do `/search` sem `query`: a
+         *     imagem não está indexada, então não há nada a tirar.
          */
         post: operations["search_by_image_api_v1_images_search_by_image_post"];
         delete?: never;
@@ -503,15 +493,15 @@ export interface paths {
         };
         /**
          * Describe one indexed image, and where it is right now
-         * @description Return one image: its device, its paths, and whether the disk is here.
+         * @description Retorna uma imagem: o seu dispositivo, os seus caminhos e se o disco está aqui.
          *
-         *     **200 when the disk is unplugged** (RFC-030 section 4.2). The row
-         *     exists and this describes the row; `device.connected: false` with
-         *     `device.label` is the answer "it is on HD3", not an error.
+         *     **200 quando o disco está desplugado** (RFC-030 §4.2). A linha existe e
+         *     isto descreve a linha; `device.connected: false` com `device.label` é a
+         *     resposta "está no HD3", não um erro.
          *
-         *     Declared after `/search` and `/map`, and that order is load-bearing:
-         *     routes match in declaration order, and `/{image_id}` would otherwise
-         *     capture either and refuse it as a malformed UUID.
+         *     Declarada depois de `/search` e `/map`, e essa ordem importa: as rotas
+         *     casam na ordem de declaração, e `/{image_id}` de outro modo capturaria
+         *     qualquer uma das duas e a recusaria como UUID malformado.
          */
         get: operations["get_image_api_v1_images__image_id__get"];
         put?: never;
@@ -533,24 +523,24 @@ export interface paths {
         put?: never;
         /**
          * Open the file manager on this machine with the image selected
-         * @description Ask Explorer to show the file, and answer once that has been launched.
+         * @description Pede ao Explorer que mostre o arquivo, e responde assim que ele foi lançado.
          *
-         *     **The request carries an id and nothing else** -- no body, no path, no
-         *     header the handler reads (RFC-030 section 5.1). The server finds the
-         *     row, resolves where its disk is mounted now, and builds the path
-         *     itself, so there is no client string in which to smuggle `..` or a
-         *     UNC share.
+         *     **A requisição leva um id e nada mais** -- nenhum corpo, nenhum caminho,
+         *     nenhum header que o handler leia (RFC-030 §5.1). O servidor acha a linha,
+         *     resolve onde o disco dela está montado agora e monta o caminho ele mesmo,
+         *     então não há texto do cliente em que contrabandear `..` ou um
+         *     compartilhamento UNC.
          *
-         *     **`POST`, because this has a side effect in the physical world**
-         *     (RFC-030 section 5.2). A `GET` could be prefetched by anything that
-         *     follows links, and a page of ten results would open ten windows.
+         *     **`POST`, porque isto tem um efeito colateral no mundo físico**
+         *     (RFC-030 §5.2). Um `GET` poderia ser pré-carregado por qualquer coisa que
+         *     segue links, e uma página de dez resultados abriria dez janelas.
          *
-         *     The two guards are dependencies on the decorator, which FastAPI
-         *     resolves before `use_case`: a refused request never opens a database
-         *     session or enumerates a volume. See `local_file_actions.py`.
+         *     As duas guardas são dependências no decorator, que o FastAPI resolve antes
+         *     de `use_case`: uma requisição recusada nunca abre uma sessão de banco nem
+         *     enumera um volume. Veja `local_file_actions.py`.
          *
-         *     204 means the process was launched. Explorer's exit status means
-         *     nothing, so nothing here can say that a window actually opened.
+         *     204 significa que o processo foi lançado. O status de saída do Explorer não
+         *     significa nada, então nada aqui pode dizer que uma janela de fato abriu.
          */
         post: operations["reveal_image_api_v1_images__image_id__reveal_post"];
         delete?: never;
@@ -568,23 +558,23 @@ export interface paths {
         };
         /**
          * The indexed images that look most like this one
-         * @description *"Parecidas com esta"*: rank the index against a photo it holds (RFC-038).
+         * @description *"Parecidas com esta"*: ordena o índice contra uma foto que ele tem (RFC-038).
          *
-         *     **The stored embedding, and no model** (section 4.1). The vector indexing
-         *     paid for is read back and ranked with the same `search_similar()` as a
-         *     text query, so this answers with the photo's disk in a drawer, with
-         *     search `loading` or `unavailable`, and without decoding a pixel. The use
-         *     case's provider does not depend on `get_embedding_model()`, which would
-         *     import `torch` for a route that never encodes anything.
+         *     **O embedding armazenado, e nenhum modelo** (§4.1). O vetor que a indexação
+         *     pagou é lido de volta e ordenado com o mesmo `search_similar()` de uma
+         *     consulta de texto, então isto responde com o disco da foto na gaveta, com
+         *     a busca `loading` ou `unavailable`, e sem decodificar um pixel. O provider
+         *     do caso de uso não depende de `get_embedding_model()`, que importaria o
+         *     `torch` para uma rota que nunca codifica nada.
          *
-         *     The photo itself is not in the results -- it would come first, with a
-         *     similarity of 1 -- and its copies are, near the top: the same bytes on
-         *     another disk answer *"where else is this photo"*. The filters are
-         *     `/search`'s, by the same parameters and rules.
+         *     A própria foto não está nos resultados -- viria primeiro, com similaridade
+         *     1 -- e as suas cópias estão, perto do topo: os mesmos bytes em outro disco
+         *     respondem *"onde mais está esta foto"*. Os filtros são os do `/search`,
+         *     pelos mesmos parâmetros e regras.
          *
-         *     404 for an id that names no row, 409 for a row without an embedding: the
-         *     second request succeeds once the photo is indexed. Nothing of the filters
-         *     is logged but which are present.
+         *     404 para um id que não nomeia linha nenhuma, 409 para uma linha sem
+         *     embedding: o segundo pedido dá certo assim que a foto é indexada. Nada dos
+         *     filtros vai para o log além de quais estão presentes.
          */
         get: operations["similar_images_api_v1_images__image_id__similar_get"];
         put?: never;
@@ -604,45 +594,44 @@ export interface paths {
         };
         /**
          * The image's thumbnail, from the application's cache
-         * @description Serve the thumbnail, or `304` when the client's copy is still right.
+         * @description Serve a thumbnail, ou `304` quando a cópia do cliente ainda está certa.
          *
-         *     **Served whether or not the photo's disk is plugged in.** Thumbnails live
-         *     in the application's own cache, on a disk that is always there, and
-         *     that is the only way a user can *see* a photo whose disk is in a drawer
-         *     (RFC-030 section 4.1).
+         *     **Servida com ou sem o disco da foto plugado.** As thumbnails vivem no
+         *     cache do próprio aplicativo, num disco que está sempre lá, e esse é o único
+         *     jeito de um usuário *ver* uma foto cujo disco está na gaveta
+         *     (RFC-030 §4.1).
          *
-         *     **Not a `StaticFiles` mount.** A mount would serve by file name, with
-         *     its own validators, and could not answer 404 for an id that has no
-         *     thumbnail row or check `If-None-Match` against the photo's content hash
-         *     before touching the disk.
+         *     **Não é um mount de `StaticFiles`.** Um mount serviria pelo nome do
+         *     arquivo, com os seus próprios validadores, e não conseguiria responder 404
+         *     para um id sem linha de thumbnail nem conferir o `If-None-Match` contra o
+         *     hash de conteúdo da foto antes de tocar no disco.
          *
-         *     **`ETag` is the photo's content hash, and `Cache-Control` is
-         *     `no-cache` -- not `max-age=31536000`, which RFC-030 section 7.2 as
-         *     proposed paired with it.** That pairing reintroduces the bug the
-         *     section was correcting. A response with a year of freshness is served
-         *     from the browser's cache without asking the server at all (RFC 9111
-         *     section 4.2), so the `ETag` would never be sent back and a photo
-         *     overwritten in place -- same path, same id -- would keep its old
-         *     thumbnail for a year, which is exactly the failure `immutable` had.
-         *     `no-cache` stores the thumbnail and revalidates it on every use; a
-         *     current copy costs a `304` with no body and no file read -- measured
-         *     at 6.6 ms median in-process against PostgreSQL, against 8.6 ms for
-         *     sending the 45 KB file (`experiments/rfc-030-file-access/
-         *     measure_reveal_and_revalidation.log`). Most of that is the metadata
-         *     read, so revalidation saves bytes more than time on a local API, and
-         *     a page of fifty thumbnails pays it fifty times. That is the declared
-         *     price of never showing a stale picture. `private` keeps a shared
-         *     cache between the user and their own machine, should there ever be
-         *     one, from keeping their photos.
+         *     **O `ETag` é o hash de conteúdo da foto, e o `Cache-Control` é `no-cache`
+         *     -- não `max-age=31536000`, que o RFC-030 §7.2, como proposto, combinava com
+         *     ele.** Essa combinação reintroduz o bug que a seção estava corrigindo. Uma
+         *     resposta com um ano de validade é servida do cache do navegador sem
+         *     perguntar nada ao servidor (RFC 9111 §4.2), então o `ETag` nunca seria
+         *     reenviado, e uma foto sobrescrita no lugar -- mesmo caminho, mesmo id --
+         *     manteria a thumbnail antiga por um ano, que é exatamente a falha que o
+         *     `immutable` tinha. `no-cache` guarda a thumbnail e a revalida a cada uso;
+         *     uma cópia atual custa um `304` sem corpo e sem leitura de arquivo --
+         *     medido em 6,6 ms de mediana in-process contra o PostgreSQL, contra 8,6 ms
+         *     para enviar o arquivo de 45 KB (`experiments/rfc-030-file-access/
+         *     measure_reveal_and_revalidation.log`). A maior parte disso é a leitura dos
+         *     metadados, então a revalidação economiza mais bytes que tempo numa API
+         *     local, e uma página de cinquenta thumbnails a paga cinquenta vezes. Esse é
+         *     o preço declarado de nunca mostrar uma imagem velha. `private` impede que
+         *     um cache compartilhado entre o usuário e a própria máquina dele, se algum
+         *     dia houver um, guarde as suas fotos.
          *
-         *     **A row with no content hash gets `no-store`.** Rows indexed before
-         *     RFC-024 have nothing to validate against, and a cache entry that can
-         *     never be revalidated is one that silently always misses.
+         *     **Uma linha sem hash de conteúdo recebe `no-store`.** Linhas indexadas
+         *     antes do RFC-024 não têm contra o que validar, e uma entrada de cache que
+         *     nunca pode ser revalidada é uma que sempre erra em silêncio.
          *
-         *     `If-None-Match` is parsed here because it is HTTP, and matched in the
-         *     use case because "is my copy current" is not. Weak tags compare
-         *     weakly, as RFC 9110 section 13.1.2 requires for this header, and `*`
-         *     is not honoured -- no browser sends it on a `GET`.
+         *     `If-None-Match` é interpretado aqui porque é HTTP, e comparado no caso de
+         *     uso porque "a minha cópia está atual" não é. Tags fracas comparam de modo
+         *     fraco, como o RFC 9110 §13.1.2 exige para este header, e `*` não é
+         *     atendido -- nenhum navegador o envia num `GET`.
          */
         get: operations["get_thumbnail_api_v1_images__image_id__thumbnail_get"];
         put?: never;
@@ -662,49 +651,49 @@ export interface paths {
         };
         /**
          * List indexing jobs, newest first
-         * @description Return the history a UI shows beside a disk.
+         * @description Devolve o histórico que uma UI mostra ao lado de um disco.
          *
-         *     Both filters are optional, and an omitted one means *all*, never
-         *     *none* -- the trap the search route's `device_id` had to avoid, where
-         *     an absent parameter turned into an empty `IN ()` and every unfiltered
-         *     request returned nothing.
+         *     Os dois filtros são opcionais, e um omitido quer dizer *todos*, nunca
+         *     *nenhum* -- a armadilha que o `device_id` da rota de busca teve de
+         *     evitar, em que um parâmetro ausente virava um `IN ()` vazio e toda
+         *     requisição sem filtro não devolvia nada.
          *
-         *     An unknown device id is not rejected. The filter narrows a set rather
-         *     than asserting that its members exist, so a list for a disk the system
-         *     has never seen correctly comes back empty (the same reasoning RFC-027
-         *     section 9 applies to search filters).
+         *     Um id de dispositivo desconhecido não é recusado. O filtro estreita um
+         *     conjunto em vez de afirmar que seus membros existem, então a lista de
+         *     um disco que o sistema nunca viu volta vazia, e corretamente (o mesmo
+         *     raciocínio que o RFC-027 §9 aplica aos filtros da busca).
          *
-         *     `job_status` is named `status` on the wire. The parameter cannot be
-         *     called `status` in this signature because that is FastAPI's status
-         *     module, imported above and used in every decorator here.
+         *     `job_status` se chama `status` na requisição. O parâmetro não pode se
+         *     chamar `status` nesta assinatura porque esse é o módulo de status do
+         *     FastAPI, importado acima e usado em todo decorator daqui.
          */
         get: operations["list_jobs_api_v1_jobs_get"];
         put?: never;
         /**
          * Queue an indexing run for a device, or for folders on it
-         * @description Queue a job and answer immediately with what was queued.
+         * @description Enfileira um job e responde na hora com o que foi enfileirado.
          *
-         *     **202, not 201.** 201 asserts that the resource the client asked for
-         *     exists and is ready. What exists is the *intention* to index; the
-         *     result does not exist yet and will take minutes or hours. 202
-         *     describes that, and the difference is observable by the client that
-         *     has to decide whether to poll (RFC-029 section 7.1).
+         *     **202, não 201.** 201 afirma que o recurso pedido pelo cliente existe
+         *     e está pronto. O que existe é a *intenção* de indexar; o resultado
+         *     ainda não existe e vai levar minutos ou horas. 202 descreve isso, e a
+         *     diferença é observável pelo cliente que precisa decidir se vai
+         *     consultar de novo (RFC-029 §7.1).
          *
-         *     Synchronous `def`, not `async def`, following RFC-026 section 9:
-         *     everything below this line is a blocking DBAPI call, and an `async
-         *     def` would run it on the event loop and stall every concurrent
-         *     request -- `/health` included -- for its duration. The work itself is
-         *     somebody else's process, so what blocks here is one `INSERT`.
+         *     `def` síncrono, não `async def`, segundo o RFC-026 §9: tudo abaixo
+         *     desta linha é uma chamada DBAPI bloqueante, e um `async def` a rodaria
+         *     no event loop e travaria toda requisição concorrente -- `/health`
+         *     inclusive -- enquanto ela durasse. O trabalho em si é de outro
+         *     processo, então o que bloqueia aqui é um `INSERT`.
          *
-         *     The response echoes the **normalised** scopes, which may not be the
-         *     ones that were sent: `2018` and `2018/junho` are one folder to walk,
-         *     and a client that asked for both should be able to see that it got
-         *     one. `[]` means the whole device.
+         *     A resposta devolve os escopos **normalizados**, que podem não ser os
+         *     que foram enviados: `2018` e `2018/junho` são uma pasta só a
+         *     percorrer, e um cliente que pediu as duas deve poder ver que recebeu
+         *     uma. `[]` quer dizer o dispositivo inteiro.
          *
-         *     No `try/except`. A device that does not exist, a disk in a drawer, a
-         *     folder that is not there and a disk that is already busy are all
-         *     domain errors, and `error_handlers.py` turns each into 404, 409, 400
-         *     and 409 without this function knowing any of those numbers.
+         *     Sem `try/except`. Um dispositivo que não existe, um disco na gaveta,
+         *     uma pasta que não está lá e um disco já ocupado são todos erros de
+         *     domínio, e `error_handlers.py` transforma cada um em 404, 409, 400 e
+         *     409 sem que esta função conheça nenhum desses números.
          */
         post: operations["create_job_api_v1_jobs_post"];
         delete?: never;
@@ -722,18 +711,18 @@ export interface paths {
         };
         /**
          * Read one indexing job's progress
-         * @description Return the job, or 404 when the id names nothing.
+         * @description Devolve o job, ou 404 quando o id não aponta para nada.
          *
-         *     Polling, not WebSocket or SSE (RFC-029 section 7.2). The client is a
-         *     local UI asking for a number that moves every few seconds; a
-         *     persistent channel would add connection management, reconnection and
-         *     an asynchronous path through the API in order to save requests that
-         *     cost almost nothing on localhost. It is future work if a measurement
-         *     ever shows the cost.
+         *     Polling, não WebSocket nem SSE (RFC-029 §7.2). O cliente é uma UI
+         *     local pedindo um número que muda a cada poucos segundos; um canal
+         *     persistente acrescentaria gestão de conexão, reconexão e um caminho
+         *     assíncrono pela API para economizar requisições que custam quase nada
+         *     em localhost. Fica como trabalho futuro, se uma medição algum dia
+         *     mostrar o custo.
          *
-         *     A missing job is 404 rather than an empty 200, because "queued, not
-         *     started" and "that id was never a job" are the two things a polling
-         *     client most needs to tell apart.
+         *     Um job ausente é 404, e não um 200 vazio, porque "enfileirado, não
+         *     iniciado" e "esse id nunca foi um job" são as duas coisas que um
+         *     cliente que consulta periodicamente mais precisa distinguir.
          */
         get: operations["get_job_api_v1_jobs__job_id__get"];
         put?: never;
@@ -755,24 +744,24 @@ export interface paths {
         put?: never;
         /**
          * Ask an indexing job to stop
-         * @description Cancel a queued job outright, or ask a running one to wind up.
+         * @description Cancela de vez um job enfileirado, ou pede a um em execução que encerre.
          *
-         *     **202, because cancelling a running job is also a request rather than
-         *     an outcome.** The worker owns every transition out of `running`: it
-         *     reads the flag between batches, finishes the batch in flight -- up to
-         *     `settings.batch_size` images of already-paid-for inference that
-         *     aborting would throw away for nothing -- writes its checkpoint, and
-         *     leaves. So the response can say the stop was recorded, and a client
-         *     watching `status` sees `running` with `cancel_requested` true until it
-         *     actually stops.
+         *     **202, porque cancelar um job em execução também é um pedido, e não um
+         *     resultado.** O worker é dono de toda transição para fora de `running`:
+         *     ele lê a flag entre lotes, termina o lote em andamento -- até
+         *     `settings.batch_size` imagens de inferência já paga, que abortar
+         *     jogaria fora por nada --, grava o checkpoint e sai. Então a resposta
+         *     pode dizer que a parada foi registrada, e um cliente que acompanha o
+         *     `status` vê `running` com `cancel_requested` verdadeiro até o job de
+         *     fato parar.
          *
-         *     A queued job has nobody to ask and is cancelled immediately, which the
-         *     same response shape reports.
+         *     Um job enfileirado não tem a quem pedir e é cancelado na hora, o que o
+         *     mesmo formato de resposta informa.
          *
-         *     Cancelling a job that has already finished is a 409, not a quiet
-         *     success: the caller is acting on a wrong belief about the system and a
-         *     202 would confirm it (RFC-029 section 8). Whether a cancellation is
-         *     legal is `IndexingJob`'s decision, not this route's.
+         *     Cancelar um job que já terminou é um 409, não um sucesso silencioso:
+         *     quem chama age com uma crença errada sobre o sistema, e um 202 a
+         *     confirmaria (RFC-029 §8). Se um cancelamento é válido é decisão de
+         *     `IndexingJob`, não desta rota.
          */
         post: operations["cancel_job_api_v1_jobs__job_id__cancel_post"];
         delete?: never;
@@ -790,23 +779,22 @@ export interface paths {
         };
         /**
          * List the volumes attached to this machine right now
-         * @description Answer *what is plugged in, and what of it do we already know?*
+         * @description Responde *o que está plugado, e o que disso já conhecemos?*
          *
-         *     The question that precedes registering a disk, and the reason the
-         *     registration below never needs a path: this hands the client an
-         *     opaque identity for each volume, and the client hands one back.
+         *     A pergunta que precede o cadastro de um disco, e a razão de o cadastro
+         *     abaixo nunca precisar de um caminho: isto entrega ao cliente uma
+         *     identidade opaca para cada volume, e o cliente devolve uma.
          *
-         *     **Deliberately the expensive route of the five.** Each volume costs
-         *     an extra platform call for its label and capacity, and reading a
-         *     capacity can spin up an external disk that had parked its heads. That
-         *     is why `VolumeCatalog` has two methods and why `GET /devices` above
-         *     uses the cheap one -- folding the detail into the enumeration would
-         *     put this cost in front of every search in the product (RFC-031
-         *     section 4.1).
+         *     **Deliberadamente a rota cara das cinco.** Cada volume custa uma chamada
+         *     extra à plataforma pelo rótulo e pela capacidade, e ler uma capacidade pode
+         *     fazer girar um disco externo que tinha estacionado as cabeças. É por isso
+         *     que o `VolumeCatalog` tem dois métodos e que o `GET /devices` acima usa o
+         *     barato -- juntar o detalhe à enumeração poria esse custo na frente de toda
+         *     busca do produto (RFC-031 §4.1).
          *
-         *     Volumes the platform refuses to describe are skipped, not reported as
-         *     errors: an empty optical drive is no reason to stop listing the disks
-         *     that answered (RFC-027 section 7).
+         *     Volumes que a plataforma se recusa a descrever são pulados, não informados
+         *     como erros: um drive óptico vazio não é razão para parar de listar os discos
+         *     que responderam (RFC-027 §7).
          */
         get: operations["list_volumes_api_v1_volumes_get"];
         put?: never;
@@ -826,7 +814,7 @@ export interface paths {
         };
         /**
          * Health Check
-         * @description Return the application health status based on database connectivity.
+         * @description Devolve o estado de saúde da aplicação, a partir da conexão com o banco.
          */
         get: operations["health_check_health_get"];
         put?: never;
@@ -843,13 +831,12 @@ export interface components {
     schemas: {
         /**
          * ActiveJobSchema
-         * @description The job currently holding a device, as a sidebar needs it.
+         * @description O job que segura um dispositivo agora, como a barra lateral precisa dele.
          *
-         *     Two fields, because two is what the sidebar draws: something is
-         *     happening, and whether it has started. A client that wants counters
-         *     polls `GET /api/v1/jobs/{id}`, which is the route that publishes
-         *     them, rather than having them duplicated into every device list
-         *     (RFC-031 section 4).
+         *     Dois campos, porque dois é o que a barra lateral desenha: algo está
+         *     acontecendo, e se já começou. Um cliente que quer contadores consulta
+         *     `GET /api/v1/jobs/{id}`, que é a rota que os publica, em vez de tê-los
+         *     duplicados em toda lista de dispositivos (RFC-031 §4).
          */
         ActiveJobSchema: {
             /**
@@ -863,12 +850,12 @@ export interface components {
         };
         /**
          * BrowseResponseSchema
-         * @description One page of every photo under the filters, by capture date.
+         * @description Uma página de todas as fotos sob os filtros, por data de captura.
          *
-         *     `limit` echoes the page size applied, as the searches do (RFC-026).
-         *     `summary` is the first page's and `null` on the pages after it, so that
-         *     inside it `null` keeps meaning "there was no such filter" and never
-         *     "this page did not count".
+         *     `limit` devolve o tamanho de página aplicado, como as buscas fazem
+         *     (RFC-026). `summary` é da primeira página e `null` nas páginas seguintes,
+         *     para que, dentro dele, `null` continue querendo dizer "não houve esse
+         *     filtro", e nunca "esta página não contou".
          */
         BrowseResponseSchema: {
             /**
@@ -893,7 +880,7 @@ export interface components {
         };
         /**
          * CapabilitiesSchema
-         * @description What the client is allowed to assume about this server.
+         * @description O que o cliente pode supor sobre este servidor.
          */
         CapabilitiesSchema: {
             /**
@@ -929,44 +916,43 @@ export interface components {
         };
         /**
          * CaptureSource
-         * @description One link of the RFC-028 section 4 fallback chain, or the end of it.
+         * @description Um elo da cadeia de recuo do RFC-028 §4, ou o fim dela.
          *
-         *     A `StrEnum` persisted into a plain `String` column rather than a native
-         *     PostgreSQL `ENUM`. Adding a member -- `gps_derived`, `filename_parsed`,
-         *     the sources RFC-028 section 11 anticipates -- would then cost a
-         *     migration for no benefit a closed database type actually provides here.
+         *     Um `StrEnum` persistido numa coluna `String` simples, e não num `ENUM`
+         *     nativo do PostgreSQL. Acrescentar um membro -- `gps_derived`,
+         *     `filename_parsed`, as fontes que o RFC-028 §11 antecipa -- custaria então
+         *     uma migration sem nenhum benefício que um tipo fechado do banco de fato
+         *     dê aqui.
          *
-         *     **There is no `mtime` member, and there must never be one.** RFC-028
-         *     section 4 is a deliberate reversal of the draft that ended the chain on
-         *     the filesystem timestamp: `mtime` is systematically wrong for a
-         *     collection whose life consists of being copied from disk to disk
-         *     (RFC-028 section 2.1), and a member for it would make that wrong date
-         *     look like one more legitimate source.
+         *     **Não há membro `mtime`, e nunca pode haver.** O RFC-028 §4 é uma
+         *     reversão deliberada do rascunho que terminava a cadeia no timestamp do
+         *     sistema de arquivos: o `mtime` é sistematicamente errado para uma coleção
+         *     cuja vida consiste em ser copiada de disco em disco (RFC-028 §2.1), e um
+         *     membro para ele faria essa data errada parecer mais uma fonte legítima.
          *
-         *     **The absence of a value is not a member either.** A row whose source
-         *     is `NULL` was *never examined* -- it predates RFC-028, or it was
-         *     scanned with extraction switched off -- while `UNKNOWN` means it *was*
-         *     examined and holds no date at all. The two must not collapse: a scan
-         *     rereads the first kind and leaves the second alone, which is what keeps
-         *     re-scanning an unchanged collection free of writes (RFC-028 section
-         *     4.2).
+         *     **A ausência de valor também não é um membro.** Uma linha cuja fonte é
+         *     `NULL` *nunca foi examinada* -- é anterior ao RFC-028, ou passou por um
+         *     scan com a extração desligada -- enquanto `UNKNOWN` quer dizer que ela
+         *     *foi* examinada e não tem data nenhuma. As duas não podem se fundir: um
+         *     scan relê o primeiro tipo e deixa o segundo em paz, e é isso que mantém
+         *     sem escritas um novo scan de uma coleção inalterada (RFC-028 §4.2).
          * @enum {string}
          */
         CaptureSource: "exif_original" | "exif_digitized" | "unknown";
         /**
          * CreateJobRequestSchema
-         * @description What a client sends to ask for an indexing run.
+         * @description O que um cliente envia para pedir uma rodada de indexação.
          *
-         *     `scopes` are folders relative to the device's mount point, and an
-         *     empty list means the whole device -- which is what zero scope rows
-         *     already mean in the schema (RFC-029 section 5.2).
+         *     `scopes` são pastas relativas ao ponto de montagem do dispositivo, e uma
+         *     lista vazia quer dizer o dispositivo inteiro -- que é o que zero linhas
+         *     de escopo já querem dizer no schema (RFC-029 §5.2).
          *
-         *     They are plain strings rather than a validated type here on purpose.
-         *     What makes a scope legal -- relative, no `..`, no UNC share, and a
-         *     folder that is actually on that disk -- is a domain rule plus a
-         *     filesystem question, and answering either in Presentation would put
-         *     business logic in the wrong layer and produce a 422 where a 400 with
-         *     a readable message belongs.
+         *     São strings simples, e não um tipo validado, aqui de propósito. O que
+         *     torna um escopo válido -- relativo, sem `..`, sem compartilhamento UNC, e
+         *     uma pasta que de fato está naquele disco -- é uma regra de domínio mais
+         *     uma pergunta ao sistema de arquivos, e responder a qualquer uma das duas
+         *     na Apresentação poria regra de negócio na camada errada e produziria um
+         *     422 onde cabe um 400 com uma mensagem legível.
          */
         CreateJobRequestSchema: {
             /**
@@ -983,7 +969,7 @@ export interface components {
         };
         /**
          * DeviceDetailSchema
-         * @description One device, resolved against the moment the request arrived.
+         * @description Um dispositivo, resolvido no momento em que a requisição chegou.
          */
         DeviceDetailSchema: {
             /** @description The pending or running job holding this disk, if any */
@@ -1067,7 +1053,7 @@ export interface components {
         };
         /**
          * DeviceListSchema
-         * @description Every device the system knows, sorted by label.
+         * @description Todo dispositivo que o sistema conhece, ordenado por rótulo.
          */
         DeviceListSchema: {
             /**
@@ -1078,7 +1064,7 @@ export interface components {
         };
         /**
          * DeviceSchema
-         * @description The disk an image is on, as the user named it, and whether it is here.
+         * @description O disco da imagem, com o nome que o usuário lhe deu, e se ele está aqui.
          */
         DeviceSchema: {
             /**
@@ -1100,12 +1086,12 @@ export interface components {
         };
         /**
          * FolderListSchema
-         * @description One level of one device's folder tree.
+         * @description Um nível da árvore de pastas de um dispositivo.
          *
-         *     `path` and `parent` are both canonical spellings and both
-         *     `/`-separated, and `""` means the device root in either of them. The
-         *     root's parent is the root, so a client walking upwards stops there
-         *     rather than falling off.
+         *     `path` e `parent` são ambos grafias canônicas, ambos separados por `/`,
+         *     e `""` quer dizer a raiz do dispositivo em qualquer um dos dois. O pai
+         *     da raiz é a raiz, então um cliente que sobe a árvore para ali, em vez
+         *     de cair para fora.
          */
         FolderListSchema: {
             /**
@@ -1132,7 +1118,7 @@ export interface components {
         };
         /**
          * FolderSchema
-         * @description One folder inside a device, and what this system knows about it.
+         * @description Uma pasta dentro de um dispositivo, e o que este sistema sabe dela.
          */
         FolderSchema: {
             /**
@@ -1162,12 +1148,12 @@ export interface components {
         };
         /**
          * FolderState
-         * @description How much of a folder this system has indexed, as one word.
+         * @description Quanto de uma pasta este sistema indexou, numa palavra.
          *
-         *     A `StrEnum` so the member *is* the string on the wire, following
-         *     `JobStatus`. Unlike `JobStatus` it is never written to a column --
-         *     there is no folder table and RFC-031 adds no migration -- so the
-         *     choice is only about the JSON.
+         *     Um `StrEnum`, para que o membro *seja* a string que vai na rede, como
+         *     `JobStatus`. Ao contrário de `JobStatus`, ele nunca é escrito numa coluna
+         *     -- não há tabela de pastas, e o RFC-031 não acrescenta migration -- então
+         *     a escolha é só sobre o JSON.
          * @enum {string}
          */
         FolderState: "indexing" | "queued" | "partial" | "indexed" | "never_indexed";
@@ -1183,7 +1169,7 @@ export interface components {
         };
         /**
          * ImageSchema
-         * @description One indexed image, where it is, and whether it can be reached right now.
+         * @description Uma imagem indexada, onde ela está, e se dá para alcançá-la agora.
          */
         ImageSchema: {
             /**
@@ -1231,7 +1217,7 @@ export interface components {
         };
         /**
          * JobListSchema
-         * @description A page of jobs, newest first.
+         * @description Uma página de jobs, os mais novos primeiro.
          */
         JobListSchema: {
             /**
@@ -1242,7 +1228,7 @@ export interface components {
         };
         /**
          * JobSchema
-         * @description One indexing job, as a client polling it sees it.
+         * @description Um job de indexação, como o vê um cliente que o consulta.
          */
         JobSchema: {
             /**
@@ -1327,32 +1313,32 @@ export interface components {
         };
         /**
          * JobStatus
-         * @description Where a job is in its life.
+         * @description Em que ponto da vida um job está.
          *
-         *     A `StrEnum` so that the member *is* the string the database column
-         *     holds. The column is `TEXT` rather than a PostgreSQL `ENUM` for the
-         *     reason RFC-028 gave `capture_source`: adding a state later should not
-         *     cost a migration.
+         *     Um `StrEnum`, para que o membro *seja* a string que a coluna do banco
+         *     guarda. A coluna é `TEXT`, e não um `ENUM` do PostgreSQL, pela razão que o
+         *     RFC-028 deu para `capture_source`: acrescentar um estado depois não deveria
+         *     custar uma migration.
          * @enum {string}
          */
         JobStatus: "pending" | "running" | "completed" | "failed" | "cancelled";
         /**
          * ListingOrder
-         * @description Which way the capture date runs. The tie-breaks never change direction.
+         * @description Para que lado corre a data de captura. Os desempates nunca mudam de sentido.
          *
-         *     `NEWEST` answers "how is it now" first, the convention of every gallery;
-         *     `OLDEST` is the same list with the date reversed -- "from the hole in the
-         *     ground to the finished building" (RFC-044 section 3.1).
+         *     `NEWEST` responde primeiro "como está agora", a convenção de toda
+         *     galeria; `OLDEST` é a mesma lista com a data invertida -- "do buraco no
+         *     chão ao prédio pronto" (RFC-044 §3.1).
          *
-         *     In both, a photo with no capture date comes **after every dated one**, in
-         *     folder order (section 3.2). It has no place on a timeline, and putting it
-         *     first in one direction would put the undated at the top of the list.
+         *     Nos dois, uma foto sem data de captura vem **depois de toda foto com
+         *     data**, na ordem da pasta (§3.2). Ela não tem lugar numa linha do tempo, e
+         *     pô-la primeiro num dos sentidos poria as sem data no topo da lista.
          * @enum {string}
          */
         ListingOrder: "newest" | "oldest";
         /**
          * ListingSummarySchema
-         * @description The whole list under the filters, not this page (RFC-044 section 5.3).
+         * @description A lista inteira sob os filtros, não esta página (RFC-044 §5.3).
          */
         ListingSummarySchema: {
             /**
@@ -1388,7 +1374,7 @@ export interface components {
         };
         /**
          * MapCellSchema
-         * @description One square of the grid: where its centre is, and how many photos are in it.
+         * @description Um quadrado da grade: onde fica o centro, e quantas fotos há nele.
          */
         MapCellSchema: {
             /**
@@ -1409,13 +1395,13 @@ export interface components {
         };
         /**
          * MapResponseSchema
-         * @description The body of a map request.
+         * @description O corpo da resposta a um pedido de mapa.
          *
-         *     `precision_applied` echoes the precision actually used, the way search
-         *     echoes `limit` (RFC-026): when the requested grid would have had more
-         *     than `MAX_MAP_CELLS` squares, the grid was coarsened, and a client that
-         *     could not see that would mistake bigger squares for a sparser
-         *     collection.
+         *     `precision_applied` devolve a precisão de fato usada, do jeito que a
+         *     busca devolve `limit` (RFC-026): quando a grade pedida teria mais de
+         *     `MAX_MAP_CELLS` quadrados, a grade foi engrossada, e um cliente que não
+         *     conseguisse ver isso confundiria quadrados maiores com uma coleção mais
+         *     esparsa.
          */
         MapResponseSchema: {
             /**
@@ -1459,33 +1445,34 @@ export interface components {
         };
         /**
          * PositionSource
-         * @description Where `latitude`/`longitude` were read from, or that nothing was.
+         * @description De onde `latitude`/`longitude` foram lidas, ou que nada foi lido.
          *
-         *     A `StrEnum` persisted into a plain `String` column rather than a native
-         *     PostgreSQL `ENUM`. Two future members already have names and are
-         *     deliberately **not** members yet: `'manual'` -- the user marks the point
-         *     on the map -- and `'subject_estimated'` -- the photographed point
-         *     computed from gimbal and altitude (RFC-032 sections 9 and 10). Each has
-         *     a writer to build first, and adding either must not cost a migration.
+         *     Um `StrEnum` persistido numa coluna `String` simples, e não num `ENUM`
+         *     nativo do PostgreSQL. Dois membros futuros já têm nome e,
+         *     deliberadamente, **ainda não** são membros: `'manual'` -- o usuário
+         *     marca o ponto no mapa -- e `'subject_estimated'` -- o ponto fotografado,
+         *     calculado a partir do gimbal e da altitude (RFC-032 §9 e §10). Cada um
+         *     tem antes um escritor a construir, e acrescentar qualquer dos dois não
+         *     pode custar uma migration.
          *
-         *     **The absence of a value is not a member.** A row whose source is NULL
-         *     was *never examined* -- it predates RFC-032, or was scanned with
-         *     `extract_gps` off -- while `UNKNOWN` means it *was* examined and holds
-         *     no usable position. The two must not collapse: a scan writes only NULL
-         *     rows, which is what keeps re-scanning an unchanged collection free of
-         *     writes, and files without GPS are numerous in exactly the collection
-         *     this RFC serves.
+         *     **A ausência de valor não é um membro.** Uma linha cuja origem é NULL
+         *     *nunca foi examinada* -- é anterior ao RFC-032, ou foi escaneada com
+         *     `extract_gps` desligado --, enquanto `UNKNOWN` quer dizer que ela *foi*
+         *     examinada e não tem posição utilizável. Os dois não podem se fundir: um
+         *     scan só grava linhas NULL, e é isso que mantém sem escritas o re-scan de
+         *     uma coleção que não mudou; e arquivos sem GPS são muitos justamente na
+         *     coleção a que este RFC serve.
          *
-         *     **There is no XMP member.** RFC-032 section 2.3 measured 40 real DJI
-         *     files carrying a `drone-dji` XMP packet and found no latitude or
-         *     longitude in any of them; a member for a source that was never seen to
-         *     hold a position would be a fallback that never fires.
+         *     **Não há membro XMP.** O RFC-032 §2.3 mediu 40 arquivos DJI reais com um
+         *     pacote XMP `drone-dji` e não achou latitude nem longitude em nenhum; um
+         *     membro para uma origem que nunca foi vista guardando uma posição seria
+         *     um fallback que nunca dispara.
          * @enum {string}
          */
         PositionSource: "exif_gps" | "unknown";
         /**
          * PurgedImagesSchema
-         * @description What `DELETE /devices/{id}/missing-images` removed (RFC-046 section 5.7).
+         * @description O que `DELETE /devices/{id}/missing-images` removeu (RFC-046 §5.7).
          */
         PurgedImagesSchema: {
             /**
@@ -1496,17 +1483,16 @@ export interface components {
         };
         /**
          * RankedImagesSchema
-         * @description A ranking of the index, whatever the query was (RFC-038 section 4.1).
+         * @description Um ranking do índice, qualquer que tenha sido a consulta (RFC-038 §4.1).
          *
-         *     The body of `POST /images/search/by-image` as it stands, and the base of
-         *     the other two: the search by text adds the `query` it echoes, and
-         *     *"Parecidas com esta"* the id of the photo it started from. One shape
-         *     and one set of rules for the three, so a client reads them the same way.
+         *     O corpo de `POST /images/search/by-image` tal como é, e a base dos outros
+         *     dois: a busca por texto acrescenta a `query` que devolve, e *"Parecidas
+         *     com esta"*, o id da foto de onde partiu. Um formato e um conjunto de
+         *     regras para os três, para que um cliente os leia do mesmo jeito.
          *
-         *     `limit` echoes the value actually used, not the one requested, which
-         *     is usually not sent at all: without it a caller receiving three
-         *     results cannot tell "there were only three images" from "the default
-         *     is smaller than I assumed".
+         *     `limit` devolve o valor de fato usado, não o pedido, que em geral nem é
+         *     enviado: sem ele, quem recebe três resultados não consegue distinguir
+         *     "só havia três imagens" de "o default é menor do que eu supunha".
          */
         RankedImagesSchema: {
             /**
@@ -1532,32 +1518,32 @@ export interface components {
         };
         /**
          * RegisterDeviceRequestSchema
-         * @description What a client sends to register a disk it saw in `GET /volumes`.
+         * @description O que um cliente envia para registrar um disco que viu em `GET /volumes`.
          *
-         *     **There is no path field, and there must never be one.** The identity
-         *     is an opaque key the server minted; the server looks it up in an
-         *     enumeration it just performed and uses *its own* mount point as the
-         *     root. A client never composes a location, and an identity a client
-         *     invented resolves to nothing at all -- which is the difference between
-         *     this and accepting `{"path": "D:\\fotos"}`, and the whole of RFC-031
-         *     section 5.1. `test_device_registration_takes_no_path.py` asserts the
-         *     field set here is exactly these three.
+         *     **Não há campo de caminho, e nunca pode haver.** A identidade é uma
+         *     chave opaca que o servidor cunhou; o servidor a procura numa enumeração
+         *     que acabou de fazer e usa o *seu próprio* ponto de montagem como raiz.
+         *     Um cliente nunca compõe uma localização, e uma identidade que um cliente
+         *     inventou não resolve para nada -- essa é a diferença entre isto e
+         *     aceitar `{"path": "D:\\fotos"}`, e é todo o RFC-031 §5.1.
+         *     `test_device_registration_takes_no_path.py` afirma que o conjunto de
+         *     campos daqui é exatamente estes três.
          *
-         *     Both identity fields are plain `str` rather than `VolumeIdentity` and
-         *     `VolumeKind`, and that is deliberate. Declaring `volume_kind:
-         *     VolumeKind` would have FastAPI refuse an unknown value with a `422`
-         *     before the use case ever runs, and the `400
-         *     InvalidVolumeIdentityError` RFC-031 section 6 specifies would become
-         *     unreachable. It is the argument `CreateJobRequestSchema` already
-         *     makes for `scopes`: what makes a value legal is a domain rule, and
-         *     answering it in Presentation produces a 422 where a 400 with a
-         *     readable message belongs.
+         *     Os dois campos de identidade são `str` simples, e não `VolumeIdentity` e
+         *     `VolumeKind`, e isso é deliberado. Declarar `volume_kind:
+         *     VolumeKind` faria o FastAPI recusar um valor desconhecido com um `422`
+         *     antes de o caso de uso sequer rodar, e o `400
+         *     InvalidVolumeIdentityError` que o RFC-031 §6 especifica ficaria
+         *     inalcançável. É o argumento que `CreateJobRequestSchema` já faz para
+         *     `scopes`: o que torna um valor válido é uma regra de domínio, e
+         *     responder a ela na Apresentação produz um 422 onde cabe um 400 com uma
+         *     mensagem legível.
          *
-         *     Extra fields are **ignored**, which is Pydantic's default and is left
-         *     alone here. A client that smuggles in a `path` gets a successful
-         *     registration of the volume it named and no path is opened, which is
-         *     what the guard test asserts. Only `RenameDeviceRequestSchema` forbids
-         *     extras, and for a reason specific to it.
+         *     Campos extras são **ignorados**, que é o default do Pydantic e fica
+         *     como está aqui. Um cliente que contrabandeia um `path` recebe um
+         *     registro bem-sucedido do volume que nomeou, e nenhum caminho é aberto,
+         *     que é o que o teste de guarda afirma. Só `RenameDeviceRequestSchema`
+         *     proíbe extras, e por um motivo específico dele.
          */
         RegisterDeviceRequestSchema: {
             /**
@@ -1579,20 +1565,20 @@ export interface components {
         };
         /**
          * RenameDeviceRequestSchema
-         * @description What a client sends to rename a disk. Only the label, and strictly.
+         * @description O que um cliente envia para renomear um disco. Só o rótulo, e estrito.
          *
-         *     **`extra="forbid"`, the only schema in the project that has it.** The
-         *     default is `extra="ignore"`, and the default is wrong here in a way
-         *     that is invisible: a client sending `last_scan_file_count` would get
-         *     a `200`, believe it had edited the declared denominator of the "%
-         *     indexed" figure, and have been silently ignored. A refusal is the
-         *     only honest answer, because the belief the request encodes is false
-         *     (RFC-031 section 7).
+         *     **`extra="forbid"`, o único schema do projeto que o tem.** O default é
+         *     `extra="ignore"`, e o default está errado aqui de um jeito invisível: um
+         *     cliente que enviasse `last_scan_file_count` receberia um `200`,
+         *     acreditaria ter editado o denominador declarado do número "%
+         *     indexado", e teria sido ignorado em silêncio. Uma recusa é a única
+         *     resposta honesta, porque a crença que a requisição carrega é falsa
+         *     (RFC-031 §7).
          *
-         *     It is not being added to the other schemas of this RFC. This is the
-         *     route where a field a client might plausibly send is a field this
-         *     system deliberately does not let anyone write, and that is what makes
-         *     silence dangerous here and unremarkable elsewhere.
+         *     Ele não está sendo acrescentado aos outros schemas deste RFC. Esta é a
+         *     rota em que um campo que um cliente plausivelmente enviaria é um campo
+         *     que este sistema deliberadamente não deixa ninguém gravar, e é isso que
+         *     torna o silêncio perigoso aqui e banal nos outros lugares.
          */
         RenameDeviceRequestSchema: {
             /**
@@ -1603,18 +1589,18 @@ export interface components {
         };
         /**
          * SearchResponseSchema
-         * @description The body of a successful search by text.
+         * @description O corpo de uma busca por texto bem-sucedida.
          *
-         *     `query` echoes what the client sent, never what the model was asked.
-         *     The string CLIP actually encodes is the RFC-023 template wrapped
-         *     around a possibly translated query -- for a Portuguese input it comes
-         *     back as `a photo of . a rural property with a lake`, leading `". "`
-         *     and all (RFC-025 section 11.5). Publishing that would make an
-         *     internal artifact of the translation path part of the contract, and
-         *     would change the response the day the template changes.
+         *     `query` devolve o que o cliente enviou, nunca o que foi pedido ao
+         *     modelo. A string que o CLIP de fato codifica é o template do RFC-023 em
+         *     volta de uma consulta possivelmente traduzida -- para uma entrada em
+         *     português ela volta como `a photo of . a rural property with a lake`,
+         *     com o `". "` na frente e tudo (RFC-025 §11.5). Publicar isso tornaria um
+         *     artefato interno do caminho de tradução parte do contrato, e mudaria a
+         *     resposta no dia em que o template mudasse.
          *
-         *     Since RFC-038 the rest is `RankedImagesSchema`'s, field for field: the
-         *     response did not change, only where its fields are declared.
+         *     Desde o RFC-038, o resto é de `RankedImagesSchema`, campo a campo: a
+         *     resposta não mudou, só o lugar onde seus campos são declarados.
          */
         SearchResponseSchema: {
             /**
@@ -1645,36 +1631,35 @@ export interface components {
         };
         /**
          * SearchResultSchema
-         * @description One ranked image, as a client sees it: the image, plus how well it matched.
+         * @description Uma imagem ranqueada, como o cliente a vê: a imagem, mais o quanto casou.
          *
-         *     **The path is published now, and RFC-030 section 2 is why.** RFC-026
-         *     kept it out with two arguments, recorded here rather than erased:
+         *     **O caminho agora é publicado, e o RFC-030 §2 diz por quê.** O RFC-026 o
+         *     deixou de fora com dois argumentos, registrados aqui em vez de apagados:
          *
-         *     > *"Publishing it would leak the server's filesystem layout to every
-         *     > caller, and would hand clients an identifier that changes whenever a
-         *     > file moves."*
+         *     > *"Publicá-lo exporia o layout do sistema de arquivos do servidor a todo
+         *     > chamador, e entregaria aos clientes um identificador que muda sempre
+         *     > que um arquivo se move."*
          *
-         *     The first dissolved. In a local-first deployment the server's
-         *     filesystem *is* the user's, and a search that ends in a filename and a
-         *     UUID has found a photo without telling anyone where it is -- the last
-         *     step of the product was missing. The second still holds, and it shapes
-         *     what is published: `id` remains the only identifier, and the paths are
-         *     display. No route accepts a path back.
+         *     O primeiro se desfez. Numa implantação local-first, o sistema de
+         *     arquivos do servidor *é* o do usuário, e uma busca que termina num nome
+         *     de arquivo e num UUID achou uma foto sem dizer a ninguém onde ela está
+         *     -- faltava o último passo do produto. O segundo continua valendo, e
+         *     molda o que é publicado: `id` continua sendo o único identificador, e os
+         *     caminhos são exibição. Nenhuma rota aceita um caminho de volta.
          *
-         *     The shape is `ImageSchema` -- the body of `GET /images/{id}`, which
-         *     this docstring once promised "RFC-027" would add -- plus `similarity`,
-         *     which exists only inside a query (RFC-025 section 4.1).
+         *     O formato é `ImageSchema` -- o corpo de `GET /images/{id}`, que esta
+         *     docstring um dia prometeu que o "RFC-027" acrescentaria -- mais
+         *     `similarity`, que só existe dentro de uma consulta (RFC-025 §4.1).
          *
-         *     **A hit on a disconnected disk is a full answer.** `device.connected`
-         *     is false, `absolute_path` is null, and `device.label` and
-         *     `relative_path` say "HD3, fotos/2018/junho" -- which, for someone with
-         *     twenty disks, is the expensive part of the question (RFC-030 section
-         *     4.1).
+         *     **Um acerto num disco desconectado é uma resposta completa.**
+         *     `device.connected` é falso, `absolute_path` é nulo, e `device.label` e
+         *     `relative_path` dizem "HD3, fotos/2018/junho" -- o que, para quem tem
+         *     vinte discos, é a parte cara da pergunta (RFC-030 §4.1).
          *
-         *     `captured_at` and `capture_source` are attributes of the photograph,
-         *     identical for every caller and every query, and the two things that
-         *     make a date-filtered result legible (RFC-028 section 12). `latitude`,
-         *     `longitude` and `position_source` do the same for a circle (RFC-032).
+         *     `captured_at` e `capture_source` são atributos da fotografia, idênticos
+         *     para todo chamador e toda consulta, e as duas coisas que tornam legível
+         *     um resultado filtrado por data (RFC-028 §12). `latitude`, `longitude` e
+         *     `position_source` fazem o mesmo para um círculo (RFC-032).
          */
         SearchResultSchema: {
             /**
@@ -1727,11 +1712,11 @@ export interface components {
         };
         /**
          * SimilarImagesResponseSchema
-         * @description The body of *"Parecidas com esta"*: `GET /images/{id}/similar` (RFC-038).
+         * @description O corpo de *"Parecidas com esta"*: `GET /images/{id}/similar` (RFC-038).
          *
-         *     `image_id` is the photo the ranking started from, which is never among the
-         *     `results`: it would come first with a similarity of 1. A copy of it -- the
-         *     same bytes under another id -- is, and comes near the top.
+         *     `image_id` é a foto de onde o ranking partiu, que nunca está entre os
+         *     `results`: viria em primeiro, com similaridade 1. Uma cópia dela -- os
+         *     mesmos bytes sob outro id -- está, e vem perto do topo.
          */
         SimilarImagesResponseSchema: {
             /**
@@ -1776,7 +1761,7 @@ export interface components {
         };
         /**
          * VolumeListSchema
-         * @description What is plugged into this machine, ordered by mount point.
+         * @description O que está plugado nesta máquina, ordenado por ponto de montagem.
          */
         VolumeListSchema: {
             /**
@@ -1787,7 +1772,7 @@ export interface components {
         };
         /**
          * VolumeSchema
-         * @description One volume attached to this machine right now.
+         * @description Um volume conectado a esta máquina agora.
          */
         VolumeSchema: {
             /**

@@ -1,15 +1,15 @@
-"""In-memory indexing-job repository, held to the PostgreSQL contract (RFC-029).
+"""Repositório em memória de jobs, preso ao contrato do PostgreSQL (RFC-029).
 
-**This double lies by omission unless it is built carefully**, and the two
-places it would lie are the two properties the whole RFC rests on. If it
-accepted a second active job for one device, every Application test above
-it would be evidence about the double rather than about the system; if
-its claim were not atomic, the one behaviour the polling loop depends on
-would go untested everywhere except against a real database.
+**Este double mente por omissão, a menos que seja construído com cuidado**, e os
+dois pontos em que mentiria são as duas propriedades em que o RFC inteiro se
+apoia. Se aceitasse um segundo job ativo para um dispositivo, todo teste da
+Application acima dele seria evidência sobre o double, e não sobre o sistema;
+se a reivindicação dele não fosse atômica, o único comportamento de que o loop
+de polling depende ficaria sem teste em todo lugar, menos contra um banco real.
 
-So both are emulated rather than skipped: the active-job rule is checked
-on insert, and every mutation is taken under a lock so that two threads
-calling `claim_next()` cannot both walk away with the same job.
+Então as duas são emuladas, e não puladas: a regra do job ativo é verificada
+no insert, e toda mutação é feita sob um lock, para que duas threads chamando
+`claim_next()` não saiam as duas com o mesmo job.
 """
 
 from __future__ import annotations
@@ -29,30 +29,30 @@ from app.domain.value_objects.job_id import JobId
 
 
 class InMemoryIndexingJobRepository(IndexingJobRepository):
-    """Repository implementation backed by a dict and a lock."""
+    """Implementação do repositório sobre um dict e um lock."""
 
     def __init__(self) -> None:
         self._jobs: dict[uuid.UUID, IndexingJob] = {}
         self._lock = threading.Lock()
-        """Stands in for the row locks PostgreSQL provides.
+        """Faz as vezes dos locks de linha que o PostgreSQL fornece.
 
-        `claim_next()` is a read and a write that must not interleave with
-        another claim. In PostgreSQL that is `FOR UPDATE SKIP LOCKED`
-        inside a single `UPDATE`; here it is this lock, held across the
-        whole operation. Without it the double would hand the same job to
-        two callers and the contract test would pass only against
-        PostgreSQL -- which is exactly the class of difference a contract
-        test exists to catch.
+        `claim_next()` é uma leitura e uma escrita que não podem se intercalar
+        com outra reivindicação. No PostgreSQL isso é `FOR UPDATE SKIP LOCKED`
+        dentro de um único `UPDATE`; aqui é este lock, mantido durante a
+        operação inteira. Sem ele, o double entregaria o mesmo job a dois
+        chamadores e o teste de contrato passaria só contra o PostgreSQL --
+        exatamente o tipo de diferença que um teste de contrato existe para
+        pegar.
         """
 
     def create(self, job: IndexingJob) -> IndexingJob:
-        """Insert, refusing a device that already has a pending or running job.
+        """Insere, recusando um dispositivo que já tem um job pendente ou rodando.
 
-        The emulation of the partial unique index of RFC-029 section 9.
-        It is a check-then-act, which the PostgreSQL implementation is
-        forbidden to be -- and that is fine here precisely because the
-        lock makes the check and the act one step, which is the property
-        the index provides over there and a bare `SELECT` does not.
+        A emulação do índice único parcial do RFC-029 §9. É um
+        verifica-depois-age, o que a implementação do PostgreSQL é proibida de
+        ser -- e aqui não há problema justamente porque o lock faz da
+        verificação e da ação um passo só, que é a propriedade que o índice dá
+        lá e que um `SELECT` sozinho não dá.
         """
         with self._lock:
             if any(
@@ -82,12 +82,12 @@ class InMemoryIndexingJobRepository(IndexingJobRepository):
         checkpoint: ImagePath | None,
         heartbeat_at: datetime.datetime,
     ) -> IndexingJob | None:
-        """Write the progress columns of a running job and read it back.
+        """Escreve as colunas de progresso de um job rodando e o lê de volta.
 
-        Applies the update to whatever the stored row is *now*, not to a
-        copy the caller is holding, which is what makes the returned
-        `cancel_requested` the route's value rather than the worker's
-        stale one.
+        Aplica a atualização à linha como ela está guardada *agora*, não a uma
+        cópia que quem chama tem em mãos, e é isso que faz do
+        `cancel_requested` devolvido o valor da rota, e não o valor velho do
+        worker.
         """
         with self._lock:
             current = self._jobs.get(job_id.value)
@@ -100,7 +100,7 @@ class InMemoryIndexingJobRepository(IndexingJobRepository):
     def save_if_status(
         self, job: IndexingJob, expected: JobStatus
     ) -> IndexingJob | None:
-        """Write only while the stored row still holds `expected`."""
+        """Escreve só enquanto a linha guardada ainda estiver em `expected`."""
         with self._lock:
             current = self._jobs.get(job.id.value)
             if current is None or current.status is not expected:
@@ -109,7 +109,7 @@ class InMemoryIndexingJobRepository(IndexingJobRepository):
             return job
 
     def claim_next(self, now: datetime.datetime) -> IndexingJob | None:
-        """Take the oldest queued job, under the lock, or return `None`."""
+        """Pega o job mais antigo da fila, sob o lock, ou devolve `None`."""
         with self._lock:
             pending = [
                 job for job in self._jobs.values() if job.status is JobStatus.PENDING
@@ -127,17 +127,17 @@ class InMemoryIndexingJobRepository(IndexingJobRepository):
             return self._claim_locked(job, now)
 
     def _claim_locked(self, job: IndexingJob, now: datetime.datetime) -> IndexingJob:
-        """Apply the claim transition and store it; the lock is already held."""
+        """Aplica a transição de reivindicação e a guarda; o lock já está tomado."""
         claimed = job.claim(now)
         self._jobs[claimed.id.value] = claimed
         return claimed
 
     def list_stale(self, heartbeat_before: datetime.datetime) -> list[IndexingJob]:
-        """Return running jobs whose heartbeat has not moved recently enough.
+        """Devolve os jobs rodando cujo heartbeat não se moveu recentemente.
 
-        A running job with no heartbeat at all is not returned. `claim()`
-        stamps one, so such a row cannot exist -- and treating it as stale
-        would mean reaping a job on no evidence.
+        Um job rodando sem heartbeat nenhum não é devolvido. `claim()` grava
+        um, então essa linha não pode existir -- e tratá-la como parada
+        seria encerrar um job sem evidência nenhuma.
         """
         return [
             job
@@ -152,7 +152,7 @@ class InMemoryIndexingJobRepository(IndexingJobRepository):
         device_id: DeviceId | None = None,
         status: JobStatus | None = None,
     ) -> list[IndexingJob]:
-        """Return matching jobs newest first, as the contract requires."""
+        """Devolve os jobs que casam, mais novos primeiro, como exige o contrato."""
         jobs = [
             job
             for job in self._jobs.values()
@@ -163,12 +163,11 @@ class InMemoryIndexingJobRepository(IndexingJobRepository):
 
 
 def _created_at_key(job: IndexingJob) -> datetime.datetime:
-    """Order by creation, putting a job with no timestamp first.
+    """Ordena pela criação, pondo primeiro um job sem timestamp.
 
-    `created_at` is stamped by `create()`, so `None` only reaches here for
-    an entity somebody built by hand and saved directly. Sorting it to the
-    front rather than raising keeps the double usable in tests that do not
-    care about time, without inventing a timestamp that the row does not
-    have.
+    `created_at` é gravado por `create()`, então `None` só chega aqui para
+    uma entidade que alguém montou à mão e guardou direto. Pô-la na frente,
+    em vez de levantar erro, mantém o double usável em testes que não se
+    importam com o tempo, sem inventar um timestamp que a linha não tem.
     """
     return job.created_at or datetime.datetime.min.replace(tzinfo=datetime.UTC)

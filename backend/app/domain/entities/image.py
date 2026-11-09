@@ -1,4 +1,4 @@
-"""Image entity for the domain layer."""
+"""Entidade Image da camada de domínio."""
 
 from __future__ import annotations
 
@@ -21,123 +21,120 @@ from app.domain.value_objects.position_source import PositionSource
 
 @dataclass(frozen=True)
 class Image:
-    """Immutable business entity representing an image known by the system.
+    """Entidade de negócio imutável que representa uma imagem que o sistema conhece.
 
-    RFC-027 replaced the single absolute `path` with the pair
-    `(device_id, relative_path)`. The absolute path was not a description
-    of where the file is; it was a description of where the file was *the
-    last time somebody looked*, because a removable volume's drive letter
-    is assigned by mount order. Storing it meant a stationary file's
-    recorded location changed on its own, taking the derived `ImageId`
-    with it (RFC-027 section 2.1).
+    O RFC-027 trocou o `path` absoluto único pelo par
+    `(device_id, relative_path)`. O caminho absoluto não descrevia onde o
+    arquivo está; descrevia onde o arquivo estava *da última vez que alguém
+    olhou*, porque a letra de um volume removível é atribuída pela ordem de
+    montagem. Guardá-lo fazia o local registrado de um arquivo parado mudar
+    sozinho, levando junto o `ImageId` derivado (RFC-027 §2.1).
 
-    The pair does not have that problem. A device id is derived from an
-    identifier the operating system keeps stable across remounts, and a
-    path relative to the device's mount point does not contain the part
-    that moves.
+    O par não tem esse problema. Um id de dispositivo é derivado de um
+    identificador que o sistema operacional mantém estável entre montagens, e
+    um caminho relativo ao ponto de montagem do dispositivo não contém a
+    parte que se move.
     """
 
     id: ImageId
     device_id: DeviceId
     relative_path: ImagePath
-    """Where the file sits *within its device*, e.g. `fotos/2018/DJI_0042.JPG`.
+    """Onde o arquivo fica *dentro do dispositivo*, p. ex. `fotos/2018/DJI_0042.JPG`.
 
-    Never begins with a drive letter or a mount point. Joining this onto
-    a mount point resolved at the moment of use is how an absolute path
-    is obtained -- see `absolute_path` below.
+    Nunca começa com letra de unidade nem ponto de montagem. Juntá-lo a um
+    ponto de montagem resolvido no momento do uso é como se obtém um caminho
+    absoluto -- ver `absolute_path`, abaixo.
     """
 
     filename: str
     extension: str
 
     absolute_path: ImagePath | None = None
-    """Where the file is right now, when that is currently knowable.
+    """Onde o arquivo está agora, quando isso se pode saber no momento.
 
-    Computed, never persisted, and therefore never part of what makes two
-    images equal. `None` is a first-class answer with a precise meaning:
-    *this image's device is not mounted, so it has no absolute path at
-    this instant.* That is exactly the case RFC-027 section 2.3 exists to
-    represent -- a search hit on a disk in a drawer is a useful answer
-    ("it is on HD3"), not a broken one, and it would be a lie to hand it a
-    path that resolves to nothing.
+    Calculado, nunca persistido e, portanto, nunca parte do que torna duas
+    imagens iguais. `None` é uma resposta de primeira classe, com um sentido
+    preciso: *o dispositivo desta imagem não está montado, então ela não tem
+    caminho absoluto neste instante.* É exatamente o caso que o RFC-027 §2.3
+    existe para representar -- um resultado de busca num disco na gaveta é
+    uma resposta útil ("está no HD3"), e não uma quebrada, e seria mentira
+    entregar a ele um caminho que não resolve para nada.
 
-    Set by whoever resolved the mount point: the indexing worker, which
-    discovered the file on a connected disk, and later RFC-030, which
-    resolves it per request for the search response. A component that
-    needs the bytes -- the content hasher, the CLIP adapter -- reads this
-    and must fail loudly when it is `None` rather than reconstruct a path
-    of its own from the relative one.
+    Preenchido por quem resolveu o ponto de montagem: o worker de indexação,
+    que descobriu o arquivo num disco conectado, e, depois, o RFC-030, que o
+    resolve a cada pedido para a resposta da busca. Um componente que precisa
+    dos bytes -- o hasher do conteúdo, o adaptador CLIP -- lê este campo e
+    tem de falhar de forma ruidosa quando ele é `None`, em vez de reconstruir
+    um caminho próprio a partir do relativo.
     """
 
     captured_at: datetime.datetime | None = None
-    """When the photograph was taken, as the camera's clock read it.
+    """Quando a fotografia foi tirada, segundo o relógio da câmera.
 
-    Naive, always: EXIF records local wall-clock time with no zone, and
-    this field keeps it that way from extraction to the HTTP response
-    (RFC-028 section 5). `None` means unknown -- the file was never
-    examined, or was examined and had no date -- and an image with an
-    unknown date never matches a date-range filter (RFC-028 section 4.1).
+    Sem fuso, sempre: o EXIF registra a hora local do relógio, sem fuso, e
+    este campo a mantém assim da extração até a resposta HTTP (RFC-028 §5).
+    `None` quer dizer desconhecida -- o arquivo nunca foi examinado, ou foi
+    examinado e não tinha data --, e uma imagem com data desconhecida nunca
+    casa com um filtro de intervalo de datas (RFC-028 §4.1).
 
-    Here on the entity, unlike `file_size`, `file_modified_at` and
-    `content_hash`, and the difference is what each one is *for*. Those
-    three are change signals: only the incremental skip decision reads
-    them, so they travel in `IndexMetadata` and `IndexingRecord`. A capture
-    date is a searchable attribute of the photograph. It has to reach the
-    search response through `SearchHit`, and it has to be visible to the
-    filter predicate the in-memory repositories evaluate against an
-    `Image`. Keeping it out of the entity would force those doubles to
-    carry a side dictionary just to filter -- a second representation of
-    the same fact, which is the divergence the shared contract test
-    exists to prevent.
+    Aqui na entidade, ao contrário de `file_size`, `file_modified_at` e
+    `content_hash`, e a diferença é *para que* serve cada um. Aqueles três são
+    sinais de mudança: só a decisão de pular, incremental, os lê, então eles
+    viajam em `IndexMetadata` e `IndexingRecord`. Uma data de captura é um
+    atributo buscável da fotografia. Ela tem de chegar à resposta da busca
+    por `SearchHit`, e tem de ser visível ao predicado do filtro que os
+    repositórios em memória avaliam contra um `Image`. Mantê-la fora da
+    entidade obrigaria esses dublês a carregar um dicionário à parte só para
+    filtrar -- uma segunda representação do mesmo fato, que é a divergência
+    que o teste de contrato compartilhado existe para impedir.
 
-    The same argument `SearchHit` makes for keeping `similarity` *off*
-    this entity cuts the other way here: a similarity means nothing
-    without its query, while a capture date is the same for every caller.
+    O mesmo argumento que `SearchHit` usa para manter `similarity` *fora*
+    desta entidade corta para o outro lado aqui: uma similaridade não quer
+    dizer nada sem a sua consulta, enquanto uma data de captura é a mesma
+    para todo chamador.
 
-    Not part of equality, which stays by `id`, like every other field.
+    Fora da igualdade, que continua pelo `id`, como todos os outros campos.
     """
 
     capture_source: CaptureSource | None = None
-    """Where `captured_at` came from; `None` if the file was never examined.
+    """De onde veio `captured_at`; `None` se o arquivo nunca foi examinado.
 
-    `None` and `CaptureSource.UNKNOWN` are different answers, and the scan
-    depends on the difference: `None` rows get their date written on the
-    next scan that sees them, `UNKNOWN` rows are left alone because
-    re-reading a file that had no date yields no date (RFC-028 section
-    4.2).
+    `None` e `CaptureSource.UNKNOWN` são respostas diferentes, e o scan
+    depende da diferença: as linhas `None` têm a data escrita no próximo scan
+    que as vê; as `UNKNOWN` ficam como estão, porque reler um arquivo que não
+    tinha data não dá data nenhuma (RFC-028 §4.2).
     """
 
     latitude: float | None = None
-    """Where the photograph was taken, north-south, in decimal degrees (RFC-032).
+    """Onde a fotografia foi tirada, norte-sul, em graus decimais (RFC-032).
 
-    Paired with `longitude`: both or neither, never half a position
-    (RFC-032 section 4.3). `None` means unknown -- never examined, or
-    examined without a usable GPS fix -- and an image whose position is
-    unknown never matches a search circle (RFC-020).
+    Em par com `longitude`: as duas ou nenhuma, nunca meia posição (RFC-032
+    §4.3). `None` quer dizer desconhecida -- nunca examinada, ou examinada
+    sem um fix de GPS utilizável --, e uma imagem de posição desconhecida
+    nunca casa com um círculo de busca (RFC-020).
 
-    **The aircraft's position, not the subject's.** For an oblique shot the
-    photographed ground can be tens to hundreds of metres away (RFC-032
-    section 2.2), and nothing corrects for that here.
+    **A posição da aeronave, e não a do assunto.** Numa foto oblíqua, o chão
+    fotografado pode estar a dezenas ou centenas de metros (RFC-032 §2.2), e
+    nada aqui corrige isso.
 
-    On the entity, beside `captured_at`, for the reason that field gives: a
-    position is a searchable attribute of the photograph, it reaches the
-    response through `SearchHit`, and the in-memory filter predicate reads
-    it off the `Image`. Never named `location`, which in this codebase is
-    where the *file* is (RFC-032 section 4.5).
+    Na entidade, ao lado de `captured_at`, pela razão que aquele campo dá:
+    uma posição é um atributo buscável da fotografia, chega à resposta por
+    `SearchHit`, e o predicado do filtro em memória a lê do `Image`. Nunca
+    chamada `location`, que neste código é onde o *arquivo* está (RFC-032
+    §4.5).
 
-    Not part of equality, which stays by `id`, like every other field.
+    Fora da igualdade, que continua pelo `id`, como todos os outros campos.
     """
 
     longitude: float | None = None
-    """Where the photograph was taken, east-west, in decimal degrees; see `latitude`."""
+    """Onde a fotografia foi tirada, leste-oeste, em graus decimais; ver `latitude`."""
 
     position_source: PositionSource | None = None
-    """Where the position came from; `None` if the file was never examined.
+    """De onde veio a posição; `None` se o arquivo nunca foi examinado.
 
-    `None` and `PositionSource.UNKNOWN` are different answers, for the
-    reason `capture_source` gives: `None` rows get their position written on
-    the next scan that sees them, `UNKNOWN` rows are left alone (RFC-032
-    section 4.4).
+    `None` e `PositionSource.UNKNOWN` são respostas diferentes, pela razão
+    que `capture_source` dá: as linhas `None` têm a posição escrita no
+    próximo scan que as vê; as `UNKNOWN` ficam como estão (RFC-032 §4.4).
     """
 
     def __post_init__(self) -> None:
@@ -146,18 +143,19 @@ class Image:
 
     @property
     def capture_date(self) -> CaptureDate | None:
-        """The examined capture date as one value, or `None` if never examined."""
+        """A data de captura examinada como um valor, ou `None` se nunca examinada."""
         if self.capture_source is None:
             return None
         return CaptureDate(captured_at=self.captured_at, source=self.capture_source)
 
     @property
     def position(self) -> Position | None:
-        """The point, when one is known; `None` for unknown and never examined alike.
+        """O ponto, quando conhecido; `None` se desconhecido ou nunca examinado.
 
-        For the questions that only care about the point -- is it inside a
-        circle, which map cell is it in. Callers that must tell "never
-        examined" from "examined, none" read `position_reading` instead.
+        Para as perguntas que só se importam com o ponto -- está dentro de um
+        círculo, em que célula do mapa está. Os chamadores que precisam
+        distinguir "nunca examinado" de "examinado, nenhum" leem
+        `position_reading`.
         """
         if self.latitude is None or self.longitude is None:
             return None
@@ -165,41 +163,41 @@ class Image:
 
     @property
     def position_reading(self) -> PositionReading | None:
-        """The examined position as one value, or `None` if never examined."""
+        """A posição examinada como um valor só, ou `None` se nunca examinada."""
         if self.position_source is None:
             return None
         return PositionReading(position=self.position, source=self.position_source)
 
     @property
     def display_path(self) -> ImagePath:
-        """The most useful path available, for a log line or an error report.
+        """O caminho mais útil disponível, para uma linha de log ou relato de erro.
 
-        The absolute one when the device is mounted, the device-relative
-        one otherwise. Never raises, because the callers are error paths:
-        a run that is already reporting a failed file must not fail again
-        while naming it.
+        O absoluto quando o dispositivo está montado; senão, o relativo ao
+        dispositivo. Nunca levanta exceção, porque os chamadores são caminhos de
+        erro: uma execução que já está relatando um arquivo que falhou não pode
+        falhar de novo ao nomeá-lo.
 
-        Distinct from `require_absolute_path()` on purpose. This one is
-        for a human to read; that one is for opening a file, and the two
-        must not be confused -- a component that fed `display_path` to
-        `open()` would, for an unmounted device, read a relative path
-        against the process\'s working directory.
+        Distinto de `require_absolute_path()` de propósito. Este é para uma
+        pessoa ler; aquele é para abrir um arquivo, e os dois não podem ser
+        confundidos -- um componente que passasse `display_path` a `open()`
+        leria, para um dispositivo não montado, um caminho relativo ao
+        diretório de trabalho do processo.
         """
         return self.absolute_path or self.relative_path
 
     def require_absolute_path(self) -> ImagePath:
-        """Return `absolute_path`, or raise if the device is not mounted.
+        """Devolve `absolute_path`; falha se o dispositivo não está montado.
 
-        One place to fail, rather than one per adapter that needs bytes.
-        The alternative -- each of `Sha256ContentHasher` and
-        `ClipEmbeddingModel` doing its own `if is None` -- is two chances
-        for one of them to instead reconstruct a path from
-        `relative_path`, which would produce a path relative to the
-        process's working directory: a plausible-looking string that reads
-        the wrong file or, worse, an unrelated one.
+        Um lugar só para falhar, em vez de um por adaptador que precisa de
+        bytes. A alternativa -- `Sha256ContentHasher` e `ClipEmbeddingModel`
+        fazendo cada um o seu `if is None` -- são duas chances de um deles, em
+        vez disso, reconstruir um caminho a partir de `relative_path`, o que
+        produziria um caminho relativo ao diretório de trabalho do processo: uma
+        string de aparência plausível que lê o arquivo errado ou, pior, um sem
+        relação nenhuma.
 
-        Raises `DeviceNotConnectedError`, not `FileNotFoundError`, because
-        the two mean different things to a caller (see that exception).
+        Levanta `DeviceNotConnectedError`, e não `FileNotFoundError`, porque os
+        dois significam coisas diferentes para um chamador (ver essa exceção).
         """
         if self.absolute_path is None:
             raise DeviceNotConnectedError(

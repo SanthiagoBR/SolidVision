@@ -1,8 +1,8 @@
-"""One indexed image, where it is, and whether its disk is here (RFC-030 section 4.2).
+"""Uma imagem indexada, onde ela está, e se o disco dela está aqui (RFC-030 §4.2).
 
-`GET /api/v1/images/{id}` -- the route RFC-026's `search_schema.py` promised
-to "RFC-027", which became devices, and which RFC-030 delivers three
-numbers later.
+`GET /api/v1/images/{id}` -- a rota que o `search_schema.py` do RFC-026 prometeu
+ao "RFC-027", que virou o de dispositivos, e que o RFC-030 entrega três números
+depois.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from app.domain.value_objects.image_id import ImageId
 
 
 class GetImageDetailsUseCase:
-    """Return one image with its device and, when mounted, its absolute path."""
+    """Devolve uma imagem com o seu dispositivo e, se montado, o caminho absoluto."""
 
     def __init__(
         self,
@@ -28,15 +28,15 @@ class GetImageDetailsUseCase:
         self._locations = location_resolver
 
     def execute(self, image_id: ImageId) -> LocatedImage:
-        """Return the image, raising only when the id names no row.
+        """Devolve a imagem, levantando exceção só quando o id não nomeia linha nenhuma.
 
-        **A disconnected device is a successful answer.** The row exists,
-        and the row is what this describes; `connected: false` with the
-        device's label is the "it is on HD3" result RFC-030 section 4.1
-        exists to give, and a 404 or a 409 here would turn it into an error.
+        **Um dispositivo desconectado é uma resposta bem-sucedida.** A linha
+        existe, e é a linha que isto descreve; `connected: false` com o rótulo
+        do dispositivo é o resultado "está no HD3" que o RFC-030 §4.1 existe
+        para dar, e um 404 ou um 409 aqui o transformaria num erro.
 
-        No similarity, because there is no query: a score means nothing
-        outside the search that produced it (RFC-025 section 4.1).
+        Sem similaridade, porque não há consulta: um score não significa nada
+        fora da busca que o produziu (RFC-025 §4.1).
         """
         image = self._repository.get(image_id)
         if image is None:

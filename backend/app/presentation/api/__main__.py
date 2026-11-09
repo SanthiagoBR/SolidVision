@@ -1,30 +1,30 @@
-r"""The API as a program of its own, the way the launcher runs it (RFC-036 5.5).
+r"""A API como programa próprio, do jeito que o launcher a roda (RFC-036 §5.5).
 
     python -X utf8 -m app.presentation.api --port 51234 --supervised
 
-uvicorn's `Server`, with the application already imported, on `127.0.0.1` and
-the port given. The address is not an argument: the API serves loopback only,
-and the second guard of RFC-030 section 6 starts from that.
+O `Server` do uvicorn, com a aplicação já importada, em `127.0.0.1` e na porta
+dada. O endereço não é argumento: a API serve só loopback, e a segunda guarda
+do RFC-030 §6 parte disso.
 
-With `--supervised`, the end of stdin is a Ctrl+C (section 7.1): uvicorn stops
-accepting, gives the requests in flight `GRACEFUL_SHUTDOWN_SECONDS`, and shuts
-the lifespan down. Its own handler receives the signal, and once it has shut
-down it raises the signal again (`capture_signals`), which arrives here as the
-`KeyboardInterrupt` that `uvicorn.main.run` also swallows.
+Com `--supervised`, o fim do stdin é um Ctrl+C (§7.1): o uvicorn para de aceitar,
+dá às requisições em andamento `GRACEFUL_SHUTDOWN_SECONDS` e encerra o lifespan.
+O próprio handler dele recebe o sinal e, depois de encerrar, levanta o sinal de
+novo (`capture_signals`), que chega aqui como o `KeyboardInterrupt` que o
+`uvicorn.main.run` também engole.
 
-Exit codes: 0 after a stop; 3, uvicorn's `STARTUP_FAILURE`, when the port was
-taken before uvicorn could bind it -- the launcher's cue to try another
-(section 5.4); 78 when the configuration is invalid (section 6.1).
+Códigos de saída: 0 depois de uma parada; 3, o `STARTUP_FAILURE` do uvicorn,
+quando a porta foi tomada antes de o uvicorn conseguir fazer o bind -- a deixa
+para o launcher tentar outra (§5.4); 78 quando a configuração é inválida (§6.1).
 
-The log is `api.log`, by the rule of RFC-034 section 8.2. `python -m uvicorn
-app.presentation.api:app` still works, writes `uvicorn.log`, and is what to run
-for `--reload` (section 9).
+O log é `api.log`, pela regra do RFC-034 §8.2. `python -m uvicorn
+app.presentation.api:app` ainda funciona, escreve `uvicorn.log` e é o que rodar
+para `--reload` (§9).
 
-**No access log** (RFC-037 section 5.3). uvicorn writes a line per request to
-stdout, the launcher passes it to its stderr, and the window writes that to its
-log: with the interface served here, every thumbnail, every file of the
-interface and every `/health` of the polling. The run by hand above keeps it,
-for whoever is developing the API.
+**Sem access log** (RFC-037 §5.3). O uvicorn escreve uma linha por requisição no
+stdout, o launcher a passa para o seu stderr, e a janela escreve isso no seu log:
+com a interface servida aqui, cada thumbnail, cada arquivo da interface e cada
+`/health` do polling. A execução à mão acima o mantém, para quem está
+desenvolvendo a API.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ from app.presentation.api import app
 LOOPBACK = "127.0.0.1"
 
 GRACEFUL_SHUTDOWN_SECONDS = 5
-"""What the requests in flight get once a stop is asked (section 7.2).
+"""O que as requisições em andamento recebem depois que uma parada é pedida (§7.2).
 
-The launcher waits 15 s for the whole API: this, the lifespan, and the margin.
+O launcher espera 15 s pela API inteira: isto, o lifespan e a margem.
 """
 
 

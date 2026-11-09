@@ -1,25 +1,25 @@
-"""Marking the photos a whole-disk scan no longer finds (RFC-046 section 5.5).
+"""Marcar as fotos que um scan do disco inteiro não acha mais (RFC-046 §5.5).
 
-Run by the job runner at the end of a job of the whole disk that completed,
-with the disk still where it was listed (section 5.4). It compares the rows
-of the device with the files of that listing:
+Rodado pelo job runner no fim de um job do disco inteiro que terminou, com o
+disco ainda onde foi listado (§5.4). Compara as linhas do dispositivo com os
+arquivos daquela listagem:
 
-    the row                        the listing                the sweep
-    visible                        has its id                 nothing
-    visible                        does not have its id       marks it
-    visible, inside an unreadable  -- (the folder was not     nothing: protected
-    folder                         read)
-    marked                         has its id                 unmarks it
-    marked                         does not have its id       nothing: keeps its date
+    a linha                        a listagem                 a varredura
+    visível                        tem o id dela              nada
+    visível                        não tem o id dela          a marca
+    visível, dentro de uma pasta   -- (a pasta não foi        nada: protegida
+    ilegível                       lida)
+    marcada                        tem o id dela              a desmarca
+    marcada                        não tem o id dela          nada: mantém a data
 
-**It marks and never deletes** (section 3). A false positive -- a folder
-that vanished from the listing for a reason nobody saw -- costs one scan to
-undo, without inference; a deletion would cost the vectors. Deleting is the
-purge's, by a button.
+**Ela marca e nunca apaga** (§3). Um falso positivo -- uma pasta que sumiu da
+listagem por uma razão que ninguém viu -- custa um scan para desfazer, sem
+inferência; uma exclusão custaria os vetores. Apagar é da purga, por um
+botão.
 
-**The ids come in already minted.** This layer does not know how a file
-becomes an id: the job runner mints them from the listing with the function
-that mints them during indexing (`listed_identity()`), and hands them over.
+**Os ids já chegam cunhados.** Esta camada não sabe como um arquivo vira um
+id: o job runner os cunha a partir da listagem com a função que os cunha
+durante a indexação (`listed_identity()`), e os entrega.
 """
 
 from __future__ import annotations
@@ -36,35 +36,35 @@ from app.domain.value_objects.job_scope import JobScope
 
 @dataclass(frozen=True)
 class SweepReport:
-    """What one sweep did, for the job's log.
+    """O que uma varredura fez, para o log do job.
 
-    The three numbers of the INFO line (section 5.5, step 5), and, for the
-    WARNING per unreadable folder, how many rows each one kept visible.
+    Os três números da linha de INFO (§5.5, passo 5) e, para o WARNING de cada
+    pasta ilegível, quantas linhas cada uma manteve visíveis.
     """
 
     marked: int
-    """Visible rows not in the listing, marked now."""
+    """Linhas visíveis fora da listagem, marcadas agora."""
     unmarked: int
-    """Marked rows in the listing again, unmarked now."""
+    """Linhas marcadas que voltaram à listagem, desmarcadas agora."""
     protected: int
-    """Visible rows not in the listing, kept visible by an unreadable folder."""
+    """Linhas visíveis fora da listagem, mantidas visíveis por uma pasta ilegível."""
     protected_by_folder: tuple[tuple[JobScope, int], ...] = ()
-    """Each unreadable folder, in the order given, with the rows it protected."""
+    """Cada pasta ilegível, na ordem dada, com as linhas que ela protegeu."""
 
 
 class SweepMissingImagesUseCase:
-    """Compare a device's rows with a listing of its whole disk; mark the difference."""
+    """Cruza as linhas de um dispositivo com a listagem do disco; marca a diferença."""
 
     def __init__(
         self,
         repository: ImageRepository,
         clock: Callable[[], datetime.datetime] | None = None,
     ) -> None:
-        """`clock` gives the date of the marks; the wall clock by default.
+        """`clock` dá a data das marcas; por padrão, o relógio de parede.
 
-        A callable and not a port, as `CreateIndexingJobUseCase` takes one:
-        the job runner hands its own, so a test that moves the job's time
-        moves the marks' too.
+        Um callable, e não uma porta, como o que `CreateIndexingJobUseCase`
+        recebe: o job runner entrega o seu, então um teste que move a hora do
+        job move também a das marcas.
         """
         self._repository = repository
         self._clock = clock or _utc_now
@@ -75,20 +75,20 @@ class SweepMissingImagesUseCase:
         listed: Set[ImageId],
         unreadable: Sequence[JobScope] = (),
     ) -> SweepReport:
-        """Mark what is missing and unmark what came back, in one write.
+        """Marca o que está ausente e desmarca o que voltou, numa escrita só.
 
-        `listed` are the ids of every file the listing found -- the whole
-        disk, including the files before a resume's checkpoint and the ones
-        whose indexing failed: a file that is there is not missing (section
-        4). `unreadable` are the folders the walk could not read; a row
-        inside one is never marked.
+        `listed` são os ids de todo arquivo que a listagem achou -- o disco
+        inteiro, inclusive os arquivos antes do checkpoint de uma retomada e
+        aqueles cuja indexação falhou: um arquivo que está lá não está ausente
+        (§4). `unreadable` são as pastas que o percurso não conseguiu ler; uma
+        linha dentro de uma delas nunca é marcada.
 
-        **Inside compares parts, not text** (section 4): `2018` unreadable
-        does not protect `2018b/x.jpg`. It is `JobScope.contains()`, the
-        rule RFC-029 section 10 set for the scopes of a job.
+        **Dentro compara partes, e não texto** (§4): `2018` ilegível não
+        protege `2018b/x.jpg`. É `JobScope.contains()`, a regra que o RFC-029
+        §10 fixou para os escopos de um job.
 
-        The rows are read now, at the end of the job, so that the ones this
-        job created are compared too (step 1).
+        As linhas são lidas agora, no fim do job, para que as que este job
+        criou também sejam comparadas (passo 1).
         """
         missing: list[ImageId] = []
         returned: list[ImageId] = []
@@ -119,11 +119,11 @@ class SweepMissingImagesUseCase:
 
 
 def _first_containing(folders: Sequence[JobScope], relative_path: str) -> int | None:
-    """The index of the first folder `relative_path` lies inside, or `None`.
+    """O índice da primeira pasta que contém `relative_path`, ou `None`.
 
-    A row's path is turned into parts only when there is a folder to compare
-    it with: a sweep with nothing unreadable -- every sweep, nearly -- builds
-    no `JobScope` at all.
+    O caminho de uma linha só é quebrado em partes quando há uma pasta com que
+    compará-lo: uma varredura sem nada ilegível -- quase toda varredura -- não
+    constrói nenhum `JobScope`.
     """
     if not folders:
         return None

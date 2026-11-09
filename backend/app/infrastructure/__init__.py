@@ -1,1 +1,1 @@
-"""Infrastructure layer for the SolidVision backend."""
+"""Camada de Infrastructure do backend do SolidVision."""

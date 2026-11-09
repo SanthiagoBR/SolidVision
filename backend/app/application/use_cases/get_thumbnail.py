@@ -1,15 +1,15 @@
-"""Serving a thumbnail, and telling a client its copy is current (RFC-030 section 7.2).
+"""Servir uma thumbnail, e dizer a um cliente que a cópia dele é atual (RFC-030 §7.2).
 
-The version of a thumbnail is the `content_hash` of the photo it was
-rendered from. RFC-024 already stores that hash for the incremental
-decision, so it costs nothing new, and it changes exactly when the thumbnail
-does: a photo overwritten in place keeps its id -- the id is derived from the
-*path* (RFC-027) -- and gets a new hash, a new embedding and a new thumbnail
-in the same reprocessing.
+A versão de uma thumbnail é o `content_hash` da foto a partir da qual ela foi
+renderizada. O RFC-024 já guarda esse hash para a decisão incremental, então ele
+não custa nada novo, e muda exatamente quando a thumbnail muda: uma foto
+sobrescrita no lugar mantém o id -- o id é derivado do *caminho* (RFC-027) -- e
+ganha um hash novo, um embedding novo e uma thumbnail nova no mesmo
+reprocessamento.
 
-`content_hash` stays off the `Image` entity. It is a change signal, like
-`file_size`, and is read here through `IndexMetadata` exactly as the skip
-decision reads it.
+`content_hash` fica fora da entidade `Image`. É um sinal de mudança, como
+`file_size`, e é lido aqui por `IndexMetadata` exatamente como a decisão de
+pular o lê.
 """
 
 from __future__ import annotations
@@ -26,27 +26,27 @@ from app.domain.value_objects.image_id import ImageId
 
 @dataclass(frozen=True)
 class ThumbnailFile:
-    """The thumbnail to send, and the version to label it with."""
+    """A thumbnail a enviar, e a versão com que rotulá-la."""
 
     path: Path
     version: str | None
-    """The photo's content hash, or `None` for a row indexed before RFC-024.
+    """O hash de conteúdo da foto, ou `None` para uma linha indexada antes do RFC-024.
 
-    `None` means the thumbnail has no version to validate against, and
-    the caller must not invent one -- a validator that never matches is a
-    cache that silently never works.
+    `None` significa que a thumbnail não tem versão contra a qual validar, e
+    quem chama não deve inventar uma -- um validador que nunca casa é um cache
+    que, em silêncio, nunca funciona.
     """
 
 
 @dataclass(frozen=True)
 class ThumbnailUnchanged:
-    """The caller already holds this version; nothing needs to be sent."""
+    """Quem chama já tem esta versão; não é preciso enviar nada."""
 
     version: str
 
 
 class GetThumbnailUseCase:
-    """Find an image's thumbnail, or confirm the caller's copy is still right."""
+    """Acha a thumbnail de uma imagem, ou confirma que a cópia de quem chama vale."""
 
     def __init__(
         self, repository: ImageRepository, thumbnail_store: ThumbnailStorePort
@@ -57,30 +57,30 @@ class GetThumbnailUseCase:
     def execute(
         self, image_id: ImageId, held_versions: Collection[str] = ()
     ) -> ThumbnailFile | ThumbnailUnchanged:
-        """Return the file to send, or say the caller's version is current.
+        """Devolve o arquivo a enviar, ou diz que a versão de quem chama é atual.
 
-        `held_versions` are the versions the caller says it already has --
-        the tags of an HTTP `If-None-Match`, with the quoting already
-        removed. Matching them is not HTTP-specific, which is why it is here
-        rather than in the route: "only give me the picture if mine is out
-        of date" is a question any client could ask.
+        `held_versions` são as versões que quem chama diz já ter -- as tags de
+        um `If-None-Match` HTTP, já sem as aspas. Compará-las não é coisa
+        específica de HTTP, e é por isso que isso fica aqui e não na rota: "só
+        me dê a imagem se a minha estiver desatualizada" é uma pergunta que
+        qualquer cliente poderia fazer.
 
-        **The store is not consulted when the answer is "unchanged".** The
-        decision needs one metadata read and nothing else, so revalidating a
-        page of fifty thumbnails costs fifty scalar lookups and zero file
-        opens. That also means a client holding the current version is told
-        so even if the cached file was cleaned away since -- which is right:
-        its copy is still the correct picture.
+        **O store não é consultado quando a resposta é "inalterada".** A
+        decisão precisa de uma leitura de metadados e nada mais, então
+        revalidar uma página de cinquenta thumbnails custa cinquenta buscas
+        escalares e nenhuma abertura de arquivo. Isso também significa que um
+        cliente com a versão atual ouve isso mesmo se o arquivo do cache tiver
+        sido apagado desde então -- o que é certo: a cópia dele continua sendo
+        a imagem correta.
 
-        Raises `ImageNotFoundError` for an id with no row, and
-        `ThumbnailNotFoundError` -- also a 404 -- when the row has no
-        thumbnail or the cache no longer holds the file. The UI shows a
-        placeholder for both (RFC-030 section 7.2).
+        Levanta `ImageNotFoundError` para um id sem linha, e
+        `ThumbnailNotFoundError` -- também um 404 -- quando a linha não tem
+        thumbnail ou o cache não tem mais o arquivo. A interface mostra um
+        placeholder nos dois casos (RFC-030 §7.2).
 
-        The device the photo lives on is never asked about. The thumbnail
-        is in the application's own cache, which is the point of keeping it
-        there: it is servable while the disk is in a drawer (RFC-030
-        section 4.1).
+        O dispositivo em que a foto está nunca é consultado. A thumbnail está
+        no cache do próprio aplicativo, e é para isso que ela fica ali: ela
+        pode ser servida enquanto o disco está na gaveta (RFC-030 §4.1).
         """
         metadata = self._repository.get_index_metadata(image_id)
         if metadata is None:

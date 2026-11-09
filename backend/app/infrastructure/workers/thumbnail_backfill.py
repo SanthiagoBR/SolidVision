@@ -1,27 +1,28 @@
-"""Give already-indexed images a thumbnail, without the model (RFC-030 section 7.2).
+"""Dá às imagens já indexadas uma thumbnail, sem o modelo (RFC-030 §7.2).
 
     python -m app.infrastructure.workers.thumbnail_backfill --root PATH
     python -m app.infrastructure.workers.thumbnail_backfill --root PATH --force
     python -m app.infrastructure.workers.thumbnail_backfill --root PATH --dry-run
 
-Images indexed before RFC-030 have no thumbnail, and so does any image whose
-thumbnail failed to render while it was being indexed. The indexing scan
-does not repair either: rendering is a full decode, and doing it for every
-file a re-scan skips would turn a `stat` per file into a decode per file.
-This command is where that work is paid for, once, when the operator asks.
+As imagens indexadas antes do RFC-030 não têm thumbnail, e nenhuma imagem cuja
+thumbnail falhou ao ser renderizada durante a indexação tem. O scan de
+indexação não conserta nenhum dos dois casos: renderizar é uma decodificação
+completa, e fazê-la para cada arquivo que um novo scan pula transformaria um
+`stat` por arquivo numa decodificação por arquivo. Este comando é onde esse
+trabalho é pago, uma vez, quando o operador pede.
 
-**It never loads, imports, or constructs the embedding model**, the property
-`capture_date_backfill` established (now `exif_backfill`, RFC-032) and
-`tests/infrastructure/workers/test_thumbnail_backfill.py` checks on the real
-import graph. Pillow is imported; torch is not.
+**Ele nunca carrega, importa ou constrói o modelo de embedding**, a
+propriedade que o `capture_date_backfill` estabeleceu (hoje `exif_backfill`,
+RFC-032) e que `tests/infrastructure/workers/test_thumbnail_backfill.py`
+verifica no grafo real de imports. O Pillow é importado; o torch, não.
 
-It only reads the collection. Thumbnails are written to
-`settings.thumbnail_directory` and nowhere else (RFC-030 section 7.1), and
-that directory is skipped by the walk even if it lies under `--root`.
+Ele só lê a coleção. As thumbnails são gravadas em
+`settings.thumbnail_directory` e em nenhum outro lugar (RFC-030 §7.1), e essa
+pasta é pulada pela varredura mesmo que fique sob `--root`.
 
-The disk must be plugged in, because the pictures are on it (RFC-027
-section 7). **`--root` is required and has no default**, for the reason the
-indexing worker gives.
+O disco precisa estar conectado, porque as fotos estão nele (RFC-027 §7).
+**`--root` é obrigatório e não tem padrão**, pelo motivo que o worker de
+indexação dá.
 """
 
 from __future__ import annotations
@@ -107,12 +108,12 @@ def _log_summary(summary: ThumbnailBackfillSummary) -> None:
 
 
 def main() -> None:
-    """Compose the backfill and run it against one explicitly named root.
+    """Compõe o backfill e o roda contra uma raiz nomeada explicitamente.
 
-    Function-local imports, as in `exif_backfill`, so that importing
-    this module for its parser or its tests pulls in no database driver.
-    `app.presentation.dependencies` is absent from the list for the reason
-    it is absent there: it is where the CLIP adapter is composed.
+    Imports dentro da função, como em `exif_backfill`, para que importar este
+    módulo pelo parser ou pelos testes não traga nenhum driver de banco.
+    `app.presentation.dependencies` falta na lista pelo mesmo motivo por que
+    falta lá: é onde o adaptador CLIP é composto.
     """
     from app.application.use_cases.thumbnail_writer import ThumbnailWriter
     from app.infrastructure.config.settings import settings
@@ -158,8 +159,8 @@ def main() -> None:
             settings.thumbnail_directory,
         )
         undiscoverable: list[IndexingFailure] = []
-        # No capture date is read: this command renders pictures, and an
-        # EXIF read per file would be a cost with no consumer.
+        # Nenhuma data de captura é lida: este comando renderiza imagens, e uma
+        # leitura de EXIF por arquivo seria um custo sem consumidor.
         provider = FilesystemImageProvider(
             root,
             settings.supported_extensions,

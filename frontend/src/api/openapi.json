@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "ActiveJobSchema": {
-        "description": "The job currently holding a device, as a sidebar needs it.\n\nTwo fields, because two is what the sidebar draws: something is\nhappening, and whether it has started. A client that wants counters\npolls `GET /api/v1/jobs/{id}`, which is the route that publishes\nthem, rather than having them duplicated into every device list\n(RFC-031 section 4).",
+        "description": "O job que segura um dispositivo agora, como a barra lateral precisa dele.\n\nDois campos, porque dois é o que a barra lateral desenha: algo está\nacontecendo, e se já começou. Um cliente que quer contadores consulta\n`GET /api/v1/jobs/{id}`, que é a rota que os publica, em vez de tê-los\nduplicados em toda lista de dispositivos (RFC-031 §4).",
         "properties": {
           "id": {
             "description": "The job holding this device",
@@ -23,7 +23,7 @@
         "type": "object"
       },
       "BrowseResponseSchema": {
-        "description": "One page of every photo under the filters, by capture date.\n\n`limit` echoes the page size applied, as the searches do (RFC-026).\n`summary` is the first page's and `null` on the pages after it, so that\ninside it `null` keeps meaning \"there was no such filter\" and never\n\"this page did not count\".",
+        "description": "Uma página de todas as fotos sob os filtros, por data de captura.\n\n`limit` devolve o tamanho de página aplicado, como as buscas fazem\n(RFC-026). `summary` é da primeira página e `null` nas páginas seguintes,\npara que, dentro dele, `null` continue querendo dizer \"não houve esse\nfiltro\", e nunca \"esta página não contou\".",
         "properties": {
           "limit": {
             "description": "The page size actually applied",
@@ -78,7 +78,7 @@
         "type": "object"
       },
       "CapabilitiesSchema": {
-        "description": "What the client is allowed to assume about this server.",
+        "description": "O que o cliente pode supor sobre este servidor.",
         "properties": {
           "address_search": {
             "description": "Whether GET /api/v1/geocode answers: draw the address field only when it does. The address is sent to an online service (RFC-043).",
@@ -123,7 +123,7 @@
         "type": "object"
       },
       "CaptureSource": {
-        "description": "One link of the RFC-028 section 4 fallback chain, or the end of it.\n\nA `StrEnum` persisted into a plain `String` column rather than a native\nPostgreSQL `ENUM`. Adding a member -- `gps_derived`, `filename_parsed`,\nthe sources RFC-028 section 11 anticipates -- would then cost a\nmigration for no benefit a closed database type actually provides here.\n\n**There is no `mtime` member, and there must never be one.** RFC-028\nsection 4 is a deliberate reversal of the draft that ended the chain on\nthe filesystem timestamp: `mtime` is systematically wrong for a\ncollection whose life consists of being copied from disk to disk\n(RFC-028 section 2.1), and a member for it would make that wrong date\nlook like one more legitimate source.\n\n**The absence of a value is not a member either.** A row whose source\nis `NULL` was *never examined* -- it predates RFC-028, or it was\nscanned with extraction switched off -- while `UNKNOWN` means it *was*\nexamined and holds no date at all. The two must not collapse: a scan\nrereads the first kind and leaves the second alone, which is what keeps\nre-scanning an unchanged collection free of writes (RFC-028 section\n4.2).",
+        "description": "Um elo da cadeia de recuo do RFC-028 §4, ou o fim dela.\n\nUm `StrEnum` persistido numa coluna `String` simples, e não num `ENUM`\nnativo do PostgreSQL. Acrescentar um membro -- `gps_derived`,\n`filename_parsed`, as fontes que o RFC-028 §11 antecipa -- custaria então\numa migration sem nenhum benefício que um tipo fechado do banco de fato\ndê aqui.\n\n**Não há membro `mtime`, e nunca pode haver.** O RFC-028 §4 é uma\nreversão deliberada do rascunho que terminava a cadeia no timestamp do\nsistema de arquivos: o `mtime` é sistematicamente errado para uma coleção\ncuja vida consiste em ser copiada de disco em disco (RFC-028 §2.1), e um\nmembro para ele faria essa data errada parecer mais uma fonte legítima.\n\n**A ausência de valor também não é um membro.** Uma linha cuja fonte é\n`NULL` *nunca foi examinada* -- é anterior ao RFC-028, ou passou por um\nscan com a extração desligada -- enquanto `UNKNOWN` quer dizer que ela\n*foi* examinada e não tem data nenhuma. As duas não podem se fundir: um\nscan relê o primeiro tipo e deixa o segundo em paz, e é isso que mantém\nsem escritas um novo scan de uma coleção inalterada (RFC-028 §4.2).",
         "enum": [
           "exif_original",
           "exif_digitized",
@@ -133,7 +133,7 @@
         "type": "string"
       },
       "CreateJobRequestSchema": {
-        "description": "What a client sends to ask for an indexing run.\n\n`scopes` are folders relative to the device's mount point, and an\nempty list means the whole device -- which is what zero scope rows\nalready mean in the schema (RFC-029 section 5.2).\n\nThey are plain strings rather than a validated type here on purpose.\nWhat makes a scope legal -- relative, no `..`, no UNC share, and a\nfolder that is actually on that disk -- is a domain rule plus a\nfilesystem question, and answering either in Presentation would put\nbusiness logic in the wrong layer and produce a 422 where a 400 with\na readable message belongs.",
+        "description": "O que um cliente envia para pedir uma rodada de indexação.\n\n`scopes` são pastas relativas ao ponto de montagem do dispositivo, e uma\nlista vazia quer dizer o dispositivo inteiro -- que é o que zero linhas\nde escopo já querem dizer no schema (RFC-029 §5.2).\n\nSão strings simples, e não um tipo validado, aqui de propósito. O que\ntorna um escopo válido -- relativo, sem `..`, sem compartilhamento UNC, e\numa pasta que de fato está naquele disco -- é uma regra de domínio mais\numa pergunta ao sistema de arquivos, e responder a qualquer uma das duas\nna Apresentação poria regra de negócio na camada errada e produziria um\n422 onde cabe um 400 com uma mensagem legível.",
         "properties": {
           "device_id": {
             "description": "The device to index",
@@ -157,7 +157,7 @@
         "type": "object"
       },
       "DeviceDetailSchema": {
-        "description": "One device, resolved against the moment the request arrived.",
+        "description": "Um dispositivo, resolvido no momento em que a requisição chegou.",
         "properties": {
           "active_job": {
             "anyOf": [
@@ -329,7 +329,7 @@
         "type": "object"
       },
       "DeviceListSchema": {
-        "description": "Every device the system knows, sorted by label.",
+        "description": "Todo dispositivo que o sistema conhece, ordenado por rótulo.",
         "properties": {
           "devices": {
             "description": "Known devices, connected and not, ordered by label",
@@ -347,7 +347,7 @@
         "type": "object"
       },
       "DeviceSchema": {
-        "description": "The disk an image is on, as the user named it, and whether it is here.",
+        "description": "O disco da imagem, com o nome que o usuário lhe deu, e se ele está aqui.",
         "properties": {
           "connected": {
             "description": "Whether the disk was mounted when this response was built. Asked of the operating system per request and never stored, so it can change between two requests for the same image.",
@@ -375,7 +375,7 @@
         "type": "object"
       },
       "FolderListSchema": {
-        "description": "One level of one device's folder tree.\n\n`path` and `parent` are both canonical spellings and both\n`/`-separated, and `\"\"` means the device root in either of them. The\nroot's parent is the root, so a client walking upwards stops there\nrather than falling off.",
+        "description": "Um nível da árvore de pastas de um dispositivo.\n\n`path` e `parent` são ambos grafias canônicas, ambos separados por `/`,\ne `\"\"` quer dizer a raiz do dispositivo em qualquer um dos dois. O pai\nda raiz é a raiz, então um cliente que sobe a árvore para ali, em vez\nde cair para fora.",
         "properties": {
           "device_id": {
             "description": "The device these folders are on",
@@ -412,7 +412,7 @@
         "type": "object"
       },
       "FolderSchema": {
-        "description": "One folder inside a device, and what this system knows about it.",
+        "description": "Uma pasta dentro de um dispositivo, e o que este sistema sabe dela.",
         "properties": {
           "has_children": {
             "description": "Whether this folder holds folders of its own -- draw an expand arrow only when true",
@@ -462,7 +462,7 @@
         "type": "object"
       },
       "FolderState": {
-        "description": "How much of a folder this system has indexed, as one word.\n\nA `StrEnum` so the member *is* the string on the wire, following\n`JobStatus`. Unlike `JobStatus` it is never written to a column --\nthere is no folder table and RFC-031 adds no migration -- so the\nchoice is only about the JSON.",
+        "description": "Quanto de uma pasta este sistema indexou, numa palavra.\n\nUm `StrEnum`, para que o membro *seja* a string que vai na rede, como\n`JobStatus`. Ao contrário de `JobStatus`, ele nunca é escrito numa coluna\n-- não há tabela de pastas, e o RFC-031 não acrescenta migration -- então\na escolha é só sobre o JSON.",
         "enum": [
           "indexing",
           "queued",
@@ -507,7 +507,7 @@
         "type": "object"
       },
       "ImageSchema": {
-        "description": "One indexed image, where it is, and whether it can be reached right now.",
+        "description": "Uma imagem indexada, onde ela está, e se dá para alcançá-la agora.",
         "properties": {
           "absolute_path": {
             "anyOf": [
@@ -617,7 +617,7 @@
         "type": "object"
       },
       "JobListSchema": {
-        "description": "A page of jobs, newest first.",
+        "description": "Uma página de jobs, os mais novos primeiro.",
         "properties": {
           "jobs": {
             "description": "Matching jobs, most recent first",
@@ -635,7 +635,7 @@
         "type": "object"
       },
       "JobSchema": {
-        "description": "One indexing job, as a client polling it sees it.",
+        "description": "Um job de indexação, como o vê um cliente que o consulta.",
         "properties": {
           "attempts": {
             "description": "How many times a worker was given this job and did not finish it -- a crashed executor, a reboot mid-run",
@@ -782,7 +782,7 @@
         "type": "object"
       },
       "JobStatus": {
-        "description": "Where a job is in its life.\n\nA `StrEnum` so that the member *is* the string the database column\nholds. The column is `TEXT` rather than a PostgreSQL `ENUM` for the\nreason RFC-028 gave `capture_source`: adding a state later should not\ncost a migration.",
+        "description": "Em que ponto da vida um job está.\n\nUm `StrEnum`, para que o membro *seja* a string que a coluna do banco\nguarda. A coluna é `TEXT`, e não um `ENUM` do PostgreSQL, pela razão que o\nRFC-028 deu para `capture_source`: acrescentar um estado depois não deveria\ncustar uma migration.",
         "enum": [
           "pending",
           "running",
@@ -794,7 +794,7 @@
         "type": "string"
       },
       "ListingOrder": {
-        "description": "Which way the capture date runs. The tie-breaks never change direction.\n\n`NEWEST` answers \"how is it now\" first, the convention of every gallery;\n`OLDEST` is the same list with the date reversed -- \"from the hole in the\nground to the finished building\" (RFC-044 section 3.1).\n\nIn both, a photo with no capture date comes **after every dated one**, in\nfolder order (section 3.2). It has no place on a timeline, and putting it\nfirst in one direction would put the undated at the top of the list.",
+        "description": "Para que lado corre a data de captura. Os desempates nunca mudam de sentido.\n\n`NEWEST` responde primeiro \"como está agora\", a convenção de toda\ngaleria; `OLDEST` é a mesma lista com a data invertida -- \"do buraco no\nchão ao prédio pronto\" (RFC-044 §3.1).\n\nNos dois, uma foto sem data de captura vem **depois de toda foto com\ndata**, na ordem da pasta (§3.2). Ela não tem lugar numa linha do tempo, e\npô-la primeiro num dos sentidos poria as sem data no topo da lista.",
         "enum": [
           "newest",
           "oldest"
@@ -803,7 +803,7 @@
         "type": "string"
       },
       "ListingSummarySchema": {
-        "description": "The whole list under the filters, not this page (RFC-044 section 5.3).",
+        "description": "A lista inteira sob os filtros, não esta página (RFC-044 §5.3).",
         "properties": {
           "excluded_unknown_date": {
             "anyOf": [
@@ -878,7 +878,7 @@
         "type": "object"
       },
       "MapCellSchema": {
-        "description": "One square of the grid: where its centre is, and how many photos are in it.",
+        "description": "Um quadrado da grade: onde fica o centro, e quantas fotos há nele.",
         "properties": {
           "count": {
             "description": "How many photos fall in the cell; never 0",
@@ -905,7 +905,7 @@
         "type": "object"
       },
       "MapResponseSchema": {
-        "description": "The body of a map request.\n\n`precision_applied` echoes the precision actually used, the way search\nechoes `limit` (RFC-026): when the requested grid would have had more\nthan `MAX_MAP_CELLS` squares, the grid was coarsened, and a client that\ncould not see that would mistake bigger squares for a sparser\ncollection.",
+        "description": "O corpo da resposta a um pedido de mapa.\n\n`precision_applied` devolve a precisão de fato usada, do jeito que a\nbusca devolve `limit` (RFC-026): quando a grade pedida teria mais de\n`MAX_MAP_CELLS` quadrados, a grade foi engrossada, e um cliente que não\nconseguisse ver isso confundiria quadrados maiores com uma coleção mais\nesparsa.",
         "properties": {
           "cells": {
             "description": "Every non-empty cell in the area, under the device and date filters, ordered by latitude then longitude. Only images with an embedding -- the ones a search could return -- are counted.",
@@ -974,7 +974,7 @@
         "type": "object"
       },
       "PositionSource": {
-        "description": "Where `latitude`/`longitude` were read from, or that nothing was.\n\nA `StrEnum` persisted into a plain `String` column rather than a native\nPostgreSQL `ENUM`. Two future members already have names and are\ndeliberately **not** members yet: `'manual'` -- the user marks the point\non the map -- and `'subject_estimated'` -- the photographed point\ncomputed from gimbal and altitude (RFC-032 sections 9 and 10). Each has\na writer to build first, and adding either must not cost a migration.\n\n**The absence of a value is not a member.** A row whose source is NULL\nwas *never examined* -- it predates RFC-032, or was scanned with\n`extract_gps` off -- while `UNKNOWN` means it *was* examined and holds\nno usable position. The two must not collapse: a scan writes only NULL\nrows, which is what keeps re-scanning an unchanged collection free of\nwrites, and files without GPS are numerous in exactly the collection\nthis RFC serves.\n\n**There is no XMP member.** RFC-032 section 2.3 measured 40 real DJI\nfiles carrying a `drone-dji` XMP packet and found no latitude or\nlongitude in any of them; a member for a source that was never seen to\nhold a position would be a fallback that never fires.",
+        "description": "De onde `latitude`/`longitude` foram lidas, ou que nada foi lido.\n\nUm `StrEnum` persistido numa coluna `String` simples, e não num `ENUM`\nnativo do PostgreSQL. Dois membros futuros já têm nome e,\ndeliberadamente, **ainda não** são membros: `'manual'` -- o usuário\nmarca o ponto no mapa -- e `'subject_estimated'` -- o ponto fotografado,\ncalculado a partir do gimbal e da altitude (RFC-032 §9 e §10). Cada um\ntem antes um escritor a construir, e acrescentar qualquer dos dois não\npode custar uma migration.\n\n**A ausência de valor não é um membro.** Uma linha cuja origem é NULL\n*nunca foi examinada* -- é anterior ao RFC-032, ou foi escaneada com\n`extract_gps` desligado --, enquanto `UNKNOWN` quer dizer que ela *foi*\nexaminada e não tem posição utilizável. Os dois não podem se fundir: um\nscan só grava linhas NULL, e é isso que mantém sem escritas o re-scan de\numa coleção que não mudou; e arquivos sem GPS são muitos justamente na\ncoleção a que este RFC serve.\n\n**Não há membro XMP.** O RFC-032 §2.3 mediu 40 arquivos DJI reais com um\npacote XMP `drone-dji` e não achou latitude nem longitude em nenhum; um\nmembro para uma origem que nunca foi vista guardando uma posição seria\num fallback que nunca dispara.",
         "enum": [
           "exif_gps",
           "unknown"
@@ -983,7 +983,7 @@
         "type": "string"
       },
       "PurgedImagesSchema": {
-        "description": "What `DELETE /devices/{id}/missing-images` removed (RFC-046 section 5.7).",
+        "description": "O que `DELETE /devices/{id}/missing-images` removeu (RFC-046 §5.7).",
         "properties": {
           "purged": {
             "description": "How many photos left the index: every one a scan had marked as not found on this disk. Their thumbnails left the cache too.",
@@ -998,7 +998,7 @@
         "type": "object"
       },
       "RankedImagesSchema": {
-        "description": "A ranking of the index, whatever the query was (RFC-038 section 4.1).\n\nThe body of `POST /images/search/by-image` as it stands, and the base of\nthe other two: the search by text adds the `query` it echoes, and\n*\"Parecidas com esta\"* the id of the photo it started from. One shape\nand one set of rules for the three, so a client reads them the same way.\n\n`limit` echoes the value actually used, not the one requested, which\nis usually not sent at all: without it a caller receiving three\nresults cannot tell \"there were only three images\" from \"the default\nis smaller than I assumed\".",
+        "description": "Um ranking do índice, qualquer que tenha sido a consulta (RFC-038 §4.1).\n\nO corpo de `POST /images/search/by-image` tal como é, e a base dos outros\ndois: a busca por texto acrescenta a `query` que devolve, e *\"Parecidas\ncom esta\"*, o id da foto de onde partiu. Um formato e um conjunto de\nregras para os três, para que um cliente os leia do mesmo jeito.\n\n`limit` devolve o valor de fato usado, não o pedido, que em geral nem é\nenviado: sem ele, quem recebe três resultados não consegue distinguir\n\"só havia três imagens\" de \"o default é menor do que eu supunha\".",
         "properties": {
           "excluded_unknown_date": {
             "anyOf": [
@@ -1048,7 +1048,7 @@
         "type": "object"
       },
       "RegisterDeviceRequestSchema": {
-        "description": "What a client sends to register a disk it saw in `GET /volumes`.\n\n**There is no path field, and there must never be one.** The identity\nis an opaque key the server minted; the server looks it up in an\nenumeration it just performed and uses *its own* mount point as the\nroot. A client never composes a location, and an identity a client\ninvented resolves to nothing at all -- which is the difference between\nthis and accepting `{\"path\": \"D:\\\\fotos\"}`, and the whole of RFC-031\nsection 5.1. `test_device_registration_takes_no_path.py` asserts the\nfield set here is exactly these three.\n\nBoth identity fields are plain `str` rather than `VolumeIdentity` and\n`VolumeKind`, and that is deliberate. Declaring `volume_kind:\nVolumeKind` would have FastAPI refuse an unknown value with a `422`\nbefore the use case ever runs, and the `400\nInvalidVolumeIdentityError` RFC-031 section 6 specifies would become\nunreachable. It is the argument `CreateJobRequestSchema` already\nmakes for `scopes`: what makes a value legal is a domain rule, and\nanswering it in Presentation produces a 422 where a 400 with a\nreadable message belongs.\n\nExtra fields are **ignored**, which is Pydantic's default and is left\nalone here. A client that smuggles in a `path` gets a successful\nregistration of the volume it named and no path is opened, which is\nwhat the guard test asserts. Only `RenameDeviceRequestSchema` forbids\nextras, and for a reason specific to it.",
+        "description": "O que um cliente envia para registrar um disco que viu em `GET /volumes`.\n\n**Não há campo de caminho, e nunca pode haver.** A identidade é uma\nchave opaca que o servidor cunhou; o servidor a procura numa enumeração\nque acabou de fazer e usa o *seu próprio* ponto de montagem como raiz.\nUm cliente nunca compõe uma localização, e uma identidade que um cliente\ninventou não resolve para nada -- essa é a diferença entre isto e\naceitar `{\"path\": \"D:\\\\fotos\"}`, e é todo o RFC-031 §5.1.\n`test_device_registration_takes_no_path.py` afirma que o conjunto de\ncampos daqui é exatamente estes três.\n\nOs dois campos de identidade são `str` simples, e não `VolumeIdentity` e\n`VolumeKind`, e isso é deliberado. Declarar `volume_kind:\nVolumeKind` faria o FastAPI recusar um valor desconhecido com um `422`\nantes de o caso de uso sequer rodar, e o `400\nInvalidVolumeIdentityError` que o RFC-031 §6 especifica ficaria\ninalcançável. É o argumento que `CreateJobRequestSchema` já faz para\n`scopes`: o que torna um valor válido é uma regra de domínio, e\nresponder a ela na Apresentação produz um 422 onde cabe um 400 com uma\nmensagem legível.\n\nCampos extras são **ignorados**, que é o default do Pydantic e fica\ncomo está aqui. Um cliente que contrabandeia um `path` recebe um\nregistro bem-sucedido do volume que nomeou, e nenhum caminho é aberto,\nque é o que o teste de guarda afirma. Só `RenameDeviceRequestSchema`\nproíbe extras, e por um motivo específico dele.",
         "properties": {
           "label": {
             "default": "",
@@ -1076,7 +1076,7 @@
       },
       "RenameDeviceRequestSchema": {
         "additionalProperties": false,
-        "description": "What a client sends to rename a disk. Only the label, and strictly.\n\n**`extra=\"forbid\"`, the only schema in the project that has it.** The\ndefault is `extra=\"ignore\"`, and the default is wrong here in a way\nthat is invisible: a client sending `last_scan_file_count` would get\na `200`, believe it had edited the declared denominator of the \"%\nindexed\" figure, and have been silently ignored. A refusal is the\nonly honest answer, because the belief the request encodes is false\n(RFC-031 section 7).\n\nIt is not being added to the other schemas of this RFC. This is the\nroute where a field a client might plausibly send is a field this\nsystem deliberately does not let anyone write, and that is what makes\nsilence dangerous here and unremarkable elsewhere.",
+        "description": "O que um cliente envia para renomear um disco. Só o rótulo, e estrito.\n\n**`extra=\"forbid\"`, o único schema do projeto que o tem.** O default é\n`extra=\"ignore\"`, e o default está errado aqui de um jeito invisível: um\ncliente que enviasse `last_scan_file_count` receberia um `200`,\nacreditaria ter editado o denominador declarado do número \"%\nindexado\", e teria sido ignorado em silêncio. Uma recusa é a única\nresposta honesta, porque a crença que a requisição carrega é falsa\n(RFC-031 §7).\n\nEle não está sendo acrescentado aos outros schemas deste RFC. Esta é a\nrota em que um campo que um cliente plausivelmente enviaria é um campo\nque este sistema deliberadamente não deixa ninguém gravar, e é isso que\ntorna o silêncio perigoso aqui e banal nos outros lugares.",
         "properties": {
           "label": {
             "description": "The new name for this disk. The only editable field.",
@@ -1092,7 +1092,7 @@
         "type": "object"
       },
       "SearchResponseSchema": {
-        "description": "The body of a successful search by text.\n\n`query` echoes what the client sent, never what the model was asked.\nThe string CLIP actually encodes is the RFC-023 template wrapped\naround a possibly translated query -- for a Portuguese input it comes\nback as `a photo of . a rural property with a lake`, leading `\". \"`\nand all (RFC-025 section 11.5). Publishing that would make an\ninternal artifact of the translation path part of the contract, and\nwould change the response the day the template changes.\n\nSince RFC-038 the rest is `RankedImagesSchema`'s, field for field: the\nresponse did not change, only where its fields are declared.",
+        "description": "O corpo de uma busca por texto bem-sucedida.\n\n`query` devolve o que o cliente enviou, nunca o que foi pedido ao\nmodelo. A string que o CLIP de fato codifica é o template do RFC-023 em\nvolta de uma consulta possivelmente traduzida -- para uma entrada em\nportuguês ela volta como `a photo of . a rural property with a lake`,\ncom o `\". \"` na frente e tudo (RFC-025 §11.5). Publicar isso tornaria um\nartefato interno do caminho de tradução parte do contrato, e mudaria a\nresposta no dia em que o template mudasse.\n\nDesde o RFC-038, o resto é de `RankedImagesSchema`, campo a campo: a\nresposta não mudou, só o lugar onde seus campos são declarados.",
         "properties": {
           "excluded_unknown_date": {
             "anyOf": [
@@ -1148,7 +1148,7 @@
         "type": "object"
       },
       "SearchResultSchema": {
-        "description": "One ranked image, as a client sees it: the image, plus how well it matched.\n\n**The path is published now, and RFC-030 section 2 is why.** RFC-026\nkept it out with two arguments, recorded here rather than erased:\n\n> *\"Publishing it would leak the server's filesystem layout to every\n> caller, and would hand clients an identifier that changes whenever a\n> file moves.\"*\n\nThe first dissolved. In a local-first deployment the server's\nfilesystem *is* the user's, and a search that ends in a filename and a\nUUID has found a photo without telling anyone where it is -- the last\nstep of the product was missing. The second still holds, and it shapes\nwhat is published: `id` remains the only identifier, and the paths are\ndisplay. No route accepts a path back.\n\nThe shape is `ImageSchema` -- the body of `GET /images/{id}`, which\nthis docstring once promised \"RFC-027\" would add -- plus `similarity`,\nwhich exists only inside a query (RFC-025 section 4.1).\n\n**A hit on a disconnected disk is a full answer.** `device.connected`\nis false, `absolute_path` is null, and `device.label` and\n`relative_path` say \"HD3, fotos/2018/junho\" -- which, for someone with\ntwenty disks, is the expensive part of the question (RFC-030 section\n4.1).\n\n`captured_at` and `capture_source` are attributes of the photograph,\nidentical for every caller and every query, and the two things that\nmake a date-filtered result legible (RFC-028 section 12). `latitude`,\n`longitude` and `position_source` do the same for a circle (RFC-032).",
+        "description": "Uma imagem ranqueada, como o cliente a vê: a imagem, mais o quanto casou.\n\n**O caminho agora é publicado, e o RFC-030 §2 diz por quê.** O RFC-026 o\ndeixou de fora com dois argumentos, registrados aqui em vez de apagados:\n\n> *\"Publicá-lo exporia o layout do sistema de arquivos do servidor a todo\n> chamador, e entregaria aos clientes um identificador que muda sempre\n> que um arquivo se move.\"*\n\nO primeiro se desfez. Numa implantação local-first, o sistema de\narquivos do servidor *é* o do usuário, e uma busca que termina num nome\nde arquivo e num UUID achou uma foto sem dizer a ninguém onde ela está\n-- faltava o último passo do produto. O segundo continua valendo, e\nmolda o que é publicado: `id` continua sendo o único identificador, e os\ncaminhos são exibição. Nenhuma rota aceita um caminho de volta.\n\nO formato é `ImageSchema` -- o corpo de `GET /images/{id}`, que esta\ndocstring um dia prometeu que o \"RFC-027\" acrescentaria -- mais\n`similarity`, que só existe dentro de uma consulta (RFC-025 §4.1).\n\n**Um acerto num disco desconectado é uma resposta completa.**\n`device.connected` é falso, `absolute_path` é nulo, e `device.label` e\n`relative_path` dizem \"HD3, fotos/2018/junho\" -- o que, para quem tem\nvinte discos, é a parte cara da pergunta (RFC-030 §4.1).\n\n`captured_at` e `capture_source` são atributos da fotografia, idênticos\npara todo chamador e toda consulta, e as duas coisas que tornam legível\num resultado filtrado por data (RFC-028 §12). `latitude`, `longitude` e\n`position_source` fazem o mesmo para um círculo (RFC-032).",
         "properties": {
           "absolute_path": {
             "anyOf": [
@@ -1264,7 +1264,7 @@
         "type": "object"
       },
       "SimilarImagesResponseSchema": {
-        "description": "The body of *\"Parecidas com esta\"*: `GET /images/{id}/similar` (RFC-038).\n\n`image_id` is the photo the ranking started from, which is never among the\n`results`: it would come first with a similarity of 1. A copy of it -- the\nsame bytes under another id -- is, and comes near the top.",
+        "description": "O corpo de *\"Parecidas com esta\"*: `GET /images/{id}/similar` (RFC-038).\n\n`image_id` é a foto de onde o ranking partiu, que nunca está entre os\n`results`: viria em primeiro, com similaridade 1. Uma cópia dela -- os\nmesmos bytes sob outro id -- está, e vem perto do topo.",
         "properties": {
           "excluded_unknown_date": {
             "anyOf": [
@@ -1361,7 +1361,7 @@
         "type": "object"
       },
       "VolumeListSchema": {
-        "description": "What is plugged into this machine, ordered by mount point.",
+        "description": "O que está plugado nesta máquina, ordenado por ponto de montagem.",
         "properties": {
           "volumes": {
             "description": "Mounted volumes, registered or not. Volumes the platform refuses to name -- an empty optical drive, a locked BitLocker volume -- are skipped rather than reported as errors.",
@@ -1379,7 +1379,7 @@
         "type": "object"
       },
       "VolumeSchema": {
-        "description": "One volume attached to this machine right now.",
+        "description": "Um volume conectado a esta máquina agora.",
         "properties": {
           "device_id": {
             "anyOf": [
@@ -1455,7 +1455,7 @@
   "paths": {
     "/api/v1/capabilities": {
       "get": {
-        "description": "Report the six things a client draws differently because of.\n\n`local_file_actions` mirrors `settings.allow_local_file_actions`\nexactly, including when it is `False` -- a `200` saying \"no\" is the\nwhole reason this route exists, and is why the configuration guard is\nnot on it.\n\n`platform` is `sys.platform`, read here rather than inferred from\nanything: only the Windows volume adapter and the Windows file\nrevealer ship, and a client is entitled to know which operating\nsystem answered (RFC-027 section 4.1).\n\n`version` is `settings.project_version` -- the package version, which\nis `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the\nsprint number, and the sprint number is not the version of anything\nthat ships. The setting is reported as it stands rather than the\nproject being renumbered to match an illustration.\n\n`max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),\nand each passes the bar: the size *\"Mostrar mais\"* asks for, and the\nsmallest radius of the list. Both are policy the API already enforces\n-- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the\nuser's file -- and a copy of either in the interface is the copy RFC-026\nsection 8.2 refused to put in the route's signature: it would drift.\n\n`address_search` came with RFC-043: the address field is drawn only\nwhen `/geocode` answers.\n\nThe bar for a seventh field is *the UI draws something different\nbecause of it*. Without a criterion this becomes a configuration\ndump, which is the risk RFC-031 section 15 names.",
+        "description": "Informa as seis coisas por causa das quais um cliente desenha diferente.\n\n`local_file_actions` espelha `settings.allow_local_file_actions`\nexatamente, inclusive quando é `False` -- um `200` dizendo \"não\" é a razão\ninteira de esta rota existir, e é por isso que a guarda de configuração\nnão está nela.\n\n`platform` é `sys.platform`, lido aqui em vez de inferido de qualquer\ncoisa: só o adaptador de volumes do Windows e o revelador de arquivos do\nWindows são distribuídos, e um cliente tem direito de saber qual sistema\noperacional respondeu (RFC-027 §4.1).\n\n`version` é `settings.project_version` -- a versão do pacote, que é\n`0.1.0`. O exemplo do RFC-031 §9 mostra `0.5.0`; esse é o número da\nsprint, e o número da sprint não é a versão de nada que é distribuído. A\nconfiguração é informada como está, em vez de o projeto ser renumerado\npara bater com uma ilustração.\n\n`max_search_limit` e `min_radius_m` vieram com o RFC-038 (§2.4), e cada um\npassa pelo critério: o tamanho que o *\"Mostrar mais\"* pede, e o menor raio\nda lista. Os dois são política que a API já impõe -- `MAX_SEARCH_LIMIT` no\ncaso de uso, `settings.min_radius_m` do arquivo do usuário -- e uma cópia\nde qualquer um deles na interface é a cópia que o RFC-026 §8.2 se recusou\na pôr na assinatura da rota: ela divergiria.\n\n`address_search` veio com o RFC-043: o campo de endereço só é desenhado\nquando o `/geocode` responde.\n\nO critério para um sétimo campo é *a UI desenha algo diferente por causa\ndele*. Sem um critério isto vira um despejo de configuração, que é o risco\nque o RFC-031 §15 nomeia.",
         "operationId": "get_capabilities_api_v1_capabilities_get",
         "responses": {
           "200": {
@@ -1480,7 +1480,7 @@
     },
     "/api/v1/devices": {
       "get": {
-        "description": "Return every disk the system knows, connected or in a drawer.\n\n`connected` and `mount_point` describe **this instant** and are\nresolved per request from a single enumeration of the mounted\nvolumes, however many devices there are. That bound is the design\n(RFC-031 section 4.1): the obvious implementation asks the locator\nonce per device, which is right for a page of search hits and is N\nenumerations of the same filesystem here.\n\n`connected: false` is a normal answer, not a failure. The row exists,\nevery photo on that disk is still searchable, and its thumbnails are\nstill served (RFC-030 section 4.1) -- what the user is missing is the\nbytes.\n\nNo `percent_indexed`. The response carries `indexed_images`,\n`last_scan_file_count` and `last_scan_at` separately, so that nobody\ncan render the ratio without having the scan date in hand\n(ARCHITECTURE.md section 15, RFC-031 section 4.2).",
+        "description": "Retorna todo disco que o sistema conhece, conectado ou na gaveta.\n\n`connected` e `mount_point` descrevem **este instante** e são resolvidos\npor requisição a partir de uma única enumeração dos volumes montados,\nquantos dispositivos houver. Esse limite é o desenho (RFC-031 §4.1): a\nimplementação óbvia pergunta ao locator uma vez por dispositivo, o que é\ncerto para uma página de resultados de busca e aqui são N enumerações do\nmesmo sistema de arquivos.\n\n`connected: false` é uma resposta normal, não uma falha. A linha existe,\ntoda foto daquele disco continua buscável, e as suas thumbnails continuam\nservidas (RFC-030 §4.1) -- o que falta ao usuário são os bytes.\n\nNada de `percent_indexed`. A resposta traz `indexed_images`,\n`last_scan_file_count` e `last_scan_at` separados, para que ninguém consiga\ndesenhar a razão sem ter a data do scan em mãos (ARCHITECTURE.md §15,\nRFC-031 §4.2).",
         "operationId": "list_devices_api_v1_devices_get",
         "responses": {
           "200": {
@@ -1500,7 +1500,7 @@
         ]
       },
       "post": {
-        "description": "Register the volume with this identity, or return the device it already is.\n\n**201 the first time, 200 the second, and the difference is\nload-bearing.** `DeviceId` is `uuid5` over the volume identity, so\nregistering a known disk lands on the existing row: nothing was\ncreated, and a client counting creations would be counting wrong. It\nis not a 409 either -- a conflict describes a request the current\nstate refuses, and this one is not refused, it is already satisfied\n(RFC-031 section 6.1). The use case reports which happened; this\nfunction only chooses the number.\n\nA `label` sent on a second registration **is** applied. `save()` is\nan upsert by design, and the alternative -- ignoring it in silence --\nwould leave a user renaming a disk with no effect.\n\n**Neither `response` nor `describer` is client input.** FastAPI\ninjects the first so the status can be lowered to 200 and resolves\nthe second as a dependency; nothing a client sends can reach either.\nThe signature test asserts the parameter list is exactly these four\nnames, so a path parameter added later has nowhere to hide.\n\nThe `describer` is composed here rather than inside the registration\nfor the reason the search route composes `SearchImagesUseCase` with\n`ResolveImageLocationUseCase`: resolving where a disk is mounted and\nhow much of it is indexed is not registering it, and the CLI path\nthrough `RegisterDeviceUseCase.register()` must stay free of both.\nIt is what makes this response say `connected: true` with a real\nmount point, rather than reporting a disk the server has this\ninstant found mounted as absent.\n\nAn identity nobody is holding is a 409 naming what to do about it --\nplug the disk in -- and **nothing is written**. An invented identity\nis not a location: it is looked up in a mapping the server produced\nseconds ago, and what is not in it does not exist. A path, by\ncontrast, *is* a location whether or not anyone meant it to be, which\nis the whole of RFC-031 section 5.1.",
+        "description": "Cadastra o volume com esta identidade, ou retorna o dispositivo que ele já é.\n\n**201 na primeira vez, 200 na segunda, e a diferença importa.** `DeviceId`\né `uuid5` sobre a identidade do volume, então cadastrar um disco conhecido\ncai na linha existente: nada foi criado, e um cliente que contasse criações\ncontaria errado. Também não é um 409 -- um conflito descreve um pedido que o\nestado atual recusa, e este não é recusado, já está satisfeito\n(RFC-031 §6.1). O caso de uso informa o que aconteceu; esta função só\nescolhe o número.\n\nUm `label` enviado num segundo cadastro **é** aplicado. `save()` é um\nupsert por desenho, e a alternativa -- ignorá-lo em silêncio -- deixaria um\nusuário renomeando um disco sem efeito.\n\n**Nem `response` nem `describer` são entrada do cliente.** O FastAPI\ninjeta o primeiro para que o status possa baixar para 200 e resolve o\nsegundo como dependência; nada que um cliente envia alcança nenhum dos\ndois. O teste de assinatura afirma que a lista de parâmetros é exatamente\nesses quatro nomes, então um parâmetro de caminho acrescentado depois não\ntem onde se esconder.\n\nO `describer` é composto aqui, e não dentro do cadastro, pela razão por que\na rota de busca compõe `SearchImagesUseCase` com\n`ResolveImageLocationUseCase`: resolver onde um disco está montado e quanto\ndele está indexado não é cadastrá-lo, e o caminho da CLI por\n`RegisterDeviceUseCase.register()` tem de ficar livre dos dois. É o que faz\nesta resposta dizer `connected: true` com um ponto de montagem real, em vez\nde informar como ausente um disco que o servidor acabou de achar montado.\n\nUma identidade que ninguém detém é um 409 dizendo o que fazer a respeito --\nplugar o disco -- e **nada é escrito**. Uma identidade inventada não é uma\nlocalização: é procurada num mapeamento que o servidor produziu segundos\natrás, e o que não está nele não existe. Um caminho, ao contrário, *é* uma\nlocalização, quer alguém tenha querido isso ou não, que é todo o RFC-031\n§5.1.",
         "operationId": "register_device_api_v1_devices_post",
         "requestBody": {
           "content": {
@@ -1551,7 +1551,7 @@
     },
     "/api/v1/devices/{device_id}": {
       "patch": {
-        "description": "Change the disk's label. Nothing else about a device is editable.\n\n**Works with the disk in a drawer**, and that is the whole point of\nthe rename requiring no bytes: a name is a fact about our table, and\nRFC-027 section 2.3 is explicit that an unplugged disk is a device\nthe system knows perfectly well. The response still *reports*\nwhether the disk is here, and reporting `false` is as successful an\noutcome as reporting `true`.\n\nA body carrying anything but `label` is a **422**, not a quietly\nignored field. `last_scan_file_count` is the plausible thing to send\nand the exact thing that must not be writable: it is the declared\ndenominator of \"% indexed\", so an editable one is an invented number\nwith the appearance of a measurement (RFC-031 section 7).\n\nThe response is the shape `GET /devices` returns, resolved the same\nway, so a client can drop it straight into the row it renamed rather\nthan re-reading the list to learn whether anything else about the\ndisk still holds.",
+        "description": "Muda o rótulo do disco. Nada mais de um dispositivo é editável.\n\n**Funciona com o disco na gaveta**, e essa é toda a razão de o renomear\nnão exigir bytes: um nome é um fato da nossa tabela, e o RFC-027 §2.3 é\nexplícito em que um disco desplugado é um dispositivo que o sistema\nconhece perfeitamente. A resposta ainda *informa* se o disco está aqui, e\ninformar `false` é um desfecho tão bem-sucedido quanto informar `true`.\n\nUm corpo que traga qualquer coisa além de `label` é um **422**, não um\ncampo ignorado em silêncio. `last_scan_file_count` é a coisa plausível de\nenviar e exatamente a que não pode ser gravável: é o denominador declarado\ndo \"% indexado\", então um editável é um número inventado com aparência de\nmedição (RFC-031 §7).\n\nA resposta tem o formato que o `GET /devices` retorna, resolvido do mesmo\njeito, para que um cliente possa colocá-la direto na linha que renomeou em\nvez de reler a lista para saber se mais alguma coisa do disco ainda vale.",
         "operationId": "rename_device_api_v1_devices__device_id__patch",
         "parameters": [
           {
@@ -1608,7 +1608,7 @@
     },
     "/api/v1/devices/{device_id}/folders": {
       "get": {
-        "description": "Return the folders directly inside `path`, each with its indexing state.\n\n**One level per request.** Not a flat first level, which would turn\n\"index the wedding\" into \"index all of 2018\" -- five hours of\ninference to reach three hundred photos -- and not the whole tree,\nwhich costs the size of the disk every time the screen opens\n(RFC-031 section 8.1).\n\n**The paths that come back are the filesystem's spelling, not the\none that was asked for.** A request for `?path=FOTOS/2018` against a\nfolder called `Fotos/2018` answers `\"path\": \"Fotos/2018\"`, because\nthat is the string the client will send in `scopes[]` and `POST\n/jobs` compares path parts exactly.\n\n**Requires the disk to be plugged in: 409, naming it.** Unlike the\nrename above, this one needs bytes, and *which disk to plug in* is\nmore useful than being told a folder is not there.\n\nNo count of files on the disk and no percentage per folder. There is\nno denominator, and getting one means walking the subtree -- the read\nRFC-029 section 7.2 measured as dominant on a cold mechanical disk.\n`indexed_images` is exact and is what to render (RFC-031 section\n2.3).\n\nNot paginated. A folder with thousands of subfolders returns all of\nthem; the debt is declared in RFC-031 section 8.3 and measured before\nit is paid.",
+        "description": "Retorna as pastas logo dentro de `path`, cada uma com o seu estado de indexação.\n\n**Um nível por requisição.** Não um primeiro nível achatado, que\ntransformaria \"indexar o casamento\" em \"indexar todo 2018\" -- cinco horas\nde inferência para chegar a trezentas fotos -- nem a árvore inteira, que\ncusta o tamanho do disco toda vez que a tela abre (RFC-031 §8.1).\n\n**Os caminhos que voltam têm a grafia do sistema de arquivos, não a que\nfoi pedida.** Uma requisição de `?path=FOTOS/2018` contra uma pasta chamada\n`Fotos/2018` responde `\"path\": \"Fotos/2018\"`, porque esse é o texto que o\ncliente vai enviar em `scopes[]`, e o `POST /jobs` compara as partes do\ncaminho exatamente.\n\n**Exige o disco plugado: 409, dizendo qual.** Ao contrário do renomear\nacima, este precisa de bytes, e *qual disco plugar* é mais útil do que\nouvir que uma pasta não está lá.\n\nNenhuma contagem de arquivos no disco e nenhuma porcentagem por pasta. Não\nhá denominador, e obter um significa percorrer a subárvore -- a leitura que\no RFC-029 §7.2 mediu como dominante num disco mecânico frio.\n`indexed_images` é exato e é o que desenhar (RFC-031 §2.3).\n\nSem paginação. Uma pasta com milhares de subpastas retorna todas; a dívida\nestá declarada no RFC-031 §8.3 e será medida antes de ser paga.",
         "operationId": "list_device_folders_api_v1_devices__device_id__folders_get",
         "parameters": [
           {
@@ -1673,7 +1673,7 @@
     },
     "/api/v1/devices/{device_id}/missing-images": {
       "delete": {
-        "description": "Delete the photos of this disk that a scan marked as not found (RFC-046).\n\n**The one route that deletes rows of the index**, and only these: the\nones a scan of the whole disk did not find, and that are hidden from\nevery read since. The rows go in one transaction, and only then their\nthumbnails, from the application's own cache. **Irreversible**, which is\nwhy the interface asks first, with the number.\n\n**409 while the disk has a job**, pending or running: the job ends by\nunmarking the photos it found again, and this would delete them first.\nThe request is legitimate and the state does not allow it -- RFC-030's\n409.\n\n**The disk does not have to be connected.** The marks came from a scan\nthat was checked when it ran, and forgetting what is no longer on a disk\nneeds nothing from the disk. Nothing in the user's file system is\ntouched, so none of RFC-030's guards apply.",
+        "description": "Apaga as fotos deste disco que um scan marcou como não achadas (RFC-046).\n\n**A única rota que apaga linhas do índice**, e só estas: as que um scan do\ndisco inteiro não achou, e que estão escondidas de toda leitura desde\nentão. As linhas saem numa transação, e só depois as suas thumbnails, do\ncache do próprio aplicativo. **Irreversível**, e é por isso que a interface\npergunta antes, com o número.\n\n**409 enquanto o disco tem um job**, pendente ou rodando: o job termina\ndesmarcando as fotos que achou de novo, e isto as apagaria antes. O pedido\né legítimo e o estado não o permite -- o 409 do RFC-030.\n\n**O disco não precisa estar conectado.** As marcas vieram de um scan que foi\nverificado quando rodou, e esquecer o que não está mais num disco não\nprecisa de nada do disco. Nada no sistema de arquivos do usuário é tocado,\nentão nenhuma das guardas do RFC-030 se aplica.",
         "operationId": "purge_missing_images_api_v1_devices__device_id__missing_images_delete",
         "parameters": [
           {
@@ -1776,7 +1776,7 @@
     },
     "/api/v1/images/browse": {
       "get": {
-        "description": "*\"Ver todas as fotos daqui, por data\"*: the photos of a place, in time (RFC-044).\n\n**No query and no model.** The use case's provider does not depend on\n`get_embedding_model()`, which would import `torch` for a route that never\nencodes anything; so this answers with search `unavailable`, which is the\nonly way to see a place's photos without the model. No 503.\n\n**Declared before `/{image_id}`**, beside `/search` and `/map`, by the rule\nof this file: after it, `/images/browse` would be `image_id=\"browse\"` and a\n422. `test_browse_api.py` asks for it and requires a 200.\n\nThe filters are the search's, by the same dependency and the same rules and\n400s. Any set is accepted, the empty one included: the whole collection by\ndate is a valid question. `after` is an id and never a path (RFC-030\nsection 5.1): the cursor's key is read from the database. An `after` that\nnames no row is a 404 -- the photo left the index since the page before.\n\nOne INFO line per request, with the direction, the sizes, whether there\nwas a cursor, how many devices and whether there was a range or a circle --\n**never the coordinates, the dates of the range or the cursor's id**: where\nsomeone looks is the query of this route (RFC-026 section 16.1, RFC-040\nsection 2.7).",
+        "description": "*\"Ver todas as fotos daqui, por data\"*: as fotos de um lugar, no tempo (RFC-044).\n\n**Sem consulta e sem modelo.** O provider do caso de uso não depende de\n`get_embedding_model()`, que importaria o `torch` para uma rota que nunca\ncodifica nada; então isto responde com a busca `unavailable`, que é o único\njeito de ver as fotos de um lugar sem o modelo. Nada de 503.\n\n**Declarada antes de `/{image_id}`**, ao lado de `/search` e `/map`, pela\nregra deste arquivo: depois dela, `/images/browse` seria `image_id=\"browse\"`\ne um 422. `test_browse_api.py` a pede e exige um 200.\n\nOs filtros são os da busca, pela mesma dependência, com as mesmas regras e\nos mesmos 400. Qualquer conjunto é aceito, o vazio inclusive: a coleção\ninteira por data é uma pergunta válida. `after` é um id e nunca um caminho\n(RFC-030 §5.1): a chave do cursor é lida do banco. Um `after` que não nomeia\nlinha nenhuma é um 404 -- a foto saiu do índice desde a página anterior.\n\nUma linha INFO por requisição, com a direção, os tamanhos, se havia cursor,\nquantos dispositivos e se havia faixa ou círculo -- **nunca as coordenadas,\nas datas da faixa ou o id do cursor**: onde alguém olha é a consulta desta\nrota (RFC-026 §16.1, RFC-040 §2.7).",
         "operationId": "browse_images_api_v1_images_browse_get",
         "parameters": [
           {
@@ -1975,7 +1975,7 @@
     },
     "/api/v1/images/map": {
       "get": {
-        "description": "Count the photos in a viewport, cell by cell (RFC-032 section 7).\n\n**Declared before `/{image_id}`, beside `/search`, and that order is the\npoint.** Declared after it, `/images/map` would be matched as\n`image_id=\"map\"` and refused with a 422 -- for a route that exists.\n`tests/presentation/test_map_api.py` asks for it and requires a 200.\n\n**The query text is ignored -- there is no `q` -- by design.** A map\nthat reflected the query could only aggregate the top K, and the top 100\nof a 100,000-image index says nothing about geography. The map shows\nwhere the photos the *filters* allow are; ranking is `/search`'s job.\nThe filters are search's own -- `device_id`, `captured_from`,\n`captured_to`, by the same parameters and the same rules -- and a circle\nis not one of them: the area is the viewport.\n\nAn area whose `min` exceeds its `max` is a 400 -- on longitude that is\neither swapped corners or a viewport across the 180th meridian, which\nthis endpoint does not support (RFC-032 section 11). A synchronous `def`,\nlike `/search`, because the grouping is a blocking database call.",
+        "description": "Conta as fotos numa viewport, célula por célula (RFC-032 §7).\n\n**Declarada antes de `/{image_id}`, ao lado de `/search`, e essa ordem é\na questão.** Declarada depois, `/images/map` casaria como\n`image_id=\"map\"` e seria recusada com um 422 -- para uma rota que existe.\n`tests/presentation/test_map_api.py` a pede e exige um 200.\n\n**O texto da consulta é ignorado -- não há `q` -- por desenho.** Um mapa\nque refletisse a consulta só poderia agregar o top K, e o top 100 de um\níndice de 100.000 imagens não diz nada sobre geografia. O mapa mostra onde\nestão as fotos que os *filtros* permitem; ordenar é trabalho do `/search`.\nOs filtros são os da própria busca -- `device_id`, `captured_from`,\n`captured_to`, pelos mesmos parâmetros e pelas mesmas regras -- e um\ncírculo não é um deles: a área é a viewport.\n\nUma área cujo `min` excede o seu `max` é um 400 -- na longitude, isso é ou\ncantos trocados ou uma viewport que cruza o meridiano 180, que este\nendpoint não suporta (RFC-032 §11). Um `def` síncrono, como o `/search`,\nporque o agrupamento é uma chamada bloqueante ao banco.",
         "operationId": "map_images_api_v1_images_map_get",
         "parameters": [
           {
@@ -2132,7 +2132,7 @@
     },
     "/api/v1/images/search": {
       "get": {
-        "description": "Return the indexed images that best match `q`, most similar first.\n\nSynchronous `def`, not `async def`, and that is a decision rather than\na default: everything below this line blocks. Encoding the query is\n~90 ms of CPU for English and ~400 ms for Portuguese including\ntranslation (RFC-025 section 12), and the ranking is a blocking DBAPI\ncall. FastAPI runs a `def` endpoint in a threadpool and an `async def`\nendpoint on the event loop, so declaring this coroutine would stall\nevery concurrent request -- `/health` included -- for the length of a\nforward pass.\n\n`limit` carries no `ge`/`le` constraint on purpose. `MAX_SEARCH_LIMIT`\nalready states that policy once, in `search_images.py`, with a comment\nsaying it is application policy rather than a database bound. Copying\n`100` into this signature would create a second copy that drifts\nsilently: raising the constant to 200 would leave the endpoint\nrejecting 101 with a 422 while every use-case test still passed. The\ncost is that an out-of-range limit comes back as 400 instead of 422,\nwhich is the more accurate status anyway -- `limit=101` is a\nwell-formed request that policy refuses.\n\nThe default is resolved here rather than left to the use case so that\nthe response can echo the value actually applied. Nothing is\nduplicated by doing so: the resolved number is what gets passed to\n`execute()`, so what the client is told and what the search used\ncannot disagree.\n\nNeither the query text nor the embedding is logged (RFC-026 section\n16.1). Query length is enough to correlate a slow request with a long\nquery; the text is a user's search history, and this is a local-first\nproduct whose premise is that it stays theirs. The device count is\nlogged rather than the ids for the same reason -- how many disks a\nsearch was narrowed to is enough to explain a fast or an empty\nresponse.\n\n`device_id` repeats for several devices (`?device_id=A&device_id=B`)\nand is omitted for all of them. Omitted must mean *all*, never *none*:\nan absent parameter that produced an empty `IN ()` would turn every\nunfiltered search into zero results, so the empty case is carried as\nan empty `SearchFilters` that adds no clause at all.\n\nAn unknown device id is not rejected. The filter restricts a\ncandidate set rather than asserting that its members exist, so a\nsearch naming a disk the system has never seen correctly matches\nnothing (RFC-027 section 9). Whether the named disks are *connected*\nis not asked here either, and could not usefully be: search ranks what\nis indexed, and a hit on a disk in a drawer is the answer the product\nexists to give.\n\nSince RFC-030 every hit carries its device, its `relative_path`, and\nits `absolute_path` when the disk is plugged in. Resolving that is a\nsecond use case called after the search rather than a step inside it:\nwhere a file is has nothing to do with how well it matched, and\n`GET /images/{id}` needs the same answer with no search at all. The\noperating system is asked once per distinct disk on the page, not once\nper hit (RFC-030 section 4.2).\n\n`captured_from` / `captured_to` (RFC-028) are the two ends of a\nhalf-open range, `[from, to)`, and either may be sent alone. An\nomitted end becomes `datetime.min` or `datetime.max` *here*, so that\n`DateRange` stays a value with two required bounds instead of growing\na `None` every consumer below would have to handle. Omitting both is\nnot an unbounded range; it is no date filter at all, because\n`[min, max)` would silently drop every photo with an unknown date.\n\n**A bound with a zone or an offset is refused, never converted.**\nPydantic parses `2018-01-01T00:00:00Z`, `...-03:00`, and even a bare\nUnix timestamp into an aware `datetime`, and `DateRange` rejects it\nwith a `DomainError`, which the app-wide handler answers with 400 and\na message naming the zone. Converting would have to pick a zone to\nconvert *into*, and the capture date is camera-local precisely\nbecause no such zone exists (RFC-028 section 5). An inverted range\nis refused the same way. A value that is not a date at all is a 422\nfrom FastAPI, as for any malformed parameter.\n\n`excluded_unknown_date` is only computed when a range was sent. It is\na second query, and an unfiltered search must not pay for it.\n\n`near_lat` / `near_lon` / `radius_m` (RFC-032 section 6) are **all or\nnothing**: two of three is a malformed request and answers 400 naming\nwhat is missing. Completing an absent radius with a default would invent\nthe user's intention in exactly the quantity RFC-032 section 2.2 showed\nis critical. A coordinate off the planet, a radius that is not positive,\nor one below `settings.min_radius_m` is a 400 with the domain's message;\na value that is not a number is FastAPI's 422. Metres, never kilometres:\none unit across the whole stack. `excluded_unknown_position` follows the\nrule of its date twin -- computed only when a circle was sent.\n\nNeither the query nor the coordinates are logged: where a user searched\nnear is as private as what they searched for (RFC-026 section 16.1), so\nthe log says only that a circle was present.",
+        "description": "Retorna as imagens indexadas que melhor casam com `q`, as mais similares antes.\n\n`def` síncrono, não `async def`, e isso é uma decisão, não um padrão: tudo\nabaixo desta linha bloqueia. Codificar a consulta são ~90 ms de CPU em\ninglês e ~400 ms em português, com a tradução (RFC-025 §12), e o ranking é\numa chamada DBAPI bloqueante. O FastAPI roda um endpoint `def` num\nthreadpool e um endpoint `async def` no event loop, então declarar isto\ncomo corrotina travaria toda requisição concorrente -- `/health` inclusive\n-- pela duração de um forward pass.\n\n`limit` não leva restrição `ge`/`le` de propósito. `MAX_SEARCH_LIMIT` já\nenuncia essa política uma vez, em `search_images.py`, com um comentário\ndizendo que é política da aplicação, e não um limite do banco. Copiar\n`100` para esta assinatura criaria uma segunda cópia que diverge em\nsilêncio: subir a constante para 200 deixaria o endpoint rejeitando 101\ncom um 422 enquanto todo teste de caso de uso continuaria passando. O custo\né que um limite fora da faixa volta como 400 em vez de 422, que é o status\nmais preciso de todo modo -- `limit=101` é uma requisição bem formada que a\npolítica recusa.\n\nO padrão é resolvido aqui, em vez de deixado para o caso de uso, para que a\nresposta possa ecoar o valor de fato aplicado. Nada é duplicado com isso: o\nnúmero resolvido é o que é passado a `execute()`, então o que o cliente\nouve e o que a busca usou não podem discordar.\n\nNem o texto da consulta nem o embedding vão para o log (RFC-026 §16.1). O\ntamanho da consulta basta para correlacionar uma requisição lenta com uma\nconsulta longa; o texto é o histórico de buscas de um usuário, e este é um\nproduto local-first cuja premissa é que ele continue sendo dele. A contagem\nde dispositivos vai para o log, e não os ids, pela mesma razão -- a quantos\ndiscos uma busca foi restrita basta para explicar uma resposta rápida ou\nvazia.\n\n`device_id` se repete para vários dispositivos (`?device_id=A&device_id=B`)\ne é omitido para todos eles. Omitido tem de significar *todos*, nunca\n*nenhum*: um parâmetro ausente que produzisse um `IN ()` vazio\ntransformaria toda busca sem filtro em zero resultados, então o caso vazio\né levado como um `SearchFilters` vazio, que não acrescenta cláusula\nnenhuma.\n\nUm id de dispositivo desconhecido não é rejeitado. O filtro restringe um\nconjunto de candidatos em vez de afirmar que os seus membros existem, então\numa busca que nomeia um disco que o sistema nunca viu corretamente não\ncasa com nada (RFC-027 §9). Se os discos nomeados estão *conectados*\ntambém não é perguntado aqui, e nem poderia ser com proveito: a busca\nordena o que está indexado, e um resultado num disco na gaveta é a resposta\nque o produto existe para dar.\n\nDesde o RFC-030, todo resultado traz o seu dispositivo, o seu\n`relative_path` e o seu `absolute_path` quando o disco está plugado.\nResolver isso é um segundo caso de uso chamado depois da busca, e não um\npasso dentro dela: onde um arquivo está não tem nada a ver com o quanto ele\ncasou, e `GET /images/{id}` precisa da mesma resposta sem busca nenhuma. O\nsistema operacional é perguntado uma vez por disco distinto na página, não\numa vez por resultado (RFC-030 §4.2).\n\n`captured_from` / `captured_to` (RFC-028) são as duas pontas de uma faixa\nsemiaberta, `[from, to)`, e qualquer uma pode ser enviada sozinha. Uma\nponta omitida vira `datetime.min` ou `datetime.max` *aqui*, para que\n`DateRange` continue um valor com dois limites obrigatórios em vez de\nganhar um `None` que todo consumidor abaixo teria de tratar. Omitir as duas\nnão é uma faixa sem limites; é nenhum filtro de data, porque `[min, max)`\ndescartaria em silêncio toda foto com data desconhecida.\n\n**Um limite com fuso ou offset é recusado, nunca convertido.** O Pydantic\ninterpreta `2018-01-01T00:00:00Z`, `...-03:00` e até um timestamp Unix puro\ncomo um `datetime` aware, e `DateRange` o rejeita com um `DomainError`, que\no handler global do app responde com 400 e uma mensagem nomeando o fuso.\nConverter exigiria escolher um fuso *para o qual* converter, e a data de\ncaptura é local da câmera justamente porque esse fuso não existe\n(RFC-028 §5). Uma faixa invertida é recusada do mesmo jeito. Um valor que\nnem é data é um 422 do FastAPI, como para qualquer parâmetro malformado.\n\n`excluded_unknown_date` só é calculado quando uma faixa foi enviada. É uma\nsegunda consulta, e uma busca sem filtro não deve pagar por ela.\n\n`near_lat` / `near_lon` / `radius_m` (RFC-032 §6) são **tudo ou nada**:\ndois de três é uma requisição malformada e responde 400 nomeando o que\nfalta. Completar um raio ausente com um padrão inventaria a intenção do\nusuário exatamente na grandeza que o RFC-032 §2.2 mostrou ser crítica. Uma\ncoordenada fora do planeta, um raio que não é positivo, ou um abaixo de\n`settings.min_radius_m` é um 400 com a mensagem do domínio; um valor que\nnão é número é o 422 do FastAPI. Metros, nunca quilômetros: uma unidade\nna stack inteira. `excluded_unknown_position` segue a regra do seu gêmeo\nde data -- calculado só quando um círculo foi enviado.\n\nNem a consulta nem as coordenadas vão para o log: perto de onde um usuário\nbuscou é tão privado quanto o que ele buscou (RFC-026 §16.1), então o log\ndiz só que havia um círculo.",
         "operationId": "search_images_api_v1_images_search_get",
         "parameters": [
           {
@@ -2309,7 +2309,7 @@
     },
     "/api/v1/images/search/by-image": {
       "post": {
-        "description": "Rank the index against a picture the user dropped (RFC-038 section 4.2).\n\n`execute_similar_to()`, as the CLI's `--image` runs it, over the same\ntransient `Image` (`query_image()`): the picture's own CLIP embedding is\nthe query. It needs the image encoder, and not the translator.\n\n**The bytes are the body, and no path comes in** (RFC-030 section 5.1).\n`query_image_file` refuses a wrong type (415), more than 50 MB (413) and\na picture Pillow cannot decode (400), in that order and before the use\ncase is composed -- so a refused upload never imports `torch` -- and\ndeletes its temporary file however the request ends.\n\n**Declared beside `/search`, before `/{image_id}`**, by the rule of this\nfile. A `POST` of two segments could only collide with\n`/{image_id}/reveal`, and `by-image` is not `reveal`; it is here for the\nreading. `test_search_by_image_api.py` asks for it and requires a 200.\n\nThe filters are `/search`'s, by the same parameters. Nothing of the\npicture is logged but its size and type, and of the filters only which\nare present (RFC-026 section 16.1). The response is `/search`'s without a\n`query`: the picture is not indexed, so there is nothing to take out.",
+        "description": "Ordena o índice contra uma imagem que o usuário soltou (RFC-038 §4.2).\n\n`execute_similar_to()`, como o `--image` da CLI o roda, sobre a mesma\n`Image` transitória (`query_image()`): o próprio embedding CLIP da imagem é\na consulta. Precisa do codificador de imagem, e não do tradutor.\n\n**Os bytes são o corpo, e nenhum caminho entra** (RFC-030 §5.1).\n`query_image_file` recusa um tipo errado (415), mais de 50 MB (413) e uma\nimagem que o Pillow não consegue decodificar (400), nessa ordem e antes de\no caso de uso ser composto -- então um upload recusado nunca importa o\n`torch` -- e apaga o seu arquivo temporário como quer que a requisição\ntermine.\n\n**Declarada ao lado de `/search`, antes de `/{image_id}`**, pela regra\ndeste arquivo. Um `POST` de dois segmentos só poderia colidir com\n`/{image_id}/reveal`, e `by-image` não é `reveal`; está aqui pela leitura.\n`test_search_by_image_api.py` a pede e exige um 200.\n\nOs filtros são os do `/search`, pelos mesmos parâmetros. Nada da imagem vai\npara o log além do tamanho e do tipo, e dos filtros só quais estão\npresentes (RFC-026 §16.1). A resposta é a do `/search` sem `query`: a\nimagem não está indexada, então não há nada a tirar.",
         "operationId": "search_by_image_api_v1_images_search_by_image_post",
         "parameters": [
           {
@@ -2505,7 +2505,7 @@
     },
     "/api/v1/images/{image_id}": {
       "get": {
-        "description": "Return one image: its device, its paths, and whether the disk is here.\n\n**200 when the disk is unplugged** (RFC-030 section 4.2). The row\nexists and this describes the row; `device.connected: false` with\n`device.label` is the answer \"it is on HD3\", not an error.\n\nDeclared after `/search` and `/map`, and that order is load-bearing:\nroutes match in declaration order, and `/{image_id}` would otherwise\ncapture either and refuse it as a malformed UUID.",
+        "description": "Retorna uma imagem: o seu dispositivo, os seus caminhos e se o disco está aqui.\n\n**200 quando o disco está desplugado** (RFC-030 §4.2). A linha existe e\nisto descreve a linha; `device.connected: false` com `device.label` é a\nresposta \"está no HD3\", não um erro.\n\nDeclarada depois de `/search` e `/map`, e essa ordem importa: as rotas\ncasam na ordem de declaração, e `/{image_id}` de outro modo capturaria\nqualquer uma das duas e a recusaria como UUID malformado.",
         "operationId": "get_image_api_v1_images__image_id__get",
         "parameters": [
           {
@@ -2552,7 +2552,7 @@
     },
     "/api/v1/images/{image_id}/reveal": {
       "post": {
-        "description": "Ask Explorer to show the file, and answer once that has been launched.\n\n**The request carries an id and nothing else** -- no body, no path, no\nheader the handler reads (RFC-030 section 5.1). The server finds the\nrow, resolves where its disk is mounted now, and builds the path\nitself, so there is no client string in which to smuggle `..` or a\nUNC share.\n\n**`POST`, because this has a side effect in the physical world**\n(RFC-030 section 5.2). A `GET` could be prefetched by anything that\nfollows links, and a page of ten results would open ten windows.\n\nThe two guards are dependencies on the decorator, which FastAPI\nresolves before `use_case`: a refused request never opens a database\nsession or enumerates a volume. See `local_file_actions.py`.\n\n204 means the process was launched. Explorer's exit status means\nnothing, so nothing here can say that a window actually opened.",
+        "description": "Pede ao Explorer que mostre o arquivo, e responde assim que ele foi lançado.\n\n**A requisição leva um id e nada mais** -- nenhum corpo, nenhum caminho,\nnenhum header que o handler leia (RFC-030 §5.1). O servidor acha a linha,\nresolve onde o disco dela está montado agora e monta o caminho ele mesmo,\nentão não há texto do cliente em que contrabandear `..` ou um\ncompartilhamento UNC.\n\n**`POST`, porque isto tem um efeito colateral no mundo físico**\n(RFC-030 §5.2). Um `GET` poderia ser pré-carregado por qualquer coisa que\nsegue links, e uma página de dez resultados abriria dez janelas.\n\nAs duas guardas são dependências no decorator, que o FastAPI resolve antes\nde `use_case`: uma requisição recusada nunca abre uma sessão de banco nem\nenumera um volume. Veja `local_file_actions.py`.\n\n204 significa que o processo foi lançado. O status de saída do Explorer não\nsignifica nada, então nada aqui pode dizer que uma janela de fato abriu.",
         "operationId": "reveal_image_api_v1_images__image_id__reveal_post",
         "parameters": [
           {
@@ -2601,7 +2601,7 @@
     },
     "/api/v1/images/{image_id}/similar": {
       "get": {
-        "description": "*\"Parecidas com esta\"*: rank the index against a photo it holds (RFC-038).\n\n**The stored embedding, and no model** (section 4.1). The vector indexing\npaid for is read back and ranked with the same `search_similar()` as a\ntext query, so this answers with the photo's disk in a drawer, with\nsearch `loading` or `unavailable`, and without decoding a pixel. The use\ncase's provider does not depend on `get_embedding_model()`, which would\nimport `torch` for a route that never encodes anything.\n\nThe photo itself is not in the results -- it would come first, with a\nsimilarity of 1 -- and its copies are, near the top: the same bytes on\nanother disk answer *\"where else is this photo\"*. The filters are\n`/search`'s, by the same parameters and rules.\n\n404 for an id that names no row, 409 for a row without an embedding: the\nsecond request succeeds once the photo is indexed. Nothing of the filters\nis logged but which are present.",
+        "description": "*\"Parecidas com esta\"*: ordena o índice contra uma foto que ele tem (RFC-038).\n\n**O embedding armazenado, e nenhum modelo** (§4.1). O vetor que a indexação\npagou é lido de volta e ordenado com o mesmo `search_similar()` de uma\nconsulta de texto, então isto responde com o disco da foto na gaveta, com\na busca `loading` ou `unavailable`, e sem decodificar um pixel. O provider\ndo caso de uso não depende de `get_embedding_model()`, que importaria o\n`torch` para uma rota que nunca codifica nada.\n\nA própria foto não está nos resultados -- viria primeiro, com similaridade\n1 -- e as suas cópias estão, perto do topo: os mesmos bytes em outro disco\nrespondem *\"onde mais está esta foto\"*. Os filtros são os do `/search`,\npelos mesmos parâmetros e regras.\n\n404 para um id que não nomeia linha nenhuma, 409 para uma linha sem\nembedding: o segundo pedido dá certo assim que a foto é indexada. Nada dos\nfiltros vai para o log além de quais estão presentes.",
         "operationId": "similar_images_api_v1_images__image_id__similar_get",
         "parameters": [
           {
@@ -2783,7 +2783,7 @@
     },
     "/api/v1/images/{image_id}/thumbnail": {
       "get": {
-        "description": "Serve the thumbnail, or `304` when the client's copy is still right.\n\n**Served whether or not the photo's disk is plugged in.** Thumbnails live\nin the application's own cache, on a disk that is always there, and\nthat is the only way a user can *see* a photo whose disk is in a drawer\n(RFC-030 section 4.1).\n\n**Not a `StaticFiles` mount.** A mount would serve by file name, with\nits own validators, and could not answer 404 for an id that has no\nthumbnail row or check `If-None-Match` against the photo's content hash\nbefore touching the disk.\n\n**`ETag` is the photo's content hash, and `Cache-Control` is\n`no-cache` -- not `max-age=31536000`, which RFC-030 section 7.2 as\nproposed paired with it.** That pairing reintroduces the bug the\nsection was correcting. A response with a year of freshness is served\nfrom the browser's cache without asking the server at all (RFC 9111\nsection 4.2), so the `ETag` would never be sent back and a photo\noverwritten in place -- same path, same id -- would keep its old\nthumbnail for a year, which is exactly the failure `immutable` had.\n`no-cache` stores the thumbnail and revalidates it on every use; a\ncurrent copy costs a `304` with no body and no file read -- measured\nat 6.6 ms median in-process against PostgreSQL, against 8.6 ms for\nsending the 45 KB file (`experiments/rfc-030-file-access/\nmeasure_reveal_and_revalidation.log`). Most of that is the metadata\nread, so revalidation saves bytes more than time on a local API, and\na page of fifty thumbnails pays it fifty times. That is the declared\nprice of never showing a stale picture. `private` keeps a shared\ncache between the user and their own machine, should there ever be\none, from keeping their photos.\n\n**A row with no content hash gets `no-store`.** Rows indexed before\nRFC-024 have nothing to validate against, and a cache entry that can\nnever be revalidated is one that silently always misses.\n\n`If-None-Match` is parsed here because it is HTTP, and matched in the\nuse case because \"is my copy current\" is not. Weak tags compare\nweakly, as RFC 9110 section 13.1.2 requires for this header, and `*`\nis not honoured -- no browser sends it on a `GET`.",
+        "description": "Serve a thumbnail, ou `304` quando a cópia do cliente ainda está certa.\n\n**Servida com ou sem o disco da foto plugado.** As thumbnails vivem no\ncache do próprio aplicativo, num disco que está sempre lá, e esse é o único\njeito de um usuário *ver* uma foto cujo disco está na gaveta\n(RFC-030 §4.1).\n\n**Não é um mount de `StaticFiles`.** Um mount serviria pelo nome do\narquivo, com os seus próprios validadores, e não conseguiria responder 404\npara um id sem linha de thumbnail nem conferir o `If-None-Match` contra o\nhash de conteúdo da foto antes de tocar no disco.\n\n**O `ETag` é o hash de conteúdo da foto, e o `Cache-Control` é `no-cache`\n-- não `max-age=31536000`, que o RFC-030 §7.2, como proposto, combinava com\nele.** Essa combinação reintroduz o bug que a seção estava corrigindo. Uma\nresposta com um ano de validade é servida do cache do navegador sem\nperguntar nada ao servidor (RFC 9111 §4.2), então o `ETag` nunca seria\nreenviado, e uma foto sobrescrita no lugar -- mesmo caminho, mesmo id --\nmanteria a thumbnail antiga por um ano, que é exatamente a falha que o\n`immutable` tinha. `no-cache` guarda a thumbnail e a revalida a cada uso;\numa cópia atual custa um `304` sem corpo e sem leitura de arquivo --\nmedido em 6,6 ms de mediana in-process contra o PostgreSQL, contra 8,6 ms\npara enviar o arquivo de 45 KB (`experiments/rfc-030-file-access/\nmeasure_reveal_and_revalidation.log`). A maior parte disso é a leitura dos\nmetadados, então a revalidação economiza mais bytes que tempo numa API\nlocal, e uma página de cinquenta thumbnails a paga cinquenta vezes. Esse é\no preço declarado de nunca mostrar uma imagem velha. `private` impede que\num cache compartilhado entre o usuário e a própria máquina dele, se algum\ndia houver um, guarde as suas fotos.\n\n**Uma linha sem hash de conteúdo recebe `no-store`.** Linhas indexadas\nantes do RFC-024 não têm contra o que validar, e uma entrada de cache que\nnunca pode ser revalidada é uma que sempre erra em silêncio.\n\n`If-None-Match` é interpretado aqui porque é HTTP, e comparado no caso de\nuso porque \"a minha cópia está atual\" não é. Tags fracas comparam de modo\nfraco, como o RFC 9110 §13.1.2 exige para este header, e `*` não é\natendido -- nenhum navegador o envia num `GET`.",
         "operationId": "get_thumbnail_api_v1_images__image_id__thumbnail_get",
         "parameters": [
           {
@@ -2845,7 +2845,7 @@
     },
     "/api/v1/jobs": {
       "get": {
-        "description": "Return the history a UI shows beside a disk.\n\nBoth filters are optional, and an omitted one means *all*, never\n*none* -- the trap the search route's `device_id` had to avoid, where\nan absent parameter turned into an empty `IN ()` and every unfiltered\nrequest returned nothing.\n\nAn unknown device id is not rejected. The filter narrows a set rather\nthan asserting that its members exist, so a list for a disk the system\nhas never seen correctly comes back empty (the same reasoning RFC-027\nsection 9 applies to search filters).\n\n`job_status` is named `status` on the wire. The parameter cannot be\ncalled `status` in this signature because that is FastAPI's status\nmodule, imported above and used in every decorator here.",
+        "description": "Devolve o histórico que uma UI mostra ao lado de um disco.\n\nOs dois filtros são opcionais, e um omitido quer dizer *todos*, nunca\n*nenhum* -- a armadilha que o `device_id` da rota de busca teve de\nevitar, em que um parâmetro ausente virava um `IN ()` vazio e toda\nrequisição sem filtro não devolvia nada.\n\nUm id de dispositivo desconhecido não é recusado. O filtro estreita um\nconjunto em vez de afirmar que seus membros existem, então a lista de\num disco que o sistema nunca viu volta vazia, e corretamente (o mesmo\nraciocínio que o RFC-027 §9 aplica aos filtros da busca).\n\n`job_status` se chama `status` na requisição. O parâmetro não pode se\nchamar `status` nesta assinatura porque esse é o módulo de status do\nFastAPI, importado acima e usado em todo decorator daqui.",
         "operationId": "list_jobs_api_v1_jobs_get",
         "parameters": [
           {
@@ -2914,7 +2914,7 @@
         ]
       },
       "post": {
-        "description": "Queue a job and answer immediately with what was queued.\n\n**202, not 201.** 201 asserts that the resource the client asked for\nexists and is ready. What exists is the *intention* to index; the\nresult does not exist yet and will take minutes or hours. 202\ndescribes that, and the difference is observable by the client that\nhas to decide whether to poll (RFC-029 section 7.1).\n\nSynchronous `def`, not `async def`, following RFC-026 section 9:\neverything below this line is a blocking DBAPI call, and an `async\ndef` would run it on the event loop and stall every concurrent\nrequest -- `/health` included -- for its duration. The work itself is\nsomebody else's process, so what blocks here is one `INSERT`.\n\nThe response echoes the **normalised** scopes, which may not be the\nones that were sent: `2018` and `2018/junho` are one folder to walk,\nand a client that asked for both should be able to see that it got\none. `[]` means the whole device.\n\nNo `try/except`. A device that does not exist, a disk in a drawer, a\nfolder that is not there and a disk that is already busy are all\ndomain errors, and `error_handlers.py` turns each into 404, 409, 400\nand 409 without this function knowing any of those numbers.",
+        "description": "Enfileira um job e responde na hora com o que foi enfileirado.\n\n**202, não 201.** 201 afirma que o recurso pedido pelo cliente existe\ne está pronto. O que existe é a *intenção* de indexar; o resultado\nainda não existe e vai levar minutos ou horas. 202 descreve isso, e a\ndiferença é observável pelo cliente que precisa decidir se vai\nconsultar de novo (RFC-029 §7.1).\n\n`def` síncrono, não `async def`, segundo o RFC-026 §9: tudo abaixo\ndesta linha é uma chamada DBAPI bloqueante, e um `async def` a rodaria\nno event loop e travaria toda requisição concorrente -- `/health`\ninclusive -- enquanto ela durasse. O trabalho em si é de outro\nprocesso, então o que bloqueia aqui é um `INSERT`.\n\nA resposta devolve os escopos **normalizados**, que podem não ser os\nque foram enviados: `2018` e `2018/junho` são uma pasta só a\npercorrer, e um cliente que pediu as duas deve poder ver que recebeu\numa. `[]` quer dizer o dispositivo inteiro.\n\nSem `try/except`. Um dispositivo que não existe, um disco na gaveta,\numa pasta que não está lá e um disco já ocupado são todos erros de\ndomínio, e `error_handlers.py` transforma cada um em 404, 409, 400 e\n409 sem que esta função conheça nenhum desses números.",
         "operationId": "create_job_api_v1_jobs_post",
         "requestBody": {
           "content": {
@@ -2956,7 +2956,7 @@
     },
     "/api/v1/jobs/{job_id}": {
       "get": {
-        "description": "Return the job, or 404 when the id names nothing.\n\nPolling, not WebSocket or SSE (RFC-029 section 7.2). The client is a\nlocal UI asking for a number that moves every few seconds; a\npersistent channel would add connection management, reconnection and\nan asynchronous path through the API in order to save requests that\ncost almost nothing on localhost. It is future work if a measurement\never shows the cost.\n\nA missing job is 404 rather than an empty 200, because \"queued, not\nstarted\" and \"that id was never a job\" are the two things a polling\nclient most needs to tell apart.",
+        "description": "Devolve o job, ou 404 quando o id não aponta para nada.\n\nPolling, não WebSocket nem SSE (RFC-029 §7.2). O cliente é uma UI\nlocal pedindo um número que muda a cada poucos segundos; um canal\npersistente acrescentaria gestão de conexão, reconexão e um caminho\nassíncrono pela API para economizar requisições que custam quase nada\nem localhost. Fica como trabalho futuro, se uma medição algum dia\nmostrar o custo.\n\nUm job ausente é 404, e não um 200 vazio, porque \"enfileirado, não\niniciado\" e \"esse id nunca foi um job\" são as duas coisas que um\ncliente que consulta periodicamente mais precisa distinguir.",
         "operationId": "get_job_api_v1_jobs__job_id__get",
         "parameters": [
           {
@@ -3000,7 +3000,7 @@
     },
     "/api/v1/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Cancel a queued job outright, or ask a running one to wind up.\n\n**202, because cancelling a running job is also a request rather than\nan outcome.** The worker owns every transition out of `running`: it\nreads the flag between batches, finishes the batch in flight -- up to\n`settings.batch_size` images of already-paid-for inference that\naborting would throw away for nothing -- writes its checkpoint, and\nleaves. So the response can say the stop was recorded, and a client\nwatching `status` sees `running` with `cancel_requested` true until it\nactually stops.\n\nA queued job has nobody to ask and is cancelled immediately, which the\nsame response shape reports.\n\nCancelling a job that has already finished is a 409, not a quiet\nsuccess: the caller is acting on a wrong belief about the system and a\n202 would confirm it (RFC-029 section 8). Whether a cancellation is\nlegal is `IndexingJob`'s decision, not this route's.",
+        "description": "Cancela de vez um job enfileirado, ou pede a um em execução que encerre.\n\n**202, porque cancelar um job em execução também é um pedido, e não um\nresultado.** O worker é dono de toda transição para fora de `running`:\nele lê a flag entre lotes, termina o lote em andamento -- até\n`settings.batch_size` imagens de inferência já paga, que abortar\njogaria fora por nada --, grava o checkpoint e sai. Então a resposta\npode dizer que a parada foi registrada, e um cliente que acompanha o\n`status` vê `running` com `cancel_requested` verdadeiro até o job de\nfato parar.\n\nUm job enfileirado não tem a quem pedir e é cancelado na hora, o que o\nmesmo formato de resposta informa.\n\nCancelar um job que já terminou é um 409, não um sucesso silencioso:\nquem chama age com uma crença errada sobre o sistema, e um 202 a\nconfirmaria (RFC-029 §8). Se um cancelamento é válido é decisão de\n`IndexingJob`, não desta rota.",
         "operationId": "cancel_job_api_v1_jobs__job_id__cancel_post",
         "parameters": [
           {
@@ -3044,7 +3044,7 @@
     },
     "/api/v1/volumes": {
       "get": {
-        "description": "Answer *what is plugged in, and what of it do we already know?*\n\nThe question that precedes registering a disk, and the reason the\nregistration below never needs a path: this hands the client an\nopaque identity for each volume, and the client hands one back.\n\n**Deliberately the expensive route of the five.** Each volume costs\nan extra platform call for its label and capacity, and reading a\ncapacity can spin up an external disk that had parked its heads. That\nis why `VolumeCatalog` has two methods and why `GET /devices` above\nuses the cheap one -- folding the detail into the enumeration would\nput this cost in front of every search in the product (RFC-031\nsection 4.1).\n\nVolumes the platform refuses to describe are skipped, not reported as\nerrors: an empty optical drive is no reason to stop listing the disks\nthat answered (RFC-027 section 7).",
+        "description": "Responde *o que está plugado, e o que disso já conhecemos?*\n\nA pergunta que precede o cadastro de um disco, e a razão de o cadastro\nabaixo nunca precisar de um caminho: isto entrega ao cliente uma\nidentidade opaca para cada volume, e o cliente devolve uma.\n\n**Deliberadamente a rota cara das cinco.** Cada volume custa uma chamada\nextra à plataforma pelo rótulo e pela capacidade, e ler uma capacidade pode\nfazer girar um disco externo que tinha estacionado as cabeças. É por isso\nque o `VolumeCatalog` tem dois métodos e que o `GET /devices` acima usa o\nbarato -- juntar o detalhe à enumeração poria esse custo na frente de toda\nbusca do produto (RFC-031 §4.1).\n\nVolumes que a plataforma se recusa a descrever são pulados, não informados\ncomo erros: um drive óptico vazio não é razão para parar de listar os discos\nque responderam (RFC-027 §7).",
         "operationId": "list_volumes_api_v1_volumes_get",
         "responses": {
           "200": {
@@ -3066,7 +3066,7 @@
     },
     "/health": {
       "get": {
-        "description": "Return the application health status based on database connectivity.",
+        "description": "Devolve o estado de saúde da aplicação, a partir da conexão com o banco.",
         "operationId": "health_check_health_get",
         "responses": {
           "200": {

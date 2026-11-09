@@ -1,1 +1,1 @@
-"""Application use cases package."""
+"""Pacote dos casos de uso da aplicação."""

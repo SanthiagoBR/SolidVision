@@ -1,16 +1,15 @@
-"""Device identity value objects for the domain layer (RFC-027).
+"""Value objects da identidade de dispositivo para a camada de domínio (RFC-027).
 
-Two value objects, and the distinction between them is the whole point of
-this RFC. `VolumeIdentity` is *what the operating system reports* about a
-volume -- an opaque string the platform guarantees to be stable across
-remounts, reboots and ports. `DeviceId` is what SolidVision calls that
-volume internally, derived from the identity so that the same disk always
-lands on the same row.
+Dois value objects, e a distinção entre eles é todo o ponto deste RFC.
+`VolumeIdentity` é *o que o sistema operacional informa* sobre um volume --
+uma string opaca que a plataforma garante ser estável entre remontagens,
+reinicializações e portas. `DeviceId` é como o SolidVision chama esse volume
+internamente, derivado da identidade para que o mesmo disco sempre caia na
+mesma linha.
 
-Neither of them is a drive letter, and neither may ever become one. A
-letter is a function of mount order, not of the volume (RFC-027 section
-2.1), and persisting one is what makes a stationary file's path change on
-its own.
+Nenhum dos dois é uma letra de unidade, e nenhum pode jamais virar uma. Uma
+letra é função da ordem de montagem, e não do volume (RFC-027 §2.1), e
+gravar uma é o que faz o caminho de um arquivo parado mudar sozinho.
 """
 
 from __future__ import annotations
@@ -26,41 +25,41 @@ from app.domain.exceptions import (
 
 
 class VolumeKind(enum.Enum):
-    """Which platform's identifier scheme a `VolumeIdentity` string came from.
+    """De qual esquema de identificadores de plataforma veio uma `VolumeIdentity`.
 
-    The discriminator exists so that the second adapter does not require a
-    migration (RFC-027 section 4.1). Only `WINDOWS_VOLUME_GUID` has an
-    adapter today; the other two members are declared and unimplemented on
-    purpose, because a Linux adapter nobody has run would be a portability
-    claim nobody verified.
+    O discriminador existe para que o segundo adaptador não exija uma
+    migration (RFC-027 §4.1). Só `WINDOWS_VOLUME_GUID` tem adaptador hoje; os
+    outros dois membros estão declarados e não implementados de propósito,
+    porque um adaptador Linux que ninguém rodou seria uma promessa de
+    portabilidade que ninguém verificou.
 
-    It is also what keeps the `UNIQUE` constraint on `volume_identity`
-    honest: two platforms are free to mint identical-looking strings, and
-    the kind is what says they are not the same volume.
+    É também o que mantém honesta a restrição `UNIQUE` sobre
+    `volume_identity`: duas plataformas são livres para criar strings que
+    parecem idênticas, e o tipo é o que diz que elas não são o mesmo volume.
     """
 
     WINDOWS_VOLUME_GUID = "windows-volume-guid"
-    r"""`\\?\Volume{GUID}\`, from `GetVolumeNameForVolumeMountPoint`."""
+    r"""`\\?\Volume{GUID}\`, de `GetVolumeNameForVolumeMountPoint`."""
 
     LINUX_FS_UUID = "linux-fs-uuid"
-    """The filesystem UUID under `/dev/disk/by-uuid`. No adapter yet."""
+    """O UUID do sistema de arquivos em `/dev/disk/by-uuid`. Sem adaptador ainda."""
 
     MACOS_VOLUME_UUID = "macos-volume-uuid"
-    """The volume UUID reported by `diskutil`. No adapter yet."""
+    """O UUID do volume informado pelo `diskutil`. Sem adaptador ainda."""
 
 
 @dataclass(frozen=True)
 class VolumeIdentity:
-    """A platform-stable identifier for one physical volume.
+    """Um identificador de um volume físico, estável na plataforma.
 
-    `value` is deliberately opaque: nothing above the adapter that
-    produced it is allowed to parse it, compare it case-insensitively, or
-    build a path out of it. It is a key, and the only operations on a key
-    are equality and hashing.
+    `value` é opaco de propósito: nada acima do adaptador que o produziu pode
+    interpretá-lo, compará-lo sem diferenciar maiúsculas de minúsculas ou
+    montar um caminho a partir dele. É uma chave, e as únicas operações sobre
+    uma chave são igualdade e hash.
 
-    Stable until the volume is reformatted, which is the accepted
-    limitation (RFC-027 section 4.1): reformatting destroys the photos, so
-    losing the rows is the correct answer rather than a side effect.
+    Estável até o volume ser reformatado, que é a limitação aceita (RFC-027
+    §4.1): reformatar destrói as fotos, então perder as linhas é a resposta
+    certa, e não um efeito colateral.
     """
 
     value: str
@@ -75,21 +74,22 @@ class VolumeIdentity:
             raise InvalidVolumeIdentityError("Volume identity cannot be empty")
 
     def __str__(self) -> str:
-        """Render as `kind:value`, the form the id derivation hashes.
+        """Escreve como `kind:value`, a forma de que a derivação do id tira o hash.
 
-        Both halves are included so that two platforms reporting the same
-        opaque string still produce two different devices.
+        As duas metades entram para que duas plataformas que informam a mesma
+        string opaca continuem produzindo dois dispositivos diferentes.
         """
         return f"{self.kind.value}:{self.value}"
 
 
 @dataclass(frozen=True)
 class DeviceId:
-    """Strongly typed identifier for a device.
+    """Identificador fortemente tipado de um dispositivo.
 
-    Modelled on `ImageId` down to the normalisation, because the two are
-    used the same way: a UUID that a repository stores as a UUID, wrapped
-    so that a bare `uuid.UUID` cannot be passed where a device was meant.
+    Modelado em `ImageId` até na normalização, porque os dois são usados do
+    mesmo jeito: um UUID que um repositório guarda como UUID, embrulhado para
+    que um `uuid.UUID` solto não possa ser passado onde se queria um
+    dispositivo.
     """
 
     value: UUID
@@ -117,10 +117,10 @@ class DeviceId:
         raise InvalidDeviceIdentifierError("Device identifier must be a UUID or string")
 
     def __str__(self) -> str:
-        """Render as the plain UUID string.
+        """Escreve como a string do UUID, sem mais nada.
 
-        Load-bearing rather than cosmetic: `compute_image_id()` hashes
-        `f"{device_id}/{relative_path}"`, so this is half of every image
-        identity in the system. Changing it would change every id.
+        Essencial, e não cosmético: `compute_image_id()` tira o hash de
+        `f"{device_id}/{relative_path}"`, então isto é metade da identidade
+        de toda imagem do sistema. Mudá-lo mudaria todos os ids.
         """
         return str(self.value)

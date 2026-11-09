@@ -1,25 +1,25 @@
-"""Volume identity: the port, and the Windows adapter behind it (RFC-027).
+"""Identidade de volume: a porta, e o adaptador Windows por trás dela (RFC-027).
 
-This module answers two questions and refuses to answer a third.
+Este módulo responde a duas perguntas e se recusa a responder a uma terceira.
 
-*What volume is this path on?* -- `resolve()`, which returns an identifier
-the operating system guarantees to be stable across remounts, reboots and
-ports, together with everything else worth knowing while the disk happens
-to be in front of us.
+*Em que volume está este caminho?* -- `resolve()`, que devolve um identificador
+que o sistema operacional garante ser estável entre remontagens, reinicializações
+e portas, junto com tudo o mais que valha saber enquanto o disco está por acaso
+diante de nós.
 
-*What is mounted right now?* -- `mounted_volumes()`, which is how RFC-027
-section 7 turns "is HD3 connected" into a question with a fresh answer
-instead of a stale column.
+*O que está montado agora?* -- `mounted_volumes()`, que é como o RFC-027 §7
+transforma "o HD3 está conectado" numa pergunta com resposta fresca, em vez de
+numa coluna velha.
 
-*Where does device X live?* has no answer here on its own, and that is
-deliberate: it is `mounted_volumes()` looked up by identity, so the code
-that wants a drive letter has to go through the enumeration that was just
-performed rather than through something remembered.
+*Onde mora o dispositivo X?* não tem resposta própria aqui, e isso é
+deliberado: é `mounted_volumes()` consultado pela identidade, então o código
+que quer uma letra de unidade tem de passar pela enumeração que acabou de ser
+feita, e não por algo lembrado.
 
-**Only the Windows adapter ships.** `VolumeKind` declares the Linux and
-macOS discriminators so that adding those adapters needs no migration, but
-an adapter nobody has run would be a portability claim nobody verified
-(RFC-027 section 4.1).
+**Só o adaptador Windows é entregue.** `VolumeKind` declara os discriminadores
+de Linux e macOS para que acrescentar esses adaptadores não exija migration, mas
+um adaptador que ninguém rodou seria uma promessa de portabilidade que ninguém
+verificou (RFC-027 §4.1).
 """
 
 from __future__ import annotations
@@ -35,32 +35,32 @@ from app.domain.value_objects.device_id import VolumeIdentity, VolumeKind
 
 
 class VolumeIdentityError(RuntimeError):
-    """Raised when the operating system will not identify a volume.
+    """Levantado quando o sistema operacional não identifica um volume.
 
-    An Infrastructure failure rather than a `DomainError`: the domain has
-    no opinion about `kernel32`. It is raised, never swallowed into a
-    `None`, because every caller is about to key data on the answer --
-    guessing an identity would file a disk's photos under the wrong
-    device, which is worse than failing.
+    Uma falha de infraestrutura e não um `DomainError`: o domínio não tem
+    opinião sobre o `kernel32`. É levantado, nunca engolido num `None`, porque
+    todo chamador está prestes a indexar dados pela resposta -- adivinhar uma
+    identidade arquivaria as fotos de um disco sob o dispositivo errado, o que
+    é pior do que falhar.
     """
 
 
 @dataclass(frozen=True)
 class ResolvedVolume:
-    """Everything known about a volume while it is actually mounted.
+    """Tudo o que se sabe de um volume enquanto ele está de fato montado.
 
-    Splits cleanly in two, and the split is the point. `identity` is
-    durable and gets persisted. `mount_point` is not, and does not: it is
-    valid until the user unplugs the disk or reboots, which is why it
-    travels in a return value rather than in a column (RFC-027 section 4).
+    Divide-se limpamente em dois, e a divisão é o que importa. `identity` é
+    durável e é persistida. `mount_point` não é, e não é persistido: vale até o
+    usuário desplugar o disco ou reiniciar, e é por isso que viaja num valor de
+    retorno e não numa coluna (RFC-027 §4).
     """
 
     identity: VolumeIdentity
     mount_point: Path
-    """Where the volume is attached *at this instant* -- `D:\\`, typically.
+    """Onde o volume está ligado *neste instante* -- `D:\\`, tipicamente.
 
-    Never persist this. It is a function of mount order, and storing it is
-    the defect RFC-027 exists to remove.
+    Nunca persista isto. É função da ordem de montagem, e guardá-lo é o defeito
+    que o RFC-027 existe para remover.
     """
 
     filesystem_label: str | None = None
@@ -68,58 +68,57 @@ class ResolvedVolume:
 
 
 class VolumeIdentityProvider(ABC):
-    """Port for asking the operating system which volume a path lives on."""
+    """Porta para perguntar ao sistema operacional em que volume está um caminho."""
 
     @abstractmethod
     def resolve(self, path: Path) -> ResolvedVolume:
-        """Identify the volume holding `path`, which must exist and be mounted.
+        """Identifica o volume que contém `path`, que deve existir e estar montado.
 
-        Raises `VolumeIdentityError` when the platform cannot answer --
-        a disconnected disk, a network share with no volume identity, a
-        path that does not exist. There is no fallback to the drive
-        letter: a letter standing in for an identity would be
-        indistinguishable from a real one and would silently recreate the
-        bug (RFC-027 section 2.1).
+        Levanta `VolumeIdentityError` quando a plataforma não consegue responder
+        -- um disco desconectado, um compartilhamento de rede sem identidade de
+        volume, um caminho que não existe. Não há recurso à letra de unidade:
+        uma letra no lugar de uma identidade seria indistinguível de uma
+        verdadeira e recriaria o bug em silêncio (RFC-027 §2.1).
         """
 
     @abstractmethod
     def mounted_volumes(self) -> dict[VolumeIdentity, Path]:
-        """Return every volume mounted right now, mapped to its mount point.
+        """Devolve todo volume montado agora, mapeado para o seu ponto de montagem.
 
-        The whole of RFC-027 section 7's connection check: a device is
-        connected exactly when its `volume_identity` is a key of this
-        mapping, and the value is where to find it. Callers may cache the
-        result for the duration of one request and must not cache it
-        across requests -- the answer changes when a user pulls a cable,
-        and nothing notifies this process when they do.
+        Toda a checagem de conexão do RFC-027 §7: um dispositivo está conectado
+        exatamente quando a sua `volume_identity` é chave deste mapeamento, e o
+        valor é onde encontrá-lo. Quem chama pode guardar o resultado em cache
+        durante uma requisição e não pode guardá-lo entre requisições -- a
+        resposta muda quando um usuário puxa um cabo, e nada avisa este processo
+        quando isso acontece.
         """
 
 
 class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
-    r"""Windows adapter over `kernel32`, via `ctypes` and no new dependency.
+    r"""Adaptador Windows sobre o `kernel32`, via `ctypes` e sem nova dependência.
 
-    Uses `\\?\Volume{GUID}\` -- the name Windows itself uses for the volume
-    internally, independent of where it is mounted. The two rejected
-    candidates and why (RFC-027 section 4.1): the drive letter is not
-    stable at all, and the 32-bit volume serial number from
-    `GetVolumeInformation` is stable but only 32 bits, which is not enough
-    to key a table on.
+    Usa `\\?\Volume{GUID}\` -- o nome que o próprio Windows usa internamente
+    para o volume, independente de onde ele está montado. Os dois candidatos
+    rejeitados, e por quê (RFC-027 §4.1): a letra de unidade não é nada
+    estável, e o número de série de 32 bits do volume, de
+    `GetVolumeInformation`, é estável mas só tem 32 bits, o que não basta para
+    servir de chave de uma tabela.
 
-    The GUID changes when the volume is reformatted. That is accepted and
-    needs no handling: reformatting destroys the photos, so orphaning
-    their rows is the correct outcome.
+    O GUID muda quando o volume é reformatado. Isso é aceito e não precisa de
+    tratamento: reformatar destrói as fotos, então deixar as linhas delas
+    órfãs é o desfecho correto.
 
-    The one limitation left standing is that a byte-for-byte clone of a
-    disk carries the same GUID, so the two are indistinguishable here
-    (RFC-027 section 13). Declared, not solved.
+    A única limitação que fica de pé é que um clone byte a byte de um disco
+    carrega o mesmo GUID, e os dois são indistinguíveis aqui (RFC-027 §13).
+    Declarada, não resolvida.
     """
 
     _BUFFER_LENGTH = 512
-    """Comfortably past `MAX_PATH` (260).
+    """Com folga além de `MAX_PATH` (260).
 
-    A volume GUID name is 49 characters, but a mounted-folder path can be
-    longer than `MAX_PATH` on a modern Windows, so the buffer is sized to
-    make truncation impossible rather than unlikely.
+    Um nome de volume por GUID tem 49 caracteres, mas o caminho de uma pasta
+    montada pode passar de `MAX_PATH` num Windows moderno, então o buffer é
+    dimensionado para tornar o truncamento impossível, e não só improvável.
     """
 
     def __init__(self) -> None:
@@ -130,7 +129,7 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
             )
 
     def resolve(self, path: Path) -> ResolvedVolume:
-        """Walk `path` back to its mount point, then name that volume."""
+        """Sobe de `path` até o seu ponto de montagem, e então nomeia o volume."""
         mount_point = self._volume_path_name(path)
         identity = VolumeIdentity(
             value=self._volume_guid_name(mount_point),
@@ -144,17 +143,17 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
         )
 
     def mounted_volumes(self) -> dict[VolumeIdentity, Path]:
-        """Name every drive-letter mount point Windows currently reports.
+        """Nomeia cada ponto de montagem com letra que o Windows relata agora.
 
-        Built from `GetLogicalDriveStrings` rather than from
-        `FindFirstVolume`, because a volume with no mount path is not
-        something this application can do anything with: every caller
-        either joins a `relative_path` onto it or shows it to a user.
+        Construído a partir de `GetLogicalDriveStrings` e não de
+        `FindFirstVolume`, porque um volume sem caminho de montagem não é algo
+        com que esta aplicação possa fazer nada: todo chamador ou junta um
+        `relative_path` a ele ou o mostra a um usuário.
 
-        Volumes that refuse to be named are skipped rather than raised on.
-        An empty optical drive and a locked BitLocker volume both fail
-        here, and neither is a reason to refuse to report the disks that
-        did answer.
+        Volumes que se recusam a ser nomeados são pulados, e não viram exceção.
+        Uma unidade óptica vazia e um volume BitLocker bloqueado falham ambos
+        aqui, e nenhum dos dois é razão para deixar de relatar os discos que
+        responderam.
         """
         mounted: dict[VolumeIdentity, Path] = {}
         for mount_point in self._logical_drive_mount_points():
@@ -170,28 +169,28 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
 
     @staticmethod
     def _kernel32() -> Any:
-        """Return `kernel32`, loaded with the wide-character entry points.
+        """Devolve o `kernel32`, carregado com os pontos de entrada wide-character.
 
-        Looked up per call rather than cached in a module global so that
-        importing this module stays free on any platform: most of the test
-        suite reaches this package transitively, and `ctypes.WinDLL` does
-        not exist off Windows.
+        Obtido a cada chamada, e não guardado num global do módulo, para que
+        importar este módulo continue gratuito em qualquer plataforma: a maior
+        parte da suíte de testes chega a este pacote transitivamente, e
+        `ctypes.WinDLL` não existe fora do Windows.
 
-        Typed `Any` because a `ctypes` DLL handle has no static signature
-        to check against -- every attribute on it is resolved at runtime
-        by name, so annotating it more tightly would describe a guarantee
-        `ctypes` does not make.
+        Tipado como `Any` porque um handle de DLL do `ctypes` não tem assinatura
+        estática contra a qual checar -- cada atributo dele é resolvido em tempo
+        de execução, pelo nome, e anotá-lo de forma mais estrita descreveria uma
+        garantia que o `ctypes` não dá.
         """
         return ctypes.WinDLL("kernel32", use_last_error=True)
 
     def _volume_path_name(self, path: Path) -> Path:
-        r"""Return the mount point `path` sits under, e.g. `D:\`.
+        r"""Devolve o ponto de montagem sob o qual `path` está, p. ex. `D:\`.
 
-        `GetVolumePathName` is what makes a mounted folder work as well as
-        a drive letter: for `D:\photos\2018` it answers `D:\`, and for a
-        volume mounted at `C:\mnt\archive` it answers `C:\mnt\archive\`
-        rather than `C:\`. Taking `path.anchor` instead would be right for
-        drive letters and quietly wrong for every mounted folder.
+        `GetVolumePathName` é o que faz uma pasta montada funcionar tão bem
+        quanto uma letra de unidade: para `D:\photos\2018` ele responde `D:\`,
+        e para um volume montado em `C:\mnt\archive` responde `C:\mnt\archive\`
+        e não `C:\`. Usar `path.anchor` no lugar estaria certo para letras de
+        unidade e silenciosamente errado para toda pasta montada.
         """
         buffer = ctypes.create_unicode_buffer(self._BUFFER_LENGTH)
         if not self._kernel32().GetVolumePathNameW(
@@ -204,12 +203,12 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
         return Path(buffer.value)
 
     def _volume_guid_name(self, mount_point: Path) -> str:
-        r"""Return `\\?\Volume{GUID}\` for a mount point.
+        r"""Devolve `\\?\Volume{GUID}\` para um ponto de montagem.
 
-        The mount point must reach Windows with a trailing separator;
-        `GetVolumeNameForVolumeMountPoint` fails outright without one, and
-        `str(Path("D:/mnt/archive"))` has none, so it is appended here
-        rather than assumed.
+        O ponto de montagem precisa chegar ao Windows com um separador no fim;
+        `GetVolumeNameForVolumeMountPoint` falha de cara sem ele, e
+        `str(Path("D:/mnt/archive"))` não tem nenhum, então ele é acrescentado
+        aqui em vez de presumido.
         """
         buffer = ctypes.create_unicode_buffer(self._BUFFER_LENGTH)
         if not self._kernel32().GetVolumeNameForVolumeMountPointW(
@@ -222,11 +221,11 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
         return buffer.value
 
     def _filesystem_label(self, mount_point: Path) -> str | None:
-        """Return the volume's own label, or `None` when it has none.
+        """Devolve o rótulo do próprio volume, ou `None` quando ele não tem um.
 
-        Informative only. Empty is normal -- an unlabelled disk reports
-        `""` -- and comes back as `None` rather than as an empty string,
-        so that "no label" is one value rather than two.
+        Só informativo. Vazio é normal -- um disco sem rótulo relata `""` -- e
+        volta como `None` e não como string vazia, para que "sem rótulo" seja um
+        valor e não dois.
         """
         buffer = ctypes.create_unicode_buffer(self._BUFFER_LENGTH)
         if not self._kernel32().GetVolumeInformationW(
@@ -243,7 +242,7 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
         return buffer.value or None
 
     def _total_bytes(self, mount_point: Path) -> int | None:
-        """Return the volume's capacity, or `None` when Windows will not say."""
+        """Devolve a capacidade do volume, ou `None` quando o Windows não a informa."""
         total = ctypes.c_ulonglong(0)
         if not self._kernel32().GetDiskFreeSpaceExW(
             self._with_trailing_separator(mount_point),
@@ -255,12 +254,12 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
         return int(total.value)
 
     def _logical_drive_mount_points(self) -> list[Path]:
-        """Return every drive-letter root Windows currently has, as paths.
+        """Devolve, como caminhos, cada raiz de letra de unidade que o Windows tem.
 
-        `GetLogicalDriveStrings` fills the buffer with a run of
-        NUL-terminated strings closed by a second NUL, so the split below
-        is the documented way to read the result rather than string
-        manipulation standing in for a parser.
+        `GetLogicalDriveStrings` enche o buffer com uma sequência de strings
+        terminadas em NUL, fechada por um segundo NUL, então a divisão abaixo é
+        a forma documentada de ler o resultado, e não manipulação de string
+        fazendo as vezes de um parser.
         """
         buffer = ctypes.create_unicode_buffer(self._BUFFER_LENGTH)
         length = self._kernel32().GetLogicalDriveStringsW(self._BUFFER_LENGTH, buffer)
@@ -269,10 +268,10 @@ class WindowsVolumeIdentityProvider(VolumeIdentityProvider):
                 "Could not enumerate mounted drives "
                 f"(Windows error {ctypes.get_last_error()})."
             )
-        # Sliced and re-joined rather than read through `buffer.value`,
-        # which stops at the first NUL and would therefore report only the
-        # first drive. `"".join()` is correct whether the slice comes back
-        # as a string or as a sequence of characters.
+        # Fatiado e reunido em vez de lido por `buffer.value`, que para no
+        # primeiro NUL e por isso relataria só a primeira unidade. `"".join()`
+        # está certo quer a fatia volte como string, quer como sequência de
+        # caracteres.
         raw = "".join(buffer[:length])
         return [Path(entry) for entry in raw.split("\0") if entry]
 

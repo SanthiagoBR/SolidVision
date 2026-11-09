@@ -1,26 +1,24 @@
-"""The embedded cluster from a terminal, until RFC-036 (RFC-033 section 11).
+"""O cluster embarcado a partir de um terminal, até o RFC-036 (RFC-033 §11).
 
     python -m app.infrastructure.database.embedded start
     python -m app.infrastructure.database.embedded status
     python -m app.infrastructure.database.embedded run -- python -m pytest
     python -m app.infrastructure.database.embedded stop
 
-`run -- <command>` starts the cluster, prepares the database, and runs the
-command with `DATABASE_SOURCE=embedded`, `EMBEDDED_POSTGRES_DIRECTORY` and
-`EMBEDDED_POSTGRES_RUNTIME_DIRECTORY` in its environment, which
-`pydantic-settings` puts above a checkout's `.env` (RFC-004). Neither the
-port nor the password is exported: the command's engine reads both from the
-cluster at every new connection, as an installed app does (RFC-034 section
-7.6). Nor are the caller's `PG*` variables: the adapter takes them out of
-this process before it connects (section 7.5), and the command gets what is
-left. The command's exit code is `run`'s exit code. **`run` leaves the
-cluster as it found it**: if it started the cluster it stops it at the end,
-and if it adopted one it does not.
+`run -- <command>` sobe o cluster, prepara o banco e roda o comando com
+`DATABASE_SOURCE=embedded`, `EMBEDDED_POSTGRES_DIRECTORY` e
+`EMBEDDED_POSTGRES_RUNTIME_DIRECTORY` no ambiente dele, que o
+`pydantic-settings` põe acima do `.env` de um checkout (RFC-004). Nem a porta
+nem a senha são exportadas: o engine do comando lê as duas do cluster a cada
+conexão nova, como faz um app instalado (RFC-034 §7.6). Nem as variáveis
+`PG*` de quem chama: o adaptador as tira deste processo antes de conectar
+(§7.5), e o comando recebe o que sobrou. O código de saída do comando é o
+código de saída do `run`. **O `run` deixa o cluster como o encontrou**: se
+subiu o cluster, para-o no fim; se adotou um, não para.
 
-This is the composition root of the adapter, and the only place in the
-package that reads `settings`. Everything it prints about itself goes to
-stderr, so the command's stdout stays the command's; the password is never
-printed.
+Esta é a raiz de composição do adaptador, e o único lugar do pacote que lê
+`settings`. Tudo o que ele imprime sobre si mesmo vai para o stderr, de modo
+que o stdout do comando continua sendo do comando; a senha nunca é impressa.
 """
 
 from __future__ import annotations
@@ -87,14 +85,14 @@ def _start_and_prepare(cluster: EmbeddedPostgres) -> StartedCluster:
 
 
 def _found_on_path(command: Sequence[str], environment: Mapping[str, str]) -> list[str]:
-    """The command with its program found on the `PATH`, as a terminal finds it.
+    """O comando com o programa achado no `PATH`, como um terminal o acha.
 
-    Given a bare name, Windows looks first in the folder of the running
-    executable. In a venv, that is the base interpreter's folder: the venv's
-    `python.exe` is a launcher that starts the base one. So `run -- python
-    scripts/check.py`, typed in an activated venv, ran a Python with none of
-    the venv's packages (RFC-048 section 17.12). A name the `PATH` does not
-    have is left as it was typed.
+    Dado um nome sem caminho, o Windows procura primeiro na pasta do
+    executável em execução. Num venv, essa é a pasta do interpretador base:
+    o `python.exe` do venv é um launcher que inicia o base. Assim, `run --
+    python scripts/check.py`, digitado num venv ativado, rodava um Python sem
+    nenhum dos pacotes do venv (RFC-048 §17.12). Um nome que o `PATH` não tem
+    fica como foi digitado.
     """
     found = shutil.which(command[0], path=environment.get("PATH"))
     program = os.path.abspath(found) if found is not None else command[0]
@@ -102,11 +100,11 @@ def _found_on_path(command: Sequence[str], environment: Mapping[str, str]) -> li
 
 
 def _run_command(command: Sequence[str], environment: dict[str, str]) -> int:
-    """Run the command to its end, through a Ctrl+C if one comes.
+    """Roda o comando até o fim, passando por um Ctrl+C se vier um.
 
-    A Ctrl+C in the terminal reaches the command too -- it shares the
-    console -- so the first one is the command's to handle, and this waits
-    for it. A second one ends the command.
+    Um Ctrl+C no terminal chega também ao comando -- ele divide o console --,
+    então o primeiro cabe ao comando tratar, e esta função espera por ele. Um
+    segundo encerra o comando.
     """
     process = subprocess.Popen(_found_on_path(command, environment), env=environment)
     interrupted = False

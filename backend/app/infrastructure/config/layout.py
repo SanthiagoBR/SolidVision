@@ -1,29 +1,29 @@
-"""Where things are: the mode, the root and the user's data directory (RFC-034 4).
+"""Onde as coisas estão: o modo, a raiz e o diretório de dados do usuário (RFC-034 4).
 
-The only module of `backend/app` that uses `__file__`, the working directory
-or `LOCALAPPDATA`; `tests/test_path_anchors_architecture.py` keeps it that
-way. It imports neither `settings` nor the logger, and both import it: the
-layout is the geometry of directories, not configuration.
+O único módulo de `backend/app` que usa `__file__`, o diretório de trabalho
+ou `LOCALAPPDATA`; `tests/test_path_anchors_architecture.py` mantém assim.
+Não importa nem `settings` nem o logger, e os dois o importam: o layout é a
+geometria dos diretórios, não configuração.
 
-The tree is the same in both modes (section 4.1)::
+A árvore é a mesma nos dois modos (§4.1)::
 
     <root>\\
         backend\\           app\\, alembic\\, alembic.ini
-        runtime\\python\\    RFC-041: the embedded interpreter, which finds
-                           `backend` through its `python312._pth`
+        runtime\\python\\    RFC-041: o interpretador embarcado, que acha
+                           `backend` pelo seu `python312._pth`
         runtime\\postgres\\  RFC-033
         runtime\\models\\    RFC-035
-        frontend\\dist\\     RFC-037: the interface the API serves
-        pyproject.toml     only in a checkout
-        .env               only in a checkout
+        frontend\\dist\\     RFC-037: a interface que a API serve
+        pyproject.toml     só num checkout
+        .env               só num checkout
 
-Installed, the root is the Electron app's `resources\\` folder (RFC-041
-section 4), and `parents[4]` of this file lands on it as it lands on the
-repository root in a checkout.
+Instalado, a raiz é a pasta `resources\\` do app Electron (RFC-041 §4), e o
+`parents[4]` deste arquivo cai nela como cai na raiz do repositório num
+checkout.
 
-A `Layout` can be built by hand, with any root and any data directory. That is
-how the tests exercise the installed mode from inside a checkout, with no
-global state.
+Um `Layout` pode ser montado à mão, com qualquer raiz e qualquer diretório de
+dados. É assim que os testes exercitam o modo instalado de dentro de um
+checkout, sem estado global.
 """
 
 from __future__ import annotations
@@ -38,21 +38,22 @@ from pathlib import Path
 from typing import Any
 
 CHECKOUT_MARKER = "pyproject.toml"
-"""What makes a directory a checkout: `pytest`, `mypy` and `ruff` all depend
-on it, and an installer has no reason to carry it. `.git` would not do -- an
-exported checkout has none (section 4.2)."""
+"""O que faz de um diretório um checkout: `pytest`, `mypy` e `ruff` dependem
+dele, e um instalador não tem motivo para levá-lo. `.git` não serviria -- um
+checkout exportado não tem (§4.2)."""
 
 INSTALLED_DATA_NAME = "SolidVision"
 DEVELOPMENT_DATA_NAME = "SolidVision-dev"
-"""A sibling of the installed one, not a folder inside it: anything a future
-uninstaller does to the user's data must not reach a developer's (section 6.2)."""
+"""Irmã da pasta instalada, não uma pasta dentro dela: o que um desinstalador
+futuro fizer com os dados do usuário não pode atingir os de um desenvolvedor
+(§6.2)."""
 
 CHECKOUT_CONFIG_NAME = ".env"
 USER_CONFIG_NAME = "solidvision.env"
 
 
 class Environment(StrEnum):
-    """The mode. A fact read from the disk, never a value someone declares."""
+    """O modo. Um fato lido do disco, nunca um valor que alguém declara."""
 
     DEVELOPMENT = "development"
     INSTALLED = "installed"
@@ -60,13 +61,13 @@ class Environment(StrEnum):
 
 @dataclass(frozen=True)
 class Layout:
-    """The mode, and the two directories everything else is derived from."""
+    """O modo, e os dois diretórios de que todo o resto deriva."""
 
     environment: Environment
     root: Path
-    """The repository root, or the installation's."""
+    """A raiz do repositório, ou a da instalação."""
     data_directory: Path
-    """`%LOCALAPPDATA%\\SolidVision-dev`, or `%LOCALAPPDATA%\\SolidVision`."""
+    """`%LOCALAPPDATA%\\SolidVision-dev`, ou `%LOCALAPPDATA%\\SolidVision`."""
 
     def __post_init__(self) -> None:
         for name in ("root", "data_directory"):
@@ -74,46 +75,47 @@ class Layout:
             if not path.is_absolute():
                 raise ValueError(f"A layout's {name} must be absolute, not {path}.")
 
-    # Everything below is derived, and none of it touches the disk.
+    # Tudo abaixo é derivado, e nada disso toca o disco.
 
     @property
     def config_file(self) -> Path:
-        """The one file this mode reads, and never the other mode's (section 5.1)."""
+        """O único arquivo que este modo lê, e nunca o do outro modo (§5.1)."""
         if self.environment is Environment.DEVELOPMENT:
             return self.root / CHECKOUT_CONFIG_NAME
         return self.data_directory / USER_CONFIG_NAME
 
     @property
     def config_base(self) -> Path:
-        """The folder of `config_file`: what a relative path setting is
-        relative to (section 6.3, rule 4)."""
+        """A pasta de `config_file`: em relação a que um setting de caminho
+        relativo é relativo (§6.3, regra 4)."""
         return self.config_file.parent
 
     @property
     def backend_directory(self) -> Path:
-        """Where `alembic.ini` and `alembic\\` are."""
+        """Onde ficam `alembic.ini` e `alembic\\`."""
         return self.root / "backend"
 
     @property
     def postgres_runtime(self) -> Path:
-        """The vendored PostgreSQL binaries (RFC-033 section 5.2)."""
+        """Os binários do PostgreSQL embarcados no repositório (RFC-033 §5.2)."""
         return self.root / "runtime" / "postgres"
 
     @property
     def model_runtime(self) -> Path:
-        """The two models, materialized from the lockfile (RFC-035 section 4.2).
+        """Os dois modelos, materializados a partir do lockfile (RFC-035 §4.2).
 
-        Per machine and read-only when installed, beside `runtime\\postgres`.
+        Por máquina e somente leitura quando instalado, ao lado de
+        `runtime\\postgres`.
         """
         return self.root / "runtime" / "models"
 
     @property
     def frontend_directory(self) -> Path:
-        """The interface's build, which the API serves (RFC-037 section 5.1).
+        """O build da interface, que a API serve (RFC-037 §5.1).
 
-        `frontend\\dist`, where `npm run build` writes in a checkout. Installed,
-        `resources\\frontend\\dist`: beside the code and outside the Electron
-        archive, because the reader is Python (RFC-041 section 4).
+        `frontend\\dist`, onde `npm run build` escreve num checkout. Instalado,
+        `resources\\frontend\\dist`: ao lado do código e fora do arquivo do
+        Electron, porque quem lê é o Python (RFC-041 §4).
         """
         return self.root / "frontend" / "dist"
 
@@ -127,41 +129,41 @@ class Layout:
 
     @property
     def postgres_directory(self) -> Path:
-        """The user's cluster; the adapter adds the major version below it."""
+        """O cluster do usuário; o adaptador acrescenta a versão major abaixo dele."""
         return self.data_directory / "postgres"
 
     @property
     def cache_directory(self) -> Path:
-        """What the model runtime writes (RFC-035 section 5.4).
+        """O que o runtime dos modelos escreve (RFC-035 §5.4).
 
-        Nothing in it is the source of anything, so all of it can be deleted
-        without loss, by the user or by an uninstaller.
+        Nada ali é fonte de coisa nenhuma, então tudo pode ser apagado sem
+        perda, pelo usuário ou por um desinstalador.
         """
         return self.data_directory / "cache"
 
     @property
     def query_image_directory(self) -> Path:
-        """Where a picture sent as a search query waits for the model (RFC-038).
+        """Onde uma foto enviada como consulta de busca espera o modelo (RFC-038).
 
-        `cache\\query-images`: each file lives for one request and is deleted
-        however it ends, and the API empties the folder when it starts, for
-        what a process that died left behind. Not `%TEMP%`, for the reason
-        the model runtime's writes are not there: the app keeps what it writes
-        in its own data root (RFC-035 section 5.4).
+        `cache\\query-images`: cada arquivo vive por uma requisição e é apagado
+        seja qual for o fim dela, e a API esvazia a pasta ao iniciar, pelo que
+        um processo que morreu deixou para trás. Não `%TEMP%`, pelo mesmo
+        motivo de as escritas do runtime dos modelos não estarem lá: o app
+        guarda o que escreve na própria raiz de dados (RFC-035 §5.4).
         """
         return self.cache_directory / "query-images"
 
 
 def layout_at(root: Path, profile: Path) -> Layout:
-    """The layout of the code under `root`, for a user whose profile is `profile`.
+    """O layout do código sob `root`, para um usuário cujo perfil é `profile`.
 
-    `development` needs proof and `installed` is what is left, because the two
-    mistakes do not cost the same (section 4.2). A user's machine taken for a
-    checkout would read the environment and write to `SolidVision-dev`, and the
-    day the detection was fixed the user's data would seem to have vanished:
-    silent and expensive. A checkout taken for an installation ignores its
-    `.env` and looks for an embedded cluster, and the developer notices on the
-    first run.
+    `development` precisa de prova e `installed` é o que sobra, porque os dois
+    erros não custam o mesmo (§4.2). A máquina de um usuário tomada por um
+    checkout leria o ambiente e escreveria em `SolidVision-dev`, e no dia em
+    que a detecção fosse corrigida os dados do usuário pareceriam ter sumido:
+    silencioso e caro. Um checkout tomado por uma instalação ignora o `.env`
+    e procura um cluster embarcado, e o desenvolvedor percebe na primeira
+    execução.
     """
     if (root / CHECKOUT_MARKER).is_file():
         return Layout(Environment.DEVELOPMENT, root, profile / DEVELOPMENT_DATA_NAME)
@@ -169,26 +171,26 @@ def layout_at(root: Path, profile: Path) -> Layout:
 
 
 def local_app_data(environ: Mapping[str, str] | None = None) -> Path:
-    """The per-user, per-machine application data folder (section 6.2).
+    """A pasta de dados de aplicativo, por usuário e por máquina (§6.2).
 
-    The variable first: it is how a validation run points a process at a
-    temporary directory without touching the real profile. Without it -- a
-    launcher may build its children's environment from nothing -- Windows is
-    asked, rather than each default guessing a different fallback.
+    A variável primeiro: é como uma execução de validação aponta um processo
+    para um diretório temporário sem tocar no perfil real. Sem ela -- um
+    launcher pode montar do zero o ambiente dos filhos -- pergunta-se ao
+    Windows, em vez de cada default adivinhar um fallback diferente.
     """
     source = os.environ if environ is None else environ
     variable = source.get("LOCALAPPDATA", "")
     if variable and Path(variable).is_absolute():
         return Path(variable)
     if sys.platform != "win32":
-        # One root, for a process that will not get far here anyway: the
-        # volume adapter and the embedded cluster are both Windows-only.
+        # Uma raiz, para um processo que de todo modo não vai longe aqui: o
+        # adaptador de volumes e o cluster embarcado são só para Windows.
         return Path.home() / ".local" / "share"
     return _known_local_app_data()
 
 
 def _known_local_app_data() -> Path:
-    """`FOLDERID_LocalAppData`, asked of the shell."""
+    """`FOLDERID_LocalAppData`, perguntado ao shell."""
     from ctypes import wintypes
 
     class Guid(ctypes.Structure):
@@ -213,7 +215,7 @@ def _known_local_app_data() -> Path:
         wintypes.HANDLE,
         ctypes.POINTER(ctypes.c_void_p),
     ]
-    # An `HRESULT` return type makes ctypes raise `OSError` on a failure.
+    # Um tipo de retorno `HRESULT` faz o ctypes levantar `OSError` numa falha.
     shell32.SHGetKnownFolderPath.restype = ctypes.HRESULT
     ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
     pointer = ctypes.c_void_p()
@@ -227,12 +229,12 @@ def _known_local_app_data() -> Path:
 
 
 def detect_layout() -> Layout:
-    """The layout of the code that is running.
+    """O layout do código que está rodando.
 
-    The one place that computes the root, and so the one function to change
-    for a frozen app, where the root comes from the executable's path instead
-    of from `__file__` (section 4.1). With an embedded Python and the code in
-    a tree, `__file__` keeps working and nothing changes.
+    O único lugar que calcula a raiz, e portanto a única função a mudar num
+    app congelado, em que a raiz vem do caminho do executável, e não de
+    `__file__` (§4.1). Com um Python embarcado e o código numa árvore,
+    `__file__` continua funcionando e nada muda.
     """
     return layout_at(Path(__file__).resolve().parents[4], local_app_data())
 

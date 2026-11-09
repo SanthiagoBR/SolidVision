@@ -1,15 +1,17 @@
-"""Give already-indexed images a thumbnail, without the model (RFC-030 section 7.2).
+"""Dá uma thumbnail às imagens já indexadas, sem o modelo (RFC-030 §7.2).
 
-The shape of `BackfillExifUseCase` -- RFC-032's, which superseded RFC-028's
-capture-date backfill -- and on purpose: the same discovered candidates, the
-same metadata prefetch per window, the same one bulk write per window with a
-per-row fallback. What differs is what a file costs. An EXIF fact is a header
-read; a thumbnail is a full decode, a resize and an encode -- still a small
-fraction of the inference a reindex would pay, and still never the model.
+A forma de `BackfillExifUseCase` -- a do RFC-032, que substituiu o backfill de
+data de captura do RFC-028 --, e de propósito: os mesmos candidatos descobertos,
+a mesma leitura antecipada de metadados por janela, a mesma gravação em massa
+por janela com recuo linha a linha. O que muda é quanto custa um arquivo. Um
+fato EXIF é a leitura de um cabeçalho; uma thumbnail é uma decodificação
+completa, um redimensionamento e uma codificação -- ainda uma pequena fração da
+inferência que uma reindexação pagaria, e nunca o modelo.
 
-It needs no embedding model and no content hasher, and takes neither.
-`tests/infrastructure/workers/test_thumbnail_backfill.py` checks the command's
-import graph for them, as the EXIF backfill's test does.
+Não precisa de modelo de embedding nem de hasher de conteúdo, e não recebe
+nenhum dos dois. `tests/infrastructure/workers/test_thumbnail_backfill.py`
+procura os dois no grafo de imports do comando, como faz o teste do backfill de
+EXIF.
 """
 
 from __future__ import annotations
@@ -30,30 +32,30 @@ from app.domain.value_objects.image_id import ImageId
 
 @dataclass
 class ThumbnailBackfillSummary:
-    """What one thumbnail backfill found and did, as data (RFC-024 section 11)."""
+    """O que um backfill de thumbnails achou e fez, como dados (RFC-024 §11)."""
 
     force: bool
     dry_run: bool
     discovered: int = 0
 
     written: int = 0
-    """Rows given a thumbnail -- or, in a dry run, rows that would be."""
+    """Linhas que receberam uma thumbnail -- ou, num dry run, as que receberiam."""
 
     already_generated: int = 0
-    """Rows skipped because they already have one.
+    """Linhas puladas porque já têm uma.
 
-    Nearly everything on a second run without `--force`: the default mode
-    is idempotent, and this counter is how that shows.
+    Quase tudo numa segunda execução sem `--force`: o modo padrão é
+    idempotente, e este contador é como isso aparece.
     """
 
     not_indexed: int = 0
-    """Files on disk with no row. Rendered for nothing: rows are never created here."""
+    """Arquivos no disco sem linha. Não são renderizados: aqui nunca se cria linha."""
 
     elapsed_seconds: float = 0.0
     failures: list[IndexingFailure] = field(default_factory=list)
-    """Files that could not be rendered or recorded.
+    """Arquivos que não puderam ser renderizados ou registrados.
 
-    Left without a thumbnail, and therefore picked up again by the next run.
+    Ficam sem thumbnail e, por isso, são pegos de novo pela próxima execução.
     """
 
     def format_report(self) -> str:
@@ -76,22 +78,22 @@ class ThumbnailBackfillSummary:
 
 
 class BackfillThumbnailsUseCase:
-    """Render and record thumbnails for the indexed rows behind a stream of files.
+    """Renderiza e registra thumbnails das linhas indexadas de um fluxo de arquivos.
 
-    **Two modes.** The default renders only rows with no thumbnail --
-    everything indexed before RFC-030, and every image whose thumbnail
-    failed during indexing. It is idempotent: a second run over the same
-    disk renders nothing.
+    **Dois modos.** O padrão renderiza só as linhas sem thumbnail -- tudo o que
+    foi indexado antes do RFC-030, e toda imagem cuja thumbnail falhou durante
+    a indexação. É idempotente: uma segunda execução sobre o mesmo disco não
+    renderiza nada.
 
-    `force=True` renders every indexed row again, replacing what is stored.
-    That is for when rendering itself changed -- `thumbnail_max_edge` was
-    raised, or the adapter learned to handle a format it used to get wrong
-    -- and nothing about the photos did, so no scan would notice.
+    `force=True` renderiza de novo toda linha indexada, substituindo o que está
+    guardado. Serve para quando a própria renderização mudou --
+    `thumbnail_max_edge` subiu, ou o adaptador aprendeu a tratar um formato que
+    antes errava -- e nada mudou nas fotos, então nenhum scan perceberia.
 
-    Unlike the capture-date backfill's `--force`, there is no weaker result
-    to refuse: a thumbnail that fails to render today is reported and the
-    stored one is left in place, because the location is only written for
-    a render that succeeded.
+    Ao contrário do `--force` do backfill de data de captura, não há resultado
+    mais fraco a recusar: uma thumbnail que falha ao renderizar hoje é relatada
+    e a guardada fica no lugar, porque a localização só é gravada para uma
+    renderização bem-sucedida.
     """
 
     def __init__(
@@ -114,7 +116,7 @@ class BackfillThumbnailsUseCase:
         self._dry_run = dry_run
 
     def execute(self, candidates: Iterable[IndexCandidate]) -> ThumbnailBackfillSummary:
-        """Stream `candidates` in prefetch windows, writing once per window."""
+        """Percorre `candidates` em janelas, gravando uma vez por janela."""
         summary = ThumbnailBackfillSummary(force=self._force, dry_run=self._dry_run)
         started = time.perf_counter()
 
@@ -158,7 +160,7 @@ class BackfillThumbnailsUseCase:
         locations: dict[ImageId, tuple[IndexCandidate, str]],
         summary: ThumbnailBackfillSummary,
     ) -> None:
-        """One bulk write per window; on failure, per row, isolating the bad one."""
+        """Uma gravação em massa por janela; se falhar, linha a linha, isolando a má."""
         if not locations:
             return
 

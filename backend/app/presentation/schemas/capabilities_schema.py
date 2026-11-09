@@ -1,10 +1,9 @@
-"""What this installation can do, as a UI needs to know it (RFC-031 section 9).
+"""O que esta instalação sabe fazer, do jeito que uma UI precisa saber (RFC-031 §9).
 
-Six fields since RFC-043, and the bar for each is stated rather than left to
-taste: *the UI draws something different because of it*. A capabilities
-route that drifts into being a configuration dump is the failure RFC-031
-section 15 names, and the guard against it is the criterion, not the
-count.
+Seis campos desde o RFC-043, e o critério de cada um é declarado, em vez de
+deixado ao gosto: *a UI desenha algo diferente por causa dele*. Uma rota de
+capacidades que deriva para um despejo de configuração é a falha que o RFC-031
+§15 aponta, e a proteção contra ela é o critério, não a contagem.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from pydantic import BaseModel, Field
 
 
 class CapabilitiesSchema(BaseModel):
-    """What the client is allowed to assume about this server."""
+    """O que o cliente pode supor sobre este servidor."""
 
     local_file_actions: bool = Field(
         description=(
