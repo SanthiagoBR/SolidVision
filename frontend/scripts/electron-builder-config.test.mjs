@@ -2,7 +2,8 @@
 // per-user installer that never asks for elevation, and what goes into it.
 
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { join, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -71,9 +72,12 @@ describe("what goes into the package (section 4)", () => {
   });
 });
 
+// LOCALAPPDATA is used only when it is absolute. A folder of the machine that
+// runs the test, as log.test.ts does: `C:\...` is not absolute on the CI's
+// Linux (RFC-049 section 5).
 describe("the montagem's place (section 7.2)", () => {
   it("is SolidVision-build\\resources under LOCALAPPDATA, outside the repository", () => {
-    const local = "C:\\Users\\ana\\AppData\\Local";
+    const local = join(tmpdir(), "ana", "AppData", "Local");
 
     expect(stagingDirectory({ LOCALAPPDATA: local })).toBe(
       join(local, "SolidVision-build", "resources"),
@@ -81,11 +85,11 @@ describe("the montagem's place (section 7.2)", () => {
   });
 
   it("is never inside a data root, which an uninstall leaves whole", () => {
-    const local = "C:\\Users\\ana\\AppData\\Local";
+    const local = join(tmpdir(), "ana", "AppData", "Local");
     const staging = stagingDirectory({ LOCALAPPDATA: local });
 
     for (const root of ["SolidVision", "SolidVision-dev"]) {
-      expect(staging.startsWith(join(local, root) + "\\")).toBe(false);
+      expect(staging.startsWith(join(local, root) + sep)).toBe(false);
     }
   });
 });
