@@ -1,37 +1,37 @@
-"""PostgreSQL-backed implementation of the indexing-job repository (RFC-029).
+"""Implementação em PostgreSQL do repositório de jobs de indexação (RFC-029).
 
-Three things here are load-bearing and easy to get subtly wrong.
+Três coisas aqui sustentam o resto e são fáceis de errar por pouco.
 
-**The claim is one statement.** `claim_next()` is an `UPDATE` whose `WHERE`
-picks its row from a `SELECT ... FOR UPDATE SKIP LOCKED` subquery. Written
-as a `SELECT` followed by an `UPDATE`, two executors polling at the same
-moment choose the same id; under `READ COMMITTED` the loser's `UPDATE`
-matches nothing and it goes back to sleep with work still queued. That is
-not corruption, it is a latency ghost, and it is invisible with a single
-executor -- which is how every test runs unless one is written for it.
+**A reivindicação é um comando só.** `claim_next()` é um `UPDATE` cujo `WHERE`
+escolhe a linha numa subconsulta `SELECT ... FOR UPDATE SKIP LOCKED`. Escrito
+como um `SELECT` seguido de um `UPDATE`, dois executores consultando no mesmo
+instante escolhem o mesmo id; sob `READ COMMITTED`, o `UPDATE` do perdedor não
+casa com nada e ele volta a dormir com trabalho ainda na fila. Não é
+corrupção, é um fantasma de latência, e é invisível com um executor só -- que
+é como todo teste roda, a não ser que se escreva um para isso.
 
-**The unique-index violation is recognised by name.** `create()` catches
-`IntegrityError` and looks for `uq_one_active_job_per_device` in the
-constraint the driver names. Not the message text, which is localised and
-reworded between versions, and not "any `IntegrityError`", which would
-report a bad device foreign key as a busy disk.
+**A violação do índice único é reconhecida pelo nome.** `create()` captura
+`IntegrityError` e procura `uq_one_active_job_per_device` na constraint que o
+driver nomeia. Não no texto da mensagem, que é traduzido e reescrito entre
+versões, e não em "qualquer `IntegrityError`", que relataria uma chave
+estrangeira de dispositivo inválida como um disco ocupado.
 
-**Every timestamp arrives from the caller's clock, and `now()` is never
-used.** `now()` in PostgreSQL is the *start of the transaction*, which is
-the trap RFC-029 section 4.11 names: with one commit per call it happens
-to equal the wall clock today, and a later unit-of-work refactor would
-break that agreement without a single test failing. The build prompt
-proposed `clock_timestamp()` instead; this implementation takes the
-caller's clock, for two reasons the prompt could not have weighed:
+**Todo timestamp vem do relógio de quem chama, e `now()` nunca é usado.**
+`now()` no PostgreSQL é o *início da transação*, que é a armadilha que o
+RFC-029 §4.11 nomeia: com um commit por chamada, ele coincide hoje com o
+relógio de parede, e uma refatoração posterior para unit of work quebraria
+essa coincidência sem um único teste falhar. O build prompt propôs
+`clock_timestamp()` no lugar; esta implementação usa o relógio de quem chama,
+por duas razões que o prompt não tinha como pesar:
 
-* the heartbeats that follow a claim are written through `save()` from an
-  entity the worker has already built, so they are Python-clock values
-  whatever this method does. Generating the *first* one in the database
-  would put two clocks in one column, and the staleness test compares
-  values within that column;
-* the reaper has to be testable without sleeping (RFC-029's own
-  validation table asks for a worker that "died"), and a clock the caller
-  supplies is a clock a test can advance.
+* os heartbeats que seguem uma reivindicação são escritos por `save()` a
+  partir de uma entidade que o worker já montou, então são valores do relógio
+  do Python, faça este método o que fizer. Gerar o *primeiro* no banco poria
+  dois relógios numa coluna, e o teste de job parado compara valores dentro
+  dessa coluna;
+* o reaper tem de ser testável sem dormir (a própria tabela de validação do
+  RFC-029 pede um worker que "morreu"), e um relógio fornecido por quem chama
+  é um relógio que um teste pode adiantar.
 """
 
 from __future__ import annotations
@@ -57,25 +57,25 @@ from app.infrastructure.database.models.indexing_job_model import (
 
 
 class PostgresIndexingJobRepository(IndexingJobRepository):
-    """Repository implementation backed by PostgreSQL via SQLAlchemy."""
+    """Implementação do repositório sobre o PostgreSQL, via SQLAlchemy."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
     def create(self, job: IndexingJob) -> IndexingJob:
-        """Insert the job, letting the partial unique index refuse a busy device.
+        """Insere o job, deixando o índice único parcial recusar um dispositivo ocupado.
 
-        **There is no `SELECT` before this `INSERT`, and there must not
-        be.** Checking for an active job in Python and then inserting is a
-        check-then-act: two concurrent requests for the same disk both
-        find nothing and both insert. The index of RFC-029 section 9 is
-        where that race is actually decided, and this method's only job is
-        to translate its refusal into a domain error, so that the route
-        needs no `try/except` of its own (RFC-026 section 8).
+        **Não há `SELECT` antes deste `INSERT`, e não pode haver.** Verificar
+        um job ativo no Python e depois inserir é um verifica-depois-age:
+        duas requisições simultâneas para o mesmo disco não acham nada e
+        inserem as duas. O índice do RFC-029 §9 é onde essa corrida é de fato
+        decidida, e o único trabalho deste método é traduzir a recusa dele
+        num erro de domínio, para que a rota não precise de um `try/except`
+        próprio (RFC-026 §8).
 
-        The rollback on failure follows `PostgresImageRepository`: a
-        rejected insert must not leave the session in a pending-rollback
-        state that fails the *next*, unrelated write.
+        O rollback na falha segue o `PostgresImageRepository`: um insert
+        recusado não pode deixar a sessão num estado de rollback pendente que
+        faça falhar a *próxima* escrita, sem relação com ele.
         """
         model = IndexingJobModel.from_domain(job)
         try:
@@ -95,21 +95,21 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         return model.to_domain()
 
     def get(self, job_id: JobId) -> IndexingJob | None:
-        """The row as it stands now -- never a copy this session kept.
+        """A linha como ela está agora -- nunca uma cópia que esta sessão guardou.
 
-        **Every read in this class asks for `populate_existing`**, and the
-        reason is a defect RFC-045's measurement found. The sessions of the
-        job runner and the CLI are made with `expire_on_commit=False`, so a
-        model this session wrote stays in its identity map, with the values
-        it had then, for as long as it is alive -- and a job model is kept
-        alive past its last reference by the cycle with its scopes, until
-        the garbage collector happens to run. Without `populate_existing`,
-        `Session.get()` and an ORM `select` hand that copy back instead of
-        the row, `with_for_update` included. The CLI creates a job and
-        claims it in one session, so its first `record_progress()` could
-        read the `pending` its `create()` left there, conclude the job had
-        been taken over, and leave it `running` for ever while the CLI
-        followed it. Whether it happened depended on the collector.
+        **Toda leitura desta classe pede `populate_existing`**, e a razão é
+        um defeito que a medição do RFC-045 achou. As sessões do job runner e
+        da CLI são criadas com `expire_on_commit=False`, então um model que
+        esta sessão escreveu fica no identity map dela, com os valores que
+        tinha então, enquanto estiver vivo -- e um model de job é mantido
+        vivo além da última referência pelo ciclo com os seus escopos, até o
+        coletor de lixo calhar de rodar. Sem `populate_existing`,
+        `Session.get()` e um `select` do ORM devolvem essa cópia em vez da
+        linha, `with_for_update` incluído. A CLI cria um job e o reivindica
+        numa sessão só, então o primeiro `record_progress()` dela podia ler o
+        `pending` que o `create()` deixou ali, concluir que o job tinha sido
+        tomado por outro, e deixá-lo `running` para sempre enquanto a CLI o
+        acompanhava. Acontecer ou não dependia do coletor.
         """
         model = self._session.get(
             IndexingJobModel, job_id.value, populate_existing=True
@@ -123,19 +123,19 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         checkpoint: ImagePath | None,
         heartbeat_at: datetime.datetime,
     ) -> IndexingJob | None:
-        """Write the progress columns of a running job, and read the row back.
+        """Escreve as colunas de progresso de um job rodando, e lê a linha de volta.
 
-        Deliberately **not** `model.apply(job)`. That would write every
-        column from the worker's own copy of the job -- including the
-        `cancel_requested` it read when it claimed the row, which is
-        `False` and minutes old -- straight over a cancellation the route
-        recorded in the meantime. The job would then never stop, and
-        nothing would look wrong anywhere.
+        De propósito, **não** `model.apply(job)`. Isso escreveria cada coluna
+        a partir da cópia do job que o próprio worker tem -- inclusive o
+        `cancel_requested` que ele leu ao reivindicar a linha, que é `False`
+        e tem minutos -- por cima de um cancelamento que a rota gravou
+        nesse meio-tempo. O job então nunca pararia, e nada pareceria errado
+        em lugar nenhum.
 
-        The row is re-read `FOR UPDATE` so the update and the read of
-        `cancel_requested` are one step, which is what lets the worker
-        learn it has been cancelled from the same round trip that proves
-        it is alive (RFC-029 section 9.1).
+        A linha é relida `FOR UPDATE` para que a atualização e a leitura de
+        `cancel_requested` sejam um passo só, e é isso que deixa o worker
+        saber que foi cancelado na mesma ida e volta que prova que ele está
+        vivo (RFC-029 §9.1).
         """
         try:
             model = self._session.get(
@@ -166,19 +166,19 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
     def save_if_status(
         self, job: IndexingJob, expected: JobStatus
     ) -> IndexingJob | None:
-        """Write the job only while its row still holds `expected`.
+        """Escreve o job só enquanto a linha dele ainda estiver em `expected`.
 
-        The compare-and-set behind cancellation and behind the reaper.
-        Both decide from a value they merely read, and both have to lose
-        gracefully: a worker may claim a `pending` job in the moment
-        between the read and the write, and an abandoned job may come back
-        to life between the reaper's query and its verdict.
+        O compare-and-set por trás do cancelamento e do reaper. Os dois
+        decidem a partir de um valor que apenas leram, e os dois precisam
+        perder com elegância: um worker pode reivindicar um job `pending` no
+        instante entre a leitura e a escrita, e um job abandonado pode voltar
+        à vida entre a consulta do reaper e o veredito dele.
 
-        The row is re-read `FOR UPDATE` rather than updated through a bare
-        `UPDATE ... WHERE status = :expected`, because the entity carries
-        every column and writing it through the model keeps one place that
-        knows how a job is stored -- `IndexingJobModel.apply()`. The row
-        lock is what makes the check and the write one step.
+        A linha é relida `FOR UPDATE`, em vez de atualizada por um simples
+        `UPDATE ... WHERE status = :expected`, porque a entidade carrega
+        todas as colunas e escrevê-la pelo model mantém um único lugar que
+        sabe como um job é guardado -- `IndexingJobModel.apply()`. O lock da
+        linha é o que faz da verificação e da escrita um passo só.
         """
         try:
             model = self._session.get(
@@ -198,7 +198,7 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         return job
 
     def claim_next(self, now: datetime.datetime) -> IndexingJob | None:
-        """Atomically claim the oldest queued job, skipping rows already locked."""
+        """Reivindica atomicamente o job mais antigo na fila, pula linhas travadas."""
         candidate = (
             select(IndexingJobModel.id)
             .where(IndexingJobModel.status == JobStatus.PENDING.value)
@@ -209,13 +209,13 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         return self._claim(candidate, now)
 
     def claim(self, job_id: JobId, now: datetime.datetime) -> IndexingJob | None:
-        """Atomically claim one named job, if it is still queued.
+        """Reivindica, atomicamente, um job nomeado, se ele ainda estiver na fila.
 
-        The CLI's entry point (RFC-029 section 12): `indexing_worker
-        --root PATH` creates a job and runs it in its own process, so it
-        needs the same atomic move as the polling loop, aimed at one id.
-        Returning `None` when a separate executor got there first is not a
-        failure -- the CLI then follows that job by polling.
+        A porta de entrada da CLI (RFC-029 §12): `indexing_worker --root
+        PATH` cria um job e o roda no próprio processo, então precisa do
+        mesmo movimento atômico do loop de polling, apontado para um id.
+        Devolver `None` quando outro executor chegou antes não é falha -- a
+        CLI então acompanha aquele job, consultando.
         """
         candidate = (
             select(IndexingJobModel.id)
@@ -231,24 +231,27 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
     def _claim(
         self, candidate: Select[tuple[uuid.UUID]], now: datetime.datetime
     ) -> IndexingJob | None:
-        """Run the claiming `UPDATE` and return the row it moved, if any.
+        """Roda o `UPDATE` da reivindicação e devolve a linha que ele moveu, se houver.
 
-        **This SQL mirrors `IndexingJob.claim()`, and has to.** An atomic
-        claim is one statement by definition, so the transition cannot be
-        computed in Python from a row read beforehand. The duplication is
-        deliberate, and it is held in check by the contract test, which
-        asserts that what comes back equals `job.claim(now)` applied to
-        the row as it stood -- so the two cannot drift apart in silence.
+        **Este SQL espelha `IndexingJob.claim()`, e tem de espelhar.** Uma
+        reivindicação atômica é, por definição, um comando só, então a
+        transição não pode ser calculada no Python a partir de uma linha
+        lida antes. A duplicação é deliberada, e é mantida sob controle pelo
+        teste de contrato, que afirma que o que volta é igual a
+        `job.claim(now)` aplicado à linha como ela estava -- então as duas
+        não podem se afastar em silêncio.
 
-        `COALESCE` is `claim()`'s `self.started_at or now`: a resumed job
-        keeps the moment it first started, because `created_at ->
-        started_at` is the queue latency RFC-029 section 6.1 measures, and
-        a job that crashed twice must not look like it started promptly.
+        `COALESCE` é o `self.started_at or now` de `claim()`: um job retomado
+        mantém o instante em que começou pela primeira vez, porque
+        `created_at -> started_at` é a latência de fila que o RFC-029 §6.1
+        mede, e um job que caiu duas vezes não pode parecer ter começado
+        prontamente.
 
-        `synchronize_session=False` because the entity is rebuilt from the
-        returned id below, read with `populate_existing`: a copy this
-        session still holds -- the `pending` the CLI's own `create()` left
-        -- is overwritten by the row, not trusted (see `get()`).
+        `synchronize_session=False` porque a entidade é remontada abaixo a
+        partir do id devolvido, lido com `populate_existing`: uma cópia que
+        esta sessão ainda guarda -- o `pending` que o próprio `create()` da
+        CLI deixou -- é sobrescrita pela linha, e não levada em conta (veja
+        `get()`).
         """
         statement = (
             update(IndexingJobModel)
@@ -274,13 +277,13 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         return model.to_domain() if model is not None else None
 
     def list_stale(self, heartbeat_before: datetime.datetime) -> list[IndexingJob]:
-        """Return running jobs whose heartbeat has not moved recently enough.
+        """Devolve os jobs rodando cujo heartbeat não se moveu recentemente.
 
-        `last_heartbeat_at IS NOT NULL` is part of the query rather than
-        implied by it. `claim()` always stamps a heartbeat, so a running
-        row without one cannot exist -- and if one ever did, reaping it
-        would mean acting on no evidence at all, which is the opposite of
-        what a heartbeat is for.
+        `last_heartbeat_at IS NOT NULL` faz parte da consulta, em vez de
+        ficar implícito nela. `claim()` sempre grava um heartbeat, então uma
+        linha rodando sem um não pode existir -- e, se um dia existisse,
+        encerrá-la seria agir sem evidência nenhuma, o oposto do que um
+        heartbeat existe para fazer.
         """
         statement = (
             select(IndexingJobModel)
@@ -303,7 +306,7 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
         device_id: DeviceId | None = None,
         status: JobStatus | None = None,
     ) -> list[IndexingJob]:
-        """Return matching jobs newest first, as the contract requires."""
+        """Devolve os jobs que casam, mais novos primeiro, como exige o contrato."""
         statement = select(IndexingJobModel).order_by(
             IndexingJobModel.created_at.desc()
         )
@@ -321,14 +324,14 @@ class PostgresIndexingJobRepository(IndexingJobRepository):
 
 
 def _violates(error: IntegrityError, constraint: str) -> bool:
-    """Whether `error` is the named constraint refusing, and not another one.
+    """Diz se `error` é a constraint nomeada recusando, e não outra.
 
-    Reads `psycopg`'s structured diagnostics rather than the message
-    string. The message is localised and has been reworded between
-    PostgreSQL versions, so matching on it would turn a busy-device 409
-    into a 500 the day a server runs in another locale. The fallback to
-    the rendered text exists only for drivers that expose no diagnostics,
-    and is a last resort rather than the mechanism.
+    Lê os diagnósticos estruturados do `psycopg` em vez da string da
+    mensagem. A mensagem é traduzida e já foi reescrita entre versões do
+    PostgreSQL, então casar com ela transformaria um 409 de dispositivo
+    ocupado num 500 no dia em que um servidor rodasse em outro locale. O
+    fallback para o texto renderizado existe só para drivers que não expõem
+    diagnósticos, e é um último recurso, não o mecanismo.
     """
     original = getattr(error, "orig", None)
     diagnostic = getattr(original, "diag", None)

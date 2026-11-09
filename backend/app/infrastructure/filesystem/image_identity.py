@@ -1,23 +1,22 @@
-"""Deterministic identity derivation for filesystem-discovered images.
+"""Derivação determinística da identidade de imagens descobertas no sistema de arquivos.
 
-The namespace UUID below was generated once via `uuid.uuid4()` and is now
-frozen permanently. Regenerating it would silently change the `ImageId`
-produced for every already-indexed file, making all of them appear "new".
-Never regenerate it, here or in a later RFC, without an explicit and
-documented migration strategy.
+O UUID de namespace abaixo foi gerado uma vez via `uuid.uuid4()` e agora está
+congelado para sempre. Regerá-lo mudaria em silêncio o `ImageId` produzido para
+todo arquivo já indexado, fazendo todos parecerem "novos". Nunca o regere, aqui
+ou num RFC posterior, sem uma estratégia de migração explícita e documentada.
 
-RFC-027 changed the *string* fed into that namespace and deliberately did
-not change the namespace itself. What used to be hashed was the absolute
-path, which on Windows contains a drive letter -- and a drive letter is a
-function of mount order, not of the disk, so the same untouched file
-produced a different id whenever it happened to mount as `F:` instead of
-`D:`, duplicating every row and re-running hours of inference (RFC-027
-section 2.1). What is hashed now is the device plus the path relative to
-that device's mount point, neither of which moves on its own.
+O RFC-027 mudou a *string* que alimenta esse namespace e, deliberadamente, não
+mudou o próprio namespace. O que se fazia hash antes era o caminho absoluto, que
+no Windows contém uma letra de unidade -- e a letra de unidade é função da ordem
+de montagem, não do disco, então o mesmo arquivo intocado produzia um id
+diferente sempre que por acaso montava como `F:` em vez de `D:`, duplicando
+todas as linhas e repetindo horas de inferência (RFC-027 §2.1). O que se faz
+hash agora é o dispositivo mais o caminho relativo ao ponto de montagem desse
+dispositivo, e nenhum dos dois se move sozinho.
 
-Preserving the namespace across that change is intentional. If both the
-namespace and the input string changed, an old id could no longer be
-recognised as having come from the old scheme.
+Preservar o namespace nessa mudança é intencional. Se o namespace e a string de
+entrada mudassem ambos, um id antigo não poderia mais ser reconhecido como
+vindo do esquema antigo.
 """
 
 from __future__ import annotations
@@ -32,19 +31,19 @@ SOLIDVISION_PATH_NAMESPACE = uuid.UUID("5dc64f53-522e-4303-951e-ee6123b10dd8")
 
 
 def compute_image_id(device_id: DeviceId, relative_path: ImagePath) -> ImageId:
-    """Derive a deterministic `ImageId` from a device and a path within it.
+    """Deriva um `ImageId` determinístico de um dispositivo e de um caminho nele.
 
-    The same file on the same disk always yields the same id, across
-    runs, across machines, and across drive letters, because neither
-    input contains a mount point. `ImagePath.__str__()` normalizes
-    separators into one posix form before it is hashed, so a path built
-    from a Windows string and one built from a posix string agree.
+    O mesmo arquivo no mesmo disco sempre dá o mesmo id, entre execuções, entre
+    máquinas e entre letras de unidade, porque nenhuma das entradas contém um
+    ponto de montagem. `ImagePath.__str__()` normaliza os separadores numa forma
+    posix única antes do hash, então um caminho construído a partir de uma
+    string do Windows e um construído a partir de uma string posix concordam.
 
-    Renaming or moving a file *within* a device changes its relative path
-    and therefore its id -- this produces a new image record rather than
-    tracking history across renames, which is an accepted limitation for
-    the current scope. Moving it to another disk changes the id for the
-    same reason.
+    Renomear ou mover um arquivo *dentro* de um dispositivo muda o seu caminho
+    relativo e, portanto, o seu id -- isso produz um novo registro de imagem em
+    vez de acompanhar o histórico através de renomeações, o que é uma limitação
+    aceita para o escopo atual. Movê-lo para outro disco muda o id pela mesma
+    razão.
     """
     return ImageId(
         uuid.uuid5(SOLIDVISION_PATH_NAMESPACE, f"{device_id}/{relative_path}")

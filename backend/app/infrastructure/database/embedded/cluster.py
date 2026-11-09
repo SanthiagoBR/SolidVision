@@ -1,34 +1,34 @@
-"""`EmbeddedPostgres`: the cluster's lifecycle, as a state machine (RFC-033).
+"""`EmbeddedPostgres`: o ciclo de vida do cluster, como máquina de estados (RFC-033).
 
     cluster = EmbeddedPostgres(
         runtime=PostgresRuntime(settings.embedded_postgres_runtime_directory),
         home=ClusterHome(settings.embedded_postgres_directory),
     )
-    started = cluster.start(on_phase=report)  # creates if needed; starts or adopts
-    cluster.prepare(started.connection)       # database and migrations, idempotent
+    started = cluster.start(on_phase=report)  # cria se preciso; sobe ou adota
+    cluster.prepare(started.connection)       # banco e migrations, idempotente
     cluster.status()                          # absent | stopped | starting | ready
-    cluster.locate()                          # the connection of a ready cluster
-    cluster.stop()                            # fast; immediate if fast fails
+    cluster.locate()                          # a conexão de um cluster pronto
+    cluster.stop()                            # fast; immediate se o fast falhar
 
-What `start()` observes, and what it does (section 9.1):
+O que o `start()` observa, e o que faz (§9.1):
 
-    observed                                   action
-    data.initdb exists                         delete it, then create (7.1)
-    data does not exist                        atomic initdb
-    PG_VERSION is not the manifest's major     refuse; never initdb over it
-    no postmaster.pid                          start
-    pid alive, this runtime, ready             adopt (8.4)
-    the same, starting                         wait for ready (8.3)
-    the same, stopping                         wait for the PID to go, then start
-    pid alive, another runtime's postgres.exe  refuse, naming that runtime
-    pid dead                                   pg_ctl start; the server recovers
-    start fails: shared memory still in use    wait, end only our orphans (9.3),
-                                               try once more
-    start fails: bind                          another port (8.2, step 4)
-    any other failure                          error with what the server logged
+    observado                                  ação
+    data.initdb existe                         apaga, depois cria (§7.1)
+    data não existe                            initdb atômico
+    PG_VERSION não é a major do manifesto      recusa; nunca initdb por cima
+    sem postmaster.pid                         sobe
+    pid vivo, este runtime, ready              adota (§8.4)
+    o mesmo, starting                          espera o ready (§8.3)
+    o mesmo, stopping                          espera o PID sumir, depois sobe
+    pid vivo, postgres.exe de outro runtime    recusa, nomeando esse runtime
+    pid morto                                  pg_ctl start; o servidor se recupera
+    subida falha: memória compartilhada em uso espera, encerra só os nossos órfãos
+                                               (§9.3), tenta mais uma vez
+    subida falha: bind                         outra porta (§8.2, passo 4)
+    qualquer outra falha                       erro com o que o servidor registrou
 
-The adapter never deletes `postmaster.pid` (9.2) and never kills the
-postmaster (8.5).
+O adaptador nunca apaga o `postmaster.pid` (§9.2) e nunca mata o postmaster
+(§8.5).
 """
 
 from __future__ import annotations
@@ -82,8 +82,8 @@ BIND_FAILURE_MARKERS = (
     "could not bind IPv4 address",
     "could not create any TCP/IP sockets",
 )
-"""Recognized by text, which is stable: this build has no translations, and
-`--locale=C` set `lc_messages = 'C'` besides (section 8.1)."""
+"""Reconhecidos pelo texto, que é estável: este build não tem traduções, e o
+`--locale=C` ainda definiu `lc_messages = 'C'` (§8.1)."""
 
 SHARED_MEMORY_IN_USE = "pre-existing shared memory block is still in use"
 
@@ -92,21 +92,21 @@ ENVIRONMENT_VARIABLES = (
     "EMBEDDED_POSTGRES_DIRECTORY",
     "EMBEDDED_POSTGRES_RUNTIME_DIRECTORY",
 )
-"""What `run -- <command>` gives the command, named in one place (RFC-034 7.6).
+"""O que o `run -- <command>` dá ao comando, nomeado num só lugar (RFC-034 §7.6).
 
-The source and the two directories, and no longer host, port and password:
-with these the command's own engine finds the cluster by `locate()`, as an
-installed app does, and the password travels in no process's environment.
+A fonte e os dois diretórios, e não mais host, porta e senha: com eles o
+próprio engine do comando acha o cluster pelo `locate()`, como faz um app
+instalado, e a senha não viaja no ambiente de processo nenhum.
 
-A test checks that every name is a field of `Settings`. A misspelt one would
-not fail: `Settings` would fall back to the `.env`, the `.env` points at
-Docker, and the suite would pass against the wrong database printing the
-same `passed` (RFC-033a section 4.2).
+Um teste confere que todo nome é um campo de `Settings`. Um nome escrito
+errado não falharia: o `Settings` recorreria ao `.env`, o `.env` aponta para o
+Docker, e a suíte passaria contra o banco errado imprimindo o mesmo `passed`
+(RFC-033a §4.2).
 """
 
 EMBEDDED_SOURCE = "embedded"
-"""`DATABASE_SOURCE`'s value, spelt here because this package reads no
-`settings`. The same test checks it against `DatabaseSource`."""
+"""O valor de `DATABASE_SOURCE`, escrito aqui porque este pacote não lê
+`settings`. O mesmo teste o confere contra `DatabaseSource`."""
 
 HOW_TO_START = "python -m app.infrastructure.database.embedded start"
 
@@ -121,10 +121,10 @@ POLL_SECONDS = 0.1
 
 
 class Phase(Enum):
-    """What `on_phase` reports, as it happens.
+    """O que o `on_phase` informa, à medida que acontece.
 
-    The first run takes tens of seconds (RFC-033a section 13), and a screen
-    that does not move for that long looks frozen.
+    A primeira execução leva dezenas de segundos (RFC-033a §13), e uma tela
+    que não se mexe por tanto tempo parece travada.
     """
 
     INITDB = "initdb"
@@ -144,7 +144,7 @@ class ClusterStatus(Enum):
 
 
 class Observation(Enum):
-    """One row of section 9.1's table: what was seen, before any action."""
+    """Uma linha da tabela do §9.1: o que foi visto, antes de qualquer ação."""
 
     INTERRUPTED_INITDB = "interrupted initdb"
     ABSENT = "absent"
@@ -166,10 +166,10 @@ class ClusterState:
 
 @dataclass(frozen=True)
 class StartedCluster:
-    """The connection, and three facts about how it came to be (section 4.2).
+    """A conexão, e três fatos sobre como ela veio a existir (§4.2).
 
-    `started_here` is how the launcher of RFC-036 decides who stops the
-    database at the end: the caller that started it, never one that adopted.
+    O `started_here` é como o launcher do RFC-036 decide quem para o banco no
+    fim: quem o subiu, nunca quem o adotou.
     """
 
     connection: ClusterConnection
@@ -180,7 +180,7 @@ class StartedCluster:
 
 @dataclass(frozen=True)
 class ClusterReport:
-    """`status()`: what is there now. Never the password."""
+    """`status()`: o que há agora. Nunca a senha."""
 
     status: ClusterStatus
     data_directory: Path
@@ -197,59 +197,60 @@ class StopOutcome(Enum):
 
 @dataclass(frozen=True)
 class ClusterTimeouts:
-    """Every wait the adapter makes, with the measurement each comes from."""
+    """Toda espera que o adaptador faz, com a medição de onde cada uma vem."""
 
     pg_ctl_start: int = 30
-    """`T` of section 8.3: a normal start with room to spare.
+    """O `T` do §8.3: uma subida normal com folga.
 
-    Measured (RFC-033 section 18): `pg_ctl start -w` took 0.6 to 1.9 s on a
-    clean start, and up to 9.6 s when the server had a crash to recover from.
-    Past `T`, a live postmaster still in `starting` is recovering, not hung,
-    and the adapter keeps waiting up to `recovery_ceiling`.
+    Medido (RFC-033 §18): o `pg_ctl start -w` levou de 0,6 a 1,9 s numa
+    subida limpa, e até 9,6 s quando o servidor tinha um crash do qual se
+    recuperar. Passado o `T`, um postmaster vivo ainda em `starting` está se
+    recuperando, não travado, e o adaptador continua esperando até o
+    `recovery_ceiling`.
     """
 
     recovery_ceiling: float = 600.0
-    """How long a crash recovery may take before the adapter gives up waiting.
+    """Quanto uma recuperação de crash pode levar antes de o adaptador desistir.
 
-    It does not stop the server when it gives up. This is a choice, not a
-    measurement: the longest recovery measured (RFC-033 section 18) took
-    13.4 s, on an SSD, and recovery grows with the WAL written since the last
-    checkpoint and with the disk. What a slow disk needs was not measured.
+    Ele não para o servidor quando desiste. É uma escolha, não uma medição: a
+    recuperação mais longa medida (RFC-033 §18) levou 13,4 s, num SSD, e a
+    recuperação cresce com o WAL escrito desde o último checkpoint e com o
+    disco. O que um disco lento precisa não foi medido.
     """
 
     pg_ctl_stop: int = 60
     lock: float = 900.0
-    """Longer than anything another holder of the lock can be doing: an
-    `initdb` (38.9 s, the worst RFC-033a measured) plus a start up to
+    """Mais longo que qualquer coisa que outro dono da trava possa estar fazendo:
+    um `initdb` (38,9 s, o pior que o RFC-033a mediu) mais uma subida de até
     `recovery_ceiling`."""
 
     orphan_grace: float = 5.0
-    """How long a dead postmaster's children get to exit on their own.
+    """Quanto tempo os filhos de um postmaster morto têm para sair sozinhos.
 
-    Measured (RFC-033 section 18): on an idle cluster the last child is
-    gone 0.05 to 0.17 s after the postmaster. Only a child that outlives the
-    grace is ended, which happened unprovoked once in 27 kills of the tree.
+    Medido (RFC-033 §18): num cluster ocioso o último filho some de 0,05 a
+    0,17 s depois do postmaster. Só um filho que sobrevive à carência é
+    encerrado, o que aconteceu sem provocação uma vez em 27 mortes da árvore.
     """
 
     stopping_wait: float = 60.0
     initdb: float = 600.0
     rename: float = 10.0
     max_port_attempts: int = 3
-    """Starts in a row refused by `bind` before giving up (section 8.2)."""
+    """Subidas seguidas recusadas pelo `bind` antes de desistir (§8.2)."""
 
 
 class PortProber:
-    """Section 8.2, steps 2 and 3: probe a port, or ask the system for one."""
+    """§8.2, passos 2 e 3: sonda uma porta, ou pede uma ao sistema."""
 
     def usable(self, port: int) -> bool:
-        """Try to bind it, and see whether Windows lets us.
+        """Tenta o bind nela, e vê se o Windows deixa.
 
-        Both "in use" (`WSAEADDRINUSE`) and "access denied" (`WSAEACCES`, a
-        range Hyper-V, WSL or Docker reserved) mean "no". The probe asks for
-        the port exclusively, so it also says "no" to a port another socket
-        holds in a way that would let a second bind share it. A wrong "no"
-        costs a new port number; a wrong "yes" costs a start that fails and
-        is retried (step 4).
+        Tanto "em uso" (`WSAEADDRINUSE`) quanto "acesso negado" (`WSAEACCES`,
+        uma faixa que o Hyper-V, o WSL ou o Docker reservaram) querem dizer
+        "não". A sonda pede a porta com exclusividade, então também diz "não" a
+        uma porta que outro socket segura de um jeito que deixaria um segundo
+        bind compartilhá-la. Um "não" errado custa um número de porta novo; um
+        "sim" errado custa uma subida que falha e é tentada de novo (passo 4).
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             exclusive = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
@@ -271,21 +272,21 @@ class PortProber:
             return True
 
     def free_port(self) -> int:
-        """Port 0: the system picks a free one, outside the excluded ranges."""
+        """Porta 0: o sistema escolhe uma livre, fora das faixas excluídas."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
             probe.bind((LOOPBACK, 0))
             return int(probe.getsockname()[1])
 
 
 class PostgresCommands:
-    """`initdb` and `pg_ctl`, run the way section 8.3 says.
+    """`initdb` e `pg_ctl`, rodados do jeito que o §8.3 diz.
 
-    `CREATE_NO_WINDOW`: `pg_ctl` gets a console without a window and the
-    server inherits it, so no black window opens for a caller without a
-    console, and a Ctrl+C in the caller's terminal does not reach a console
-    the server does not share. Output always to a file, never to a pipe: the
-    server would inherit the pipe, and whoever waited for `pg_ctl` to finish
-    would wait for the server to finish.
+    `CREATE_NO_WINDOW`: o `pg_ctl` recebe um console sem janela e o servidor o
+    herda, então nenhuma janela preta se abre para quem chama sem console, e
+    um Ctrl+C no terminal de quem chama não chega a um console que o servidor
+    não divide. A saída vai sempre para um arquivo, nunca para um pipe: o
+    servidor herdaria o pipe, e quem esperasse o `pg_ctl` terminar esperaria
+    o servidor terminar.
     """
 
     def __init__(self, runtime: PostgresRuntime) -> None:
@@ -294,10 +295,10 @@ class PostgresCommands:
     def initdb(
         self, target: Path, password_file: Path, timeout: float
     ) -> tuple[int, str]:
-        """RFC-033a's flags: scram, the password file, `UTF8` and `C`.
+        """As flags do RFC-033a: scram, o arquivo de senha, `UTF8` e `C`.
 
-        A pipe is safe here: every process `initdb` starts has exited by the
-        time it does.
+        Um pipe é seguro aqui: todo processo que o `initdb` inicia já saiu
+        quando ele sai.
         """
         completed = subprocess.run(
             [
@@ -320,14 +321,14 @@ class PostgresCommands:
         return completed.returncode, _decode(completed.stdout + completed.stderr)
 
     def clear_startup_log(self, files: ClusterFiles) -> None:
-        """Empty `startup.log`: it is rewritten on every start (section 8.1).
+        """Esvazia o `startup.log`: ele é reescrito a cada subida (§8.1).
 
-        Raises `PermissionError` while any process of the server is alive.
-        `pg_ctl` does not start `postgres.exe` itself: it starts
+        Levanta `PermissionError` enquanto algum processo do servidor está
+        vivo. O `pg_ctl` não inicia o `postgres.exe` ele mesmo: inicia
         `cmd.exe /D /C ""postgres.exe" -D "..." < "nul" >> "startup.log" 2>&1"`
-        (read from the running `cmd.exe`), and from then until the last
-        process of that server has exited the file cannot be opened for
-        writing by anyone else.
+        (lido do `cmd.exe` em execução), e daí até o último processo desse
+        servidor sair o arquivo não pode ser aberto para escrita por mais
+        ninguém.
         """
         files.startup_log.write_bytes(b"")
 
@@ -381,7 +382,7 @@ def _ignore(_: Phase) -> None:
 
 
 class EmbeddedPostgres:
-    """The adapter. Holds no state between calls: the files are the state."""
+    """O adaptador. Não guarda estado entre chamadas: os arquivos são o estado."""
 
     def __init__(
         self,
@@ -409,10 +410,10 @@ class EmbeddedPostgres:
         self._timeouts = timeouts if timeouts is not None else ClusterTimeouts()
         self._signal = signal
 
-    # -- the contract (section 4.2) ---------------------------------------
+    # -- o contrato (§4.2) -------------------------------------------------
 
     def start(self, on_phase: Callable[[Phase], None] | None = None) -> StartedCluster:
-        """Create if needed; start, or adopt a cluster that is already up."""
+        """Cria se preciso; sobe, ou adota um cluster que já está de pé."""
         report = on_phase or _ignore
         manifest = self._runtime.manifest()
         files = self._home.files(manifest.major)
@@ -467,7 +468,7 @@ class EmbeddedPostgres:
         connection: ClusterConnection,
         on_phase: Callable[[Phase], None] | None = None,
     ) -> PreparedDatabase:
-        """The database, the migrations and the facts (section 7.4)."""
+        """O banco, as migrations e os fatos (§7.4)."""
         report = on_phase or _ignore
         manifest = self._runtime.manifest()
         return prepare_database(
@@ -478,7 +479,7 @@ class EmbeddedPostgres:
         )
 
     def status(self) -> ClusterReport:
-        """A read of the files and the process table; takes no lock."""
+        """Uma leitura dos arquivos e da tabela de processos; não pega trava."""
         manifest = self._runtime.manifest()
         shown = self._home.files(manifest.major).data
         files = self._home.for_commands(self._home.files(manifest.major))
@@ -510,17 +511,18 @@ class EmbeddedPostgres:
         )
 
     def locate(self) -> ClusterConnection:
-        """The connection of a cluster that is up. Reads; starts nothing.
+        """A conexão de um cluster que está de pé. Lê; não sobe nada.
 
-        RFC-034 section 7.2. No lock, no connection, no waiting: the port the
-        server is *using*, from line 4 of `postmaster.pid`, and the password
-        from its file, after the checks `status()` makes -- the PID is alive,
-        the executable is this runtime's, and the lock file names this
-        `data\\`. Anything but `ready` is `ClusterNotRunningError`.
+        RFC-034 §7.2. Sem trava, sem conexão, sem espera: a porta que o
+        servidor está *usando*, da linha 4 do `postmaster.pid`, e a senha do
+        arquivo dela, depois das conferências que o `status()` faz -- o PID
+        está vivo, o executável é deste runtime, e o arquivo de trava nomeia
+        este `data\\`. Qualquer coisa que não seja `ready` é
+        `ClusterNotRunningError`.
 
-        `ready` in the file is not `ready` in the server (RFC-033 section
-        8.4). A connection opened while the server reinitializes is refused
-        by the server, and the caller gets an ordinary database error.
+        `ready` no arquivo não é `ready` no servidor (RFC-033 §8.4). Uma
+        conexão aberta enquanto o servidor se reinicializa é recusada pelo
+        servidor, e quem chama recebe um erro de banco comum.
         """
         manifest = self._runtime.manifest()
         shown = self._home.files(manifest.major).data
@@ -553,10 +555,10 @@ class EmbeddedPostgres:
         return ClusterConnection(port=state.pid_file.port, password=password)
 
     def environment(self) -> dict[str, str]:
-        """`ENVIRONMENT_VARIABLES` for a child process, pointing it at this cluster.
+        """`ENVIRONMENT_VARIABLES` para um processo filho, apontando-o a este cluster.
 
-        Above the `.env` in a checkout (RFC-004). Neither the port nor the
-        password is here: the child reads both from the cluster, by `locate()`.
+        Acima do `.env` num checkout (RFC-004). Nem a porta nem a senha estão
+        aqui: o filho lê as duas do cluster, pelo `locate()`.
         """
         return {
             "DATABASE_SOURCE": EMBEDDED_SOURCE,
@@ -565,7 +567,7 @@ class EmbeddedPostgres:
         }
 
     def stop(self) -> StopOutcome:
-        """`fast`; `immediate` if `fast` fails; an error if both do (8.5)."""
+        """`fast`; `immediate` se o `fast` falhar; erro se os dois falharem (§8.5)."""
         manifest = self._runtime.manifest()
         files = self._home.for_commands(self._home.files(manifest.major))
         if not files.data.exists():
@@ -594,16 +596,16 @@ class EmbeddedPostgres:
             )
 
     def stop_by_signal(self, timeout: float) -> StopOutcome:
-        """`stop()` without starting a process: for a session that is ending.
+        """`stop()` sem iniciar processo: para uma sessão que está terminando.
 
-        RFC-036 section 7.5. During a logoff `pg_ctl` cannot start, so the
-        postmaster is sent the signal `pg_ctl` would have sent, through its
-        signal pipe: `fast`, and `immediate` if the server is still there
-        `timeout` later. Each waits for the processes to be gone, not for
-        `postmaster.pid` -- the next start finds no server either way. Up to
-        `timeout` for the lock too: at a logoff, nobody else should hold it,
-        and the session will not wait 15 minutes. The same refusals and the
-        same error as `stop()`.
+        RFC-036 §7.5. Durante um logoff o `pg_ctl` não consegue subir, então o
+        postmaster recebe o sinal que o `pg_ctl` teria mandado, pelo pipe de
+        sinais dele: `fast`, e `immediate` se o servidor ainda estiver lá
+        `timeout` depois. Cada um espera os processos sumirem, não o
+        `postmaster.pid` -- a próxima subida não acha servidor de um jeito ou
+        de outro. Até `timeout` também para a trava: num logoff, ninguém mais
+        deveria segurá-la, e a sessão não vai esperar 15 minutos. As mesmas
+        recusas e o mesmo erro do `stop()`.
         """
         manifest = self._runtime.manifest()
         files = self._home.for_commands(self._home.files(manifest.major))
@@ -617,8 +619,8 @@ class EmbeddedPostgres:
                 return StopOutcome.NOT_RUNNING
             assert state.pid_file is not None
             postmaster = state.pid_file.pid
-            # Listed before the signal: a process on its way out may no longer
-            # say what it runs, and would pass for gone (measured).
+            # Listados antes do sinal: um processo de saída pode não dizer mais
+            # o que roda, e passaria por sumido (medido).
             server = sorted({postmaster, *self._server_processes(postmaster)})
             if self._signal(postmaster, FAST) and self._gone(server, timeout):
                 logger.info("Embedded cluster stopped (fast, by its signal pipe)")
@@ -634,7 +636,7 @@ class EmbeddedPostgres:
             )
 
     def _gone(self, server: list[int], timeout: float) -> bool:
-        """Whether every process in `server` exited within `timeout`."""
+        """Se todo processo em `server` saiu dentro de `timeout`."""
         deadline = time.monotonic() + timeout
         while any(self._processes.is_alive(pid) for pid in server):
             if time.monotonic() >= deadline:
@@ -643,15 +645,14 @@ class EmbeddedPostgres:
         return True
 
     def _server_processes(self, postmaster: int) -> list[int]:
-        """The postmaster and its children that exist right now, by identity.
+        """O postmaster e os filhos dele que existem agora, por identidade.
 
-        Each one counted here is a program of this runtime, and not only a
-        number. A process records its parent's PID once and Windows never
-        updates it, so a process that has nothing to do with the cluster
-        shows up as a "child" of the postmaster whenever its own long-gone
-        parent had the number the postmaster has now -- on the machine this
-        was measured on, 18 of 328 processes named a parent PID that
-        belonged to nobody any more.
+        Cada um contado aqui é um programa deste runtime, e não só um número.
+        Um processo registra o PID do pai uma vez e o Windows nunca o atualiza,
+        então um processo que nada tem a ver com o cluster aparece como "filho"
+        do postmaster sempre que o seu próprio pai, há muito sumido, tinha o
+        número que o postmaster tem agora -- na máquina em que isto foi medido,
+        18 de 328 processos nomeavam um PID de pai que não era mais de ninguém.
         """
         return [
             process.pid
@@ -661,14 +662,14 @@ class EmbeddedPostgres:
         ]
 
     def _wait_for_exit(self, postmaster: int) -> None:
-        """Return from `stop()` only when the processes are gone, not just the lock.
+        """Volta do `stop()` só quando os processos sumiram, não só a trava.
 
-        `pg_ctl stop -w` waits for `postmaster.pid` to disappear, which the
-        postmaster does on its way out; the processes themselves are still
-        there for a moment after. A caller told "stopped" should find no
-        `postgres.exe` of this cluster, and a `start()` that follows should
-        find `startup.log` free. Nobody is ended here: the lock is released,
-        and what is left is leaving.
+        O `pg_ctl stop -w` espera o `postmaster.pid` desaparecer, o que o
+        postmaster faz ao sair; os próprios processos ainda ficam lá por um
+        momento depois. Quem ouviu "parado" não deveria achar `postgres.exe`
+        deste cluster, e um `start()` em seguida deveria achar o `startup.log`
+        livre. Ninguém é encerrado aqui: a trava foi liberada, e o que sobrou
+        está de saída.
         """
         deadline = time.monotonic() + self._timeouts.orphan_grace
         while self._server_processes(postmaster):
@@ -681,7 +682,7 @@ class EmbeddedPostgres:
                 return
             time.sleep(POLL_SECONDS / 10)
 
-    # -- observing (section 9.1) ------------------------------------------
+    # -- observar (§9.1) ---------------------------------------------------
 
     def _observe(
         self,
@@ -712,9 +713,9 @@ class EmbeddedPostgres:
             return ClusterState(Observation.STALE, pid_file)
         executable = self._processes.executable(pid_file.pid)
         if executable is None or executable.name.lower() != "postgres.exe":
-            # A PID reused by another program, or one this user cannot
-            # inspect. Stale as far as the adapter can tell; on start, the
-            # server itself decides whether the lock holds (section 9.2).
+            # Um PID reusado por outro programa, ou um que este usuário não
+            # consegue inspecionar. Velho até onde o adaptador consegue ver; na
+            # subida, o próprio servidor decide se a trava vale (§9.2).
             return ClusterState(
                 Observation.STALE,
                 pid_file,
@@ -749,11 +750,11 @@ class EmbeddedPostgres:
             )
 
     def _shut_down_cleanly(self, files: ClusterFiles) -> bool:
-        """Whether `pg_control` says the last shutdown was clean.
+        """Se o `pg_control` diz que o último desligamento foi limpo.
 
-        Read before the start, so `recovered` is known rather than inferred
-        from a log: the state is the fifth 32-bit field of `pg_control`,
-        whose layout version 1300 has not changed since PostgreSQL 13.
+        Lido antes da subida, para que `recovered` seja sabido em vez de
+        inferido de um log: o estado é o quinto campo de 32 bits do
+        `pg_control`, cuja versão de layout 1300 não mudou desde o PostgreSQL 13.
         """
         try:
             with files.pg_control.open("rb") as handle:
@@ -768,7 +769,7 @@ class EmbeddedPostgres:
             return True
         return state in (_DB_SHUTDOWNED, _DB_SHUTDOWNED_IN_RECOVERY)
 
-    # -- creating (section 7.1) -------------------------------------------
+    # -- criar (§7.1) ------------------------------------------------------
 
     def _create(self, files: ClusterFiles, report: Callable[[Phase], None]) -> None:
         report(Phase.INITDB)
@@ -788,10 +789,10 @@ class EmbeddedPostgres:
         self._rename(files.data_initdb, files.data)
 
     def _rename(self, source: Path, target: Path) -> None:
-        """Atomic on one volume; retried while something holds a handle.
+        """Atômico num volume; tentado de novo enquanto algo segura um handle.
 
-        A scanner opening the files `initdb` just wrote can make Windows
-        refuse a directory rename for a moment.
+        Um scanner abrindo os arquivos que o `initdb` acabou de escrever pode
+        fazer o Windows recusar o rename de um diretório por um momento.
         """
         deadline = time.monotonic() + self._timeouts.rename
         while True:
@@ -804,11 +805,11 @@ class EmbeddedPostgres:
                 time.sleep(POLL_SECONDS)
 
     def _discard_interrupted_initdb(self, files: ClusterFiles) -> None:
-        """Delete a `data.initdb` left by a creation that did not finish.
+        """Apaga um `data.initdb` deixado por uma criação que não terminou.
 
-        An `initdb` of this runtime still running -- orphaned by a parent
-        killed on its own -- is waited for first: it would otherwise keep
-        writing into the directory being deleted.
+        Um `initdb` deste runtime ainda rodando -- órfão de um pai morto sozinho
+        -- é esperado primeiro: senão, continuaria escrevendo no diretório que
+        está sendo apagado.
         """
         deadline = time.monotonic() + self._timeouts.initdb
         while self._running_initdb() and time.monotonic() < deadline:
@@ -835,7 +836,7 @@ class EmbeddedPostgres:
             if process.name.lower() == "initdb.exe" and self._ours(process.pid)
         ]
 
-    # -- starting (sections 8.2 and 8.3) ------------------------------------
+    # -- subir (§8.2 e §8.3) -------------------------------------------------
 
     def _start_server(
         self,
@@ -862,18 +863,19 @@ class EmbeddedPostgres:
             self._clear_startup_log(files, stale_pid)
             marks = self._server_log_marks(files)
             returncode = self._commands.start(files, self._timeouts.pg_ctl_start)
-            # `pg_ctl`'s exit code is a hint, not the answer. On Windows it
-            # cannot match `postmaster.pid` to the process it started -- what
-            # it started is `cmd.exe` -- so it accepts any file whose start
-            # time is at most two seconds old, including the *stale* file of
-            # a postmaster that has just been killed, which still says
-            # `ready`. The answer is a live postmaster of this runtime in
-            # the file, and what that file says.
+            # O código de saída do `pg_ctl` é uma pista, não a resposta. No
+            # Windows ele não consegue casar o `postmaster.pid` com o processo
+            # que iniciou -- o que ele iniciou é o `cmd.exe` --, então aceita
+            # qualquer arquivo cujo horário de início tenha no máximo dois
+            # segundos, inclusive o arquivo *velho* de um postmaster que acabou
+            # de ser morto, que ainda diz `ready`. A resposta é um postmaster
+            # vivo deste runtime no arquivo, e o que esse arquivo diz.
             pid_file = self._live_postmaster(files, marks, wait=returncode == 0)
             if pid_file is not None:
                 if pid_file.status not in (STATUS_READY, STATUS_STANDBY):
-                    # Alive and still `starting` after `-t` ran out, or after
-                    # a stale `ready`: crash recovery, not a hang (8.3).
+                    # Vivo e ainda em `starting` depois de o `-t` se esgotar, ou
+                    # depois de um `ready` velho: recuperação de crash, não um
+                    # travamento (§8.3).
                     if not recovery_expected:
                         report(Phase.RECOVERING)
                     pid_file = self._wait_until_ready(files, pid_file, marks)
@@ -913,13 +915,13 @@ class EmbeddedPostgres:
     def _live_postmaster(
         self, files: ClusterFiles, marks: dict[Path, int], *, wait: bool
     ) -> PostmasterPid | None:
-        """The `postmaster.pid` of a live server of this runtime, if there is one.
+        """O `postmaster.pid` de um servidor vivo deste runtime, se houver um.
 
-        With `wait`, for as long as a normal start may take: `pg_ctl` said the
-        server is up, so a file that does not show it yet is one the new
-        postmaster has not rewritten. A `FATAL` in `startup.log`, or a
-        refused `bind` in the server's own log, ends the wait early -- that
-        server is not coming.
+        Com `wait`, por tanto tempo quanto uma subida normal pode levar: o
+        `pg_ctl` disse que o servidor está de pé, então um arquivo que ainda não
+        o mostra é um que o novo postmaster não reescreveu. Um `FATAL` no
+        `startup.log`, ou um `bind` recusado no log do próprio servidor,
+        encerra a espera antes -- esse servidor não vem.
         """
         deadline = time.monotonic() + (self._timeouts.pg_ctl_start if wait else 0)
         while True:
@@ -935,14 +937,14 @@ class EmbeddedPostgres:
                 return None
             time.sleep(POLL_SECONDS)
 
-    # -- what the server said (section 8.1) ---------------------------------
+    # -- o que o servidor disse (§8.1) ---------------------------------------
 
     def _server_log_marks(self, files: ClusterFiles) -> dict[Path, int]:
-        """The size of each of the collector's files, before a start.
+        """O tamanho de cada arquivo do collector, antes de uma subida.
 
-        The files are one per weekday and every start of that day appends to
-        the same one, so "what this start logged" is what lies past these
-        sizes.
+        Os arquivos são um por dia da semana e toda subida daquele dia escreve
+        no fim do mesmo, então "o que esta subida registrou" é o que fica além
+        desses tamanhos.
         """
         marks: dict[Path, int] = {}
         if files.server_log_directory.is_dir():
@@ -961,8 +963,8 @@ class EmbeddedPostgres:
             try:
                 with path.open("rb") as handle:
                     mark = marks.get(path, 0)
-                    # A file smaller than its mark was truncated by a
-                    # rotation: all of it is new.
+                    # Um arquivo menor que a sua marca foi truncado por uma
+                    # rotação: ele é todo novo.
                     handle.seek(mark if path.stat().st_size >= mark else 0)
                     written.append(_decode(handle.read()))
             except OSError:
@@ -970,25 +972,26 @@ class EmbeddedPostgres:
         return "".join(written)
 
     def _start_output(self, files: ClusterFiles, marks: dict[Path, int]) -> str:
-        """Everything the server logged in this start, in the order it did.
+        """Tudo o que o servidor registrou nesta subida, na ordem em que registrou.
 
-        **Two logs, and not the split RFC-033 section 8.1 first assumed.**
-        PostgreSQL 16 starts the logging collector *before* it opens its
-        sockets, so `startup.log` -- `pg_ctl -l` -- holds only what comes
-        earlier still: the lock file, the configuration, the shared memory.
-        A refused `bind` is in the collector's file, with everything after.
+        **Dois logs, e não a divisão que o RFC-033 §8.1 supôs primeiro.** O
+        PostgreSQL 16 sobe o logging collector *antes* de abrir os sockets,
+        então o `startup.log` -- `pg_ctl -l` -- guarda só o que vem antes ainda:
+        o arquivo de trava, a configuração, a memória compartilhada. Um `bind`
+        recusado está no arquivo do collector, com tudo o que vem depois.
         """
         return self._read_text(files.startup_log) + self._server_log_since(files, marks)
 
     def _clear_startup_log(self, files: ClusterFiles, stale_pid: int | None) -> None:
-        """Rewrite `startup.log`, waiting out whoever still holds it.
+        """Reescreve o `startup.log`, esperando quem ainda o segura largar.
 
-        After a postmaster dies by force, its children are the first thing
-        in the way: they hold `startup.log` until they exit, before any new
-        server gets far enough to find the shared memory in use. So the
-        orphan rule of section 9.3 is applied here as well -- wait the grace,
-        end only the orphans that are this cluster's, and wait again. With
-        no dead postmaster to name, nobody is ended at all.
+        Depois que um postmaster morre à força, os filhos dele são a primeira
+        coisa no caminho: seguram o `startup.log` até sair, antes que qualquer
+        servidor novo chegue longe o bastante para achar a memória
+        compartilhada em uso. Então a regra dos órfãos do §9.3 é aplicada aqui
+        também -- espera a carência, encerra só os órfãos que são deste
+        cluster, e espera de novo. Sem postmaster morto para nomear, ninguém é
+        encerrado.
         """
         if self._startup_log_cleared(files):
             return
@@ -1013,7 +1016,7 @@ class EmbeddedPostgres:
         return True
 
     def _configured_port(self, files: ClusterFiles) -> int | None:
-        """The port of the last start, as `solidvision.conf` asked for it."""
+        """A porta da última subida, como o `solidvision.conf` a pediu."""
         for line in self._read_text(files.server_conf).splitlines():
             name, _, value = line.partition("=")
             if name.strip() == "port":
@@ -1023,9 +1026,8 @@ class EmbeddedPostgres:
         return None
 
     def _write_server_conf(self, files: ClusterFiles, port: int) -> None:
-        """Section 8.1. Nothing goes through `pg_ctl -o`: someone who runs
-        `pg_ctl` by hand to diagnose a problem starts the same server, on the
-        same port."""
+        """§8.1. Nada passa pelo `pg_ctl -o`: quem roda o `pg_ctl` à mão para
+        diagnosticar um problema sobe o mesmo servidor, na mesma porta."""
         files.server_conf.write_text(
             "# Written by the SolidVision embedded adapter before every start\n"
             "# (RFC-033 section 8.1). Edits here are overwritten.\n"
@@ -1085,7 +1087,7 @@ class EmbeddedPostgres:
         password: str,
         report: Callable[[Phase], None],
     ) -> StartedCluster:
-        """Section 8.4: this directory, this runtime, and the password works."""
+        """§8.4: este diretório, este runtime, e a senha funciona."""
         assert state.pid_file is not None
         pid_file = state.pid_file
         if state.observation is Observation.STARTING:
@@ -1103,12 +1105,13 @@ class EmbeddedPostgres:
     def _login(
         self, connection: ClusterConnection, report: Callable[[Phase], None]
     ) -> None:
-        """The third condition of section 8.4, and the last word on "ready".
+        """A terceira condição do §8.4, e a palavra final sobre "pronto".
 
-        A server reinitializing after one of its own processes died still has
-        `ready` in `postmaster.pid`; what tells the truth is the connection,
-        refused with "in recovery mode". That refusal is waited out, like any
-        other recovery, up to the same ceiling. A rejected password is not.
+        Um servidor se reinicializando depois que um dos seus próprios
+        processos morreu ainda tem `ready` no `postmaster.pid`; quem diz a
+        verdade é a conexão, recusada com "in recovery mode". Essa recusa é
+        esperada, como qualquer outra recuperação, até o mesmo teto. Uma senha
+        rejeitada não é.
         """
         deadline = time.monotonic() + self._timeouts.recovery_ceiling
         reported = False
@@ -1124,7 +1127,7 @@ class EmbeddedPostgres:
                     reported = True
                 time.sleep(POLL_SECONDS)
 
-    # -- orphans (section 9.3) ----------------------------------------------
+    # -- órfãos (§9.3) -------------------------------------------------------
 
     def _ours(self, pid: int) -> bool:
         executable = self._processes.executable(pid)
@@ -1138,12 +1141,12 @@ class EmbeddedPostgres:
         )
 
     def _orphans_of(self, dead_pid: int) -> list[ProcessInfo]:
-        """Children of *this* data directory's dead postmaster, from *this* runtime.
+        """Filhos do postmaster morto *deste* diretório de dados, *deste* runtime.
 
-        Both conditions, always together: they are what protects a
-        PostgreSQL the user installed and another Windows account's cluster
-        on the same machine. And nothing at all if the "dead" PID is alive
-        again -- reused, so its children are not the ones being looked for.
+        As duas condições, sempre juntas: são elas que protegem um PostgreSQL
+        que o usuário instalou e o cluster de outra conta do Windows na mesma
+        máquina. E nada se o PID "morto" estiver vivo de novo -- reusado, então
+        os filhos dele não são os procurados.
         """
         if self._processes.is_alive(dead_pid):
             return []

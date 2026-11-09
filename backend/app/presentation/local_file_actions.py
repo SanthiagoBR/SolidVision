@@ -1,28 +1,29 @@
-"""The two guards in front of anything that acts on the user's machine (RFC-030).
+"""As duas guardas na frente de tudo o que age na máquina do usuário (RFC-030).
 
-`POST /api/v1/images/{id}/reveal` starts a process on the computer the API
-runs on. RFC-030 section 2.1 dropped RFC-026's objection to publishing file
-paths *because the deployment is local*, and a condition a security
-decision rests on has to be checked when a request arrives, not assumed
-when the code is read. Hence two guards, and they are independent on
-purpose:
+`POST /api/v1/images/{id}/reveal` inicia um processo no computador em que a
+API roda. O RFC-030 §2.1 derrubou a objeção do RFC-026 a publicar caminhos
+de arquivo *porque a implantação é local*, e uma condição em que se apoia uma
+decisão de segurança precisa ser verificada quando a requisição chega, não
+suposta quando o código é lido. Daí duas guardas, independentes de
+propósito:
 
-* **Guard 1 -- configuration.** `settings.allow_local_file_actions`,
-  `False` unless the operator turns it on. The operator's intention.
-* **Guard 2 -- loopback.** The caller's address must be a loopback one,
-  whatever the setting says. A fact about who is calling, which still
-  holds for an operator who started the API on `0.0.0.0` without noticing
-  -- precisely the deployment in which RFC-026's objection comes back.
+* **Guarda 1 -- configuração.** `settings.allow_local_file_actions`,
+  `False` a menos que o operador a ligue. A intenção do operador.
+* **Guarda 2 -- loopback.** O endereço de quem chama precisa ser de
+  loopback, diga o que disser a configuração. Um fato sobre quem está
+  chamando, que continua valendo para um operador que subiu a API em
+  `0.0.0.0` sem perceber -- justamente a implantação em que a objeção do
+  RFC-026 volta.
 
-Neither substitutes for the other. The setting alone does not protect an
-API exposed to the network; the loopback check alone is satisfied by
-anything that tunnels to localhost, and does not say the operator wanted
-this at all.
+Nenhuma substitui a outra. A configuração sozinha não protege uma API
+exposta na rede; a verificação de loopback sozinha é satisfeita por
+qualquer coisa que faça um túnel até localhost, e não diz que o operador
+queria isso.
 
-Both are FastAPI dependencies declared on the route decorator, which
-FastAPI resolves before the endpoint's own parameters. A refused request
-therefore never constructs the use case, never opens a database session,
-and never enumerates a volume.
+As duas são dependências do FastAPI declaradas no decorator da rota, que o
+FastAPI resolve antes dos parâmetros do próprio endpoint. Uma requisição
+recusada, portanto, nunca constrói o caso de uso, nunca abre uma sessão no
+banco e nunca enumera um volume.
 """
 
 from __future__ import annotations
@@ -35,28 +36,28 @@ from app.infrastructure.config.settings import settings
 
 
 def require_local_file_actions_enabled() -> None:
-    """Guard 1: answer exactly as a route that does not exist would.
+    """Guarda 1: responde exatamente como responderia uma rota que não existe.
 
-    404 with FastAPI's own `{"detail": "Not Found"}`, not 403. RFC-030
-    section 6: with the setting off, the route does not exist rather than
-    existing and refusing -- a client probing the API learns nothing from
-    it that an unknown path would not tell it.
+    404 com o próprio `{"detail": "Not Found"}` do FastAPI, não 403. RFC-030
+    §6: com a configuração desligada, a rota não existe, em vez de existir e
+    recusar -- um cliente sondando a API não aprende com ela nada que um
+    caminho desconhecido não lhe diria.
     """
     if not settings.allow_local_file_actions:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
 
 def require_loopback_client(request: Request) -> None:
-    """Guard 2: refuse any caller whose address is not a loopback address.
+    """Guarda 2: recusa quem chama de um endereço que não é de loopback.
 
-    403, because at this point the route does exist -- the operator turned
-    it on -- and the caller is the problem. The address is the one the ASGI
-    server reports for the connection. A reverse proxy on the same machine
-    makes every caller look local unless the server is told to trust its
-    forwarding headers, which is one of the reasons guard 1 exists at all.
+    403, porque a esta altura a rota existe -- o operador a ligou -- e o
+    problema é quem chama. O endereço é o que o servidor ASGI informa para
+    a conexão. Um proxy reverso na mesma máquina faz todo chamador parecer
+    local, a menos que o servidor seja instruído a confiar nos cabeçalhos de
+    encaminhamento dele, e esse é um dos motivos de a guarda 1 existir.
 
-    A request with no client address at all is refused: "unknown" is not
-    "local".
+    Uma requisição sem nenhum endereço de cliente é recusada:
+    "desconhecido" não é "local".
     """
     client = request.client
     if client is None or not is_loopback_address(client.host):
@@ -67,17 +68,17 @@ def require_loopback_client(request: Request) -> None:
 
 
 def is_loopback_address(host: str) -> bool:
-    """Whether `host` is a literal loopback IP address, IPv4 or IPv6.
+    """Se `host` é um endereço IP literal de loopback, IPv4 ou IPv6.
 
-    Only literal addresses count. `localhost` is a name, and a name is
-    whatever a resolver says it is; ASGI servers report the peer's address,
-    so a name here means something upstream rewrote it.
+    Só endereços literais contam. `localhost` é um nome, e um nome é o que
+    um resolvedor disser que é; servidores ASGI informam o endereço do par,
+    então um nome aqui quer dizer que algo no caminho o reescreveu.
 
-    An IPv4-mapped IPv6 address -- `::ffff:127.0.0.1`, which a dual-stack
-    socket reports for an IPv4 loopback caller -- is judged by the IPv4
-    address inside it. `ipaddress` does not do that for `is_loopback` on
-    every Python version this could run on, and getting it wrong would
-    refuse a legitimate local caller.
+    Um endereço IPv6 mapeado de IPv4 -- `::ffff:127.0.0.1`, que um socket
+    dual-stack informa para um chamador de loopback IPv4 -- é julgado pelo
+    endereço IPv4 dentro dele. `ipaddress` não faz isso no `is_loopback` em
+    toda versão do Python em que isto poderia rodar, e errar aqui recusaria
+    um chamador local legítimo.
     """
     try:
         address = ipaddress.ip_address(host)

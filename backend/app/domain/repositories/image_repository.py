@@ -1,4 +1,4 @@
-"""Abstract repository port for image persistence operations."""
+"""Porta abstrata de repositório para as operações de persistência de imagens."""
 
 from __future__ import annotations
 
@@ -35,73 +35,73 @@ from app.domain.value_objects.search_hit import SearchHits
 
 
 class ImageRepository(ABC):
-    """Repository contract for managing Image domain entities."""
+    """Contrato de repositório para gerenciar as entidades de domínio Image."""
 
     @abstractmethod
     def save(self, image: Image) -> None:
-        """Persist a new image in the repository.
+        """Persiste uma imagem nova no repositório.
 
-        Kept as the original RFC-015 create-once contract, used by
-        `IndexImageUseCase`. Incremental indexing uses `save_indexed()`
-        instead.
+        Mantido como o contrato original do RFC-015, de criar uma vez, usado
+        por `IndexImageUseCase`. A indexação incremental usa `save_indexed()`
+        no lugar dele.
         """
 
     @abstractmethod
     def get(self, image_id: ImageId) -> Image | None:
-        """Retrieve an image by its identifier."""
+        """Busca uma imagem pelo identificador."""
 
     @abstractmethod
     def exists(self, image_id: ImageId) -> bool:
-        """Return whether an image exists for the provided identifier."""
+        """Diz se existe uma imagem com o identificador dado."""
 
     @abstractmethod
     def delete(self, image_id: ImageId) -> None:
-        """Remove an image from the repository."""
+        """Remove uma imagem do repositório."""
 
     @abstractmethod
     def list(self) -> list[Image]:
-        """Return all images known to the repository."""
+        """Devolve todas as imagens que o repositório conhece."""
 
     @abstractmethod
     def save_indexed(self, record: IndexingRecord) -> None:
-        """Create or update an image together with its embedding and metadata.
+        """Cria ou atualiza uma imagem junto com o embedding e os metadados.
 
-        The whole row is written from the record, capture date included:
-        `record.image.captured_at` and `capture_source` replace whatever
-        was stored, even when they are `None`. That is correct for the only
-        caller, which reaches this for new or genuinely changed bytes --
-        a date read from the old bytes no longer describes the file, and
-        "never examined" is the honest state until a scan reads the new
-        ones.
+        A linha inteira é escrita a partir do registro, data de captura
+        incluída: `record.image.captured_at` e `capture_source` substituem o
+        que estava gravado, mesmo quando são `None`. Isso é o certo para o
+        único chamador, que chega aqui com bytes novos ou que de fato
+        mudaram -- uma data lida dos bytes antigos não descreve mais o
+        arquivo, e "nunca examinada" é o estado honesto até um scan ler os
+        novos.
 
-        The same holds for `record.thumbnail_path` (RFC-030): written as
-        given, `None` included, because a thumbnail rendered from the old
-        bytes no longer depicts the file -- and for the position (RFC-032):
-        `latitude`, `longitude` and `position_source` come from the entity,
-        `None` included, for the capture date's reason.
+        O mesmo vale para `record.thumbnail_path` (RFC-030): escrito como
+        veio, `None` incluído, porque uma thumbnail gerada dos bytes antigos
+        não mostra mais o arquivo -- e para a posição (RFC-032): `latitude`,
+        `longitude` e `position_source` vêm da entidade, `None` incluído,
+        pela razão da data de captura.
 
-        And the row is **unmarked** (RFC-046 section 5.1): a photo that was
-        just indexed exists, whatever an earlier scan failed to find.
+        E a linha é **desmarcada** (RFC-046 §5.1): uma foto que acabou de ser
+        indexada existe, seja o que for que um scan anterior não achou.
         """
 
     @abstractmethod
     def save_indexed_many(self, records: Sequence[IndexingRecord]) -> None:
-        """Create or update many images as a single unit of work.
+        """Cria ou atualiza muitas imagens como uma única unidade de trabalho.
 
-        All or nothing: either every record is persisted or none is. That
-        is what makes the method worth having -- one commit instead of N --
-        and it is also what makes it dangerous, since a single bad row
-        discards the embeddings of every other row in the batch, each of
-        which cost real inference time to produce.
+        Tudo ou nada: ou todos os registros são persistidos, ou nenhum. É
+        isso que faz o método valer a pena -- um commit em vez de N -- e é
+        também o que o torna perigoso, já que uma única linha ruim descarta
+        os embeddings de todas as outras linhas do lote, e cada um deles
+        custou tempo real de inferência.
 
-        Callers are therefore expected to fall back to `save_indexed()` per
-        record when this raises, so that only the genuinely bad row is
-        lost (RFC-024 section 7.2). An implementation must leave itself
-        usable for exactly that: on failure it must roll back cleanly
-        rather than leaving half-applied state behind.
+        Por isso, espera-se que os chamadores recorram a `save_indexed()`
+        por registro quando este levanta, para que só a linha de fato ruim
+        se perca (RFC-024 §7.2). Uma implementação precisa se deixar
+        utilizável exatamente para isso: na falha, faz rollback limpo em vez
+        de deixar estado aplicado pela metade.
 
-        Constraint violations propagate as they do from `save_indexed()`;
-        they are real errors, not duplicate-create signals.
+        Violações de restrição se propagam como em `save_indexed()`; são
+        erros reais, e não sinais de criação duplicada.
         """
 
     @abstractmethod
@@ -111,354 +111,361 @@ class ImageRepository(ABC):
         limit: int,
         filters: SearchFilters | None = None,
     ) -> SearchHits:
-        """Return the images closest to `embedding`, best match first.
+        """Devolve as imagens mais próximas de `embedding`, a melhor primeiro.
 
-        The counterpart of `save_indexed()`: that method is how an
-        embedding enters the repository, and this is the only way one is
-        used once it is there. The repository owns the ranking -- callers
-        receive an ordered list and must not re-sort it, since an
-        implementation is free to rank by whatever it stores rather than
-        by recomputing anything in the caller's process.
+        A contraparte de `save_indexed()`: aquele método é como um embedding
+        entra no repositório, e este é o único jeito de usá-lo depois que
+        está lá. O ranking é do repositório -- os chamadores recebem uma
+        lista ordenada e não devem reordená-la, já que uma implementação é
+        livre para ranquear pelo que guarda, em vez de recalcular qualquer
+        coisa no processo do chamador.
 
-        The contract every implementation owes:
+        O contrato que toda implementação deve cumprir:
 
-        - Results are ordered from most similar to least similar, and
-          `SearchHit.similarity` is cosine similarity in [-1, 1]. It is
-          never rescaled to [0, 1]; a negative score is a real answer
-          meaning the vectors oppose each other.
-        - An image with no stored embedding never appears. It was never
-          compared, and inventing a score for it would put unindexed
-          files in front of indexed ones.
-        - **Nor does a marked image** (RFC-046 section 6): the last scan
-          of its disk did not find the file. The two conditions are one
-          rule -- *searchable* -- and every read that serves the
-          interface applies both: this one, the listing and its summary,
-          the two counts of excluded photos and the map.
-        - At most `limit` hits come back, fewer when fewer images have
-          embeddings, and `[]` when none do. A short result means the
-          repository ran out of candidates, never that it ran out of
-          quality: filtering by a minimum score is not part of this
-          contract.
-        - Equally similar images come back in a stable, deterministic
-          order, so that repeating a search repeats its result.
-        - Without `filters`, the search covers every image known to the
-          repository. RFC-025 wrote that there was "no scoping argument,
-          by collection or otherwise" and named the condition for adding
-          one: a real table, a real foreign key, and ownership rules.
-          RFC-027 delivers those for *devices*, which are a physical fact
-          about where bytes are rather than a modelling choice, so
-          `filters` narrows by device -- and, since RFC-028, by capture
-          date, which is a fact recorded inside the file.
-        - A capture-date range is half-open, `[start, end)`, over the
-          camera-local `captured_at`. An image whose capture date is
-          unknown never matches a range, however wide: unknown never
-          means "matches" (RFC-020). The device set and the range combine
-          with AND.
-        - A circle (RFC-032) keeps the images whose position is within
-          `radius_m` metres of its centre by **exact haversine distance**,
-          the edge included, computed with `EARTH_RADIUS_M`. A bounding box
-          may narrow the rows first, but only as a pre-filter that can never
-          remove a row the distance would keep. An image whose position is
-          unknown never matches a circle, however large -- the in-memory
-          implementations must say `is None` explicitly, because Python
-          raises where SQL quietly compares NULL as false. All three
-          clauses combine with AND.
-        - `filters=None` and `filters=SearchFilters()` mean the same
-          thing: no narrowing, and byte-for-byte the query RFC-025
-          shipped. Neither may be read as "an empty set of devices",
-          which would match nothing and turn a defaulted argument into a
-          search that silently returns zero results -- nor as an
-          unbounded date range, which would silently drop every image
-          without a date.
-        - Every hit's `Image` carries its `captured_at` and
-          `capture_source`, so a caller can show why a photo matched a
-          date filter and how much that date is worth -- and, since
-          RFC-032, its `latitude`, `longitude` and `position_source`, for
-          the same reason about a circle.
-        - A filtered search obeys every rule above, including ordering,
-          the cosine range, and skipping images with no embedding. It
-          restricts the candidate set; it does not change the ranking
-          within it.
-        - Filtering on a device that has no images returns `[]`, and
-          filtering on an unknown device id is not an error. The set is a
-          restriction, not an assertion that its members exist.
-        - An `embedding` whose width does not match the indexed vectors
-          raises `EmbeddingDimensionMismatchError`. It is a caller error,
-          not a search that happens to match nothing, and it must fail
-          identically in every implementation -- the plausible bug is an
-          implementation that truncates to the shorter vector and returns
-          a confident, meaningless ranking.
+        - Os resultados vêm do mais parecido ao menos parecido, e
+          `SearchHit.similarity` é a similaridade de cosseno em [-1, 1].
+          Nunca é reescalada para [0, 1]; uma nota negativa é uma resposta
+          real, e quer dizer que os vetores apontam em sentidos opostos.
+        - Uma imagem sem embedding gravado nunca aparece. Ela nunca foi
+          comparada, e inventar uma nota para ela poria arquivos não
+          indexados na frente dos indexados.
+        - **Nem uma imagem marcada** (RFC-046 §6): o último scan do disco
+          dela não achou o arquivo. As duas condições são uma regra só --
+          *buscável* -- e toda leitura que serve a interface aplica as duas:
+          esta, a listagem e o resumo dela, as duas contagens de fotos
+          deixadas de fora e o mapa.
+        - Voltam no máximo `limit` resultados, menos quando menos imagens
+          têm embedding, e `[]` quando nenhuma tem. Um resultado curto quer
+          dizer que o repositório ficou sem candidatos, nunca que ficou sem
+          qualidade: filtrar por uma nota mínima não faz parte deste
+          contrato.
+        - Imagens igualmente parecidas voltam numa ordem estável e
+          determinística, para que repetir uma busca repita o resultado.
+        - Sem `filters`, a busca cobre todas as imagens que o repositório
+          conhece. O RFC-025 escreveu que não havia "no scoping argument,
+          by collection or otherwise" e deu a condição para acrescentar um:
+          uma tabela real, uma chave estrangeira real e regras de posse. O
+          RFC-027 entrega isso para *dispositivos*, que são um fato físico
+          sobre onde os bytes estão, e não uma escolha de modelagem; por
+          isso `filters` restringe por dispositivo -- e, desde o RFC-028,
+          por data de captura, que é um fato gravado dentro do arquivo.
+        - Um intervalo de datas de captura é semiaberto, `[start, end)`,
+          sobre o `captured_at` no horário local da câmera. Uma imagem cuja
+          data de captura é desconhecida nunca casa com um intervalo, por
+          mais largo que seja: desconhecido nunca quer dizer "casa"
+          (RFC-020). O conjunto de dispositivos e o intervalo se combinam
+          com AND.
+        - Um círculo (RFC-032) mantém as imagens cuja posição está a até
+          `radius_m` metros do centro pela **distância de haversine
+          exata**, a borda incluída, calculada com `EARTH_RADIUS_M`. Uma
+          caixa delimitadora pode restringir as linhas antes, mas só como
+          um pré-filtro que nunca tira uma linha que a distância manteria.
+          Uma imagem cuja posição é desconhecida nunca casa com um círculo,
+          por maior que seja -- as implementações em memória precisam dizer
+          `is None` explicitamente, porque o Python levanta onde o SQL
+          compara NULL como falso em silêncio. As três cláusulas se
+          combinam com AND.
+        - `filters=None` e `filters=SearchFilters()` querem dizer a mesma
+          coisa: nenhuma restrição, e byte a byte a consulta que o RFC-025
+          entregou. Nenhum dos dois pode ser lido como "um conjunto vazio de
+          dispositivos", que não casaria com nada e transformaria um
+          argumento padrão numa busca que devolve zero resultados em
+          silêncio -- nem como um intervalo de datas sem limites, que
+          descartaria em silêncio toda imagem sem data.
+        - A `Image` de cada resultado traz o `captured_at` e o
+          `capture_source`, para que um chamador possa mostrar por que uma
+          foto casou com um filtro de data e quanto essa data vale -- e,
+          desde o RFC-032, a `latitude`, a `longitude` e o
+          `position_source`, pela mesma razão, quanto a um círculo.
+        - Uma busca filtrada obedece a todas as regras acima, incluindo a
+          ordem, a faixa do cosseno e pular imagens sem embedding. Ela
+          restringe o conjunto de candidatos; não muda o ranking dentro
+          dele.
+        - Filtrar por um dispositivo que não tem imagens devolve `[]`, e
+          filtrar por um id de dispositivo desconhecido não é erro. O
+          conjunto é uma restrição, e não uma afirmação de que os membros
+          dele existem.
+        - Um `embedding` cuja largura não bate com a dos vetores indexados
+          levanta `EmbeddingDimensionMismatchError`. É um erro do chamador,
+          e não uma busca que por acaso não casa com nada, e precisa falhar
+          igual em todas as implementações -- o bug plausível é uma
+          implementação que trunca para o vetor mais curto e devolve um
+          ranking confiante e sem sentido.
 
-        `limit` is expected to be a positive number the caller has already
-        vetted; policy about how large a page may be belongs to the
-        Application layer, not here.
+        Espera-se que `limit` seja um número positivo que o chamador já
+        validou; a política de quão grande uma página pode ser é da camada
+        Application, e não daqui.
 
-        **A filter may cost recall, and that is measured rather than
-        assumed.** PostgreSQL does not push an arbitrary predicate into
-        an HNSW graph traversal; it applies the filter to what the index
-        already returned, so a scan that explored `ef_search` candidates
-        can hand back *fewer* than `limit` rows while more matching rows
-        exist. That is the same mechanism RFC-025 section 7.3 measured by
-        accident with dead tuples. The filter is justified by usefulness
-        -- "search only the disk in my hand" -- not by speed (RFC-027
-        section 9.1).
+        **Um filtro pode custar recall, e isso é medido, e não suposto.** O
+        PostgreSQL não empurra um predicado arbitrário para dentro do
+        percurso do grafo HNSW; ele aplica o filtro ao que o índice já
+        devolveu, então um scan que explorou `ef_search` candidatos pode
+        devolver *menos* que `limit` linhas enquanto existem mais linhas que
+        casam. É o mesmo mecanismo que o RFC-025 §7.3 mediu por acidente,
+        com tuplas mortas. O filtro se justifica pela utilidade -- "buscar
+        só no disco que está na minha mão" -- e não pela velocidade (RFC-027
+        §9.1).
         """
 
     @abstractmethod
     def get_embedding(self, image_id: ImageId) -> EmbeddingVector | None:
-        """Return the stored embedding of one image, or `None` (RFC-038 4.1).
+        """Devolve o embedding gravado de uma imagem, ou `None` (RFC-038 §4.1).
 
-        The read behind *"Parecidas com esta"*: the vector that indexing
-        already paid for, handed back so it can be ranked against the rest
-        with `search_similar()`. Reopening the file instead would need its
-        disk plugged in -- the case the product exists for is the disk in a
-        drawer -- and a forward pass of CLIP to produce this same vector.
+        A leitura por trás de *"Parecidas com esta"*: o vetor que a indexação
+        já pagou, devolvido para ser ranqueado contra os outros com
+        `search_similar()`. Reabrir o arquivo exigiria o disco dele plugado
+        -- o caso para o qual o produto existe é o disco na gaveta -- e uma
+        passada do CLIP para produzir esse mesmo vetor.
 
-        `None` both when there is no row and when the row has no embedding.
-        Telling those apart is the caller's, with `exists()`: they are two
-        different answers to a user (404 and 409), and folding the second
-        into this signature would make every caller that only wants a
-        vector handle a third case.
+        `None` tanto quando não há linha quanto quando a linha não tem
+        embedding. Distinguir os dois é do chamador, com `exists()`: são
+        duas respostas diferentes para um usuário (404 e 409), e dobrar a
+        segunda nesta assinatura faria todo chamador que só quer um vetor
+        tratar um terceiro caso.
 
-        One row, one column. `search_similar()` keeps the column out of its
-        `SELECT` on purpose, and this method is the only place a vector
-        comes back out of the repository.
+        Uma linha, uma coluna. `search_similar()` deixa a coluna fora do
+        `SELECT` de propósito, e este método é o único lugar em que um vetor
+        sai de volta do repositório.
         """
 
     @abstractmethod
     def get_index_metadata(self, image_id: ImageId) -> IndexMetadata | None:
-        """Return the persisted filesystem metadata for an image, if any.
+        """Devolve os metadados de sistema de arquivos gravados de uma imagem.
 
-        Returns `None` when no row exists for `image_id` (new file).
-        Returns `IndexMetadata(None, None)` when a row exists but has no
-        metadata yet -- callers must treat that as changed, not unchanged.
+        Devolve `None` quando não existe linha para `image_id` (arquivo
+        novo). Devolve `IndexMetadata(None, None)` quando a linha existe mas
+        ainda não tem metadados -- os chamadores devem tratar isso como
+        mudado, e não como inalterado.
 
-        Includes the row's `capture_source` (RFC-028), `thumbnail_path`
-        (RFC-030) and `position_source` (RFC-032), none of which is a
-        change signal; see `IndexMetadata`.
+        Inclui o `capture_source` (RFC-028), o `thumbnail_path` (RFC-030) e
+        o `position_source` (RFC-032) da linha, nenhum dos quais é um sinal
+        de mudança; ver `IndexMetadata`.
         """
 
     @abstractmethod
     def get_index_metadata_many(
         self, image_ids: Sequence[ImageId]
     ) -> dict[ImageId, IndexMetadata]:
-        """Return the persisted filesystem metadata for many images at once.
+        """Devolve os metadados de sistema de arquivos de muitas imagens de vez.
 
-        The bulk counterpart of `get_index_metadata()`, and the reason
-        RFC-024 added it: a re-index over an unchanged collection asks the
-        skip question once per discovered file, so the per-file version
-        turns a 100,000-image scan into 100,000 round trips *before* any
-        inference happens. That is a Big-O problem in the number of files,
-        independent of how fast the model is.
+        A contraparte em massa de `get_index_metadata()`, e a razão de o
+        RFC-024 tê-la acrescentado: uma reindexação sobre uma coleção
+        inalterada faz a pergunta de pular uma vez por arquivo descoberto,
+        então a versão por arquivo transforma um scan de 100.000 imagens em
+        100.000 idas e voltas *antes* de qualquer inferência. É um problema
+        de Big-O no número de arquivos, independente de quão rápido o
+        modelo é.
 
-        Ids with no row are simply absent from the result -- the mapping is
-        not padded with `None` values. Callers must therefore distinguish
-        "absent" (new file) from "present with `None` fields" (row exists,
-        metadata never written) exactly as they do for the single-id
-        version.
+        Ids sem linha simplesmente não aparecem no resultado -- o mapa não
+        é preenchido com valores `None`. Os chamadores precisam, portanto,
+        distinguir "ausente" (arquivo novo) de "presente com campos `None`"
+        (a linha existe, metadados nunca escritos) exatamente como fazem
+        para a versão de um id só.
         """
 
     @abstractmethod
     def list_change_signals(self, device_id: DeviceId) -> dict[ImageId, ChangeSignals]:
-        """Return the size and modification time of every row of one device.
+        """Devolve o tamanho e a data de modificação de toda linha de um dispositivo.
 
-        The snapshot of RFC-045 section 5.2: read once per job, on the main
-        thread, before the read-ahead thread starts, so that the thread can
-        predict which files the incremental decision will ask the bytes of
-        without touching the database itself -- a session is not safe
-        across threads, and a second connection opened from another thread
-        is what RFC-036 section 7.5's `deferring()` exists to avoid.
+        O instantâneo do RFC-045 §5.2: lido uma vez por job, na thread
+        principal, antes de a thread de leitura antecipada começar, para que
+        ela possa prever de quais arquivos a decisão incremental vai pedir
+        os bytes sem tocar no banco -- uma sessão não é segura entre
+        threads, e uma segunda conexão aberta de outra thread é o que o
+        `deferring()` do RFC-036 §7.5 existe para evitar.
 
-        **A prediction, not the decision.** The pipeline still reads the
-        metadata per window and decides with `plan_indexing()`. A snapshot
-        that is stale costs a read too many or a read by path, never a
-        wrong answer.
+        **Uma previsão, e não a decisão.** O pipeline continua lendo os
+        metadados por janela e decidindo com `plan_indexing()`. Um
+        instantâneo desatualizado custa uma leitura a mais ou uma leitura
+        pelo caminho, nunca uma resposta errada.
 
-        Every row of the device, with or without an embedding, and the
-        `None`s of a row that never had the two columns are kept as they
-        are: the decision treats them as changed, and so must the
-        prediction. Ids of other devices are absent.
+        Toda linha do dispositivo, com ou sem embedding, e os `None` de uma
+        linha que nunca teve as duas colunas ficam como estão: a decisão os
+        trata como mudados, e a previsão também precisa tratar. Ids de
+        outros dispositivos não aparecem.
         """
 
     @abstractmethod
     def update_index_metadata(self, image_id: ImageId, metadata: IndexMetadata) -> None:
-        """Refresh an existing row's filesystem metadata, leaving its embedding.
+        """Atualiza os metadados de sistema de arquivos de uma linha, sem o embedding.
 
-        The write half of the content-hash check (ARCHITECTURE.md 16 step
-        3): when a file's mtime or size moved but its bytes did not, the
-        stored embedding is still correct and re-computing it would be pure
-        waste. Only the metadata that drives the *next* skip decision needs
-        to catch up.
+        A metade de escrita da verificação por hash de conteúdo
+        (ARCHITECTURE.md 16, passo 3): quando o mtime ou o tamanho de um
+        arquivo mudou mas os bytes não, o embedding gravado continua certo,
+        e recalculá-lo seria puro desperdício. Só os metadados que guiam a
+        *próxima* decisão de pular precisam se atualizar.
 
-        Does nothing when no row exists for `image_id`; a caller that wants
-        a row created must go through `save_indexed()`, which is the only
-        contract carrying an embedding.
+        Não faz nada quando não existe linha para `image_id`; um chamador
+        que quer uma linha criada precisa passar por `save_indexed()`, que é
+        o único contrato que leva um embedding.
 
-        Writes the three change signals and nothing else. In particular it
-        does not touch the capture date, whatever `metadata.capture_source`
-        says: that belongs to `update_capture_date()`, and a refresh that
-        also wrote it would reset an examined row to "never examined"
-        whenever a caller built its `IndexMetadata` without one. The
-        position is left alone for the same reason, whatever
-        `metadata.position_source` says (RFC-032 section 8), and so is the
-        thumbnail location -- a refresh means the bytes did not change, so
-        the thumbnail still depicts them.
+        Escreve os três sinais de mudança e mais nada. Em particular, não
+        toca na data de captura, diga o que disser `metadata.capture_source`:
+        ela é de `update_capture_date()`, e uma atualização que também a
+        escrevesse voltaria uma linha examinada para "nunca examinada"
+        sempre que um chamador montasse o `IndexMetadata` sem ela. A posição
+        fica intocada pela mesma razão, diga o que disser
+        `metadata.position_source` (RFC-032 §8), e o local da thumbnail
+        também -- uma atualização quer dizer que os bytes não mudaram,
+        então a thumbnail ainda os mostra.
         """
 
     @abstractmethod
     def update_capture_date(self, image_id: ImageId, capture: CaptureDate) -> None:
-        """Record the examined capture date of an existing row (RFC-028).
+        """Grava a data de captura examinada de uma linha existente (RFC-028).
 
-        Writes `captured_at` and `capture_source` and nothing else -- no
-        embedding, no change signal -- because a capture date is a
-        searchable attribute of the photograph, not a reason to reindex it
-        (RFC-028 section 6.1). This is how an already-indexed image gains a
-        date without paying for inference.
+        Escreve `captured_at` e `capture_source` e mais nada -- nenhum
+        embedding, nenhum sinal de mudança -- porque uma data de captura é
+        um atributo buscável da fotografia, e não uma razão para
+        reindexá-la (RFC-028 §6.1). É assim que uma imagem já indexada
+        ganha uma data sem pagar por inferência.
 
-        Takes a `CaptureDate`, never `None`: there is no call that marks a
-        row as "never examined" again, since nothing legitimate un-reads a
-        file.
+        Recebe um `CaptureDate`, nunca `None`: não existe chamada que marque
+        uma linha como "nunca examinada" de novo, já que nada legítimo
+        desfaz a leitura de um arquivo.
 
-        Does nothing when no row exists for `image_id`, the same contract
-        as `update_index_metadata()`. A date is only worth storing beside
-        an image the system knows, and creating a row here would create
-        one with no embedding.
+        Não faz nada quando não existe linha para `image_id`, o mesmo
+        contrato de `update_index_metadata()`. Uma data só vale a pena ser
+        guardada ao lado de uma imagem que o sistema conhece, e criar uma
+        linha aqui criaria uma sem embedding.
 
-        Unconditional. Deciding *whether* to write -- only rows never
-        examined during a scan; never replacing a stronger source with a
-        weaker one under the backfill's `--force` -- is the caller's
-        policy, in `capture_date_to_write()`.
+        Incondicional. Decidir *se* escreve -- só linhas nunca examinadas
+        durante um scan; nunca trocar uma fonte mais forte por uma mais
+        fraca sob o `--force` do backfill -- é a política do chamador, em
+        `capture_date_to_write()`.
         """
 
     @abstractmethod
     def update_capture_date_many(self, captures: Mapping[ImageId, CaptureDate]) -> None:
-        """Record many capture dates as one write.
+        """Grava muitas datas de captura numa escrita só.
 
-        The bulk counterpart of `update_capture_date()`, for the reason
-        RFC-024 added `get_index_metadata_many()`: the first scan after
-        RFC-028 dates an entire already-indexed collection, and one
-        statement per file would turn that pass into 100,000 round trips.
+        A contraparte em massa de `update_capture_date()`, pela razão de o
+        RFC-024 ter acrescentado `get_index_metadata_many()`: o primeiro
+        scan depois do RFC-028 data uma coleção inteira já indexada, e um
+        comando por arquivo transformaria essa passada em 100.000 idas e
+        voltas.
 
-        Ids with no row are skipped silently, exactly as the single-row
-        version does. An empty mapping writes nothing.
+        Ids sem linha são pulados em silêncio, exatamente como na versão de
+        uma linha. Um mapa vazio não escreve nada.
         """
 
     @abstractmethod
     def update_position(self, image_id: ImageId, reading: PositionReading) -> None:
-        """Record the examined position of an existing row (RFC-032 section 8).
+        """Grava a posição examinada de uma linha existente (RFC-032 §8).
 
-        Writes `latitude`, `longitude` and `position_source` and nothing
-        else -- no embedding, no change signal, no capture date -- because a
-        position is a searchable attribute of the photograph, not a reason
-        to reindex it. This is how an already-indexed image gains a
-        position without paying for inference.
+        Escreve `latitude`, `longitude` e `position_source` e mais nada --
+        nenhum embedding, nenhum sinal de mudança, nenhuma data de captura
+        -- porque uma posição é um atributo buscável da fotografia, e não
+        uma razão para reindexá-la. É assim que uma imagem já indexada ganha
+        uma posição sem pagar por inferência.
 
-        Takes a `PositionReading`, never `None`: nothing legitimate un-reads
-        a file, so there is no call that marks a row "never examined" again.
+        Recebe um `PositionReading`, nunca `None`: nada legítimo desfaz a
+        leitura de um arquivo, então não existe chamada que marque uma linha
+        como "nunca examinada" de novo.
 
-        Does nothing when no row exists for `image_id`, the contract of
+        Não faz nada quando não existe linha para `image_id`, o contrato de
         `update_capture_date()`.
 
-        Unconditional. Deciding *whether* to write is the caller's policy,
-        in `position_to_write()`.
+        Incondicional. Decidir *se* escreve é a política do chamador, em
+        `position_to_write()`.
         """
 
     @abstractmethod
     def update_position_many(self, readings: Mapping[ImageId, PositionReading]) -> None:
-        """Record many positions as one write.
+        """Grava muitas posições numa escrita só.
 
-        The bulk counterpart of `update_position()`, used once per prefetch
-        window for the reason `update_capture_date_many()` exists: the
-        first scan after RFC-032 places an entire already-indexed
-        collection, and one statement per file would be 100,000 round
-        trips. Ids with no row are skipped silently; an empty mapping
-        writes nothing.
+        A contraparte em massa de `update_position()`, usada uma vez por
+        janela de prefetch pela razão de existir `update_capture_date_many()`:
+        o primeiro scan depois do RFC-032 posiciona uma coleção inteira já
+        indexada, e um comando por arquivo seriam 100.000 idas e voltas. Ids
+        sem linha são pulados em silêncio; um mapa vazio não escreve nada.
         """
 
     @abstractmethod
     def update_thumbnail_path(self, image_id: ImageId, location: str) -> None:
-        """Record where an existing row's thumbnail was stored (RFC-030).
+        """Grava onde a thumbnail de uma linha existente foi guardada (RFC-030).
 
-        The thumbnail backfill's write: it gives an already-indexed image
-        a thumbnail without touching its embedding or its change signals,
-        the way `update_capture_date()` gives it a date.
+        A escrita do backfill de thumbnails: dá uma thumbnail a uma imagem
+        já indexada sem tocar no embedding nem nos sinais de mudança dela,
+        do jeito que `update_capture_date()` lhe dá uma data.
 
-        Does nothing when no row exists for `image_id`. A thumbnail is only
-        worth pointing at from an image the system knows, and creating a
-        row here would create one with no embedding.
+        Não faz nada quando não existe linha para `image_id`. Uma thumbnail
+        só vale a pena ser apontada a partir de uma imagem que o sistema
+        conhece, e criar uma linha aqui criaria uma sem embedding.
         """
 
     @abstractmethod
     def update_thumbnail_path_many(self, locations: Mapping[ImageId, str]) -> None:
-        """Record many thumbnail locations as one write.
+        """Grava muitos locais de thumbnail numa escrita só.
 
-        The bulk counterpart of `update_thumbnail_path()`, used once per
-        prefetch window by the backfill for the reason
-        `update_capture_date_many()` exists. Ids with no row are skipped
-        silently; an empty mapping writes nothing.
+        A contraparte em massa de `update_thumbnail_path()`, usada pelo
+        backfill uma vez por janela de prefetch pela razão de existir
+        `update_capture_date_many()`. Ids sem linha são pulados em
+        silêncio; um mapa vazio não escreve nada.
         """
 
     @abstractmethod
     def count_unknown_capture_date(self, filters: SearchFilters) -> int:
-        """Count the searchable images a date filter hid for having no date.
+        """Conta as imagens buscáveis que um filtro de data escondeu por não terem data.
 
-        The number behind "N photos were left out because their date is
-        unknown". RFC-028 section 4.1 requires the UI to be able to say it:
-        without it, "I can't find the 2018 photo" and "the 2018 photo is
-        indexed but has no EXIF" look identical -- an empty result that
-        reads as the photo not existing, which is the failure RFC-028
-        section 2.1 exists to remove.
+        O número por trás de "N fotos ficaram de fora porque a data é
+        desconhecida". O RFC-028 §4.1 exige que a interface consiga dizer
+        isso: sem ele, "não acho a foto de 2018" e "a foto de 2018 está
+        indexada mas não tem EXIF" parecem iguais -- um resultado vazio que
+        se lê como se a foto não existisse, que é a falha que o RFC-028
+        §2.1 existe para remover.
 
-        Counts images that (a) have an embedding, so a search could have
-        returned them, (b) satisfy every *other* clause of `filters` -- the
-        device set and, since RFC-032, the circle -- and (c) have
-        `captured_at` NULL, whether never examined or examined without a
-        date. When `filters.captured_between` is `None` there was no date
-        clause to hide anything, the answer is 0, and an implementation
-        must return it without querying.
+        Conta as imagens que (a) têm embedding, então uma busca poderia
+        tê-las devolvido, (b) satisfazem todas as *outras* cláusulas de
+        `filters` -- o conjunto de dispositivos e, desde o RFC-032, o
+        círculo -- e (c) têm `captured_at` NULL, seja nunca examinada, seja
+        examinada sem data. Quando `filters.captured_between` é `None` não
+        havia cláusula de data para esconder nada, a resposta é 0, e uma
+        implementação precisa devolvê-la sem consultar o banco.
 
-        Three properties to know before "fixing" what looks inconsistent:
+        Três propriedades para saber antes de "consertar" o que parece
+        inconsistente:
 
-        - It is a **second query**, not a by-product of the search. A
-          vector search returns at most `limit` rows and has no way to
-          know what its `WHERE` discarded.
-        - It counts over **the whole table under the filters**, not over
-          the neighbourhood an approximate index happened to explore. That
-          is the question the user is asking -- how many photos did the
-          filter hide? -- and it is deliberately not the ranking's
-          universe. The two numbers are not supposed to add up to anything.
-        - It ignores the query text. Relevance is not the reason these
-          images were left out; their missing date is.
+        - É uma **segunda consulta**, e não um subproduto da busca. Uma
+          busca vetorial devolve no máximo `limit` linhas e não tem como
+          saber o que o `WHERE` dela descartou.
+        - Conta sobre **a tabela inteira sob os filtros**, e não sobre a
+          vizinhança que um índice aproximado por acaso explorou. É essa a
+          pergunta que o usuário faz -- quantas fotos o filtro escondeu? --
+          e não é, de propósito, o universo do ranking. Os dois números não
+          precisam somar nada.
+        - Ignora o texto da consulta. A relevância não é a razão de essas
+          imagens terem ficado de fora; a data ausente é.
         """
 
     @abstractmethod
     def count_unknown_position(self, filters: SearchFilters) -> int:
-        """Count the searchable images that have no position (RFC-032 section 6.2).
+        """Conta as imagens buscáveis que não têm posição (RFC-032 §6.2).
 
-        The number behind "N photos were left out because they have no
-        coordinates". Without it a circle answers with the most expensive
-        lie the product can tell -- *there is no photo of this place* --
-        when the truth is *1,200 photos have no coordinates and none of
-        them was looked at*.
+        O número por trás de "N fotos ficaram de fora porque não têm
+        coordenadas". Sem ele, um círculo responde com a mentira mais cara
+        que o produto pode contar -- *não há foto deste lugar* -- quando a
+        verdade é *1.200 fotos não têm coordenadas e nenhuma delas foi
+        olhada*.
 
-        Counts images that (a) have an embedding, (b) satisfy every *other*
-        clause of `filters` -- the device set and the capture-date range --
-        and (c) have `latitude` NULL, whether never examined or examined
-        without a fix. `filters.taken_within` is ignored: it is the clause
-        whose victims are being counted.
+        Conta as imagens que (a) têm embedding, (b) satisfazem todas as
+        *outras* cláusulas de `filters` -- o conjunto de dispositivos e o
+        intervalo de datas de captura -- e (c) têm `latitude` NULL, seja
+        nunca examinada, seja examinada sem posição. `filters.taken_within`
+        é ignorado: é a cláusula cujas vítimas estão sendo contadas.
 
-        **Unlike `count_unknown_capture_date()`, this does not answer 0 for
-        a filter without a circle.** `GET /images/map` asks exactly this
-        question with no circle at all (RFC-032 section 7) -- how many
-        photos the map cannot draw -- and it must be the same number over
-        the same universe. Not paying for the query on a search with no
-        circle is still a rule; it is enforced one layer up, where
-        `SearchImagesUseCase` does not call this method at all.
+        **Ao contrário de `count_unknown_capture_date()`, este não responde
+        0 para um filtro sem círculo.** `GET /images/map` faz exatamente
+        esta pergunta sem círculo nenhum (RFC-032 §7) -- quantas fotos o
+        mapa não consegue desenhar -- e precisa ser o mesmo número sobre o
+        mesmo universo. Não pagar pela consulta numa busca sem círculo
+        continua sendo regra; ela é cumprida uma camada acima, onde
+        `SearchImagesUseCase` nem chama este método.
 
-        The three properties of `count_unknown_capture_date()` hold: a
-        second query, over the whole table under the filters rather than
-        the neighbourhood an approximate index explored, ignoring the
-        query text.
+        Valem as três propriedades de `count_unknown_capture_date()`: uma
+        segunda consulta, sobre a tabela inteira sob os filtros, e não sobre
+        a vizinhança que um índice aproximado explorou, ignorando o texto
+        da consulta.
         """
 
     @abstractmethod
@@ -469,39 +476,40 @@ class ImageRepository(ABC):
         precision: int,
         cell_limit: int | None,
     ) -> PositionCells:
-        """Group the searchable images in `area` into map cells (RFC-032 section 7).
+        """Agrupa as imagens buscáveis de `area` em células do mapa (RFC-032 §7).
 
-        A map cannot be drawn from search hits: the top 100 of a 100,000-
-        image index says nothing about where the photos are, and moving
-        100,000 points to the client to group them is moving the collection
-        across the wire to answer a question `GROUP BY` answers here.
+        Um mapa não se desenha com resultados de busca: os 100 primeiros de
+        um índice de 100.000 imagens não dizem nada sobre onde as fotos
+        estão, e levar 100.000 pontos ao cliente para agrupá-los é levar a
+        coleção pela rede para responder uma pergunta que `GROUP BY`
+        responde aqui.
 
-        The universe is **the filters', not the ranking's**: images with an
-        embedding, satisfying the device set and the capture-date range of
-        `filters`, whose position lies inside `area` (edges included). That
-        is the universe of `count_unknown_position()` restricted to images
-        that have a position -- the two numbers describe one population,
-        split by whether it can be drawn. There is no query text; ranking
-        is the search's business.
+        O universo é **o dos filtros, e não o do ranking**: imagens com
+        embedding, que satisfazem o conjunto de dispositivos e o intervalo
+        de datas de captura de `filters`, cuja posição fica dentro de `area`
+        (bordas incluídas). É o universo de `count_unknown_position()`
+        restrito às imagens que têm posição -- os dois números descrevem uma
+        população, dividida pelo que pode ser desenhado. Não há texto de
+        consulta; ranquear é assunto da busca.
 
-        Each cell is the pair of coordinates rounded to `precision` decimal
-        places, half away from zero, **as PostgreSQL rounds a
-        `double precision` cast to `numeric`** -- the value's 15 significant
-        digits rounded in decimal, not the binary float rounded by Python's
-        `round()`. The in-memory implementations reproduce that exactly
-        (`round_to_cell()`), or a photo on a cell boundary would land in
-        different cells in different implementations.
+        Cada célula é o par de coordenadas arredondado para `precision`
+        casas decimais, metade para longe do zero, **como o PostgreSQL
+        arredonda um `double precision` convertido para `numeric`** -- os 15
+        dígitos significativos do valor arredondados em decimal, e não o
+        float binário arredondado pelo `round()` do Python. As
+        implementações em memória reproduzem isso exatamente
+        (`round_to_cell()`), ou uma foto na borda de uma célula cairia em
+        células diferentes em implementações diferentes.
 
-        At most `cell_limit` cells come back -- every cell when it is
-        `None` -- ordered by latitude and then longitude so a truncated
-        answer is still deterministic. A caller that needs to know whether
-        the area holds *more* than N cells asks for N + 1: the ceiling is
-        the caller's policy (`MAX_MAP_CELLS`), and this method only stops
-        counting past it.
+        Voltam no máximo `cell_limit` células -- todas quando é `None` --
+        ordenadas por latitude e depois por longitude, para que uma resposta
+        truncada continue determinística. Um chamador que precisa saber se a
+        área tem *mais* de N células pede N + 1: o teto é a política do
+        chamador (`MAX_MAP_CELLS`), e este método só para de contar depois
+        dele.
 
-        `filters.taken_within` is not consulted: the map's area is the
-        viewport, and "near here" is a different question (RFC-032
-        section 9).
+        `filters.taken_within` não é consultado: a área do mapa é a janela
+        visível, e "perto daqui" é outra pergunta (RFC-032 §9).
         """
 
     @abstractmethod
@@ -512,81 +520,87 @@ class ImageRepository(ABC):
         limit: int,
         after: Image | None,
     ) -> ListedImages:
-        """Every searchable image under `filters`, in capture-date order (RFC-044).
+        """Toda imagem buscável sob `filters`, em ordem de data de captura (RFC-044).
 
-        The read behind *"Ver todas as fotos daqui, por data"*: no query, no
-        model, no score -- what exists here, in time. A page at a time:
-        at most `limit` images, starting right after `after` in the order.
+        A leitura por trás de *"Ver todas as fotos daqui, por data"*: sem
+        consulta, sem modelo, sem nota -- o que existe aqui, no tempo. Uma
+        página por vez: no máximo `limit` imagens, começando logo depois de
+        `after` na ordem.
 
-        The contract every implementation owes, which
-        `test_listing_contract.py` holds the three to:
+        O contrato que toda implementação deve cumprir, ao qual
+        `test_listing_contract.py` prende as três:
 
-        - **The universe is the search's** (RFC-032 section 7): images with
-          an embedding, under the device set, the date range and the circle
-          of `filters`, by the same clauses -- a range never matches an
-          unknown date, a circle never matches an unknown position (RFC-020),
-          and `SearchFilters()` narrows nothing.
-        - **A total order.** `captured_at` in the direction of `order`; then
-          `relative_path`, then the id, both always ascending. The path puts
-          a burst shot in the same second in the camera's numbering
-          (`DJI_0042`, `DJI_0043`) and the undated in folder order; the id
-          separates the same path on two disks, as it breaks ties in search
-          (RFC-025 section 6). Without it the order would not be total, and a
-          cursor would repeat or skip one of the copies.
-        - **The undated come after every dated image, in both directions**
-          (RFC-044 section 3.2). No undated photo ever sits between two dated
-          ones.
-        - **Paths compare by code point**, in all three implementations: the
-          `C` collation in PostgreSQL, `str` comparison in Python -- which are
-          the same order for UTF-8 text. `B` comes before `a`.
-        - **`after` is a position in the order, not a member of the list.**
-          The page starts with the first image whose sort key is past
-          `after`'s, whether or not `after` itself satisfies `filters` or
-          has an embedding. `None` is the first page.
-        - Asking page after page, each `after` being the last image of the
-          page before, yields exactly the list asked for at once: no image
-          repeated, none skipped.
-        - At most `limit` images, `[]` when nothing is left. A caller that
-          needs to know whether there is a next page asks for one more
-          (`limit + 1`), as the map asks for `MAX_MAP_CELLS + 1` cells: a
-          short page is not the signal.
-        - Every image carries its `captured_at`, `capture_source`,
-          `latitude`, `longitude` and `position_source`, as a search hit
-          does, and no embedding is read: the vectors stay out of the query.
+        - **O universo é o da busca** (RFC-032 §7): imagens com embedding,
+          sob o conjunto de dispositivos, o intervalo de datas e o círculo
+          de `filters`, pelas mesmas cláusulas -- um intervalo nunca casa
+          com uma data desconhecida, um círculo nunca casa com uma posição
+          desconhecida (RFC-020), e `SearchFilters()` não restringe nada.
+        - **Uma ordem total.** `captured_at` no sentido de `order`; depois
+          `relative_path`, depois o id, os dois sempre crescentes. O caminho
+          põe uma rajada no mesmo segundo na numeração da câmera
+          (`DJI_0042`, `DJI_0043`) e as sem data na ordem da pasta; o id
+          separa o mesmo caminho em dois discos, como desempata na busca
+          (RFC-025 §6). Sem ele a ordem não seria total, e um cursor
+          repetiria ou pularia uma das cópias.
+        - **As sem data vêm depois de toda imagem com data, nos dois
+          sentidos** (RFC-044 §3.2). Nenhuma foto sem data fica entre duas
+          com data.
+        - **Os caminhos se comparam por code point**, nas três
+          implementações: a collation `C` no PostgreSQL, a comparação de
+          `str` no Python -- que são a mesma ordem para texto UTF-8. `B`
+          vem antes de `a`.
+        - **`after` é uma posição na ordem, e não um membro da lista.** A
+          página começa na primeira imagem cuja chave de ordenação passa da
+          de `after`, satisfaça ou não o próprio `after` os `filters`, tenha
+          ou não embedding. `None` é a primeira página.
+        - Pedir página após página, cada `after` sendo a última imagem da
+          página anterior, dá exatamente a lista pedida de uma vez: nenhuma
+          imagem repetida, nenhuma pulada.
+        - No máximo `limit` imagens, `[]` quando não sobra nada. Um chamador
+          que precisa saber se há próxima página pede uma a mais
+          (`limit + 1`), como o mapa pede `MAX_MAP_CELLS + 1` células: uma
+          página curta não é o sinal.
+        - Toda imagem traz o `captured_at`, o `capture_source`, a
+          `latitude`, a `longitude` e o `position_source`, como um resultado
+          de busca, e nenhum embedding é lido: os vetores ficam fora da
+          consulta.
 
-        `limit` is expected to be positive and already vetted; the page-size
-        policy is the Application layer's.
+        Espera-se que `limit` seja positivo e já validado; a política de
+        tamanho de página é da camada Application.
         """
 
     @abstractmethod
     def summarize_listing(self, filters: SearchFilters) -> ListingSummary:
-        """The size and the time span of `list_by_filters()`'s list (RFC-044 5.3).
+        """O tamanho e o período da lista de `list_by_filters()` (RFC-044 §5.3).
 
-        Over the same universe, as one aggregate: how many images, how many
-        of them undated, and the first and last capture dates. Under a date
-        range `undated` is 0 -- an unknown date never matches one -- and on
-        an empty list the counts are 0 and the dates `None`.
+        Sobre o mesmo universo, como um agregado só: quantas imagens,
+        quantas delas sem data, e a primeira e a última datas de captura.
+        Sob um intervalo de datas, `undated` é 0 -- uma data desconhecida
+        nunca casa com um -- e numa lista vazia as contagens são 0 e as
+        datas, `None`.
 
-        The two counts of excluded photos (`count_unknown_capture_date()`,
-        `count_unknown_position()`) are not part of this answer: they belong
-        to the search's request policy, which the listing calls as it is.
+        As duas contagens de fotos deixadas de fora
+        (`count_unknown_capture_date()`, `count_unknown_position()`) não
+        fazem parte desta resposta: são da política de requisição da busca,
+        que a listagem chama como está.
         """
 
     @abstractmethod
     def list_presence(self, device_id: DeviceId) -> Presences:
-        """Return the id, the path and the mark of every row of one device (RFC-046).
+        """Devolve o id, o caminho e a marca de toda linha de um dispositivo (RFC-046).
 
-        The sweep's read, at the end of a whole-disk job (section 5.5): a
-        query then, and not the snapshot of `list_change_signals()`, which
-        is from the start of the job, so that the rows the job itself
-        created are compared too.
+        A leitura da varredura, ao fim de um job do disco inteiro (§5.5):
+        uma consulta nesse momento, e não o instantâneo de
+        `list_change_signals()`, que é do início do job, para que as linhas
+        que o próprio job criou também sejam comparadas.
 
-        Every row of the device -- with or without an embedding, marked or
-        not -- and nothing of any other device. No order: the caller looks
-        ids up. Named columns only; the vectors stay where they are.
+        Toda linha do dispositivo -- com ou sem embedding, marcada ou não --
+        e nada de nenhum outro dispositivo. Sem ordem: o chamador procura
+        ids. Só colunas nomeadas; os vetores ficam onde estão.
 
-        **Streamed**, one query read in chunks: the caller consumes it
-        before writing anything, and never holds the whole device at once.
+        **Em fluxo**, uma consulta lida em pedaços: o chamador a consome
+        antes de escrever qualquer coisa, e nunca segura o dispositivo
+        inteiro de uma vez.
         """
 
     @abstractmethod
@@ -596,124 +610,125 @@ class ImageRepository(ABC):
         present: Collection[ImageId],
         since: datetime.datetime,
     ) -> None:
-        """Mark `missing` as not found since `since`, and unmark `present` (RFC-046).
+        """Marca `missing` como ausentes desde `since` e desmarca `present` (RFC-046).
 
-        **One transaction**, both writes or neither (section 5.5, step 4).
-        The section names the two halves `mark_missing()` and
-        `mark_present()`; they are one method so that they can be one
-        transaction, which a repository that commits per call could not
-        otherwise promise.
+        **Uma transação**, as duas escritas ou nenhuma (§5.5, passo 4). A
+        seção chama as duas metades de `mark_missing()` e `mark_present()`;
+        são um método só para poderem ser uma transação só, o que um
+        repositório que faz commit por chamada não poderia prometer de outro
+        jeito.
 
-        - A row of `missing` that is **already marked keeps its date**: the
-          card says since when the photos were not found, and a later scan
-          that misses them again does not make that sooner.
-        - A row of `present` loses its mark, whatever its date.
-        - Ids with no row are skipped silently, as by every bulk write
-          here. Empty collections write nothing.
+        - Uma linha de `missing` que **já está marcada mantém a data**: o
+          cartão diz desde quando as fotos não foram encontradas, e um scan
+          posterior que de novo não as acha não torna isso mais recente.
+        - Uma linha de `present` perde a marca, seja qual for a data.
+        - Ids sem linha são pulados em silêncio, como em toda escrita em
+          massa daqui. Coleções vazias não escrevem nada.
 
-        The caller keeps the two sets disjoint; an id in both is refused
-        with `ValueError` rather than resolved by an order nobody chose.
+        O chamador mantém os dois conjuntos disjuntos; um id nos dois é
+        recusado com `ValueError`, em vez de resolvido por uma ordem que
+        ninguém escolheu.
         """
 
     @abstractmethod
     def count_missing_by_device(self) -> dict[DeviceId, MissingImages]:
-        """Count the marked rows of every device, with the oldest mark, at once.
+        """Conta de vez as linhas marcadas de cada dispositivo, e a marca mais antiga.
 
-        One `GROUP BY` for every device, for the reason `count_by_device()`
-        gives (RFC-031 section 4.3): `GET /devices` renders every disk. A
-        device with no marked row is **absent**, as `count_by_device()`
-        omits an empty one; callers read it with `.get()`.
+        Um `GROUP BY` para todos os dispositivos, pela razão que
+        `count_by_device()` dá (RFC-031 §4.3): `GET /devices` desenha todos
+        os discos. Um dispositivo sem linha marcada **não aparece**, como
+        `count_by_device()` omite um vazio; os chamadores o leem com
+        `.get()`.
         """
 
     @abstractmethod
     def purge_missing(self, device_id: DeviceId) -> PurgedImages:
-        """Delete the marked rows of one device, and say what went (RFC-046 §5.7).
+        """Apaga as linhas marcadas de um dispositivo, e diz o que saiu (RFC-046 §5.7).
 
-        One `DELETE ... RETURNING thumbnail_path`, in one transaction:
-        every marked row of `device_id` and nothing else -- no visible row,
-        no row of another device. Returns how many rows went and the
-        thumbnail locations they held, for the store to delete **after**
-        the rows are gone: a thumbnail without a row is litter in the
-        cache, and a row without its thumbnail would be a row pointing at
-        nothing.
+        Um `DELETE ... RETURNING thumbnail_path`, numa transação: toda linha
+        marcada de `device_id` e mais nada -- nenhuma linha visível, nenhuma
+        linha de outro dispositivo. Devolve quantas linhas saíram e os
+        locais de thumbnail que elas guardavam, para o store apagar
+        **depois** que as linhas se foram: uma thumbnail sem linha é lixo no
+        cache, e uma linha sem a thumbnail seria uma linha apontando para o
+        nada.
 
-        Irreversible, which is why the route that calls it refuses while
-        the disk has a job and the interface asks first with the number.
+        Irreversível, e é por isso que a rota que o chama recusa enquanto o
+        disco tem um job, e a interface pergunta antes, com o número.
         """
 
     @abstractmethod
     def count_by_device(self) -> dict[DeviceId, int]:
-        """Return how many images each device has, as one grouped read.
+        """Devolve quantas imagens cada dispositivo tem, numa leitura agrupada.
 
-        **A mapping, not a count for one id, and the plural is the
-        contract.** `GET /api/v1/devices` renders every disk at once, so
-        a single-device version of this would be N queries behind a
-        signature that looks like one -- the same defect as enumerating
-        volumes once per device, one layer down (RFC-031 section 4.3 of
-        the build prompt).
+        **Um mapa, e não uma contagem para um id, e o plural é o
+        contrato.** `GET /api/v1/devices` desenha todos os discos de uma
+        vez, então uma versão de um dispositivo só seriam N consultas atrás
+        de uma assinatura que parece uma -- o mesmo defeito de enumerar os
+        volumes uma vez por dispositivo, uma camada abaixo (RFC-031 §4.3 do
+        build prompt).
 
-        Devices with no images are **absent** rather than present with a
-        zero, the way `get_index_metadata_many()` omits ids with no row.
-        Callers read it with `.get(device_id, 0)`; padding it here would
-        require this method to know which devices exist, which is the
-        other repository's question.
+        Dispositivos sem imagens **não aparecem**, em vez de aparecerem com
+        zero, do jeito que `get_index_metadata_many()` omite ids sem linha.
+        Os chamadores o leem com `.get(device_id, 0)`; preenchê-lo aqui
+        exigiria que este método soubesse quais dispositivos existem, que é
+        a pergunta do outro repositório.
 
-        Counts every row, whether or not it carries an embedding. The
-        number answers *"how many files of this disk does the system
-        know"*, which is what sits beside `last_scan_file_count` in the
-        response, and a row without an embedding is still a file this
-        system knows about.
+        Conta toda linha, tenha ou não embedding. O número responde *"quantos
+        arquivos deste disco o sistema conhece"*, que é o que fica ao lado
+        de `last_scan_file_count` na resposta, e uma linha sem embedding
+        continua sendo um arquivo que este sistema conhece.
 
-        **Except a marked row** (RFC-046 section 6): a file the last scan
-        did not find is not one the system knows to be on the disk, and the
-        numerator of the percentage is what the search can find. The marked
-        rows are `count_missing_by_device()`'s.
+        **Menos uma linha marcada** (RFC-046 §6): um arquivo que o último
+        scan não achou não é um que o sistema sabe estar no disco, e o
+        numerador da porcentagem é o que a busca consegue achar. As linhas
+        marcadas são de `count_missing_by_device()`.
         """
 
     @abstractmethod
     def count_by_path_prefixes(
         self, device_id: DeviceId, parent: JobScope
     ) -> dict[str, int]:
-        """Count images per immediate subfolder of `parent`, in one query.
+        """Conta as imagens por subpasta imediata de `parent`, numa consulta.
 
-        The read behind `GET /api/v1/devices/{id}/folders`: a folder
-        listing shows `indexed_images` per row, and forty rows must not
-        be forty `COUNT(*)`s (RFC-031 section 8.2).
+        A leitura por trás de `GET /api/v1/devices/{id}/folders`: uma
+        listagem de pastas mostra `indexed_images` por linha, e quarenta
+        linhas não podem ser quarenta `COUNT(*)` (RFC-031 §8.2).
 
-        The result maps **one path component** -- the first segment below
-        `parent` -- to the number of rows anywhere beneath it. `parent`
-        being the whole-device scope groups by the first segment of
-        `relative_path` itself.
+        O resultado mapeia **um componente de caminho** -- o primeiro
+        segmento abaixo de `parent` -- para o número de linhas em qualquer
+        lugar abaixo dele. `parent` sendo o escopo do dispositivo inteiro
+        agrupa pelo primeiro segmento do próprio `relative_path`.
 
-        Two properties an implementation must reproduce exactly, because
-        the contract test pins both and the natural implementations
-        differ on them:
+        Duas propriedades que uma implementação precisa reproduzir
+        exatamente, porque o teste de contrato fixa as duas e as
+        implementações naturais divergem nelas:
 
-        * **Images sitting directly in `parent` appear under their own
-          filename.** `2018/loose.jpg` under `parent="2018"` yields the
-          key `loose.jpg`, which is a file and not a folder. That is
-          deliberate rather than tolerated: filtering it out here would
-          mean this method deciding what is a directory, which it cannot
-          know without touching the disk. The caller already holds the
-          folder names the filesystem reported and keeps only those keys,
-          so these entries are discarded one layer up, together with the
-          other kind of key that must not become a row.
-        * **The other kind: a folder renamed on disk since it was
-          indexed.** Its rows are still filed under the old name, so the
-          old name comes back here and matches nothing the caller saw.
-          Same fate, same line of code.
+        * **Imagens que estão direto em `parent` aparecem sob o próprio
+          nome de arquivo.** `2018/loose.jpg` sob `parent="2018"` dá a chave
+          `loose.jpg`, que é um arquivo e não uma pasta. Isso é deliberado,
+          e não tolerado: filtrá-la aqui significaria este método decidir o
+          que é diretório, o que ele não tem como saber sem tocar no disco.
+          O chamador já tem os nomes de pasta que o sistema de arquivos
+          informou e só mantém essas chaves, então essas entradas são
+          descartadas uma camada acima, junto com o outro tipo de chave que
+          não pode virar linha.
+        * **O outro tipo: uma pasta renomeada no disco desde que foi
+          indexada.** As linhas dela continuam guardadas sob o nome antigo,
+          então o nome antigo volta aqui e não casa com nada que o chamador
+          viu. Mesmo destino, mesma linha de código.
 
-        Comparison is by exact text on a `/`-separated prefix, which is
-        what `relative_path` holds -- `ImagePath` stores posix form, so
-        there is no `\\` in the column to handle. The trailing separator
-        on the prefix is load-bearing: without it `2018` would match
-        `2018b`, which is a different folder (RFC-029 section 10).
+        A comparação é por texto exato num prefixo separado por `/`, que é
+        o que `relative_path` guarda -- `ImagePath` grava a forma posix,
+        então não há `\\` na coluna para tratar. O separador final no
+        prefixo é essencial: sem ele `2018` casaria com `2018b`, que é outra
+        pasta (RFC-029 §10).
 
-        A subfolder with no indexed images is absent, not zero, for the
-        reason `count_by_device()` omits an empty device: the names come
-        from the caller, and inventing keys here would mean guessing
-        them.
+        Uma subpasta sem imagens indexadas não aparece, em vez de aparecer
+        com zero, pela razão de `count_by_device()` omitir um dispositivo
+        vazio: os nomes vêm do chamador, e inventar chaves aqui seria
+        adivinhá-los.
 
-        Marked rows are not counted (RFC-046 section 6), as in
+        Linhas marcadas não são contadas (RFC-046 §6), como em
         `count_by_device()`.
         """

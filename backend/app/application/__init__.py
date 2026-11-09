@@ -1,1 +1,1 @@
-"""Application layer for the SolidVision backend."""
+"""Camada de aplicação do backend do SolidVision."""

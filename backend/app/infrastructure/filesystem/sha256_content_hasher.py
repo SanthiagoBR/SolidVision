@@ -1,4 +1,4 @@
-"""SHA-256 implementation of the content-hashing port (RFC-024 section 4)."""
+"""Implementação SHA-256 da porta de hash de conteúdo (RFC-024 §4)."""
 
 from __future__ import annotations
 
@@ -8,38 +8,39 @@ from app.domain.entities.image import Image
 from app.domain.services.content_hasher_port import ContentHasherPort
 
 READ_CHUNK_BYTES = 1024 * 1024
-"""How much of a file is held in memory at once while hashing.
+"""Quanto de um arquivo fica em memória de uma vez durante o hash.
 
-Not configuration, so it is not in `Settings`: nothing about the product
-changes if this is 512 KiB or 4 MiB. What matters is that it is *bounded*.
-`Path.read_bytes()` would be shorter and would work perfectly on the 1.8 MB
-demo corpus, then allocate the whole file for a 200 MB TIFF -- and this runs
-immediately before batch inference, which is already the memory-hungry part
-of the pipeline (RFC-024 section 9).
+Não é configuração, então não está em `Settings`: nada no produto muda se isto
+for 512 KiB ou 4 MiB. O que importa é que seja *limitado*. `Path.read_bytes()`
+seria mais curto e funcionaria perfeitamente no corpus de demonstração de
+1,8 MB, e depois alocaria o arquivo inteiro para um TIFF de 200 MB -- e isto
+roda imediatamente antes da inferência em lote, que já é a parte do pipeline
+que mais consome memória (RFC-024 §9).
 """
 
 
 class Sha256ContentHasher(ContentHasherPort):
-    """Fingerprint an image's bytes with SHA-256, streaming the file.
+    """Tira a impressão digital dos bytes de uma imagem com SHA-256, em fluxo.
 
-    Lives in `infrastructure/filesystem/` rather than beside the use case
-    because hashing a file is filesystem I/O; the Application layer depends
-    on `ContentHasherPort` and never learns that a real disk was involved.
+    Mora em `infrastructure/filesystem/` e não ao lado do caso de uso porque
+    fazer o hash de um arquivo é I/O de sistema de arquivos; a camada de
+    aplicação depende de `ContentHasherPort` e nunca fica sabendo que um disco
+    real esteve envolvido.
 
-    Errors propagate untouched, matching `ClipEmbeddingModel`: a missing or
-    unreadable file is the caller's decision to make, and the callers
-    already isolate failures per file.
+    Os erros se propagam intocados, como em `ClipEmbeddingModel`: um arquivo
+    ausente ou ilegível é decisão de quem chama, e quem chama já isola as
+    falhas por arquivo.
     """
 
     def hash_image(self, image: Image) -> str:
-        """Return the hex-encoded SHA-256 digest of the image's bytes.
+        """Devolve o digest SHA-256 em hexadecimal dos bytes da imagem.
 
-        Reads `Image.require_absolute_path()` rather than joining
-        `relative_path` onto anything: since RFC-027 an image records
-        where it lives on its *device*, and only whoever resolved that
-        device's mount point knows where that is right now. An image whose
-        device is unplugged raises `DeviceNotConnectedError` here, which
-        is the truthful answer -- there are no bytes to hash.
+        Lê `Image.require_absolute_path()` em vez de unir `relative_path` a
+        alguma coisa: desde o RFC-027, uma imagem registra onde mora no seu
+        *dispositivo*, e só quem resolveu o ponto de montagem desse dispositivo
+        sabe onde isso fica agora. Uma imagem cujo dispositivo está desplugado
+        levanta `DeviceNotConnectedError` aqui, que é a resposta verdadeira --
+        não há bytes para o hash.
         """
         digest = hashlib.sha256()
 
@@ -51,12 +52,12 @@ class Sha256ContentHasher(ContentHasherPort):
 
 
 def sha256_of(data: bytes) -> str:
-    """The fingerprint `Sha256ContentHasher` would give a file holding `data`.
+    """A impressão digital que `Sha256ContentHasher` daria a um arquivo com `data`.
 
-    For the read-ahead of RFC-045, which reads a whole file at once and
-    hashes what it read instead of opening the file a second time. Here,
-    beside the streaming version, so that the two cannot drift apart in
-    algorithm or in spelling -- lowercase hex, as the column stores it; a
-    test holds them to the same digest for the same files.
+    Para a leitura antecipada do RFC-045, que lê um arquivo inteiro de uma vez e
+    faz o hash do que leu em vez de abrir o arquivo uma segunda vez. Aqui, ao
+    lado da versão em fluxo, para que as duas não possam divergir no algoritmo
+    nem na grafia -- hex minúsculo, como a coluna o guarda; um teste as obriga
+    ao mesmo digest para os mesmos arquivos.
     """
     return hashlib.sha256(data).hexdigest()

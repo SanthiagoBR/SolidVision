@@ -1,25 +1,25 @@
-"""API v1 presentation package.
+"""Pacote de apresentação da API v1.
 
-Version one of the product's HTTP surface. The prefix exists before there
-are clients rather than after, because a search response is exactly the
-shape that grows a thumbnail URL or a `total` once a UI needs one
-(RFC-027, RFC-028), and versioning something already published is a
-migration rather than a decision.
+A versão um da superfície HTTP do produto. O prefixo existe antes de haver
+clientes, e não depois, porque uma resposta de busca é exatamente o formato
+que ganha uma URL de thumbnail ou um `total` assim que uma UI precisa de um
+(RFC-027, RFC-028), e versionar algo já publicado é uma migração, e não uma
+decisão.
 
-`/capabilities` (RFC-031 section 9) *is* part of it, and the difference
-from `/health` is worth stating because the two look alike. A health
-probe says whether the process is up, to a monitor that is not a person.
-`/capabilities` says what this installation supports, to the UI, so it
-knows which buttons exist -- it is a resource of the product's API, it
-would plausibly change shape in a `v2`, and it is behind the loopback
-guard precisely because it is nobody else's business.
+`/capabilities` (RFC-031 §9) *faz* parte dela, e vale explicar a diferença
+para `/health`, porque os dois se parecem. Uma sonda de saúde diz se o
+processo está no ar, a um monitor que não é uma pessoa. `/capabilities` diz o
+que esta instalação suporta, à UI, para que ela saiba quais botões existem --
+é um recurso da API do produto, plausivelmente mudaria de formato numa `v2`, e
+está atrás da guarda de loopback justamente porque não é da conta de mais
+ninguém.
 
-`/health` is deliberately not part of this: a health probe is
-infrastructure, not a resource in the product's API, it is what an
-orchestrator or a load balancer calls at a path fixed in configuration,
-and a `v2` of search would not mean a `v2` of "is the database
-reachable". It stays unversioned in `app/presentation/routes/`, which
-takes no further resource routes (RFC-026 section 6.1).
+`/health` deliberadamente não faz parte dela: uma sonda de saúde é
+infraestrutura, não um recurso da API do produto, é o que um orquestrador ou um
+load balancer chama num caminho fixado em configuração, e uma `v2` da busca
+não significaria uma `v2` de "o banco está acessível". Ele fica sem versão em
+`app/presentation/routes/`, que não recebe mais rotas de recurso
+(RFC-026 §6.1).
 """
 
 from fastapi import APIRouter

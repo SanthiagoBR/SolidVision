@@ -1,25 +1,25 @@
-"""RFC-042 level A: one matrix applied to the query's vector.
+"""RFC-042 nível A: uma matriz aplicada ao vetor da consulta.
 
-A search's text vector `t`, already normalized, becomes `normalize(t + A t)`
-before it is compared with the photos. The photos' vectors are not touched,
-so nothing in the index changes and nothing is reindexed (RFC-042 section 9).
-A picture used as the query (search by image, "find similar") is not adapted
-either, because `A` was trained on text.
+O vetor de texto `t` de uma busca, já normalizado, vira `normalize(t + A t)`
+antes de ser comparado com as fotos. Os vetores das fotos não são tocados,
+então nada no índice muda e nada é reindexado (RFC-042 §9). Uma imagem usada
+como consulta (busca por imagem, "achar parecidas") também não é adaptada,
+porque `A` foi treinada com texto.
 
-**The matrix is code**, like the lexicon (RFC-047 section 4). It lives in
-`query_adapter.safetensors`, beside this module, is versioned with it, and is
-read as data of this package. Its header names what it was trained for:
+**A matriz é código**, como o léxico (RFC-047 §4). Fica em
+`query_adapter.safetensors`, ao lado deste módulo, é versionada com ele e é
+lida como dado deste pacote. O cabeçalho dela diz para o que foi treinada:
 
-- `clip_repository` and `clip_revision`: the lockfile's CLIP. Another
-  checkpoint makes other vectors, on which this matrix means nothing, so
-  the load refuses it.
-- `lexicon_sha256`: the lexicon its training searches were translated with.
-  A test holds this one, not the load. A lexicon change is a commit, and the
-  test fails on that commit until the matrix is trained again and measured
-  (RFC-042 section 16).
+- `clip_repository` e `clip_revision`: o CLIP do lockfile. Outro checkpoint
+  faz outros vetores, sobre os quais esta matriz não significa nada, então a
+  carga o recusa.
+- `lexicon_sha256`: o léxico com que as buscas do treino foram traduzidas.
+  Quem segura este é um teste, não a carga. Mudar o léxico é um commit, e o
+  teste falha nesse commit até a matriz ser treinada de novo e medida
+  (RFC-042 §16).
 
-`experiments/rfc-042-fine-tuning/export_adapter.py` writes the file from a
-`train_adapter.py` matrix.
+`experiments/rfc-042-fine-tuning/export_adapter.py` escreve o arquivo a partir
+de uma matriz do `train_adapter.py`.
 """
 
 from __future__ import annotations
@@ -41,19 +41,19 @@ MATRIX_KEY = "matrix"
 
 
 class QueryAdapterError(Exception):
-    """The adapter file is not one this version of the code can use."""
+    """O arquivo do adaptador não é um que esta versão do código possa usar."""
 
 
 def lexicon_digest(content: bytes) -> str:
-    """The lexicon's sha256 with normalized line endings, as the header records it."""
+    """O sha256 do léxico, com fins de linha normalizados, como o cabeçalho o guarda."""
     return hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def header_metadata(content: bytes) -> dict[str, str]:
-    """The `__metadata__` of a safetensors file.
+    """O `__metadata__` de um arquivo safetensors.
 
-    The file starts with the header's length (8 bytes, little-endian) and
-    then the header itself, which is JSON.
+    O arquivo começa com o tamanho do cabeçalho (8 bytes, little-endian) e
+    depois o próprio cabeçalho, que é JSON.
     """
     (length,) = struct.unpack("<Q", content[:8])
     header = json.loads(content[8 : 8 + length])
@@ -61,7 +61,7 @@ def header_metadata(content: bytes) -> dict[str, str]:
 
 
 class QueryAdapter:
-    """The level A matrix, checked against the CLIP it was trained for."""
+    """A matriz do nível A, conferida com o CLIP para o qual foi treinada."""
 
     def __init__(self, matrix: torch.Tensor, metadata: Mapping[str, str]) -> None:
         if (
@@ -82,7 +82,7 @@ class QueryAdapter:
 
     @classmethod
     def load(cls, path: Path | None = None) -> QueryAdapter:
-        """The adapter in `path`, or by default the one of this version."""
+        """O adaptador em `path` ou, por padrão, o desta versão."""
         if path is None:
             source = resources.files("app.infrastructure.ai") / ADAPTER_NAME
             name, content = ADAPTER_NAME, source.read_bytes()
@@ -103,7 +103,7 @@ class QueryAdapter:
         return cls(matrix, metadata)
 
     def apply(self, vectors: torch.Tensor) -> torch.Tensor:
-        """`normalize(t + t A^T)` per row, what `train_adapter.adapt` trained."""
+        """`normalize(t + t A^T)` por linha, o que `train_adapter.adapt` treinou."""
         matrix = self.matrix.to(vectors.device)
         return torch.nn.functional.normalize(
             vectors + vectors @ matrix.T, p=2.0, dim=-1

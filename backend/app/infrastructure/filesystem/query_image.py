@@ -1,20 +1,20 @@
-"""A picture sent as a search query, decoded before the model sees it (RFC-038 4.2).
+"""Imagem enviada como consulta, decodificada antes que o modelo a veja (RFC-038 §4.2).
 
-`POST /images/search/by-image` writes the bytes it received to a temporary
-file and hands the path to CLIP. The adapter decodes it again in
-`_preprocess`, and lets the decoder's errors through on purpose -- for an
-indexed file they are a fault worth a traceback. For a file the user just
-dropped they are the user's, and a JPEG cut short must be a 400 that says so,
-not a 500.
+`POST /images/search/by-image` escreve os bytes que recebeu num arquivo
+temporário e entrega o caminho ao CLIP. O adaptador o decodifica de novo em
+`_preprocess` e deixa passar os erros do decodificador de propósito -- para um
+arquivo indexado, eles são uma falha que merece um traceback. Para um arquivo
+que o usuário acabou de soltar, são do usuário, e um JPEG cortado tem de ser um
+400 que diga isso, não um 500.
 
-So this opens the file first, with the same Pillow, and refuses what the
-adapter would choke on: bytes that are no image, a format other than the one
-declared, more pixels than `Image.MAX_IMAGE_PIXELS` -- Pillow's default
-guard against decompression bombs, 89,478,485 -- and a file whose pixels do
-not decode to the end. Decoding twice, here and in the adapter, is the price,
-and it is in the measured time of RFC-038 section 8.
+Por isso este módulo abre o arquivo antes, com o mesmo Pillow, e recusa aquilo
+em que o adaptador engasgaria: bytes que não são imagem, um formato diferente do
+declarado, mais pixels que `Image.MAX_IMAGE_PIXELS` -- a proteção padrão do
+Pillow contra bombas de descompressão, 89.478.485 -- e um arquivo cujos pixels
+não decodificam até o fim. Decodificar duas vezes, aqui e no adaptador, é o
+preço, e ele está no tempo medido do RFC-038 §8.
 
-Infrastructure, and not the dependency that calls it: `PIL` is kept out of
+Infraestrutura, e não a dependência que a chama: `PIL` fica fora de
 `app/presentation/api/` (`tests/test_ai_layer_boundaries.py`).
 """
 
@@ -28,32 +28,32 @@ from PIL import Image, UnidentifiedImageError
 from app.domain.exceptions import UnreadableQueryImageError
 
 PILLOW_FORMATS = {"image/jpeg": ("JPEG", "MPO"), "image/png": ("PNG",)}
-"""The media types a query picture may have, and what Pillow calls each.
+"""Os media types que uma imagem de consulta pode ter, e como o Pillow chama cada um.
 
-**A DJI photo is `MPO` to Pillow**, not `JPEG`: a JPEG with a second picture,
-the preview, after the first (CIPA's Multi-Picture Format). Every one of the
-40 real DJI files of RFC-032 opens as `MPO`, and the first version of this
-check refused them all -- the photos the product exists to find -- with a 400.
-The measurement of RFC-038 found it; the first frame is the photo, and it is
-what the adapter reads."""
+**Uma foto DJI é `MPO` para o Pillow**, não `JPEG`: um JPEG com uma segunda
+imagem, a prévia, depois da primeira (o Multi-Picture Format da CIPA). Todos os
+40 arquivos DJI reais do RFC-032 abrem como `MPO`, e a primeira versão desta
+checagem recusou todos -- as fotos que o produto existe para achar -- com um
+400. A medição do RFC-038 o achou; o primeiro quadro é a foto, e é ele que o
+adaptador lê."""
 
 
 def inspect_query_image(path: Path, media_type: str) -> None:
-    """Decode the picture at `path`, or raise `UnreadableQueryImageError`.
+    """Decodifica a imagem em `path`, ou levanta `UnreadableQueryImageError`.
 
-    `media_type` is the one the request declared, already checked against the
-    first bytes; the format Pillow identifies must agree with it. The pixel
-    limit is checked against the size in the header, before anything is
-    decoded, so a bomb costs a header read. `MAX_IMAGE_PIXELS` is read at
-    every call, as Pillow itself reads it.
+    `media_type` é o que a requisição declarou, já checado contra os primeiros
+    bytes; o formato que o Pillow identifica precisa concordar com ele. O limite
+    de pixels é checado contra o tamanho no cabeçalho, antes de qualquer
+    decodificação, então uma bomba custa a leitura de um cabeçalho.
+    `MAX_IMAGE_PIXELS` é lido a cada chamada, como o próprio Pillow o lê.
     """
     expected = PILLOW_FORMATS.get(media_type)
     if expected is None:
         raise UnreadableQueryImageError(f"{media_type} is not a query image type.")
     try:
         with warnings.catch_warnings():
-            # Above the limit Pillow only warns, up to twice it; the check
-            # below refuses at the limit itself.
+            # Acima do limite o Pillow só avisa, até o dobro dele; a checagem
+            # abaixo recusa já no próprio limite.
             warnings.simplefilter("ignore", Image.DecompressionBombWarning)
             with Image.open(path) as picture:
                 if picture.format not in expected:
@@ -76,8 +76,8 @@ def inspect_query_image(path: Path, media_type: str) -> None:
             f"The picture cannot be read: {error}"
         ) from error
     except (OSError, SyntaxError, ValueError) as error:
-        # A truncated JPEG raises `OSError` from `load()`; a corrupt PNG chunk,
-        # `SyntaxError` or `ValueError`, depending on where it breaks.
+        # Um JPEG truncado levanta `OSError` em `load()`; um chunk PNG
+        # corrompido, `SyntaxError` ou `ValueError`, conforme onde quebra.
         raise UnreadableQueryImageError(
             f"The picture cannot be read: {error}"
         ) from error

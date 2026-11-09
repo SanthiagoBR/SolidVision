@@ -1,44 +1,44 @@
-"""The two models as a runtime: found by a setting, checked against code (RFC-035).
+"""Os dois modelos como runtime: um setting os acha, o código os confere (RFC-035).
 
-The lockfile is code. `models.lock.json`, beside this module, names the
-repository, the revision and every file of CLIP and of the translator, with
-the size and the sha256 of each (section 4.1). Changing a model is a commit to
-it, reviewed, and not a line in a configuration file.
+O lockfile é código. `models.lock.json`, ao lado deste módulo, nomeia o
+repositório, a revisão e cada arquivo do CLIP e do tradutor, com o tamanho e o
+sha256 de cada um (§4.1). Trocar um modelo é um commit nele, revisado, e não
+uma linha num arquivo de configuração.
 
-`scripts/vendor_models.py` materializes the lockfile into a tree, by default
-`runtime\\models` beside the code (section 4.2)::
+`scripts/vendor_models.py` materializa o lockfile numa árvore, por default
+`runtime\\models` ao lado do código (§4.2)::
 
     <runtime>\\
-        SOLIDVISION-MODELS.json              the lockfile that made the tree
-        clip-vit-b-32-laion2b-s34b-b79k\\     the 8 files of the CLIP snapshot
-        opus-mt-romance-en\\                  the 7 files of the translator's
+        SOLIDVISION-MODELS.json              o lockfile que fez a árvore
+        clip-vit-b-32-laion2b-s34b-b79k\\     os 8 arquivos do snapshot do CLIP
+        opus-mt-romance-en\\                  os 7 arquivos do tradutor
 
-and this module is the other half: it checks the tree against the lockfile of
-the code that is running, and only then hands a directory to an adapter.
+e este módulo é a outra metade: confere a árvore com o lockfile do código que
+está rodando, e só então entrega um diretório a um adaptador.
 
-What is checked, and when (section 6.1):
+O que é conferido, e quando (§6.1):
 
-    on the start of a process      the manifest; every file of both models
-    that will load models          present, with its size (`check_presence`)
-    before each load of a model    the same for that model, and the sha256 of
-                                   each of its files (`verified_directory`)
+    no início de um processo       o manifesto; todo arquivo dos dois modelos
+    que vai carregar modelos       presente, com o tamanho (`check_presence`)
+    antes de cada carga de modelo  o mesmo para aquele modelo, e o sha256 de
+                                   cada arquivo dele (`verified_directory`)
 
-**The sha256 before the load, never after.** It is what gives the right
-message: a truncated file loaded first reaches the user as a traceback from
-torch (section 6.2). No pickle is left to guard: the translator's
-`pytorch_model.bin` is converted to `safetensors` by `vendor_models.py`, which
-checks the pickle's hash before it unpickles it (the second branch of section
-7.4), and the tree holds no pickle at all.
+**O sha256 antes da carga, nunca depois.** É o que dá a mensagem certa: um
+arquivo truncado carregado primeiro chega ao usuário como um traceback do
+torch (§6.2). Não sobra pickle a proteger: o `pytorch_model.bin` do tradutor é
+convertido para `safetensors` por `vendor_models.py`, que confere o hash do
+pickle antes de desserializá-lo (o segundo ramo de §7.4), e a árvore não tem
+pickle nenhum.
 
-**The second branch of section 6.3.** Hashing the weights costs several times
-what loading them does (RFC-035 section 15: CLIP's 605 MB hash in 2.4 s warm
-and 4.7 s cold, and load in 0.6 s and 2.0 s), so a file whose path, size,
-modification time and NTFS file id are those of a file already hashed against
-this lockfile is not hashed again. That record, `models-verified.json` in the
-user's cache folder, is written after every successful hash. Presence and size
-are still checked on every load. What the branch gives up, declared: a
-corruption of the disk that changes neither the size nor the dates is caught
-only by the next full check.
+**O segundo ramo de §6.3.** Calcular o hash dos pesos custa várias vezes o que
+custa carregá-los (RFC-035 §15: os 605 MB do CLIP dão o hash em 2,4 s a quente
+e 4,7 s a frio, e carregam em 0,6 s e 2,0 s), então um arquivo cujo caminho,
+tamanho, data de modificação e file id do NTFS são os de um arquivo já
+conferido contra este lockfile não tem o hash calculado de novo. Esse
+registro, `models-verified.json` na pasta de cache do usuário, é gravado
+depois de cada hash bem-sucedido. Presença e tamanho continuam conferidos em
+toda carga. Do que o ramo abre mão, declarado: uma corrupção do disco que não
+muda nem o tamanho nem as datas só é pega na próxima verificação completa.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ RECORD_FORMAT = 1
 
 CLIP = "clip"
 TRANSLATOR = "translator"
-"""The keys of the lockfile: what the code asks for by name."""
+"""As chaves do lockfile: o que o código pede pelo nome."""
 
 REMEDIES = {
     Environment.DEVELOPMENT: (
@@ -76,25 +76,25 @@ REMEDIES = {
     ),
     Environment.INSTALLED: "Reinstall SolidVision.",
 }
-"""What to do, at the end of every message: what can be done is per mode."""
+"""O que fazer, no fim de toda mensagem: o que dá para fazer depende do modo."""
 
 ModelDirectory = Callable[[], Path]
-"""What an adapter receives instead of a name: called on its first load, it
-returns the model's directory, checked, or raises `ModelUnavailableError`.
+"""O que um adaptador recebe no lugar de um nome: chamado na primeira carga,
+devolve o diretório do modelo, conferido, ou levanta `ModelUnavailableError`.
 
-A callable rather than a path, so that constructing an adapter stays free
-(RFC-023 section 9) and the check happens on the load, not before.
+Um callable, e não um caminho, para que construir um adaptador continue de
+graça (RFC-023 §9) e a verificação aconteça na carga, não antes.
 """
 
 
 class ModelUnavailableError(Exception):
-    """A model cannot be loaded, and the message is one line saying why.
+    """Um modelo não pode ser carregado, e a mensagem é uma linha dizendo por quê.
 
-    The model, the file, the problem and what to do (section 6.4), and never
-    the content of any file: names, sizes and the prefix of a hash. Who shows
-    it decides the rest (section 6.5): the job runner and the CLI print it and
-    exit with 78, the code of RFC-036 section 6.1; the API answers 503 with it
-    on the routes that need a model. Restarting fixes none of the cases.
+    O modelo, o arquivo, o problema e o que fazer (§6.4), e nunca o conteúdo
+    de arquivo nenhum: nomes, tamanhos e o prefixo de um hash. Quem a mostra
+    decide o resto (§6.5): o job runner e a CLI a imprimem e saem com 78, o
+    código do RFC-036 §6.1; a API responde 503 com ela nas rotas que precisam
+    de um modelo. Reiniciar não resolve nenhum dos casos.
     """
 
 
@@ -117,14 +117,14 @@ class LockedModel:
 
 @dataclass(frozen=True)
 class Lockfile:
-    """The lockfile, parsed, and the digest that names it in a manifest."""
+    """O lockfile, interpretado, e o digest que o nomeia num manifesto."""
 
     models: Mapping[str, LockedModel]
     sha256: str
 
     @classmethod
     def parse(cls, content: bytes) -> Lockfile:
-        """The lockfile from its bytes, or `ValueError` saying what is wrong."""
+        """O lockfile a partir dos bytes, ou `ValueError` dizendo o que está errado."""
         raw = json.loads(content.decode("utf-8"))
         if not isinstance(raw, dict) or not raw:
             raise ValueError("the lockfile names no model")
@@ -157,21 +157,22 @@ class Lockfile:
 
 
 def lockfile_digest(content: bytes) -> str:
-    """The lockfile's sha256, line endings normalized, as the manifest names it.
+    """O sha256 do lockfile, fins de linha normalizados, como o manifesto o nomeia.
 
-    Git checks the file out with CRLF or LF depending on `core.autocrlf`; the
-    digest must be the same on every machine. `vendor_models.py` computes it
-    the same way.
+    O Git faz o checkout do arquivo com CRLF ou LF conforme `core.autocrlf`; o
+    digest tem de ser o mesmo em toda máquina. `vendor_models.py` o calcula do
+    mesmo jeito.
     """
     return hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest()
 
 
 @functools.cache
 def read_lockfile() -> Lockfile:
-    """The lockfile of the running code, read as data of this package.
+    """O lockfile do código em execução, lido como dado deste pacote.
 
-    Through `importlib.resources`, and not a path climbed from a file: the
-    lockfile travels with the code, and an installed app has no `scripts\\`.
+    Por `importlib.resources`, e não por um caminho subido a partir de um
+    arquivo: o lockfile viaja com o código, e um app instalado não tem
+    `scripts\\`.
     """
     content = (resources.files("app.infrastructure.ai") / LOCKFILE_NAME).read_bytes()
     try:
@@ -185,17 +186,18 @@ def read_lockfile() -> Lockfile:
 
 @functools.cache
 def default_runtime() -> ModelRuntime:
-    """The tree `settings.model_runtime_directory` names, for this process.
+    """A árvore que `settings.model_runtime_directory` nomeia, para este processo.
 
-    Checked against the running code's lockfile, never trusted: pointing the
-    setting at another tree can only point it at an identical copy (RFC-035
-    section 4.5). Building it reads the small lockfile and nothing else.
+    Conferida com o lockfile do código em execução, nunca tida como confiável:
+    apontar o setting para outra árvore só consegue apontá-lo para uma cópia
+    idêntica (RFC-035 §4.5). Construí-la lê o lockfile, que é pequeno, e mais
+    nada.
 
-    One per process, so that a refusal it remembers -- a file whose hash did
-    not match -- holds for every caller. Here, and not in the composition
-    root, because a process that only checks presence at its start -- the
-    job runner, the CLI -- must be able to refuse without importing `torch`
-    first, which takes longer than everything else it does before that.
+    Uma por processo, para que uma recusa de que ela se lembra -- um arquivo
+    cujo hash não bateu -- valha para todo chamador. Aqui, e não na
+    composition root, porque um processo que só confere a presença no início
+    -- o job runner, a CLI -- tem de poder recusar sem importar `torch`
+    antes, o que leva mais tempo que tudo o que ele faz até ali.
     """
     from app.infrastructure.config.settings import settings
 
@@ -203,10 +205,11 @@ def default_runtime() -> ModelRuntime:
 
 
 def huggingface_is_offline() -> bool:
-    """Whether `huggingface_hub` would refuse every request.
+    """Se o `huggingface_hub` recusaria toda requisição.
 
-    Imported here, on the first load, and not at the top: the package
-    `__init__` has run by then, so a first import here sees the variable.
+    Importado aqui, na primeira carga, e não no topo: a essa altura o
+    `__init__` do pacote já rodou, então um primeiro import aqui vê a
+    variável.
     """
     import huggingface_hub
 
@@ -214,10 +217,10 @@ def huggingface_is_offline() -> bool:
 
 
 def load_failed(directory: Path) -> ModelUnavailableError:
-    """Row six of section 6.4: every file checked out, and the load failed anyway.
+    """A linha seis de §6.4: todo arquivo conferiu, e a carga falhou mesmo assim.
 
-    Called inside an `except` block: the traceback goes to the log, and the
-    line that is returned does not repeat it.
+    Chamada dentro de um bloco `except`: o traceback vai para o log, e a
+    linha devolvida não o repete.
     """
     logger.exception("Loading the model in %s failed", directory)
     return ModelUnavailableError(
@@ -226,7 +229,7 @@ def load_failed(directory: Path) -> ModelUnavailableError:
 
 
 class ModelRuntime:
-    """One tree of models, refused unless it is the one the lockfile describes."""
+    """Uma árvore de modelos, recusada a não ser que seja a que o lockfile descreve."""
 
     def __init__(
         self,
@@ -245,16 +248,17 @@ class ModelRuntime:
         self._offline = offline
         self._lock = threading.Lock()
         self._refused: dict[tuple[str, str], str] = {}
-        """Files whose hash was already refused, by path and identity.
+        """Arquivos cujo hash já foi recusado, por caminho e identidade.
 
-        So that a corrupt tree costs one hash, and not one per search request
-        answered with 503 -- while a file that was replaced since, and so has
-        another identity, is hashed again: fixing the tree needs no restart.
+        Para que uma árvore corrompida custe um hash, e não um por requisição
+        de busca respondida com 503 -- enquanto um arquivo substituído desde
+        então, e que por isso tem outra identidade, tem o hash calculado de
+        novo: consertar a árvore não exige reiniciar.
         """
 
     @classmethod
     def of(cls, root: Path, where: Layout) -> ModelRuntime:
-        """The tree at `root`, checked against the running code's lockfile."""
+        """A árvore em `root`, conferida com o lockfile do código em execução."""
         return cls(
             root,
             read_lockfile(),
@@ -263,25 +267,26 @@ class ModelRuntime:
         )
 
     def loader(self, key: str) -> ModelDirectory:
-        """What an adapter is given: the checked directory, on its first load."""
+        """O que um adaptador recebe: o diretório conferido, na primeira carga."""
         return functools.partial(self.verified_directory, key)
 
     def check_presence(self) -> None:
-        """The check of a process's start: cheap, and of both models.
+        """A verificação do início de um processo: barata, e dos dois modelos.
 
-        The manifest, and every file of every model present with its size: one
-        small JSON file and fifteen `stat`s. It finds a broken installation
-        when the process starts, and not on the first search in Portuguese.
+        O manifesto, e todo arquivo de todo modelo presente com o tamanho: um
+        JSON pequeno e quinze `stat`s. Acha uma instalação quebrada quando o
+        processo começa, e não na primeira busca em português.
         """
         self._check_manifest()
         for model in self._lockfile.models.values():
             self._stat_files(model)
 
     def verified_directory(self, key: str) -> Path:
-        """The directory of one model, after its files were checked in full.
+        """O diretório de um modelo, depois de conferidos por inteiro os arquivos dele.
 
-        One thread at a time: two first requests that both find the adapter
-        unloaded hash once, and the second finds the record the first wrote.
+        Uma thread por vez: duas primeiras requisições que achem o adaptador
+        descarregado calculam o hash uma vez, e a segunda acha o registro que
+        a primeira gravou.
         """
         model = self._lockfile.model(key)
         with self._lock:
@@ -294,11 +299,12 @@ class ModelRuntime:
     # ------------------------------------------------------------------
 
     def _require_offline(self, model: LockedModel) -> None:
-        """Section 5.2: the variable only works if it came before the import.
+        """§5.2: a variável só funciona se veio antes do import.
 
-        Something that imported `huggingface_hub` before this package -- a
-        `sitecustomize`, a tool, a test -- left it reading the environment as
-        it was then. Loading anyway would load with the network on.
+        Algo que importou `huggingface_hub` antes deste pacote -- um
+        `sitecustomize`, uma ferramenta, um teste -- o deixou lendo o ambiente
+        como estava naquela hora. Carregar mesmo assim carregaria com a rede
+        ligada.
         """
         if not self._offline():
             raise ModelUnavailableError(
@@ -413,10 +419,10 @@ class ModelRuntime:
         self._write_record(vouched)
 
     def _read_record(self) -> dict[str, Any]:
-        """The files already hashed against this lockfile, by absolute path.
+        """Os arquivos já conferidos contra este lockfile, por caminho absoluto.
 
-        A record that cannot be read, or that was written for another
-        lockfile, vouches for nothing: the cost is one more hash.
+        Um registro que não pode ser lido, ou que foi gravado para outro
+        lockfile, não garante nada: o custo é um hash a mais.
         """
         if self._record_file is None:
             return {}
@@ -443,12 +449,13 @@ class ModelRuntime:
         return files
 
     def _write_record(self, files: Mapping[str, Any]) -> None:
-        """Replace the record in one rename, so no reader sees half of one.
+        """Substitui o registro num único rename, para nenhum leitor ver metade dele.
 
-        Two processes writing at once lose one of the two updates, which
-        costs that process's files one more hash, and nothing else. A record
-        that cannot be written is logged and otherwise ignored: the models are
-        right, and the next load hashes them again.
+        Dois processos gravando ao mesmo tempo perdem uma das duas
+        atualizações, o que custa aos arquivos daquele processo um hash a
+        mais, e nada além disso. Um registro que não pode ser gravado vai para
+        o log e é ignorado: os modelos estão certos, e a próxima carga calcula
+        o hash deles de novo.
         """
         if self._record_file is None:
             return
@@ -474,12 +481,12 @@ class ModelRuntime:
 
 
 def _identity(found: os.stat_result, sha256: str) -> dict[str, Any]:
-    """What must not have changed for an earlier hash to still vouch for a file.
+    """O que não pode ter mudado para um hash anterior ainda garantir um arquivo.
 
-    The size, the modification time and the file id -- on Windows `st_ino` is
-    the NTFS file id, and `st_dev` the volume's serial number -- and the
-    sha256 the file was checked against. A file replaced by a copy has a new
-    id; a file rewritten in place has a new modification time.
+    O tamanho, a data de modificação e o file id -- no Windows, `st_ino` é o
+    file id do NTFS, e `st_dev` o número de série do volume -- e o sha256 com
+    que o arquivo foi conferido. Um arquivo substituído por uma cópia tem um
+    id novo; um arquivo reescrito no lugar tem uma data de modificação nova.
     """
     return {
         "size": found.st_size,

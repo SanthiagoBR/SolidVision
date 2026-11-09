@@ -1,1 +1,1 @@
-"""Persistence infrastructure package."""
+"""Pacote de infraestrutura de persistência."""

@@ -1,15 +1,15 @@
-"""Where rendered thumbnails are kept, without naming a directory (RFC-030).
+"""Onde ficam as thumbnails geradas, sem nomear um diretório (RFC-030).
 
-The Application layer decides *that* a thumbnail is written and records
-where; it must not open files to do it, any more than it hashes them. This
-port is the other half of `ThumbnailGeneratorPort`: that one turns a photo
-into bytes, this one keeps the bytes.
+A camada Application decide *que* uma thumbnail é escrita e grava onde; ela
+não pode abrir arquivos para isso, assim como não calcula o hash deles. Esta
+porta é a outra metade de `ThumbnailGeneratorPort`: aquela transforma uma
+foto em bytes, esta guarda os bytes.
 
-**Nothing behind this port may write into a user's collection.** RFC-028
-section 10 declared that the system never writes to the collection, and
-RFC-030 section 7.1 repeats it for thumbnails with a second reason: a
-thumbnail stored beside the photo would vanish into the drawer with the
-disk, which is exactly when a user most needs to see what they found.
+**Nada atrás desta porta pode escrever na coleção de um usuário.** O RFC-028
+§10 declarou que o sistema nunca escreve na coleção, e o RFC-030 §7.1 o
+repete para as thumbnails com uma segunda razão: uma thumbnail guardada ao
+lado da foto sumiria na gaveta junto com o disco, que é exatamente quando o
+usuário mais precisa ver o que achou.
 """
 
 from __future__ import annotations
@@ -21,39 +21,38 @@ from app.domain.value_objects.image_id import ImageId
 
 
 class ThumbnailStorePort(ABC):
-    """Keep a thumbnail per image id, in storage the application owns."""
+    """Guarda uma thumbnail por id de imagem, num armazenamento do aplicativo."""
 
     @abstractmethod
     def save(self, image_id: ImageId, data: bytes) -> str:
-        """Store `data` as the thumbnail of `image_id` and return its location.
+        """Guarda `data` como a thumbnail de `image_id` e devolve o local dela.
 
-        The location is what gets persisted in `images.thumbnail_path`, and
-        it is opaque to everyone but the store: a caller hands it back to
-        `locate()` and never builds a path from it.
+        O local é o que vai para `images.thumbnail_path`, e é opaco para todos
+        menos o store: um chamador o devolve a `locate()` e nunca monta um
+        caminho a partir dele.
 
-        Saving for an id that already has a thumbnail replaces it in place.
-        That is the regeneration RFC-030 section 7.2 describes -- the same
-        id, new bytes -- and the reason clients must revalidate rather than
-        trust a cached copy for ever.
+        Guardar para um id que já tem thumbnail a substitui no lugar. É a
+        regeneração que o RFC-030 §7.2 descreve -- o mesmo id, bytes novos --
+        e a razão de os clientes precisarem revalidar, em vez de confiar
+        para sempre numa cópia em cache.
         """
 
     @abstractmethod
     def locate(self, location: str) -> Path | None:
-        """Return the file behind a stored location, or `None` if it is gone.
+        """Devolve o arquivo por trás de um local gravado, ou `None` se ele sumiu.
 
-        `None` is an honest answer rather than an error: the cache is the
-        application's, and a thumbnail that was cleaned away is served as
-        "not generated yet" (RFC-030 section 7.2) instead of failing the
-        request.
+        `None` é uma resposta honesta, e não um erro: o cache é do
+        aplicativo, e uma thumbnail que foi limpa é servida como "ainda não
+        gerada" (RFC-030 §7.2), em vez de derrubar a requisição.
         """
 
     @abstractmethod
     def delete(self, location: str) -> None:
-        """Remove the thumbnail behind a stored location, if it is there (RFC-046).
+        """Remove a thumbnail por trás de um local gravado, se ela existe (RFC-046).
 
-        The purge's second step, after the rows are gone (section 5.7). A
-        location with nothing behind it is not an error -- the cache is the
-        application's, and the file may have been cleaned already -- and a
-        location that does not resolve inside the store deletes nothing:
-        the same check `locate()` makes, because this one removes.
+        O segundo passo da purga, depois que as linhas se foram (§5.7). Um
+        local sem nada por trás não é erro -- o cache é do aplicativo, e o
+        arquivo pode já ter sido limpo -- e um local que não resolve para
+        dentro do store não apaga nada: a mesma verificação que `locate()`
+        faz, porque este remove.
         """

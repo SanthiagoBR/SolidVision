@@ -1,4 +1,4 @@
-"""Carrier for previously persisted filesystem metadata."""
+"""Portador dos metadados de sistema de arquivos gravados anteriormente."""
 
 from __future__ import annotations
 
@@ -11,95 +11,93 @@ from app.domain.value_objects.position_source import PositionSource
 
 @dataclass(frozen=True)
 class IndexMetadata:
-    """Filesystem metadata read back from persistence for change comparison.
+    """Metadados de sistema de arquivos relidos da persistência para comparar mudanças.
 
-    Deliberately excludes `embedding` and `Image` -- reconstructing a
-    full embedding vector just to compare two scalars would be wasteful,
-    and no such reconstruction exists elsewhere in the codebase. Lives in
-    Domain because it is part of the `ImageRepository` port's contract.
+    Deixa de fora `embedding` e `Image` de propósito -- reconstruir um vetor
+    de embedding inteiro só para comparar dois escalares seria desperdício,
+    e nenhuma reconstrução assim existe em outro lugar do código. Mora no
+    Domain porque faz parte do contrato da porta `ImageRepository`.
     """
 
     file_size: int | None
     file_modified_at: datetime.datetime | None
     content_hash: str | None = None
-    """Fingerprint of the file's bytes at the time it was last indexed.
+    """Impressão digital dos bytes do arquivo na última vez que ele foi indexado.
 
-    Defaults to `None`, which means *unknown*, never *matches*. Rows
-    written before RFC-024 carry NULL here and the column was added
-    without a backfill, so a caller comparing hashes must treat `None` as
-    "cannot confirm unchanged" and fall through to re-embedding. Defaulted
-    rather than required so that every construction site that predates
-    content hashing keeps producing the safe answer instead of silently
-    claiming a match it never checked.
+    O padrão é `None`, que quer dizer *desconhecido*, nunca *casa*. Linhas
+    escritas antes do RFC-024 têm NULL aqui, e a coluna foi acrescentada sem
+    backfill, então um chamador que compara hashes precisa tratar `None` como
+    "não dá para confirmar que não mudou" e seguir para recalcular o
+    embedding. Com padrão, e não obrigatório, para que todo ponto de
+    construção anterior ao hash de conteúdo continue produzindo a resposta
+    segura, em vez de afirmar em silêncio uma igualdade que nunca verificou.
     """
 
     capture_source: CaptureSource | None = None
-    """Whether this row's capture date was ever examined, and from where.
+    """Se a data de captura desta linha já foi examinada, e de onde veio.
 
-    **NOT A CHANGE SIGNAL. `plan_indexing()` must never read it.** It
-    rides along in the prefetch for a different consumer: the scan writes a
-    capture date only for rows whose source is still `None` -- never
-    examined -- so that re-scanning an unchanged collection costs zero
-    writes after the first pass (RFC-028 section 6). The prefetch is
-    already one query per window, so one more scalar in it is free, where a
-    separate lookup would be the per-file round trip RFC-024 section 7.1
-    removed.
+    **NÃO É UM SINAL DE MUDANÇA. `plan_indexing()` nunca pode lê-lo.** Ele
+    pega carona no prefetch para outro consumidor: o scan escreve uma data de
+    captura só para as linhas cuja fonte ainda é `None` -- nunca examinadas
+    -- para que um novo scan de uma coleção inalterada custe zero escritas
+    depois da primeira passada (RFC-028 §6). O prefetch já é uma consulta
+    por janela, então mais um escalar nele sai de graça, enquanto uma busca
+    separada seria a ida e volta por arquivo que o RFC-024 §7.1 eliminou.
 
-    A different capture date says nothing about whether the pixels
-    changed. Comparing it in the skip decision would re-embed a photo --
-    the most expensive operation in the system -- because its EXIF was
-    edited or the extraction improved (RFC-028 section 6.1).
-    `test_indexing_plan.py` fails if that comparison is ever added.
+    Uma data de captura diferente não diz nada sobre se os pixels mudaram.
+    Compará-la na decisão de pular recalcularia o embedding de uma foto -- a
+    operação mais cara do sistema -- porque o EXIF dela foi editado ou a
+    extração melhorou (RFC-028 §6.1). `test_indexing_plan.py` falha se essa
+    comparação for acrescentada algum dia.
 
-    Only `ImageRepository.update_capture_date*()` writes this column;
-    `update_index_metadata()` leaves it untouched even though it receives
-    an `IndexMetadata`.
+    Só `ImageRepository.update_capture_date*()` escreve esta coluna;
+    `update_index_metadata()` a deixa intocada, embora receba um
+    `IndexMetadata`.
     """
 
     position_source: PositionSource | None = None
-    """Whether this row's position was ever examined, and from where (RFC-032).
+    """Se a posição desta linha já foi examinada, e de onde veio (RFC-032).
 
-    **NOT A CHANGE SIGNAL. `plan_indexing()` must never read it.** It rides
-    the prefetch for the reason `capture_source` does: the scan writes a
-    position only for rows whose source is still `None` -- never examined
-    -- so that re-scanning an unchanged collection costs zero writes after
-    the first pass (RFC-032 section 8).
+    **NÃO É UM SINAL DE MUDANÇA. `plan_indexing()` nunca pode lê-lo.** Ele
+    pega carona no prefetch pela razão de `capture_source`: o scan escreve
+    uma posição só para as linhas cuja fonte ainda é `None` -- nunca
+    examinadas -- para que um novo scan de uma coleção inalterada custe zero
+    escritas depois da primeira passada (RFC-032 §8).
 
-    A coordinate read today says nothing about whether the pixels changed.
-    Comparing it in the skip decision would re-embed a photo -- the most
-    expensive operation in the system -- for a metadata fact, and
-    `test_indexing_plan.py` fails, verified by mutation, if that comparison
-    is ever added.
+    Uma coordenada lida hoje não diz nada sobre se os pixels mudaram.
+    Compará-la na decisão de pular recalcularia o embedding de uma foto -- a
+    operação mais cara do sistema -- por um fato de metadado, e
+    `test_indexing_plan.py` falha, verificado por mutação, se essa comparação
+    for acrescentada algum dia.
 
-    Only `ImageRepository.update_position*()` and `save_indexed*()` write
-    this column; `update_index_metadata()` leaves it untouched even though it
-    receives an `IndexMetadata`, because a refresh that wrote it would reset
-    an examined row to "never examined".
+    Só `ImageRepository.update_position*()` e `save_indexed*()` escrevem esta
+    coluna; `update_index_metadata()` a deixa intocada, embora receba um
+    `IndexMetadata`, porque uma atualização que a escrevesse voltaria uma
+    linha examinada para "nunca examinada".
     """
 
     thumbnail_path: str | None = None
-    """Where this row's thumbnail is stored, or `None` if it has none (RFC-030).
+    """Onde a thumbnail desta linha está guardada, ou `None` se não há (RFC-030).
 
-    **NOT A CHANGE SIGNAL. `plan_indexing()` must never read it.** It rides
-    the prefetch for the same reason `capture_source` does: the thumbnail
-    backfill asks "which of these rows already has one?" once per window,
-    and the prefetch is that query already. A missing thumbnail says
-    nothing about whether the pixels changed, and re-embedding a photo
-    because its thumbnail failed to render would spend the most expensive
-    operation in the system to fix the cheapest.
+    **NÃO É UM SINAL DE MUDANÇA. `plan_indexing()` nunca pode lê-lo.** Ele
+    pega carona no prefetch pela mesma razão de `capture_source`: o backfill
+    de thumbnails pergunta "quais destas linhas já têm uma?" uma vez por
+    janela, e o prefetch já é essa consulta. Uma thumbnail ausente não diz
+    nada sobre se os pixels mudaram, e recalcular o embedding de uma foto
+    porque a thumbnail dela não foi gerada gastaria a operação mais cara do
+    sistema para consertar a mais barata.
 
-    The location itself rather than a flag, although the backfill only
-    needs the flag. `GET /images/{id}/thumbnail` needs the location and
-    the `content_hash` beside it, and a boolean here would have left the
-    column with no reader at all -- the route would have had to rebuild
-    the location from the id, and the stored one would have become a
-    second copy of a fact free to disagree with the first.
+    O próprio local, e não uma flag, embora o backfill só precise da flag.
+    `GET /images/{id}/thumbnail` precisa do local e do `content_hash` ao lado
+    dele, e um booleano aqui teria deixado a coluna sem leitor nenhum -- a
+    rota teria de reconstruir o local a partir do id, e o gravado teria
+    virado uma segunda cópia de um fato livre para discordar da primeira.
 
-    Only `ImageRepository.save_indexed*()` and `update_thumbnail_path*()`
-    write it; `update_index_metadata()` leaves it alone.
+    Só `ImageRepository.save_indexed*()` e `update_thumbnail_path*()` o
+    escrevem; `update_index_metadata()` o deixa em paz.
     """
 
     @property
     def thumbnail_generated(self) -> bool:
-        """Whether a thumbnail was ever stored for this row."""
+        """Se alguma thumbnail já foi guardada para esta linha."""
         return self.thumbnail_path is not None

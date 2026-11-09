@@ -1,17 +1,16 @@
-"""The indexing job entity and the state machine that owns its transitions.
+"""A entidade do job de indexação e a máquina de estados que detém as transições.
 
-One job is one request to index a device, or some folders on it. It is an
-*event*, not a description of the disk: two requests to index the same
-folder are two rows, and the row keeps its counters and its checkpoint
-long after the work is over (RFC-029 section 5.1).
+Um job é um pedido para indexar um dispositivo, ou algumas pastas dele. É um
+*evento*, e não uma descrição do disco: dois pedidos para indexar a mesma
+pasta são duas linhas, e a linha guarda os contadores e o checkpoint muito
+depois de o trabalho acabar (RFC-029 §5.1).
 
-**Every legal move lives here, and nowhere else.** The route does not
-decide whether a cancellation is allowed, and the worker does not decide
-whether an expired job may go back to the queue -- both call a method on
-this entity and let it refuse (`AI_Context.md`: no business logic in
-Presentation or Infrastructure). What Infrastructure owns is the
-*atomicity* of a move, which is a different question and lives in the
-repository.
+**Todo movimento legal mora aqui, e em nenhum outro lugar.** A rota não
+decide se um cancelamento é permitido, e o worker não decide se um job
+expirado pode voltar para a fila -- os dois chamam um método desta entidade e
+a deixam recusar (`AI_Context.md`: nenhuma regra de negócio na Presentation
+ou na Infrastructure). O que a Infrastructure detém é a *atomicidade* de um
+movimento, que é outra pergunta e mora no repositório.
 """
 
 from __future__ import annotations
@@ -29,12 +28,12 @@ from app.domain.value_objects.job_scope import JobScope
 
 
 class JobStatus(enum.StrEnum):
-    """Where a job is in its life.
+    """Em que ponto da vida um job está.
 
-    A `StrEnum` so that the member *is* the string the database column
-    holds. The column is `TEXT` rather than a PostgreSQL `ENUM` for the
-    reason RFC-028 gave `capture_source`: adding a state later should not
-    cost a migration.
+    Um `StrEnum`, para que o membro *seja* a string que a coluna do banco
+    guarda. A coluna é `TEXT`, e não um `ENUM` do PostgreSQL, pela razão que o
+    RFC-028 deu para `capture_source`: acrescentar um estado depois não deveria
+    custar uma migration.
     """
 
     PENDING = "pending"
@@ -45,19 +44,19 @@ class JobStatus(enum.StrEnum):
 
     @property
     def is_terminal(self) -> bool:
-        """Whether nothing further will ever happen to a job in this state."""
+        """Se nada mais vai acontecer a um job neste estado."""
         return self in _TERMINAL
 
     @property
     def is_active(self) -> bool:
-        """Whether this state holds the device.
+        """Se este estado segura o dispositivo.
 
-        Exactly the states the partial unique index of RFC-029 section 9
-        covers, named once so that the index, the in-memory double and
-        the list filter cannot drift apart. `running` is obvious;
-        `pending` is the one worth stating, and it is deliberate -- a
-        queued job has already reserved the disk, so a second request for
-        the same disk is refused rather than queued behind it.
+        Exatamente os estados que o índice único parcial do RFC-029 §9 cobre,
+        nomeados uma vez para que o índice, o dublê em memória e o filtro da
+        lista não possam divergir. `running` é óbvio; `pending` é o que vale
+        dizer, e é deliberado -- um job na fila já reservou o disco, então um
+        segundo pedido para o mesmo disco é recusado, e não posto na fila atrás
+        dele.
         """
         return self in _ACTIVE
 
@@ -67,14 +66,14 @@ _ACTIVE = frozenset({JobStatus.PENDING, JobStatus.RUNNING})
 
 
 class JobEvent(enum.StrEnum):
-    """Everything that can be asked of a job, named so tests can enumerate it.
+    """Tudo o que se pode pedir a um job, nomeado para que os testes o enumerem.
 
-    Exists because "the legal transitions are tested" is a weaker claim
-    than it sounds: asserting that the legal moves work says nothing about
-    the illegal ones, and an entity that allowed `complete` on a cancelled
-    job would pass such a suite. With the events as data,
-    `test_indexing_job_transitions.py` walks the whole `(status, event)`
-    grid and requires a refusal for every cell outside the table below.
+    Existe porque "as transições legais estão testadas" é uma afirmação mais
+    fraca do que parece: verificar que os movimentos legais funcionam não diz
+    nada sobre os ilegais, e uma entidade que permitisse `complete` num job
+    cancelado passaria numa suíte assim. Com os eventos como dados,
+    `test_indexing_job_transitions.py` percorre a grade inteira de
+    `(status, event)` e exige uma recusa em toda célula fora da tabela abaixo.
     """
 
     CLAIM = "claim"
@@ -95,96 +94,93 @@ LEGAL_TRANSITIONS: dict[JobEvent, frozenset[JobStatus]] = {
     JobEvent.EXPIRE: frozenset({JobStatus.RUNNING}),
     JobEvent.REQUEST_CANCEL: frozenset({JobStatus.PENDING, JobStatus.RUNNING}),
 }
-"""Which states each event is allowed from. The whole state machine.
+"""De quais estados cada evento é permitido. A máquina de estados inteira.
 
-Read as a table rather than scattered through `if` statements, so that
-the answer to "can a cancelled job be completed?" is one lookup and the
-exhaustive test has something to enumerate.
+Lida como uma tabela, e não espalhada por comandos `if`, para que a resposta
+a "um job cancelado pode ser concluído?" seja uma consulta só e o teste
+exaustivo tenha o que enumerar.
 
-Two entries are worth the words:
+Duas entradas valem as palavras:
 
-* `FAIL` is reachable only from `RUNNING`. A job that never started
-  cannot have discovered that its disk is in a drawer -- the executor
-  re-validates the connection *after* claiming, by which point the job is
-  running.
-* `EXPIRE` is likewise `RUNNING`-only, because a pending job has no
-  heartbeat to miss.
+* `FAIL` só é alcançável a partir de `RUNNING`. Um job que nunca começou não
+  pode ter descoberto que o disco está numa gaveta -- o executor revalida a
+  conexão *depois* de pegar o job, e a essa altura o job está rodando.
+* `EXPIRE` também é só de `RUNNING`, porque um job pendente não tem
+  heartbeat para perder.
 """
 
 
 @dataclass(frozen=True)
 class IndexingJob:
-    """One indexing request, its progress, and where to resume it.
+    """Um pedido de indexação, o seu progresso e de onde retomá-lo.
 
-    Frozen, and every transition returns a new value. That follows `Image`
-    and `Device` (RFC-009), and it earns its keep here in a way it does
-    not there: a job is written by a route setting `cancel_requested` and
-    by a worker writing counters at the same time, and an entity that
-    mutated in place would make "which of those did I just overwrite?" an
-    invisible question. A new value has to be handed to a repository,
-    which is where that concurrency is actually resolved.
+    Congelada, e toda transição devolve um valor novo. Isso segue `Image` e
+    `Device` (RFC-009), e aqui se paga de um jeito que lá não se paga: um job
+    é escrito por uma rota que põe `cancel_requested` e por um worker que
+    escreve contadores ao mesmo tempo, e uma entidade que mudasse no lugar
+    faria de "qual desses eu acabei de sobrescrever?" uma pergunta invisível.
+    Um valor novo tem de ser entregue a um repositório, que é onde essa
+    concorrência é de fato resolvida.
     """
 
     id: JobId
     device_id: DeviceId
     status: JobStatus = JobStatus.PENDING
     scopes: tuple[JobScope, ...] = ()
-    """The folders to walk, already normalised, `()` for the whole device.
+    """As pastas a percorrer, já normalizadas; `()` para o dispositivo inteiro.
 
-    Normalised by `normalize_scopes()` before it reaches here, so nothing
-    downstream has to cope with one scope nested inside another (RFC-029
-    section 5.2).
+    Normalizadas por `normalize_scopes()` antes de chegarem aqui, para que
+    nada mais adiante tenha de lidar com um escopo aninhado em outro (RFC-029
+    §5.2).
     """
 
     created_at: datetime.datetime | None = None
     started_at: datetime.datetime | None = None
-    """When this job was *first* claimed, not when it was last claimed.
+    """Quando este job foi pego *pela primeira vez*, e não da última.
 
-    Preserved across a resume on purpose. `created_at -> started_at` is
-    the queue latency RFC-029 section 6.1 says to measure, and rewriting
-    it every time a worker picks the job back up would make a job that
-    crashed twice look like it had started promptly.
+    Preservado numa retomada, de propósito. `created_at -> started_at` é a
+    latência da fila que o RFC-029 §6.1 manda medir, e reescrevê-lo toda vez
+    que um worker retoma o job faria um job que caiu duas vezes parecer ter
+    começado logo.
     """
 
     finished_at: datetime.datetime | None = None
     progress: IndexingProgress = IndexingProgress()
     last_processed_relative_path: ImagePath | None = None
-    """The checkpoint: every file up to and including this one is durable.
+    """O checkpoint: todo arquivo até este, inclusive, está durável.
 
-    **Not "the last path seen".** The batch coordinator holds decided
-    files in a pending buffer that survives across windows, so a later
-    path can be decided while an earlier one is still unwritten; a
-    checkpoint taken from the last path seen would step over that buffer,
-    and a crash would lose exactly the images in it. See
-    `IndexOrUpdateImagesUseCase.execute()`.
+    **Não é "o último caminho visto".** O coordenador de lotes guarda os
+    arquivos decididos num buffer pendente que sobrevive entre janelas, então
+    um caminho posterior pode estar decidido enquanto um anterior ainda não
+    foi escrito; um checkpoint tirado do último caminho visto passaria por
+    cima desse buffer, e uma queda perderia exatamente as imagens que estão
+    nele. Ver `IndexOrUpdateImagesUseCase.execute()`.
 
-    Device-relative, like everything else persisted since RFC-027. An
-    absolute checkpoint would stop being valid the moment the disk came
-    back under another drive letter.
+    Relativo ao dispositivo, como tudo o que é persistido desde o RFC-027. Um
+    checkpoint absoluto deixaria de valer no momento em que o disco voltasse
+    com outra letra de unidade.
     """
 
     error_message: str | None = None
     last_heartbeat_at: datetime.datetime | None = None
     cancel_requested: bool = False
-    """Set by the route; read by the worker between batches.
+    """Ligado pela rota; lido pelo worker entre os lotes.
 
-    A flag rather than a `cancelling` state, because the worker is the
-    only owner of the transitions out of `running`. A state would put the
-    route and the worker in a race for the `status` column, and would
-    release the partial unique index before the worker had actually let
-    go of the disk (RFC-029 section 8; the draft schema in section 5.1
-    omitted this column entirely).
+    Uma flag, e não um estado `cancelling`, porque o worker é o único dono
+    das transições que saem de `running`. Um estado poria a rota e o worker
+    numa corrida pela coluna `status`, e liberaria o índice único parcial
+    antes de o worker ter de fato soltado o disco (RFC-029 §8; o schema do
+    rascunho, em §5.1, omitia esta coluna por completo).
     """
 
     attempts: int = 0
-    """How many times a worker was given this job and did not finish it.
+    """Quantas vezes um worker recebeu este job e não o terminou.
 
-    Incremented only by `expire()`. A clean stop does not count, and
-    neither does the first claim: the number answers "how many times has
-    something killed a worker holding this job", and it exists to stop the
-    one case that would otherwise loop for ever -- a file whose decoder
-    takes the whole process down, killing every worker that resumes onto
-    it.
+    Incrementado só por `expire()`. Uma parada limpa não conta, e a primeira
+    pegada também não: o número responde a "quantas vezes algo matou um worker
+    que segurava este job", e existe para interromper o único caso que, fora
+    isso, rodaria em laço para sempre -- um arquivo cujo decodificador derruba
+    o processo inteiro, matando todo worker que retoma sobre ele.
     """
 
     def __eq__(self, other: object) -> bool:
@@ -196,13 +192,12 @@ class IndexingJob:
         return hash(self.id)
 
     def claim(self, now: datetime.datetime) -> IndexingJob:
-        """Take the job out of the queue and start running it.
+        """Tira o job da fila e começa a rodá-lo.
 
-        `started_at` is written only the first time. The heartbeat is
-        stamped immediately rather than at the first batch, because a
-        worker that claimed a job and then spent two minutes walking a
-        cold disk must not look abandoned before it has emitted anything
-        (RFC-029 section 9.1).
+        `started_at` só é escrito da primeira vez. O heartbeat é carimbado na
+        hora, e não no primeiro lote, porque um worker que pegou um job e
+        depois passou dois minutos percorrendo um disco frio não pode parecer
+        abandonado antes de ter emitido qualquer coisa (RFC-029 §9.1).
         """
         self._require(JobEvent.CLAIM)
         return replace(
@@ -213,25 +208,24 @@ class IndexingJob:
         )
 
     def complete(self, now: datetime.datetime) -> IndexingJob:
-        """Finish successfully.
+        """Termina com sucesso.
 
-        The caller is required to have confirmed that the device is still
-        mounted before asking for this (RFC-029 section 15). The entity
-        cannot check it -- the Domain does not know what a mount point is
-        -- which is why the rule is stated on the executor and tested
-        there.
+        O chamador tem de ter confirmado que o dispositivo continua montado
+        antes de pedir isto (RFC-029 §15). A entidade não consegue checar --
+        o Domain não sabe o que é um ponto de montagem --, e é por isso que a
+        regra é enunciada no executor e testada lá.
         """
         self._require(JobEvent.COMPLETE)
         return replace(self, status=JobStatus.COMPLETED, finished_at=now)
 
     def fail(self, now: datetime.datetime, message: str) -> IndexingJob:
-        """Finish unsuccessfully, recording why.
+        """Termina sem sucesso, registrando por quê.
 
-        Does not touch `attempts`. A job that failed for a reason a retry
-        would hit again -- an unplugged disk, a scope that is gone -- has
-        not consumed a life, because nothing is going to retry it:
-        RFC-029 section 14 keeps `failed` out of automatic resumption, and
-        the user recreates it.
+        Não toca em `attempts`. Um job que falhou por uma razão em que uma
+        nova tentativa esbarraria de novo -- um disco desplugado, um escopo
+        que sumiu -- não consumiu uma vida, porque nada vai tentá-lo de novo: o
+        RFC-029 §14 deixa `failed` fora da retomada automática, e o usuário o
+        recria.
         """
         self._require(JobEvent.FAIL)
         return replace(
@@ -242,63 +236,60 @@ class IndexingJob:
         )
 
     def cancel(self, now: datetime.datetime) -> IndexingJob:
-        """Stop at the user's request, keeping everything already indexed.
+        """Para a pedido do usuário, mantendo tudo o que já foi indexado.
 
-        Legal from `pending`, where the route performs it directly because
-        no worker holds the job, and from `running`, where only the worker
-        performs it and only once the batch in flight has finished.
-        Cancelling does not undo: a job cancelled at 60% leaves 60% of the
-        scope searchable, and the next job over the same scope skips it
-        through the incremental decision (RFC-029 section 8).
+        Legal a partir de `pending`, onde a rota o faz direto porque nenhum
+        worker segura o job, e de `running`, onde só o worker o faz, e só
+        depois que o lote em andamento terminou. Cancelar não desfaz: um job
+        cancelado em 60% deixa 60% do escopo buscável, e o próximo job sobre o
+        mesmo escopo pula essa parte pela decisão incremental (RFC-029 §8).
         """
         self._require(JobEvent.CANCEL)
         return replace(self, status=JobStatus.CANCELLED, finished_at=now)
 
     def release(self, now: datetime.datetime) -> IndexingJob:
-        """Hand the job back to the queue after a *clean* stop.
+        """Devolve o job à fila depois de uma parada *limpa*.
 
-        `Ctrl+C` on the executor arrives as `KeyboardInterrupt`, which is
-        an operator stopping a process rather than a crash. The job goes
-        back to `pending` with its checkpoint intact and **no attempt
-        consumed**: counting it would mean that restarting the worker
-        three times for ordinary reasons -- a reboot, a settings change --
-        permanently failed a job that never went wrong.
+        O `Ctrl+C` no executor chega como `KeyboardInterrupt`, que é um
+        operador parando um processo, e não uma queda. O job volta para
+        `pending` com o checkpoint intacto e **nenhuma tentativa consumida**:
+        contá-la significaria que reiniciar o worker três vezes por razões
+        comuns -- um reboot, uma mudança de configuração -- faria falhar para
+        sempre um job que nunca deu errado.
 
-        `now` is accepted and deliberately not written anywhere; the
-        heartbeat is cleared instead, because a released job has nobody
-        working on it and a fresh heartbeat would claim that somebody
-        does. Keeping the parameter means every transition takes the
-        clock, so no caller has to remember which ones need it.
+        `now` é aceito e, de propósito, não é escrito em lugar nenhum; em vez
+        disso, o heartbeat é limpo, porque ninguém trabalha num job liberado e
+        um heartbeat novo afirmaria que alguém trabalha. Manter o parâmetro faz
+        toda transição receber o relógio, e nenhum chamador precisa lembrar
+        quais precisam dele.
         """
         self._require(JobEvent.RELEASE)
         del now
         return replace(self, status=JobStatus.PENDING, last_heartbeat_at=None)
 
     def expire(self, now: datetime.datetime, max_attempts: int) -> IndexingJob:
-        """Resolve a job whose worker stopped proving that it was alive.
+        """Resolve um job cujo worker parou de provar que estava vivo.
 
-        Three outcomes, and the branching is here rather than in the
-        reaper because it is a rule about what a job *is* rather than
-        about how one is found:
+        Três desfechos, e a ramificação está aqui, e não no reaper, porque é
+        uma regra sobre o que um job *é*, e não sobre como ele é encontrado:
 
-        * a job somebody had already asked to cancel becomes `cancelled`.
-          The worker is gone, so there is nothing left to stop, and the
-          user's answer is still the right one -- reporting `failed` would
-          blame the system for a stop the user chose;
-        * a job with attempts left goes back to `pending`, keeping its
-          checkpoint, so that a worker resumes rather than restarts. This
-          is what gives the checkpoint column a consumer at all: marking
-          the job `failed` and leaving the user to recreate it mints a new
-          row with a `NULL` checkpoint, which re-reads the whole scope
-          (RFC-029 section 9.1, corrected);
-        * a job that has used up `max_attempts` becomes `failed`. Without
-          that bound, a file that crashes the process outright would kill
-          every worker that resumed onto it, for ever.
+        * um job que alguém já tinha pedido para cancelar vira `cancelled`. O
+          worker se foi, então não sobra nada para parar, e a resposta do
+          usuário continua sendo a certa -- relatar `failed` culparia o sistema
+          por uma parada que o usuário escolheu;
+        * um job com tentativas sobrando volta para `pending`, mantendo o
+          checkpoint, para que um worker retome em vez de recomeçar. É isso
+          que dá à coluna do checkpoint um consumidor: marcar o job `failed` e
+          deixar o usuário recriá-lo cunha uma linha nova com checkpoint
+          `NULL`, que relê o escopo inteiro (RFC-029 §9.1, corrigido);
+        * um job que esgotou `max_attempts` vira `failed`. Sem esse limite, um
+          arquivo que derruba o processo de vez mataria, para sempre, todo
+          worker que retomasse sobre ele.
 
-        The device stays reserved in the `pending` case, and that is the
-        point: the partial unique index covers `pending` too, so an
-        interrupted job at 60% keeps its place instead of losing the disk
-        to whatever was requested next.
+        O dispositivo continua reservado no caso `pending`, e é esse o ponto:
+        o índice único parcial cobre `pending` também, então um job
+        interrompido em 60% mantém o seu lugar, em vez de perder o disco para
+        o que quer que tenha sido pedido em seguida.
         """
         self._require(JobEvent.EXPIRE)
         if self.cancel_requested:
@@ -324,15 +315,15 @@ class IndexingJob:
         )
 
     def request_cancel(self) -> IndexingJob:
-        """Record that the user wants this job stopped.
+        """Registra que o usuário quer este job parado.
 
-        Refuses on a job that has already finished. RFC-029 section 8 is
-        explicit that this is an error rather than a silent no-op: a
-        caller asking to cancel a `completed` job holds a wrong belief
-        about the system, and a 202 would confirm it.
+        Recusa num job que já terminou. O RFC-029 §8 é explícito: isso é um
+        erro, e não uma operação nula silenciosa -- um chamador que pede para
+        cancelar um job `completed` tem uma crença errada sobre o sistema, e
+        um 202 a confirmaria.
 
-        Takes no clock, because it is not a transition -- the status does
-        not move, and the worker is what eventually moves it.
+        Não recebe relógio, porque não é uma transição -- o status não se
+        move, e quem acaba por movê-lo é o worker.
         """
         self._require(JobEvent.REQUEST_CANCEL)
         return replace(self, cancel_requested=True)
@@ -343,20 +334,19 @@ class IndexingJob:
         checkpoint: ImagePath | None,
         heartbeat_at: datetime.datetime,
     ) -> IndexingJob:
-        """Record how far the run has got, and that it is still alive.
+        """Registra até onde a execução chegou, e que ela continua viva.
 
-        Not a transition: the status does not move and no legality check
-        applies. The heartbeat travels with the counters because the two
-        are written together, which is what RFC-029 section 9.1 means by
-        "no additional round trip" -- but *when* that write happens is a
-        time policy owned by the Infrastructure observer, not by this
-        method.
+        Não é uma transição: o status não se move e nenhuma checagem de
+        legalidade se aplica. O heartbeat viaja com os contadores porque os
+        dois são escritos juntos, que é o que o RFC-029 §9.1 quer dizer com
+        "no additional round trip" -- mas *quando* essa escrita acontece é uma
+        política de tempo do observer da Infrastructure, e não deste método.
 
-        The checkpoint is passed in rather than derived. Only the batch
-        coordinator knows which files are durable, and `None` means it
-        cannot name one yet -- everything decided so far is still in its
-        pending buffer -- in which case the previous checkpoint stands
-        rather than being cleared.
+        O checkpoint é passado, e não derivado. Só o coordenador de lotes sabe
+        quais arquivos estão duráveis, e `None` quer dizer que ele ainda não
+        consegue nomear um -- tudo o que foi decidido até aqui ainda está no
+        buffer pendente dele --, e nesse caso o checkpoint anterior fica, em
+        vez de ser limpo.
         """
         return replace(
             self,
@@ -370,7 +360,7 @@ class IndexingJob:
         )
 
     def _require(self, event: JobEvent) -> None:
-        """Refuse `event` unless the current status permits it."""
+        """Recusa `event`, a menos que o status atual o permita."""
         if self.status not in LEGAL_TRANSITIONS[event]:
             raise IllegalJobTransitionError(
                 f"Cannot {event.value} a job that is {self.status.value}."

@@ -1,23 +1,23 @@
-"""Every photo of a place, by capture date, with no query (RFC-044).
+"""Todas as fotos de um lugar, por data de captura, sem consulta (RFC-044).
 
-The use case behind *"Ver todas as fotos daqui, por data"*: the client of a
-professional photographs a building site until it is finished -- months of
-photos of one place -- and a search for *"construção"* ranks the finished
-building by its likeness to a word it no longer resembles. The question is
-"what exists here, in time", and it has no text to encode.
+O caso de uso por trás de *"Ver todas as fotos daqui, por data"*: o cliente de
+um profissional fotografa uma obra até ela ficar pronta -- meses de fotos de um
+lugar --, e uma busca por *"construção"* ranqueia o prédio pronto pela
+semelhança com uma palavra com a qual ele já não se parece. A pergunta é "o que
+existe aqui, no tempo", e não tem texto para codificar.
 
-**Not a search, and not in the search's module** (RFC-044 section 5.4). No
-model, no vector and no score: `SearchHit.similarity` is mandatory on purpose
-(RFC-025 section 4.1), and a listing that invented one would present photos
-as compared. What it shares with the search is the *request policy* -- the
-page size, the radius floor and the two counts of excluded photos -- and it
-imports those functions as they are, rather than a copy that could drift.
+**Não é uma busca, e não fica no módulo da busca** (RFC-044 §5.4). Sem modelo,
+sem vetor e sem score: `SearchHit.similarity` é obrigatório de propósito
+(RFC-025 §4.1), e uma listagem que inventasse um apresentaria as fotos como
+comparadas. O que ela divide com a busca é a *política da requisição* -- o
+tamanho da página, o piso do raio e as duas contagens de fotos excluídas --, e
+importa essas funções como são, em vez de uma cópia que poderia divergir.
 
-**Pages by cursor, not by offset** (section 2.1). The cursor is the id of the
-last photo of the page before, read back by its primary key: a page can
-start where the previous one stopped while a job indexes new photos, which
-an offset would shift. One more image than the page is asked for, so
-`next_after` is exact -- the map's `MAX_MAP_CELLS + 1` (RFC-032 section 7).
+**Páginas por cursor, não por offset** (§2.1). O cursor é o id da última foto
+da página anterior, lido de volta pela chave primária: uma página pode começar
+onde a anterior parou enquanto um job indexa fotos novas, o que deslocaria um
+offset. Pede-se uma imagem a mais que a página, para que `next_after` seja
+exato -- o `MAX_MAP_CELLS + 1` do mapa (RFC-032 §7).
 """
 
 from __future__ import annotations
@@ -41,14 +41,14 @@ from app.domain.value_objects.search_filters import SearchFilters
 
 @dataclass(frozen=True)
 class ListingOverview:
-    """The header of a list: its summary and what the filters left out.
+    """O cabeçalho de uma lista: o seu resumo e o que os filtros deixaram de fora.
 
-    `excluded_unknown_date` and `excluded_unknown_position` are the search's
-    numbers, by the search's functions: `None` with no date range, or no
-    circle, and then not queried at all (RFC-028 section 8.2). Under a date
-    range the undated are out of the list and counted here; without one they
-    are *in* the list, at its end, and `listing.undated` says how many
-    (RFC-044 section 3.2).
+    `excluded_unknown_date` e `excluded_unknown_position` são os números da
+    busca, pelas funções da busca: `None` sem intervalo de datas, ou sem
+    círculo, e aí nem são consultados (RFC-028 §8.2). Com um intervalo de
+    datas, as fotos sem data ficam fora da lista e são contadas aqui; sem ele,
+    elas estão *na* lista, no fim, e `listing.undated` diz quantas são
+    (RFC-044 §3.2).
     """
 
     listing: ListingSummary
@@ -58,12 +58,12 @@ class ListingOverview:
 
 @dataclass(frozen=True)
 class ImageListing:
-    """One page of a listing.
+    """Uma página de uma listagem.
 
-    `next_after` is the id to send as `after` for the next page, and `None`
-    exactly when the list is over. `overview` is the first page's, and
-    `None` on every page after it: the screen draws the header once, and a
-    later page does not pay again for a number it already has.
+    `next_after` é o id a mandar como `after` para a próxima página, e é `None`
+    exatamente quando a lista acabou. `overview` é o da primeira página, e
+    `None` em todas as seguintes: a tela desenha o cabeçalho uma vez, e uma
+    página posterior não paga de novo por um número que já tem.
     """
 
     order: ListingOrder
@@ -74,13 +74,13 @@ class ImageListing:
 
 
 class BrowseImagesUseCase:
-    """List the photos the filters allow, by capture date, a page at a time.
+    """Lista as fotos que os filtros permitem, por data de captura, página a página.
 
-    `default_limit` and `min_radius_m` are injected by the composition root,
-    from `settings.top_k_results` and `settings.min_radius_m`, as for
-    `FindSimilarImagesUseCase` -- the Application layer does not read
-    configuration. **No embedding model**: the listing never encodes
-    anything, and its provider must not compose one (section 5.4).
+    `default_limit` e `min_radius_m` são injetados pela raiz de composição, a
+    partir de `settings.top_k_results` e `settings.min_radius_m`, como em
+    `FindSimilarImagesUseCase` -- a camada de aplicação não lê configuração.
+    **Sem modelo de embedding**: a listagem nunca codifica nada, e o seu
+    provider não deve compor um (§5.4).
     """
 
     def __init__(
@@ -102,23 +102,24 @@ class BrowseImagesUseCase:
         limit: int | None = None,
         after: ImageId | None = None,
     ) -> ImageListing:
-        """One page of the list, after `after` when there is one.
+        """Uma página da lista, depois de `after` quando ele vem.
 
-        1. The page size and the circle are checked first, by the search's
-           `validated_request()`: an unusable request costs no read.
-        2. `after` is read by its primary key. No row is
-           `ImageNotFoundError` -- the last photo of the page before left the
-           index -- which the route answers with a 404 and the screen with
-           *"A lista mudou desde a última página"*. The photo need not
-           satisfy the filters: it is a position in the order.
-        3. `limit + 1` images are asked for; the extra one, when it comes,
-           only says that the list goes on.
-        4. Without `after`, the overview: the repository's summary and the
-           search's two counts.
+        1. O tamanho da página e o círculo são verificados primeiro, pelo
+           `validated_request()` da busca: uma requisição inutilizável não
+           custa leitura nenhuma.
+        2. `after` é lido pela chave primária. Sem linha, é
+           `ImageNotFoundError` -- a última foto da página anterior saiu do
+           índice --, que a rota responde com um 404 e a tela com *"A lista
+           mudou desde a última página"*. A foto não precisa satisfazer os
+           filtros: ela é uma posição na ordem.
+        3. Pedem-se `limit + 1` imagens; a extra, quando vem, só diz que a
+           lista continua.
+        4. Sem `after`, o overview: o resumo do repositório e as duas
+           contagens da busca.
 
-        **Any filters are accepted, none included.** The whole collection by
-        date is a valid question that costs the scan of the whole map; the
-        interface only asks it with a circle (section 5.1).
+        **Quaisquer filtros são aceitos, inclusive nenhum.** A coleção inteira
+        por data é uma pergunta válida, que custa a varredura do mapa inteiro;
+        a interface só a faz com um círculo (§5.1).
         """
         effective_limit = validated_request(
             limit, filters, self._default_limit, self._min_radius_m

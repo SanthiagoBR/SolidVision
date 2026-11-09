@@ -1,10 +1,10 @@
-"""Rendering a thumbnail and keeping it, composed once (RFC-030 section 7).
+"""Gerar uma thumbnail e guardá-la, composto uma vez só (RFC-030 §7).
 
-Two ports and a size, and two callers that need all three together: the
-indexing pipeline, which renders a thumbnail for every image it embeds, and
-the thumbnail backfill, which renders one for every image indexed before
-RFC-030. Composing them here once keeps the two callers from disagreeing
-about which size a thumbnail is, or where it goes.
+Duas portas e um tamanho, e dois chamadores que precisam dos três juntos: o
+pipeline de indexação, que gera uma thumbnail para cada imagem que passa pelo
+embedding, e o backfill de thumbnails, que gera uma para cada imagem indexada
+antes do RFC-030. Compô-los aqui uma vez impede os dois chamadores de
+discordarem sobre o tamanho de uma thumbnail, ou sobre para onde ela vai.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from app.domain.services.thumbnail_store_port import ThumbnailStorePort
 
 
 class ThumbnailWriter:
-    """Render `image` at `max_edge` and store the result under its id."""
+    """Gera `image` em `max_edge` e guarda o resultado sob o id dela."""
 
     def __init__(
         self,
@@ -23,12 +23,12 @@ class ThumbnailWriter:
         store: ThumbnailStorePort,
         max_edge: int,
     ) -> None:
-        """Compose the writer; `max_edge` is injected, never read from settings.
+        """Compõe o writer; `max_edge` é injetado, nunca lido da configuração.
 
-        The Application layer must not import `Settings`
-        (`test_application_architecture.py`), so the composition root
-        passes `settings.thumbnail_max_edge` in -- the arrangement
-        `IndexOrUpdateImagesUseCase` uses for `batch_size`.
+        A camada Application não pode importar `Settings`
+        (`test_application_architecture.py`), então a composition root passa
+        `settings.thumbnail_max_edge` -- o arranjo que o
+        `IndexOrUpdateImagesUseCase` usa para o `batch_size`.
         """
         if max_edge < 1:
             raise ValueError(f"max_edge must be at least 1, got {max_edge}")
@@ -37,17 +37,16 @@ class ThumbnailWriter:
         self._max_edge = max_edge
 
     def write(self, image: Image, content: bytes | None = None) -> str:
-        """Render and store one thumbnail, returning the stored location.
+        """Gera e guarda uma thumbnail, devolvendo o local guardado.
 
-        `content` is the file's bytes when the caller already has them
-        (RFC-045 section 5.3), handed to the generator so that it decodes
-        them instead of reading the file again; the backfill has none and
-        passes nothing.
+        `content` são os bytes do arquivo quando o chamador já os tem (RFC-045
+        §5.3), entregues ao gerador para que ele os decodifique em vez de ler
+        o arquivo de novo; o backfill não os tem e não passa nada.
 
-        Errors from either port propagate. Whether a failed thumbnail
-        matters is the caller's decision, and both callers decided it does
-        not stop anything: the pipeline still persists the embedding, the
-        backfill moves on to the next file.
+        Erros de qualquer das duas portas se propagam. Se uma thumbnail que
+        falhou importa é decisão do chamador, e os dois decidiram que ela não
+        interrompe nada: o pipeline persiste o embedding mesmo assim, e o
+        backfill passa para o próximo arquivo.
         """
         return self._store.save(
             image.id, self._generator.generate(image, self._max_edge, content)

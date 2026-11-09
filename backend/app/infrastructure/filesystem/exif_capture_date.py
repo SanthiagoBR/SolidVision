@@ -1,41 +1,41 @@
-"""Read when and where a photograph was taken, from inside the file (RFC-028, RFC-032).
+"""Lê quando e onde uma foto foi tirada, de dentro do arquivo (RFC-028, RFC-032).
 
     DateTimeOriginal   ->  CaptureSource.EXIF_ORIGINAL
     DateTimeDigitized  ->  CaptureSource.EXIF_DIGITIZED
-    nothing usable     ->  CaptureSource.UNKNOWN, with no date
+    nada utilizável    ->  CaptureSource.UNKNOWN, sem data
 
     GPS IFD (0x8825)   ->  PositionSource.EXIF_GPS
-    nothing usable     ->  PositionSource.UNKNOWN, with no position
+    nada utilizável    ->  PositionSource.UNKNOWN, sem posição
 
-**One open, two facts** (RFC-032 section 4.2). The scan already opens every
-candidate to read its date, and opening it again for the GPS would double the
-measured cost -- 0.39 ms becoming ~0.8 ms a file, ~40 s becoming ~80 s per
-100,000 files -- to reread the same header bytes. `read_exif_facts()` opens
-once and returns both; `read_capture_date()` remains as the date's reader.
+**Uma abertura, dois fatos** (RFC-032 §4.2). O scan já abre cada candidato para
+ler a sua data, e abri-lo de novo para o GPS dobraria o custo medido -- 0,39 ms
+virando ~0,8 ms por arquivo, ~40 s virando ~80 s a cada 100.000 arquivos --
+para reler os mesmos bytes do cabeçalho. `read_exif_facts()` abre uma vez e
+devolve os dois; `read_capture_date()` continua como o leitor da data.
 
-**The two facts are independent; neither is derived from the other.** Each
-keeps the three outcomes RFC-028 section 4.3 established -- a value, `unknown`,
-or `None` for "not examined" -- *per fact*. A file that cannot be read is not
-examined for either; a file read without GPS and with a date is `unknown` for
-its position and dated for its date; a GPS block too damaged to parse makes the
-position `unknown` and leaves the date alone.
+**Os dois fatos são independentes; nenhum deriva do outro.** Cada um mantém os
+três desfechos que o RFC-028 §4.3 estabeleceu -- um valor, `unknown`, ou `None`
+para "não examinado" -- *por fato*. Um arquivo que não pode ser lido não é
+examinado para nenhum dos dois; um arquivo lido sem GPS e com data é `unknown`
+na posição e datado na data; um bloco GPS danificado demais para ser lido deixa
+a posição `unknown` e não mexe na data.
 
-**The filesystem is not consulted, and neither is EXIF `DateTime`.**
-`st_mtime` is the date of the last copy for a collection that lives by being
-copied between disks (RFC-028 section 2.1), and tag 0x0132 `DateTime` is
-what editing software stamps on save -- the same modification time wearing
-an EXIF name. **And there is no XMP fallback for the position**: RFC-032
-section 2.3 found the `drone-dji` XMP packet in all 40 real DJI files it read,
-and no latitude or longitude in any of them.
+**O sistema de arquivos não é consultado, nem o `DateTime` do EXIF.**
+`st_mtime` é a data da última cópia, numa coleção que vive de ser copiada entre
+discos (RFC-028 §2.1), e a tag 0x0132 `DateTime` é o que o software de edição
+carimba ao salvar -- a mesma data de modificação com um nome de EXIF. **E não
+há recurso ao XMP para a posição**: o RFC-032 §2.3 achou o pacote XMP
+`drone-dji` em todos os 40 arquivos DJI reais que leu, e nenhuma latitude ou
+longitude em nenhum deles.
 
-A unit of its own, rather than lines inside the discovery loop, because
-nearly every line in it exists to survive something real files do: a tag
-that lives one IFD away from where it looks like it lives, a placeholder of
-zeros, NUL padding, a hemisphere letter that went missing, a truncated header,
-a file that vanished between being listed and being opened.
+Uma unidade própria, e não linhas dentro do laço da descoberta, porque quase
+toda linha dela existe para sobreviver a algo que arquivos reais fazem: uma tag
+que mora um IFD ao lado de onde parece morar, um marcador de zeros, preenchimento
+com NUL, uma letra de hemisfério que sumiu, um cabeçalho truncado, um arquivo que
+desapareceu entre ser listado e ser aberto.
 
-Read-only. Nothing here writes EXIF, or anything else, to a file in the
-collection (RFC-028 section 10, RFC-032 section 10).
+Somente leitura. Nada aqui escreve EXIF, nem qualquer outra coisa, num arquivo
+da coleção (RFC-028 §10, RFC-032 §10).
 """
 
 from __future__ import annotations
@@ -61,57 +61,56 @@ from app.domain.value_objects.position import (
 from app.domain.value_objects.position_source import PositionSource
 
 EXIF_IFD_POINTER = 0x8769
-"""Tag in IFD0 pointing at the Exif sub-IFD.
+"""Tag do IFD0 que aponta para o sub-IFD Exif.
 
-`DateTimeOriginal` and `DateTimeDigitized` live in that sub-IFD, not in
-IFD0. `Image.getexif()[0x9003]` therefore returns nothing for almost every
-real photograph, and code written that way passes against hand-built
-fixtures that put the tag in the wrong place and returns `unknown` for an
-entire camera roll.
+`DateTimeOriginal` e `DateTimeDigitized` moram nesse sub-IFD, não no IFD0.
+`Image.getexif()[0x9003]` por isso não devolve nada para quase toda fotografia
+real, e um código escrito assim passa contra fixtures feitas à mão que põem a
+tag no lugar errado e devolve `unknown` para um rolo de câmera inteiro.
 """
 
 GPS_IFD_POINTER = 0x8825
-"""Tag in IFD0 pointing at the GPS IFD -- not the Exif sub-IFD, one IFD over.
+"""Tag do IFD0 que aponta para o IFD de GPS -- não o sub-IFD Exif, um IFD ao lado.
 
-The same trap as `EXIF_IFD_POINTER`, next door (RFC-032 section 4.1): the
-coordinates are neither in IFD0 nor in the sub-IFD the date comes from, and
-a reader that looked in either would pass every test built the same wrong
-way and return `unknown` for 95% of the collection.
+A mesma armadilha de `EXIF_IFD_POINTER`, na porta ao lado (RFC-032 §4.1): as
+coordenadas não estão nem no IFD0 nem no sub-IFD de onde vem a data, e um leitor
+que procurasse em qualquer dos dois passaria em todo teste construído do mesmo
+jeito errado e devolveria `unknown` para 95% da coleção.
 """
 
 GPS_LATITUDE_REF = 0x0001
 GPS_LATITUDE = 0x0002
 GPS_LONGITUDE_REF = 0x0003
 GPS_LONGITUDE = 0x0004
-"""A coordinate is **four** values, not two.
+"""Uma coordenada são **quatro** valores, não dois.
 
-`GPSLatitude` and `GPSLongitude` are degree/minute/second triples of
-unsigned rationals; the *sign* lives in `GPSLatitudeRef` (`N`/`S`) and
-`GPSLongitudeRef` (`E`/`W`). Dropping the reference raises no error -- it
-puts a photo from Parana in the northern hemisphere.
+`GPSLatitude` e `GPSLongitude` são triplas de grau/minuto/segundo em racionais
+sem sinal; o *sinal* mora em `GPSLatitudeRef` (`N`/`S`) e `GPSLongitudeRef`
+(`E`/`W`). Descartar a referência não levanta erro nenhum -- põe uma foto do
+Paraná no hemisfério norte.
 """
 
 DATE_TIME_ORIGINAL = 0x9003
 DATE_TIME_DIGITIZED = 0x9004
 
 EXIF_DATETIME_FORMAT = "%Y:%m:%d %H:%M:%S"
-"""EXIF 2.3's `YYYY:MM:DD HH:MM:SS` -- colons in the date too, and no zone."""
+"""O `YYYY:MM:DD HH:MM:SS` do EXIF 2.3 -- dois-pontos também na data, e sem fuso."""
 
 NULL_ISLAND_TOLERANCE_DEGREES = 1e-4
-"""How close to `0, 0` counts as the "no satellite fix" placeholder: ~11 m.
+"""Quão perto de `0, 0` conta como o marcador de "sem fix de satélite": ~11 m.
 
-Not exact equality, because a partial fix writes zeros with noise in them
-(RFC-032 section 4.3). The point it guards is real -- the Gulf of Guinea,
-"Null Island", where coordinate errors pile up in databases worldwide -- and
-"every photo without a fix, in one spot in the ocean" is the kind of answer
-that looks right until someone clicks on it.
+Não igualdade exata, porque um fix parcial escreve zeros com ruído (RFC-032
+§4.3). O ponto de que ele protege é real -- o Golfo da Guiné, a "Null Island",
+onde erros de coordenada se acumulam em bancos de dados do mundo inteiro --, e
+"toda foto sem fix, num só ponto do oceano" é o tipo de resposta que parece
+certa até alguém clicar nela.
 """
 
 _CHAIN: tuple[tuple[int, CaptureSource], ...] = (
     (DATE_TIME_ORIGINAL, CaptureSource.EXIF_ORIGINAL),
     (DATE_TIME_DIGITIZED, CaptureSource.EXIF_DIGITIZED),
 )
-"""The fallback chain, strongest claim first. Deliberately two links long."""
+"""A cadeia de recurso, a afirmação mais forte primeiro. Dois elos, de propósito."""
 
 _HEMISPHERE_SIGNS: tuple[Mapping[str, int], Mapping[str, int]] = (
     {"N": 1, "S": -1},
@@ -121,11 +120,11 @@ _HEMISPHERE_SIGNS: tuple[Mapping[str, int], Mapping[str, int]] = (
 
 @dataclass(frozen=True)
 class ExifFacts:
-    """The two facts one header read yields, each examined or not on its own.
+    """Os dois fatos que uma leitura de cabeçalho rende, cada um examinado ou não.
 
-    `None` in a field means *not examined* -- switched off, or the file
-    could not be read -- exactly as `DiscoveredImageFile` uses it. A value
-    means examined, which includes the `unknown` outcome.
+    `None` num campo significa *não examinado* -- desligado, ou o arquivo não
+    pôde ser lido --, exatamente como `DiscoveredImageFile` o usa. Um valor
+    significa examinado, o que inclui o desfecho `unknown`.
     """
 
     capture_date: CaptureDate | None
@@ -135,33 +134,33 @@ class ExifFacts:
 def read_exif_facts(
     path: Path, capture_date: bool = True, position: bool = True
 ) -> ExifFacts:
-    """Open `path` once and read the requested facts from its header.
+    """Abre `path` uma vez e lê do seu cabeçalho os fatos pedidos.
 
-    Per fact, three outcomes, and the difference between the last two is
-    the point:
+    Por fato, três desfechos, e a diferença entre os dois últimos é o que
+    importa:
 
-    - a value with an EXIF source;
-    - `unknown` when the file was read and holds nothing usable -- no EXIF
-      at all (normal for PNG and BMP, and not logged as anything), a
-      placeholder, garbage in a tag, half a coordinate, or bytes Pillow
-      cannot parse. Reading the same bytes again gives the same answer, so
-      the row is marked examined and a later scan leaves it alone;
-    - `None` when the file could not be *read* -- deleted since it was
-      listed, locked, a disk that went away. That is not a fact about the
-      file, and recording it as `unknown` would stop every future scan from
-      looking again. `None` leaves the row unexamined, so the next scan
-      retries.
+    - um valor com uma origem EXIF;
+    - `unknown` quando o arquivo foi lido e não guarda nada utilizável -- EXIF
+      nenhum (normal em PNG e BMP, e não registrado como nada), um marcador,
+      lixo numa tag, meia coordenada, ou bytes que o Pillow não consegue ler.
+      Ler os mesmos bytes de novo dá a mesma resposta, então a linha é marcada
+      como examinada e um scan posterior a deixa em paz;
+    - `None` quando o arquivo não pôde ser *lido* -- apagado desde que foi
+      listado, bloqueado, um disco que sumiu. Isso não é um fato sobre o
+      arquivo, e registrá-lo como `unknown` impediria todo scan futuro de olhar
+      de novo. `None` deixa a linha não examinada, e o próximo scan tenta de
+      novo.
 
-    A fact that was not requested is `None` -- not examined -- whatever the
-    file holds: switched off means "nobody looked", never "nothing there"
+    Um fato que não foi pedido é `None` -- não examinado --, seja o que for que
+    o arquivo guarde: desligado significa "ninguém olhou", nunca "não há nada"
     (`Settings.extract_capture_date`, `Settings.extract_gps`).
 
-    **Never raises** for anything a file on disk can do to it. The caller
-    is a scan over 100,000 files, and one corrupt JPEG must not end it
-    (RFC-028 section 13).
+    **Nunca levanta exceção** por nada que um arquivo em disco possa lhe fazer.
+    Quem chama é um scan sobre 100.000 arquivos, e um JPEG corrompido não pode
+    encerrá-lo (RFC-028 §13).
 
-    Only the header is read: `Image.open()` is lazy, and nothing here calls
-    `load()`, converts or resizes.
+    Só o cabeçalho é lido: `Image.open()` é preguiçoso, e nada aqui chama
+    `load()`, converte ou redimensiona.
     """
     if not capture_date and not position:
         return ExifFacts(capture_date=None, position=None)
@@ -175,19 +174,18 @@ def read_exif_facts(
         try:
             sub_ifd, gps_ifd = _exif_ifds(handle)
         except OSError as exc:
-            # Pillow reports a malformed file as a bare `OSError("...")`,
-            # with no errno; the operating system reports a failed read
-            # with one. Only the first is a property of the bytes.
+            # O Pillow relata um arquivo malformado como um `OSError("...")`
+            # puro, sem errno; o sistema operacional relata uma leitura que
+            # falhou com um. Só o primeiro é uma propriedade dos bytes.
             if exc.errno is not None:
                 return ExifFacts(capture_date=None, position=None)
             sub_ifd, gps_ifd = {}, {}
         except Exception:
-            # Wide on purpose, and only around the Pillow calls. A corrupt
-            # file surfaces as `UnidentifiedImageError`, `SyntaxError`,
-            # `struct.error`, `ValueError`, `KeyError` or
-            # `DecompressionBombError` depending on where the damage is,
-            # and every one of them means the same thing here: examined,
-            # nothing usable.
+            # Amplo de propósito, e só em volta das chamadas ao Pillow. Um
+            # arquivo corrompido aparece como `UnidentifiedImageError`,
+            # `SyntaxError`, `struct.error`, `ValueError`, `KeyError` ou
+            # `DecompressionBombError`, conforme onde está o dano, e todos
+            # significam a mesma coisa aqui: examinado, nada utilizável.
             sub_ifd, gps_ifd = {}, {}
 
     return ExifFacts(
@@ -197,35 +195,34 @@ def read_exif_facts(
 
 
 def read_capture_date(path: Path) -> CaptureDate | None:
-    """Return the capture date recorded inside `path`, or `None` if unreadable.
+    """Devolve a data de captura gravada em `path`, ou `None` se ilegível.
 
-    The date's reader, kept as RFC-028 shipped it and now a view of
-    `read_exif_facts()`, so the two can never disagree about a file. The
-    scan calls `read_exif_facts()` directly: calling this and a position
-    reader separately would open every file twice.
+    O leitor da data, mantido como o RFC-028 o entregou e agora uma visão de
+    `read_exif_facts()`, para que os dois nunca discordem sobre um arquivo. O
+    scan chama `read_exif_facts()` diretamente: chamar este e um leitor de
+    posição separadamente abriria cada arquivo duas vezes.
     """
     return read_exif_facts(path, capture_date=True, position=False).capture_date
 
 
 def _exif_ifds(handle: BinaryIO) -> tuple[Mapping[int, object], Mapping[int, object]]:
-    """Open the image lazily, once, and return its Exif sub-IFD and its GPS IFD.
+    """Abre a imagem preguiçosamente, uma vez, e devolve o sub-IFD Exif e o de GPS.
 
-    **Each IFD is read on its own**, so damage to one cannot take the other
-    fact with it: a GPS block Pillow fails to parse comes back empty --
-    `unknown` position -- while the date is still read from its own IFD
-    (RFC-032 section 4.2). A failure with an errno is the disk, not the
-    bytes, and is let through so the caller can answer "not examined".
+    **Cada IFD é lido por conta própria**, para que o dano em um não leve o
+    outro fato junto: um bloco GPS que o Pillow não consegue ler volta vazio --
+    posição `unknown` -- enquanto a data ainda é lida do seu próprio IFD
+    (RFC-032 §4.2). Uma falha com errno é do disco, não dos bytes, e é deixada
+    passar para que quem chama possa responder "não examinado".
 
-    Warnings are silenced for the duration, because every one Pillow raises
-    here is already reflected in the return value. "Corrupt EXIF data"
-    comes back as an empty or partial IFD, which resolves to `unknown`;
-    `DecompressionBombWarning` fires for large aerial frames that nothing
-    here will decode.
+    Os avisos ficam silenciados durante a leitura, porque cada um que o Pillow
+    levanta aqui já está refletido no valor devolvido. "Corrupt EXIF data" volta
+    como um IFD vazio ou parcial, que vira `unknown`; `DecompressionBombWarning`
+    dispara para quadros aéreos grandes que nada aqui vai decodificar.
 
-    Beyond twice Pillow's pixel limit `open()` raises instead of warning,
-    and such a file comes back `unknown` for both facts even if it carries
-    EXIF -- a declared limitation for very large orthomosaics, which the
-    backfill's `--force` can revisit.
+    Além do dobro do limite de pixels do Pillow, `open()` levanta exceção em vez
+    de avisar, e um arquivo assim volta `unknown` para os dois fatos mesmo que
+    traga EXIF -- uma limitação declarada para ortomosaicos muito grandes, que o
+    `--force` do backfill pode revisitar.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -235,7 +232,7 @@ def _exif_ifds(handle: BinaryIO) -> tuple[Mapping[int, object], Mapping[int, obj
 
 
 def _ifd(exif: Image.Exif, pointer: int) -> Mapping[int, object]:
-    """One IFD as a plain dict, or empty if it is absent or will not parse."""
+    """Um IFD como dict simples, ou vazio se estiver ausente ou não for legível."""
     try:
         return dict(exif.get_ifd(pointer))
     except OSError as exc:
@@ -247,7 +244,7 @@ def _ifd(exif: Image.Exif, pointer: int) -> Mapping[int, object]:
 
 
 def _capture_date(sub_ifd: Mapping[int, object]) -> CaptureDate:
-    """Walk the RFC-028 chain over the Exif sub-IFD; `unknown` at its end."""
+    """Percorre a cadeia do RFC-028 sobre o sub-IFD Exif; `unknown` no fim dela."""
     for tag, source in _CHAIN:
         captured_at = parse_exif_datetime(sub_ifd.get(tag))
         if captured_at is not None:
@@ -256,20 +253,20 @@ def _capture_date(sub_ifd: Mapping[int, object]) -> CaptureDate:
 
 
 def _position(gps_ifd: Mapping[int, object]) -> PositionReading:
-    """Turn a GPS IFD into a reading, applying RFC-032 section 4.3 in order.
+    """Transforma um IFD de GPS numa leitura, aplicando o RFC-032 §4.3 em ordem.
 
-    Every refusal below is `unknown`, and each is a separate line so that
-    none of them can be "simplified" into another:
+    Toda recusa abaixo é `unknown`, e cada uma é uma linha separada para que
+    nenhuma possa ser "simplificada" dentro de outra:
 
-    - no GPS IFD, or no latitude, or no longitude -- **never half a
-      position**;
-    - a reference that is missing or is not `N`/`S` (`E`/`W`): the
-      hemisphere is never guessed;
-    - a triple that is not three numbers, a rational with a zero
-      denominator, `NaN`, or a negative component;
-    - the `0, 0` placeholder, **recognised by name** rather than left for a
-      range check to reject by accident -- `0, 0` is inside every range;
-    - anything outside `[-90, 90]` x `[-180, 180]`.
+    - sem IFD de GPS, ou sem latitude, ou sem longitude -- **nunca meia
+      posição**;
+    - uma referência ausente ou que não seja `N`/`S` (`E`/`W`): o hemisfério
+      nunca é adivinhado;
+    - uma tripla que não sejam três números, um racional com denominador zero,
+      `NaN`, ou um componente negativo;
+    - o marcador `0, 0`, **reconhecido pelo nome** em vez de deixado para uma
+      checagem de faixa rejeitar por acaso -- `0, 0` está dentro de toda faixa;
+    - qualquer coisa fora de `[-90, 90]` x `[-180, 180]`.
     """
     latitude = parse_gps_coordinate(
         gps_ifd.get(GPS_LATITUDE), gps_ifd.get(GPS_LATITUDE_REF), _HEMISPHERE_SIGNS[0]
@@ -293,11 +290,11 @@ def _position(gps_ifd: Mapping[int, object]) -> PositionReading:
 def parse_gps_coordinate(
     raw: object, reference: object, signs: Mapping[str, int]
 ) -> float | None:
-    """Decimal degrees from a DMS triple and its hemisphere letter, or `None`.
+    """Graus decimais a partir de uma tripla DMS e da letra do hemisfério, ou `None`.
 
-    `signs` maps the two legal letters for this axis to their sign. The
-    letter is ASCII in the file and Pillow may hand it back as `str` or
-    `bytes`, NUL-terminated either way.
+    `signs` mapeia as duas letras válidas deste eixo para o seu sinal. A letra
+    é ASCII no arquivo, e o Pillow pode devolvê-la como `str` ou `bytes`,
+    terminada em NUL de qualquer jeito.
     """
     sign = _hemisphere_sign(reference, signs)
     if sign is None:
@@ -315,7 +312,7 @@ def parse_gps_coordinate(
 
 
 def is_null_island(latitude: float, longitude: float) -> bool:
-    """Whether a coordinate is the receivers' "no fix" placeholder, `0, 0`."""
+    """Se uma coordenada é o marcador de "sem fix" dos receptores, `0, 0`."""
     return (
         abs(latitude) < NULL_ISLAND_TOLERANCE_DEGREES
         and abs(longitude) < NULL_ISLAND_TOLERANCE_DEGREES
@@ -334,29 +331,29 @@ def _hemisphere_sign(reference: object, signs: Mapping[str, int]) -> int | None:
 
 
 def parse_exif_datetime(raw: object) -> datetime.datetime | None:
-    """Parse one EXIF date string into a naive `datetime`, or `None`.
+    """Interpreta uma string de data EXIF como um `datetime` ingênuo, ou `None`.
 
-    `None` for anything that is not a usable date, so the caller simply
-    moves to the next link of the chain:
+    `None` para tudo o que não for uma data utilizável, e quem chama
+    simplesmente passa para o próximo elo da cadeia:
 
-    - absent, or not text at all;
-    - the placeholder `0000:00:00 00:00:00` that cameras and exporters
-      write when the clock was never set. Filtered by name, not left to
-      `strptime` to reject: swallowing the parse error would give the
-      right answer for the wrong reason, and the next person to loosen the
-      parsing would turn it into year 0 -- which `datetime` cannot even
-      represent;
-    - blanks-and-colons (`"    :  :     :  :  "`), the other placeholder
-      the EXIF specification permits for an unknown date;
-    - anything else `strptime` rejects: an impossible month, a trailing
-      zone suffix some software appends, truncated text.
+    - ausente, ou nem sequer texto;
+    - o marcador `0000:00:00 00:00:00` que câmeras e exportadores escrevem
+      quando o relógio nunca foi acertado. Filtrado pelo nome, e não deixado
+      para o `strptime` rejeitar: engolir o erro de interpretação daria a
+      resposta certa pelo motivo errado, e a próxima pessoa a afrouxar a
+      interpretação o transformaria no ano 0 -- que o `datetime` nem consegue
+      representar;
+    - brancos e dois-pontos (`"    :  :     :  :  "`), o outro marcador que a
+      especificação EXIF permite para uma data desconhecida;
+    - qualquer outra coisa que o `strptime` rejeite: um mês impossível, um
+      sufixo de fuso que algum software acrescenta, texto truncado.
 
-    NUL and whitespace are stripped first. EXIF ASCII values are
-    NUL-terminated and often padded to a fixed width, and Pillow hands
-    back the terminator as part of the string.
+    NUL e espaços em branco são removidos antes. Os valores ASCII do EXIF são
+    terminados em NUL e muitas vezes preenchidos até uma largura fixa, e o
+    Pillow devolve o terminador como parte da string.
 
-    The result is naive, always. The format has no zone, and inventing
-    one is the error RFC-028 section 5 exists to prevent.
+    O resultado é ingênuo, sempre. O formato não tem fuso, e inventar um é o
+    erro que o RFC-028 §5 existe para evitar.
     """
     if isinstance(raw, bytes):
         try:
@@ -376,6 +373,6 @@ def parse_exif_datetime(raw: object) -> datetime.datetime | None:
 
 
 def _is_placeholder(text: str) -> bool:
-    """Whether `text` is one of the EXIF spellings of "no date"."""
+    """Se `text` é uma das grafias EXIF de "sem data"."""
     significant = text.replace(":", "").replace(" ", "")
     return not significant or set(significant) == {"0"}

@@ -1,9 +1,10 @@
-"""`GET /api/v1/geocode`: a typed address, found by an online service (RFC-043).
+"""`GET /api/v1/geocode`: um endereço digitado, achado por um serviço online (RFC-043).
 
-The one route whose request leaves the machine. Loopback only, so the API is
-never a relay to the service for anybody else; 403 with the setting off, and
-not `/reveal`'s 404 -- `/capabilities` already says it is off, so hiding the
-route would hide nothing. The address is never logged (RFC-026 section 16.1).
+A única rota cuja requisição sai da máquina. Só loopback, para que a API nunca
+seja um relay para o serviço em nome de mais ninguém; 403 com a configuração
+desligada, e não o 404 do `/reveal` -- o `/capabilities` já diz que está
+desligada, então esconder a rota não esconderia nada. O endereço nunca vai para
+o log (RFC-026 §16.1).
 """
 
 from __future__ import annotations

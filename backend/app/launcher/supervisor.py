@@ -1,43 +1,43 @@
-r"""The supervisor: the order of the start, ready, restarts and the stop (RFC-036).
+r"""O supervisor: a ordem do início, o ready, os reinícios e a parada (RFC-036).
 
-One thread, one loop, a tick of 100 ms. Everything that touches the world --
-the children, the cluster, the clock, the `/health` probe, the ports, the
-events and the state file -- comes in through the constructor, so that the
-tests of section 10 run the whole machine against doubles and a clock that
-only moves when the machine sleeps.
+Uma thread, um loop, um tick de 100 ms. Tudo o que toca o mundo -- os filhos, o
+cluster, o relógio, a sonda de `/health`, as portas, os eventos e o arquivo de
+estado -- entra pelo construtor, para que os testes de §10 rodem a máquina
+inteira contra dublês e um relógio que só anda quando a máquina dorme.
 
-The start (section 5.1, with the second branch that section 16 made enter)::
+O início (§5.1, com o segundo ramo que §16 fez valer)::
 
-    the port of the API (5.4), and the API -- after the cluster on a first run
-    the cluster and the migrations, when the source is embedded, meanwhile
-    the job runner
-    ready: the first 200 of /health, asked every tick
+    a porta da API (5.4), e a API -- depois do cluster numa primeira execução
+    o cluster e as migrations, quando a fonte é embarcada, enquanto isso
+    o job runner
+    ready: o primeiro 200 do /health, perguntado a cada tick
 
-What the supervision does when something exits (6.1, 6.2)::
+O que a supervisão faz quando algo sai (6.1, 6.2)::
 
-    exit                               the supervisor
-    during the stop                    nothing: it is expected
-    78, at any moment                  no restart; `child` with the last line.
-                                       The API: stop everything, 78. The job
-                                       runner: carry on, indexing unavailable
-    3 from the API before it answered  the port was taken: another port
-    anything else                      restart, after the wait of the turn
-    the postmaster (status, every 2 s) start() again, under the same limit
+    saída                              o supervisor
+    durante a parada                   nada: é esperado
+    78, a qualquer momento             nenhum reinício; `child` com a última
+                                       linha. A API: para tudo, 78. O job
+                                       runner: segue, indexação indisponível
+    3 da API antes de ela responder    a porta foi tomada: outra porta
+    qualquer outra coisa               reinicia, depois da espera da vez
+    o postmaster (status, a cada 2 s)  start() de novo, sob o mesmo limite
 
-The stop (7.2): `stopping`; stdin closed on both children at once; each
-waited for up to its deadline, then `TerminateProcess`; the cluster last, and
-only when a launcher started it (7.3) -- or when the session is ending, which
-would end it anyway (7.5), and then through the postmaster's signal pipe,
-because no process starts during a logoff; `stopped`. A second request during
-the stop skips the deadlines. Every child's exit code goes to the log, and one
-already dead when the stop begins is said to be: at a logoff, that is how the
-log tells who Windows ended first, and whether the `release()` failed.
+A parada (7.2): `stopping`; o stdin fechado nos dois filhos ao mesmo tempo; cada
+um esperado até o seu prazo, depois `TerminateProcess`; o cluster por último, e
+só quando um launcher o iniciou (7.3) -- ou quando a sessão está terminando, o
+que o encerraria de qualquer jeito (7.5), e então pelo pipe de sinal do
+postmaster, porque nenhum processo inicia durante um logoff; `stopped`. Um
+segundo pedido durante a parada pula os prazos. O código de saída de cada filho
+vai para o log, e um já morto quando a parada começa é dito como tal: num
+logoff, é assim que o log diz quem o Windows encerrou primeiro, e se o
+`release()` falhou.
 
-**Requests to stop are honoured at safe points, never in the middle of a
-call.** They arrive as counts, polled every tick: a Ctrl+C or the end of stdin
-through the signal handler of `__main__`, a `stop` through the named event, the
-end of the session through its window. An `initdb` or a crash recovery is not
-cut in half by any of them: the stop begins when the call returns.
+**Os pedidos de parada são atendidos em pontos seguros, nunca no meio de uma
+chamada.** Chegam como contagens, consultadas a cada tick: um Ctrl+C ou o fim do
+stdin pelo signal handler de `__main__`, um `stop` pelo evento nomeado, o fim da
+sessão pela sua janela. Um `initdb` ou uma crash recovery não é cortado ao meio
+por nenhum deles: a parada começa quando a chamada retorna.
 """
 
 from __future__ import annotations
@@ -81,57 +81,58 @@ logger = get_logger(__name__)
 LOOPBACK = "127.0.0.1"
 
 UVICORN_STARTUP_FAILURE = 3
-"""`STARTUP_FAILURE`, in `uvicorn/config.py`: what uvicorn exits with when it
-cannot bind its port. Spelt here because the launcher imports no uvicorn."""
+"""`STARTUP_FAILURE`, em `uvicorn/config.py`: o código com que o uvicorn sai
+quando não consegue fazer o bind da porta. Escrito aqui porque o launcher não
+importa o uvicorn."""
 
 DATABASE = "database"
-"""The `name` of the cluster in a `child` event."""
+"""O `name` do cluster num evento `child`."""
 
 PROBE_SECONDS = 2.0
-"""How long one `/health` probe waits for its answer."""
+"""Quanto tempo uma sonda de `/health` espera pela resposta."""
 
 
 @dataclass(frozen=True)
 class Timings:
-    """Every wait of the supervisor. Choices, unless the docstring says measured."""
+    """Toda espera do supervisor. Escolhas, a menos que a docstring diga medido."""
 
     tick: float = 0.1
-    """The loop's period, and the period of the `/health` probe while starting
-    (section 5.1)."""
+    """O período do loop, e o período da sonda de `/health` durante o início
+    (§5.1)."""
     ready_deadline: float = 120.0
-    """From the creation of the API to its first 200, before `failed`.
+    """Da criação da API ao seu primeiro 200, antes de `failed`.
 
-    A database that never answers -- the Docker container of a checkout,
-    stopped -- is what it is for. The value is set against the measurement of
-    section 16, in `experiments/rfc-036-launcher/measure_launcher.py`."""
+    Um banco que nunca responde -- o contêiner Docker de um checkout, parado --
+    é para isso que ele serve. O valor é fixado contra a medição de §16, em
+    `experiments/rfc-036-launcher/measure_launcher.py`."""
     cluster_check: float = 2.0
-    """How often `status()` is asked whether there is a server (section 6.2)."""
+    """Com que frequência se pergunta ao `status()` se há um servidor (§6.2)."""
     restart_probe: float = 0.5
-    """How often a restarted API is asked whether it answers yet."""
+    """Com que frequência se pergunta a uma API reiniciada se ela já responde."""
     api_stop: float = 15.0
-    """The API's deadline in the stop: uvicorn's 5 s for the requests in
-    flight, the lifespan, and the margin (section 7.2)."""
+    """O prazo da API na parada: os 5 s do uvicorn para as requisições em
+    andamento, o lifespan e a margem (§7.2)."""
     job_runner_stop: float = 30.0
-    """The job runner's deadline in the stop: the `release()` of the job."""
+    """O prazo do job runner na parada: o `release()` do job."""
     session_api_stop: float = 3.0
     session_job_runner_stop: float = 10.0
-    """The deadlines at the end of the session (section 7.5), shorter, because
-    the system's patience is."""
+    """Os prazos no fim da sessão (§7.5), mais curtos, porque a paciência do
+    sistema também é."""
     session_cluster_stop: float = 6.0
-    """At the end of the session, each wait of the stop by the signal pipe: the
-    lock, the fast shutdown, the immediate one. With the job runner's 10 s,
-    inside the 30 s the window gives the whole stop. The fast shutdowns in the
-    server's logs took 0.1 to 2.6 s."""
+    """No fim da sessão, cada espera da parada pelo pipe de sinal: o lock, o
+    fast shutdown, o immediate. Com os 10 s do job runner, dentro dos 30 s que
+    a janela dá à parada inteira. Os fast shutdowns nos logs do servidor
+    levaram de 0,1 a 2,6 s."""
     restart_delays: tuple[float, ...] = (0.0, 2.0, 5.0, 15.0, 30.0)
-    """The wait before each restart in a row (section 6.1)."""
+    """A espera antes de cada reinício seguido (§6.1)."""
     restart_window: float = 600.0
     restart_limit: int = 5
-    """Five exits in ten minutes, and the supervisor gives up on that child as
-    if it had exited with 78."""
+    """Cinco saídas em dez minutos, e o supervisor desiste daquele filho como
+    se ele tivesse saído com 78."""
     stable_after: float = 600.0
-    """Up this long, and the next exit waits zero again."""
+    """No ar por esse tempo, e a próxima saída volta a esperar zero."""
     port_attempts: int = 3
-    """Starts of the API in a row refused by `bind`: RFC-033's number."""
+    """Inícios seguidos da API recusados pelo `bind`: o número do RFC-033."""
 
 
 class Clock(Protocol):
@@ -149,7 +150,7 @@ class SystemClock:
 
 
 class Cluster(Protocol):
-    """What the supervisor asks of the cluster: `EmbeddedPostgres`, structurally."""
+    """O que o supervisor pede ao cluster: `EmbeddedPostgres`, estruturalmente."""
 
     def start(
         self, on_phase: Callable[[Phase], None] | None = None
@@ -169,7 +170,7 @@ class Cluster(Protocol):
 
 
 class Prober(Protocol):
-    """`PortProber` of the cluster adapter, structurally (section 5.4)."""
+    """`PortProber` do adaptador do cluster, estruturalmente (§5.4)."""
 
     def usable(self, port: int) -> bool: ...
 
@@ -187,14 +188,14 @@ class HealthAnswer:
 
 
 HealthProbe = Callable[[int], HealthAnswer | None]
-"""`GET /health` on a port of `127.0.0.1`: the answer, or `None` for none."""
+"""`GET /health` numa porta de `127.0.0.1`: a resposta, ou `None` se não houve."""
 
 Spawn = Callable[[Program, Sequence[str]], Child]
-"""Create a child of `program` with these arguments, started."""
+"""Cria um filho de `program` com esses argumentos, já iniciado."""
 
 
 def probe_health(port: int) -> HealthAnswer | None:
-    """One `GET /health`. A refused connection is `None`: "not yet"."""
+    """Um `GET /health`. Uma conexão recusada é `None`: "ainda não"."""
     connection = http.client.HTTPConnection(LOOPBACK, port, timeout=PROBE_SECONDS)
     try:
         connection.request("GET", "/health")
@@ -215,16 +216,15 @@ def probe_health(port: int) -> HealthAnswer | None:
 
 
 class PortRefusedError(Exception):
-    """`API_PORT` is set, and that port cannot be used."""
+    """`API_PORT` está definida, e essa porta não pode ser usada."""
 
 
 class ApiPorts:
-    """The port of the API (section 5.4).
+    """A porta da API (§5.4).
 
-    1. The port of the last start that reached `ready`, if an exclusive
-       `bind` accepts it. 2. Otherwise one the system gives. `API_PORT` fixes
-    it: that port or a refusal, never another one, because a fixed port is a
-    promise to somebody.
+    1. A porta do último início que chegou a `ready`, se um `bind` exclusivo a
+       aceitar. 2. Senão, uma que o sistema der. `API_PORT` a fixa: essa porta
+    ou uma recusa, nunca outra, porque uma porta fixa é uma promessa a alguém.
     """
 
     def __init__(self, prober: Prober, *, fixed: int | None, last: int | None) -> None:
@@ -242,13 +242,13 @@ class ApiPorts:
         return self._prober.free_port()
 
     def another(self, taken: int) -> int:
-        """The API exited with 3: `taken` went to somebody else meanwhile."""
+        """A API saiu com 3: `taken` foi para outro nesse meio-tempo."""
         if self._fixed is not None:
             raise PortRefusedError(self._taken(self._fixed))
         return self._prober.free_port()
 
     def again(self, current: int | None) -> int:
-        """For a restart: the same port first, so the window keeps its URL."""
+        """Para um reinício: a mesma porta primeiro, para a janela manter a URL."""
         if self._fixed is not None:
             return self._fixed
         if current is not None and self._prober.usable(current):
@@ -265,7 +265,7 @@ class ApiPorts:
 
 
 class RestartPolicy:
-    """Section 6.1: the wait grows, and five exits in ten minutes is the end."""
+    """§6.1: a espera cresce, e cinco saídas em dez minutos são o fim."""
 
     def __init__(self, timings: Timings) -> None:
         self._timings = timings
@@ -273,7 +273,7 @@ class RestartPolicy:
         self._in_a_row = 0
 
     def after_exit(self, now: float, started_at: float) -> float | None:
-        """The wait before the next start, or `None` to give up."""
+        """A espera antes do próximo início, ou `None` para desistir."""
         if now - started_at >= self._timings.stable_after:
             self._in_a_row = 0
         window = self._timings.restart_window
@@ -300,7 +300,7 @@ class _Ending(NamedTuple):
 
 
 class _StartRefusedError(Exception):
-    """The start cannot go on: `failed`, with this line."""
+    """O início não pode seguir: `failed`, com esta linha."""
 
     def __init__(self, line: str, code: int = EXIT_CANNOT_START) -> None:
         super().__init__(line)
@@ -310,7 +310,7 @@ class _StartRefusedError(Exception):
 
 @dataclass
 class _Supervised:
-    """One program under supervision, across the children it has been."""
+    """Um programa sob supervisão, através dos filhos que ele já foi."""
 
     program: Program
     restarts: RestartPolicy
@@ -320,14 +320,14 @@ class _Supervised:
     unavailable: bool = False
     port: int | None = None
     answering: bool = False
-    """The API answered something on `port` in this incarnation: it has bound
-    the port, and an exit 3 can no longer mean the port was taken."""
+    """A API respondeu algo em `port` nesta encarnação: ela fez o bind da
+    porta, e uma saída 3 não pode mais significar que a porta foi tomada."""
     port_failures: int = 0
     next_probe: float = 0.0
 
 
 class Supervisor:
-    """The launcher's state machine. `run()` returns the exit code."""
+    """A máquina de estados do launcher. `run()` retorna o código de saída."""
 
     def __init__(
         self,
@@ -364,10 +364,10 @@ class Supervisor:
         self._announced_port: int | None = None
         self._last_ready_port = previous.last_ready_port if previous else None
         self.finished = threading.Event()
-        """Set when `run()` has ended: what the end of the session waits for."""
+        """Definido quando `run()` terminou: o que o fim da sessão espera."""
 
     # ------------------------------------------------------------------
-    # The whole life
+    # A vida inteira
 
     def run(self) -> int:
         try:
@@ -409,27 +409,26 @@ class Supervisor:
         return ending.code
 
     # ------------------------------------------------------------------
-    # The start (section 5.1)
+    # O início (§5.1)
 
     def _start(self) -> bool:
-        """`True` once ready; `False` when a stop was asked first.
+        """`True` quando ficou pronto; `False` quando uma parada foi pedida antes.
 
-        **The API is created together with the cluster** -- the second branch
-        of section 5.1, which section 16 made enter: warm, the cluster and the
-        migrations took 2.1 s and the API 3.6 s from its creation to its first
-        200, one after the other, 6.4 s to `ready` against a criterion of 5.
-        Side by side, the import of the API covers the start of the cluster.
-        What it costs, declared: the API answers 503 until the cluster is up,
-        and could serve during the migrations -- to nobody who was told its
-        URL, which `ready` alone gives. The job runner still waits for the
-        migrations: its first query, the reaper's, would otherwise come before
-        a first `initdb` has finished.
+        **A API é criada junto com o cluster** -- o segundo ramo de §5.1, que
+        §16 fez valer: a quente, o cluster e as migrations levaram 2,1 s e a API
+        3,6 s da criação ao primeiro 200, um depois do outro, 6,4 s até `ready`
+        contra um critério de 5. Lado a lado, o import da API cobre o início do
+        cluster. O que custa, declarado: a API responde 503 até o cluster subir,
+        e poderia servir durante as migrations -- a ninguém a quem tenham dito
+        a sua URL, que só o `ready` dá. O job runner ainda espera as migrations:
+        a sua primeira consulta, a do reaper, viria de outro modo antes de um
+        primeiro `initdb` terminar.
 
-        **Except on the first run, when there is no cluster yet.** Measured
-        too: the API's warm-up then imports `torch` and hashes 924 MB of
-        models on the same disk as the `initdb`, which went from 45 to 99 s,
-        and the cold start from 68 to 109 s. With no cluster to start, the
-        API waits for the `initdb`, as in the first branch.
+        **Exceto na primeira execução, quando ainda não há cluster.** Medido
+        também: o aquecimento da API então importa o `torch` e calcula o hash de
+        924 MB de modelos no mesmo disco do `initdb`, que foi de 45 para 99 s, e
+        o início a frio de 68 para 109 s. Sem cluster a iniciar, a API espera o
+        `initdb`, como no primeiro ramo.
         """
         self._write_state(LauncherState.STARTING)
         if self._stop_asked():
@@ -455,7 +454,7 @@ class Supervisor:
 
     @staticmethod
     def _first_run(cluster: Cluster) -> bool:
-        """Whether `start()` is about to create the cluster: an `initdb` ahead."""
+        """Se `start()` está para criar o cluster: um `initdb` pela frente."""
         try:
             return cluster.status().status is ClusterStatus.ABSENT
         except EmbeddedPostgresError:
@@ -476,11 +475,11 @@ class Supervisor:
             logger.warning("%s", warning)
 
     def _arrival_of(self, cluster: Cluster, started: StartedCluster) -> ClusterArrival:
-        """Section 7.3: a launcher stops the cluster a launcher started.
+        """§7.3: um launcher para o cluster que um launcher iniciou.
 
-        Including the one a launcher that died left behind, which this one
-        adopts and nobody else would stop: the state file of a launcher whose
-        lock is free says `started`, about this same server.
+        Inclusive o que um launcher que morreu deixou para trás, que este adota
+        e que ninguém mais pararia: o arquivo de estado de um launcher cujo lock
+        está livre diz `started`, sobre este mesmo servidor.
         """
         try:
             self._postmaster_pid = cluster.status().pid
@@ -568,7 +567,7 @@ class Supervisor:
         return "running"
 
     # ------------------------------------------------------------------
-    # The supervision (section 6)
+    # A supervisão (§6)
 
     def _supervise(self) -> _Ending:
         next_cluster_check = self._clock.monotonic() + self._timings.cluster_check
@@ -593,7 +592,7 @@ class Supervisor:
             self._clock.sleep(self._timings.tick)
 
     def _watch_children(self) -> str | None:
-        """Handle every child that exited; a line when the API is lost."""
+        """Trata cada filho que saiu; uma linha quando a API se perde."""
         for supervised in (self._api, self._job_runner):
             child = supervised.child
             if child is None:
@@ -650,8 +649,8 @@ class Supervisor:
         return None
 
     def _port_taken(self, api: _Supervised) -> str | None:
-        """Section 5.4, step 3: between the probe and uvicorn's `bind`, the
-        port went to another process. Another port, at once."""
+        """§5.4, passo 3: entre a sonda e o `bind` do uvicorn, a porta foi para
+        outro processo. Outra porta, na hora."""
         api.port_failures += 1
         taken = api.port
         if api.port_failures >= self._timings.port_attempts:
@@ -673,7 +672,7 @@ class Supervisor:
     def _give_up(
         self, supervised: _Supervised, code: int, detail: str | None
     ) -> str | None:
-        """No more restarts. Losing the API is losing the app."""
+        """Nada mais de reinícios. Perder a API é perder o app."""
         supervised.unavailable = True
         supervised.restart_at = None
         name = supervised.program.name
@@ -694,7 +693,7 @@ class Supervisor:
         *,
         before_the_stop: bool = False,
     ) -> None:
-        """The launcher's log gets the last lines of whoever died, and only those."""
+        """O log do launcher recebe as últimas linhas de quem morreu, e só essas."""
         logger.warning(
             "%s (PID %s) exited with %s%s; its last %d lines follow",
             name,
@@ -722,7 +721,7 @@ class Supervisor:
                 self._spawn_job_runner()
 
     def _probe_restarted_api(self) -> None:
-        """A restarted API is followed until it answers, to say where it is."""
+        """Uma API reiniciada é acompanhada até responder, para dizer onde está."""
         api = self._api
         now = self._clock.monotonic()
         if (
@@ -747,11 +746,11 @@ class Supervisor:
         self._write_state(LauncherState.READY)
 
     def _watch_cluster(self, cluster: Cluster) -> str | None:
-        """Section 6.2: only a dead postmaster is the supervisor's business.
+        """§6.2: só um postmaster morto é assunto do supervisor.
 
-        A server process that is not the postmaster dying makes the postmaster
-        reinitialize on its own, with `ready` still in `postmaster.pid`;
-        `status()` says `ready` all along, and nothing is done.
+        A morte de um processo do servidor que não é o postmaster faz o
+        postmaster se reinicializar sozinho, com `ready` ainda em
+        `postmaster.pid`; `status()` diz `ready` o tempo todo, e nada é feito.
         """
         try:
             report = cluster.status()
@@ -807,13 +806,13 @@ class Supervisor:
         return None
 
     # ------------------------------------------------------------------
-    # The children
+    # Os filhos
 
     def _spawn_api(
         self, port: int, *, first: bool = False, port_retry: bool = False
     ) -> None:
-        """The `phase` once, for the first API. A restarted one says `running`
-        when it answers (`_probe_restarted_api`), or `ready` does."""
+        """O `phase` uma vez, para a primeira API. Uma reiniciada diz `running`
+        quando responde (`_probe_restarted_api`), ou o `ready` diz."""
         api = self._api
         if not port_retry:
             api.port_failures = 0
@@ -830,7 +829,7 @@ class Supervisor:
         )
 
     def _spawn_job_runner(self, *, first: bool = False) -> None:
-        """The `phase` for the first; `running` for every one that follows."""
+        """O `phase` para o primeiro; `running` para cada um que vier depois."""
         runner = self._job_runner
         runner.started_at = self._clock.monotonic()
         runner.child = self._spawn_child(JOB_RUNNER, [SUPERVISED_FLAG])
@@ -844,7 +843,7 @@ class Supervisor:
         )
 
     # ------------------------------------------------------------------
-    # The stop (section 7)
+    # A parada (§7)
 
     def _stop_asked(self) -> bool:
         return self._requests.count() > 0 or self._requests.session_ending()
@@ -876,11 +875,11 @@ class Supervisor:
         logger.info("Stopped (exit code %s)", ending.code)
 
     def _stop_children(self) -> None:
-        """Both at once, each up to its deadline; `TerminateProcess` after it.
+        """Os dois ao mesmo tempo, cada um até o seu prazo; `TerminateProcess` depois.
 
-        Nothing depends on the other: the API and the job runner both need
-        only the database, and so the database is stopped after them -- the
-        `release()` of a job is a write.
+        Nada depende do outro: a API e o job runner precisam só do banco, e por
+        isso o banco é parado depois deles -- o `release()` de um job é uma
+        escrita.
         """
         stopping: list[_Supervised] = []
         for supervised in (self._api, self._job_runner):
@@ -890,8 +889,8 @@ class Supervisor:
             supervised.restart_at = None
             code = child.poll()
             if code is not None:
-                # Dead since the last tick: "stopped in 0.0 s" would credit the
-                # stop with an exit it never caused (section 7.5).
+                # Morto desde o último tick: "stopped in 0.0 s" atribuiria à
+                # parada uma saída que ela nunca causou (§7.5).
                 child.drain()
                 supervised.child = None
                 self._log_exit(
@@ -917,8 +916,8 @@ class Supervisor:
                     child.drain()
                     supervised.child = None
                     stopping.remove(supervised)
-                    # The code says whether it stopped or broke on the way:
-                    # a `release()` that failed leaves with a traceback and 1.
+                    # O código diz se ele parou ou quebrou no caminho: um
+                    # `release()` que falhou sai com um traceback e 1.
                     logger.info(
                         "%s stopped in %.1f s, with %s",
                         supervised.program.name,
@@ -952,9 +951,9 @@ class Supervisor:
             if skipped
             else f"it did not stop within {self._deadline(supervised):.0f} s"
         )
-        # The launcher does not know whether the job runner held a job: if it
-        # was still importing `torch` -- a DLL load does not return to Python
-        # for seconds, and the interrupt waits for it -- it held none.
+        # O launcher não sabe se o job runner detinha um job: se ele ainda
+        # estava importando o `torch` -- a carga de uma DLL não volta ao Python
+        # por segundos, e a interrupção a espera --, não detinha nenhum.
         cost = (
             "the requests in flight were cut"
             if supervised is self._api
@@ -965,12 +964,12 @@ class Supervisor:
         child.terminate()
 
     def _stop_cluster(self) -> bool:
-        """Stop the cluster if a launcher started it; whether it was left up.
+        """Para o cluster se um launcher o iniciou; diz se ele ficou no ar.
 
-        An adopted one too when the session is ending: Windows ends it a moment
-        later regardless, and an ordered stop spares the next start a crash
-        recovery (section 7.5). It is still not this launcher's, and a stop
-        that fails leaves no ownership behind.
+        Um adotado também, quando a sessão está terminando: o Windows o encerra
+        um instante depois de qualquer jeito, e uma parada ordenada poupa o
+        próximo início de uma crash recovery (§7.5). Ele continua não sendo
+        deste launcher, e uma parada que falha não deixa posse para trás.
         """
         if self._cluster is None:
             return False
@@ -988,7 +987,7 @@ class Supervisor:
         started_at = time.monotonic()
         try:
             if self._requests.session_ending():
-                # `pg_ctl` is a process, and none starts during a logoff.
+                # O `pg_ctl` é um processo, e nenhum inicia durante um logoff.
                 outcome = self._cluster.stop_by_signal(
                     self._timings.session_cluster_stop
                 )
@@ -1024,8 +1023,8 @@ class Supervisor:
 
 
 def exit_code(code: int) -> str:
-    """An exit code as the log says it; an NTSTATUS in hex too, which is how
-    one is looked up -- 3221225786 is `0xC000013A`, a console's Ctrl+C."""
+    """Um código de saída como o log o diz; um NTSTATUS também em hex, que é
+    como se procura um -- 3221225786 é `0xC000013A`, o Ctrl+C de um console."""
     if 0 <= code <= 255:
         return str(code)
     return f"{code} (0x{code & 0xFFFFFFFF:08X})"

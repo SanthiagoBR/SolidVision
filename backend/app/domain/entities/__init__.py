@@ -1,4 +1,4 @@
-"""Domain entities package."""
+"""Pacote das entidades de domínio."""
 
 from app.domain.entities.device import Device
 from app.domain.entities.image import Image

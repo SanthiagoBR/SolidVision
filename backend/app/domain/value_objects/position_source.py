@@ -1,9 +1,9 @@
-"""Where an image's position came from (RFC-032 section 4.4).
+"""De onde veio a posição de uma imagem (RFC-032 §4.4).
 
-The same three-state design as `CaptureSource` (RFC-028 section 4.2), applied
-to the second fact the scan reads from the same header. With it, "what
-fraction of the collection has a position?" is a `GROUP BY` rather than a
-re-read of every file, and a backfill knows which rows are worth revisiting.
+O mesmo desenho de três estados de `CaptureSource` (RFC-028 §4.2), aplicado
+ao segundo fato que o scan lê do mesmo cabeçalho. Com ele, "que fração da
+coleção tem posição?" é um `GROUP BY`, e não uma releitura de cada arquivo,
+e um backfill sabe quais linhas vale a pena revisitar.
 """
 
 from __future__ import annotations
@@ -12,54 +12,54 @@ import enum
 
 
 class PositionSource(enum.StrEnum):
-    """Where `latitude`/`longitude` were read from, or that nothing was.
+    """De onde `latitude`/`longitude` foram lidas, ou que nada foi lido.
 
-    A `StrEnum` persisted into a plain `String` column rather than a native
-    PostgreSQL `ENUM`. Two future members already have names and are
-    deliberately **not** members yet: `'manual'` -- the user marks the point
-    on the map -- and `'subject_estimated'` -- the photographed point
-    computed from gimbal and altitude (RFC-032 sections 9 and 10). Each has
-    a writer to build first, and adding either must not cost a migration.
+    Um `StrEnum` persistido numa coluna `String` simples, e não num `ENUM`
+    nativo do PostgreSQL. Dois membros futuros já têm nome e,
+    deliberadamente, **ainda não** são membros: `'manual'` -- o usuário
+    marca o ponto no mapa -- e `'subject_estimated'` -- o ponto fotografado,
+    calculado a partir do gimbal e da altitude (RFC-032 §9 e §10). Cada um
+    tem antes um escritor a construir, e acrescentar qualquer dos dois não
+    pode custar uma migration.
 
-    **The absence of a value is not a member.** A row whose source is NULL
-    was *never examined* -- it predates RFC-032, or was scanned with
-    `extract_gps` off -- while `UNKNOWN` means it *was* examined and holds
-    no usable position. The two must not collapse: a scan writes only NULL
-    rows, which is what keeps re-scanning an unchanged collection free of
-    writes, and files without GPS are numerous in exactly the collection
-    this RFC serves.
+    **A ausência de valor não é um membro.** Uma linha cuja origem é NULL
+    *nunca foi examinada* -- é anterior ao RFC-032, ou foi escaneada com
+    `extract_gps` desligado --, enquanto `UNKNOWN` quer dizer que ela *foi*
+    examinada e não tem posição utilizável. Os dois não podem se fundir: um
+    scan só grava linhas NULL, e é isso que mantém sem escritas o re-scan de
+    uma coleção que não mudou; e arquivos sem GPS são muitos justamente na
+    coleção a que este RFC serve.
 
-    **There is no XMP member.** RFC-032 section 2.3 measured 40 real DJI
-    files carrying a `drone-dji` XMP packet and found no latitude or
-    longitude in any of them; a member for a source that was never seen to
-    hold a position would be a fallback that never fires.
+    **Não há membro XMP.** O RFC-032 §2.3 mediu 40 arquivos DJI reais com um
+    pacote XMP `drone-dji` e não achou latitude nem longitude em nenhum; um
+    membro para uma origem que nunca foi vista guardando uma posição seria
+    um fallback que nunca dispara.
     """
 
     EXIF_GPS = "exif_gps"
-    """The GPS IFD, pointed at by tag 0x8825 in IFD0.
+    """O IFD de GPS, apontado pela tag 0x8825 no IFD0.
 
-    The position of the *aircraft*, not of what it photographed (RFC-032
-    section 2.2). The search radius absorbs the difference; nothing here
-    corrects it.
+    A posição da *aeronave*, não do que ela fotografou (RFC-032 §2.2). O
+    raio da busca absorve a diferença; nada aqui a corrige.
     """
 
     UNKNOWN = "unknown"
-    """The file was examined and carries no usable position.
+    """O arquivo foi examinado e não tem posição utilizável.
 
-    Pairs with `latitude = longitude = NULL`. An image with this source
-    never matches a search circle, however large (RFC-020).
+    Vem com `latitude = longitude = NULL`. Uma imagem com esta origem nunca
+    casa com um círculo de busca, por maior que seja (RFC-020).
     """
 
     @property
     def precedence(self) -> int:
-        """Rank within the chain; higher is a stronger claim.
+        """Posição na cadeia; quanto maior, mais forte a afirmação.
 
-        Exists for the backfill's `--force` rule, as `CaptureSource`'s
-        does: re-examining a row may replace its source only with one at
-        least as strong, so a file that fails to open today cannot turn a
-        stored `exif_gps` into `unknown` (RFC-032 section 8.1). Separate
-        from the capture-date chain on purpose -- a file can lose its date
-        and keep its position, and each fact is judged on its own.
+        Existe para a regra `--force` do backfill, como a de
+        `CaptureSource`: reexaminar uma linha só pode trocar a origem dela
+        por uma pelo menos tão forte, para que um arquivo que hoje não abre
+        não transforme um `exif_gps` guardado em `unknown` (RFC-032 §8.1).
+        Separada da cadeia da data de captura de propósito -- um arquivo
+        pode perder a data e manter a posição, e cada fato é julgado por si.
         """
         return _PRECEDENCE[self]
 

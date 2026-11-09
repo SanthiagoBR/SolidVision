@@ -1,4 +1,4 @@
-"""Logging infrastructure package."""
+"""Pacote de infraestrutura de logging."""
 
 from .logger import get_logger, log_exception
 

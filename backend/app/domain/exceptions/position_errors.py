@@ -1,20 +1,20 @@
-"""Position domain exceptions (RFC-032)."""
+"""Exceções de domínio da posição (RFC-032)."""
 
 from app.domain.exceptions.domain_error import DomainError
 
 
 class InvalidPositionError(DomainError):
-    """Raised when a latitude and longitude do not describe one point on Earth.
+    """Levantada quando uma latitude e uma longitude não descrevem um ponto da Terra.
 
-    Most often: half a position. A latitude without its longitude does not
-    locate anything, and RFC-032 section 4.3 refuses to store one -- the
-    `ck_images_position_pairing` CHECK says the same thing in SQL, for the
-    writers that never pass through here. Also raised for a coordinate
-    outside `[-90, 90]` x `[-180, 180]`, or one that is not a finite number.
+    No mais das vezes: meia posição. Uma latitude sem a longitude não
+    localiza nada, e o RFC-032 §4.3 se recusa a guardar uma -- a CHECK
+    `ck_images_position_pairing` diz o mesmo em SQL, para quem escreve sem
+    passar por aqui. Levantada também para uma coordenada fora de
+    `[-90, 90]` x `[-180, 180]`, ou que não seja um número finito.
 
-    A subclass of `DomainError`, so the HTTP layer answers 400 without a
-    handler of its own: `near_lat=91` parses as a number and is refused for
-    what it means, which is the 400 case rather than FastAPI's 422.
+    Uma subclasse de `DomainError`, para que a camada HTTP responda 400 sem
+    um handler próprio: `near_lat=91` é interpretado como número e recusado
+    pelo que significa, que é o caso do 400, e não do 422 do FastAPI.
     """
 
     def __init__(self, message: str = "Invalid position.") -> None:
@@ -22,15 +22,14 @@ class InvalidPositionError(DomainError):
 
 
 class InvalidGeoCircleError(DomainError):
-    """Raised when a "near here" circle cannot be evaluated as asked.
+    """Levantada quando um círculo de "perto daqui" não pode ser avaliado como pedido.
 
-    A radius that is zero, negative, not finite, or -- by application
-    policy -- below `MIN_RADIUS_M`; or a circle given only in part, two of
-    `near_lat` / `near_lon` / `radius_m` without the third (RFC-032
-    section 6). Refused rather than answered with an empty result: an
-    empty answer to a malformed circle reads exactly like "there is no
-    photo here", which is the most expensive wrong answer this filter can
-    give.
+    Um raio que é zero, negativo, não finito ou -- por política da aplicação
+    -- abaixo de `MIN_RADIUS_M`; ou um círculo dado só em parte, dois de
+    `near_lat` / `near_lon` / `radius_m` sem o terceiro (RFC-032 §6).
+    Recusado, em vez de respondido com um resultado vazio: uma resposta vazia
+    para um círculo malformado se lê exatamente como "não há foto aqui", que
+    é a resposta errada mais cara que este filtro pode dar.
     """
 
     def __init__(self, message: str = "Invalid search circle.") -> None:
@@ -38,14 +37,14 @@ class InvalidGeoCircleError(DomainError):
 
 
 class InvalidBoundingBoxError(DomainError):
-    """Raised when a map area is inverted or crosses the antimeridian.
+    """Levantada quando uma área do mapa está invertida ou cruza o antimeridiano.
 
-    `GET /images/map` takes the viewport as `min`/`max` corners, and
-    `min > max` has two readings that the four numbers cannot tell apart:
-    a client that swapped its corners, or a viewport that wraps across
-    +/-180 degrees. RFC-032 section 7 supports neither and says so with a
-    400, rather than guessing which one was meant and answering a
-    different question.
+    `GET /images/map` recebe a área visível como cantos `min`/`max`, e
+    `min > max` tem duas leituras que os quatro números não distinguem: um
+    cliente que trocou os cantos, ou uma área visível que dá a volta por
+    +/-180 graus. O RFC-032 §7 não suporta nenhuma das duas e o diz com um
+    400, em vez de adivinhar qual era a intenção e responder a outra
+    pergunta.
     """
 
     def __init__(self, message: str = "Invalid map area.") -> None:

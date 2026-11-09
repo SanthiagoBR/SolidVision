@@ -1,25 +1,24 @@
-"""Asking the filesystem where a device is, without importing the filesystem.
+"""Perguntar ao sistema de arquivos onde está um dispositivo, sem importá-lo.
 
-Three questions the Application must be able to ask -- *is this disk
-plugged in right now?*, *is this folder actually on it?* and, since
-RFC-031, *what folders are directly inside it?* -- and all three are
-questions for the operating system. The adapter that answers them is
-`WindowsVolumeIdentityProvider`, which is an Infrastructure ABC the
-Application is forbidden to import
-(`test_application_architecture.py` fails the build if it does), so the
-dependency is inverted here instead.
+Três perguntas que a Application precisa conseguir fazer -- *este disco está
+plugado agora?*, *esta pasta está mesmo nele?* e, desde o RFC-031, *que
+pastas estão direto dentro dele?* -- e as três são perguntas para o sistema
+operacional. O adaptador que as responde é `WindowsVolumeIdentityProvider`,
+que é uma ABC da Infrastructure que a Application é proibida de importar
+(`test_application_architecture.py` quebra o build se ela importar), então a
+dependência é invertida aqui.
 
-*What is attached to this machine?* is deliberately **not** here. Every
-signature below takes a `Device`, because every question below is about a
-disk the system already knows; asking what is plugged in is asking about
-volumes that are not a device yet, and it has its own port
+*O que está ligado a esta máquina?* de propósito **não** está aqui. Toda
+assinatura abaixo recebe um `Device`, porque toda pergunta abaixo é sobre um
+disco que o sistema já conhece; perguntar o que está plugado é perguntar
+sobre volumes que ainda não são um dispositivo, e isso tem porta própria
 (`VolumeCatalog`).
 
-**Nothing may cache across calls.** A device's mount point is a fact about
-this instant, and the whole of RFC-027 section 7 is that no stored value
-can keep it -- the user pulls the cable and nothing notifies this process.
-An implementation that remembered an answer would hand a job a drive
-letter that now belongs to a different disk.
+**Nada pode guardar cache entre chamadas.** O ponto de montagem de um
+dispositivo é um fato deste instante, e todo o RFC-027 §7 é que nenhum valor
+gravado consegue guardá-lo -- o usuário puxa o cabo e nada avisa este
+processo. Uma implementação que lembrasse uma resposta entregaria a um job
+uma letra de unidade que agora pertence a outro disco.
 """
 
 from __future__ import annotations
@@ -34,106 +33,107 @@ from app.domain.value_objects.job_scope import JobScope
 
 @dataclass(frozen=True)
 class FolderEntry:
-    """One folder directly inside another, and whether it has any of its own.
+    """Uma pasta direto dentro de outra, e se ela tem alguma subpasta.
 
-    `has_children` travels with the name rather than being left for the
-    caller to work out, because working it out means **opening the
-    folder**: a listing of forty subfolders costs forty-one `readdir`
-    calls, not one, and only the adapter can pay that without the
-    Application touching a filesystem (RFC-031 section 4.4 of the build
-    prompt).
+    `has_children` viaja com o nome, em vez de ficar para o chamador
+    descobrir, porque descobrir quer dizer **abrir a pasta**: uma listagem de
+    quarenta subpastas custa quarenta e uma chamadas de `readdir`, e não uma,
+    e só o adaptador pode pagar isso sem a Application tocar num sistema de
+    arquivos (RFC-031 §4.4 do build prompt).
 
-    It is here at all because a UI that guessed would guess wrong in the
-    visible direction: an expand arrow drawn on a leaf folder is an error
-    the user only discovers by clicking it.
+    Ele está aqui porque uma interface que adivinhasse erraria no sentido
+    visível: uma seta de expandir desenhada numa pasta folha é um erro que o
+    usuário só descobre ao clicar nela.
     """
 
     name: str
-    """The folder's own name, as the filesystem spells it.
+    """O nome da própria pasta, como o sistema de arquivos o escreve.
 
-    A single path component, never a path. The caller joins it onto the
-    canonical spelling of the parent, which is what makes the result
-    something a client can send straight back as a job scope.
+    Um único componente de caminho, nunca um caminho. O chamador o junta à
+    grafia canônica da pasta-mãe, e é isso que faz do resultado algo que um
+    cliente pode mandar de volta direto como escopo de um job.
     """
 
     has_children: bool
-    """Whether this folder contains at least one subfolder.
+    """Se esta pasta contém pelo menos uma subpasta.
 
-    `False` for a folder the platform refused to open -- a permission
-    wall, a disk that went away mid-listing. An implementation logs that
-    and carries on rather than failing the whole listing, which is the
-    same rule RFC-027 applies to a volume that will not be named.
+    `False` para uma pasta que a plataforma se recusou a abrir -- uma
+    barreira de permissão, um disco que sumiu no meio da listagem. Uma
+    implementação registra isso no log e segue, em vez de derrubar a listagem
+    inteira, que é a mesma regra que o RFC-027 aplica a um volume que não
+    informa o nome.
     """
 
 
 class DeviceLocator(ABC):
-    """Port for locating a device's files at the moment the question is asked."""
+    """Porta para localizar os arquivos de um dispositivo no momento da pergunta."""
 
     @abstractmethod
     def mount_point(self, device: Device) -> Path | None:
-        """Return where `device` is mounted right now, or `None` if nowhere.
+        """Devolve onde `device` está montado agora, ou `None` se em lugar nenhum.
 
-        `None` is the answer for a disk in a drawer, and it is a first-
-        class one rather than an error: the system knows the device
-        perfectly well, it simply has no bytes to offer (RFC-027 section
-        2.3). Callers turn it into `DeviceNotConnectedError` when they
-        needed the bytes.
+        `None` é a resposta para um disco na gaveta, e é uma resposta de
+        primeira classe, e não um erro: o sistema conhece o dispositivo
+        perfeitamente, só não tem bytes a oferecer (RFC-027 §2.3). Os
+        chamadores a transformam em `DeviceNotConnectedError` quando
+        precisavam dos bytes.
 
-        The returned path is never persisted by anyone. It is valid until
-        the user unplugs the disk, which is precisely why `Device` has no
-        field for it.
+        O caminho devolvido nunca é gravado por ninguém. Ele vale até o
+        usuário desplugar o disco, e é exatamente por isso que `Device` não
+        tem campo para ele.
         """
 
     @abstractmethod
     def resolve_scope(self, device: Device, scope: JobScope) -> JobScope | None:
-        """Return `scope` as the filesystem spells it, or `None` if absent.
+        """Devolve `scope` como o sistema de arquivos o escreve, ou `None` se ausente.
 
-        Does two things that cannot be done above this layer, and both are
-        why the port has this method rather than a plain `exists()`:
+        Faz duas coisas que não podem ser feitas acima desta camada, e as
+        duas são a razão de a porta ter este método, e não um `exists()`
+        simples:
 
-        * it confirms the scope resolves to a directory that is genuinely
-          *inside* the device. `JobScope` has already refused `..`, a
-          drive anchor and a UNC path, but an NTFS junction sitting inside
-          the scope points somewhere else entirely and looks like an
-          ordinary folder until it is resolved (RFC-029 section 7.1);
-        * it returns the folder's canonical spelling. Windows paths are
-          case-insensitive, so `Fotos` and `fotos` are one directory --
-          and `normalize_scopes()` compares parts exactly, so without
-          canonicalisation here two spellings of the same folder would
-          both survive normalisation and be walked twice.
+        * confirma que o escopo resolve para um diretório que está de fato
+          *dentro* do dispositivo. `JobScope` já recusou `..`, uma âncora de
+          unidade e um caminho UNC, mas uma junção NTFS dentro do escopo
+          aponta para outro lugar inteiramente e parece uma pasta comum até
+          ser resolvida (RFC-029 §7.1);
+        * devolve a grafia canônica da pasta. Caminhos do Windows não
+          diferenciam maiúsculas de minúsculas, então `Fotos` e `fotos` são
+          um diretório só -- e `normalize_scopes()` compara as partes
+          exatamente, então, sem a canonicalização aqui, duas grafias da
+          mesma pasta sobreviveriam as duas à normalização e seriam
+          percorridas duas vezes.
 
-        `None` means the scope is not a directory on this device, which
-        the caller reports as an invalid scope. A device that is not
-        mounted at all answers `None` for every scope; callers check the
-        connection first so that the user is told which disk to plug in
-        rather than that their folder is wrong.
+        `None` quer dizer que o escopo não é um diretório neste dispositivo,
+        o que o chamador informa como escopo inválido. Um dispositivo que não
+        está montado responde `None` para todo escopo; os chamadores
+        verificam a conexão antes, para que o usuário ouça qual disco plugar,
+        e não que a pasta dele está errada.
         """
 
     @abstractmethod
     def list_folders(self, device: Device, scope: JobScope) -> list[FolderEntry] | None:
-        """Return the folders directly inside `scope`, or `None` if it is absent.
+        """Devolve as pastas direto dentro de `scope`, ou `None` se ele não existe.
 
-        **One level, and no files.** The caller is drawing one step of a
-        tree the user is walking, so the cost follows what they opened
-        rather than the size of the disk (RFC-031 section 8.1). Files are
-        not returned at all: what this feeds is a folder picker whose
-        output goes back as `scopes[]`, and a file is not a scope.
+        **Um nível, e nenhum arquivo.** O chamador está desenhando um passo
+        de uma árvore que o usuário está percorrendo, então o custo segue o
+        que ele abriu, e não o tamanho do disco (RFC-031 §8.1). Arquivos nem
+        são devolvidos: o que isto alimenta é um seletor de pastas cuja saída
+        volta como `scopes[]`, e um arquivo não é um escopo.
 
-        **Nothing counts anything here.** How many images a folder has
-        indexed is a fact about our own table, answered by
-        `ImageRepository`; how many files are on the disk under it is the
-        subtree walk RFC-029 section 7.2 measured as the dominant cost on
-        a cold mechanical disk, and RFC-031 section 2.3 refuses to pay it
-        twice.
+        **Nada conta nada aqui.** Quantas imagens uma pasta tem indexadas é
+        um fato da nossa própria tabela, respondido por `ImageRepository`;
+        quantos arquivos há no disco abaixo dela é o percurso da subárvore
+        que o RFC-029 §7.2 mediu como o custo dominante num disco mecânico a
+        frio, e que o RFC-031 §2.3 se recusa a pagar duas vezes.
 
-        `None` carries exactly the meaning it carries in
-        `resolve_scope()`: this is not a folder on this device -- absent,
-        a file, or outside the device once NTFS junctions are resolved. A
-        device that is not mounted answers `None` for everything, and
-        callers check the connection first so the user is told which disk
-        to plug in.
+        `None` tem exatamente o sentido que tem em `resolve_scope()`: isto
+        não é uma pasta neste dispositivo -- ausente, um arquivo, ou fora do
+        dispositivo depois de resolvidas as junções NTFS. Um dispositivo que
+        não está montado responde `None` para tudo, e os chamadores
+        verificam a conexão antes, para que o usuário ouça qual disco
+        plugar.
 
-        Order is not part of the contract, because the platform's own is
-        not: `scandir` returns entries in whatever order the filesystem
-        keeps them. A caller that renders the list sorts it.
+        A ordem não faz parte do contrato, porque a da plataforma também não
+        faz: `scandir` devolve as entradas na ordem em que o sistema de
+        arquivos as guarda. Um chamador que desenha a lista a ordena.
         """

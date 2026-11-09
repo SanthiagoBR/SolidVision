@@ -1,4 +1,4 @@
-"""Abstract contract for rendering a thumbnail of an image's bytes (RFC-030)."""
+"""Contrato abstrato para gerar uma thumbnail dos bytes de uma imagem (RFC-030)."""
 
 from __future__ import annotations
 
@@ -8,49 +8,51 @@ from app.domain.entities.image import Image
 
 
 class ThumbnailGeneratorPort(ABC):
-    """Render a small, displayable copy of the picture an `Image` points at.
+    """Gera uma cópia pequena e exibível da foto para a qual uma `Image` aponta.
 
-    Shaped like `ContentHasherPort`, and for the same reason: decoding a
-    photograph is I/O plus an imaging library, both of which belong in
-    Infrastructure, while *deciding when a thumbnail is worth rendering*
-    belongs to the pipeline that calls this.
+    Com a forma de `ContentHasherPort`, e pela mesma razão: decodificar uma
+    fotografia é I/O mais uma biblioteca de imagem, e as duas coisas são da
+    Infrastructure, enquanto *decidir quando vale a pena gerar uma thumbnail*
+    é do pipeline que chama isto.
 
-    **Every call decodes the file afresh.** RFC-030 section 7.2 as proposed
-    said a thumbnail would come "from the image already decoded" for CLIP,
-    at the cost of a resize and an encode. It cannot, in this codebase: the
-    decoded picture is a local of `ClipEmbeddingModel._preprocess()`, which
-    sits behind `EmbeddingModelPort` and returns only a fixed-size tensor.
-    Handing the decoded picture back through that port was considered and
-    refused -- it would give the embedding adapter a responsibility that
-    has nothing to do with embeddings, and make every embedding double
-    learn to draw thumbnails. So this is a fourth, independent open of the
-    file, beside the hash, the EXIF header read and the model's decode,
-    each for its own narrow purpose.
+    **Toda chamada decodifica o arquivo do zero.** O RFC-030 §7.2, como foi
+    proposto, dizia que uma thumbnail viria "da imagem já decodificada" para o
+    CLIP, ao custo de um redimensionamento e uma codificação. Neste código,
+    não tem como: a imagem decodificada é uma variável local de
+    `ClipEmbeddingModel._preprocess()`, que fica atrás de
+    `EmbeddingModelPort` e só devolve um tensor de tamanho fixo. Devolver a
+    imagem decodificada por essa porta foi considerado e recusado -- daria
+    ao adaptador de embedding uma responsabilidade que nada tem a ver com
+    embeddings, e faria todo dublê de embedding aprender a desenhar
+    thumbnails. Então esta é uma quarta abertura independente do arquivo, ao
+    lado do hash, da leitura do cabeçalho EXIF e da decodificação do modelo,
+    cada uma para um propósito estreito.
 
-    **Since RFC-045 it need not be a fourth read of the disk.** The caller
-    may hand over the bytes it already read for the hash (`content`), and
-    the implementation decodes those. It is still a decode of its own --
-    the refusal above stands -- only the source of the bytes changes.
+    **Desde o RFC-045, não precisa ser uma quarta leitura do disco.** O
+    chamador pode entregar os bytes que já leu para o hash (`content`), e a
+    implementação decodifica esses. Continua sendo uma decodificação própria
+    -- a recusa acima continua de pé -- só a origem dos bytes muda.
 
-    Implementations read `Image.require_absolute_path()`, which raises
-    `DeviceNotConnectedError` for an unmounted device, and let decode and
-    I/O errors propagate rather than returning a placeholder -- the caller
-    decides whether a failed thumbnail is worth reporting, and RFC-030
-    decided it never fails the indexing of the image.
+    As implementações leem `Image.require_absolute_path()`, que levanta
+    `DeviceNotConnectedError` para um dispositivo desmontado, e deixam os
+    erros de decodificação e de I/O se propagarem em vez de devolver um
+    marcador -- o chamador decide se uma thumbnail que falhou vale ser
+    informada, e o RFC-030 decidiu que ela nunca derruba a indexação da
+    imagem.
     """
 
     @abstractmethod
     def generate(
         self, image: Image, max_edge: int, content: bytes | None = None
     ) -> bytes:
-        """Return encoded thumbnail bytes for `image`, decoding it fresh.
+        """Devolve os bytes codificados da thumbnail de `image`, decodificada do zero.
 
-        The longer side of the result is at most `max_edge` pixels and the
-        aspect ratio is preserved. A source smaller than that is never
-        enlarged: an upscaled thumbnail costs bytes and shows nothing the
-        original did not.
+        O lado maior do resultado tem no máximo `max_edge` pixels, e a
+        proporção é preservada. Uma origem menor que isso nunca é ampliada:
+        uma thumbnail ampliada custa bytes e não mostra nada que o original
+        não mostrasse.
 
-        `content`, when given, is the file's bytes, already read (RFC-045
-        section 5.3), and the result must be the one the file would have
-        given. `None` reads the image from its location, as before.
+        `content`, quando dado, são os bytes do arquivo, já lidos (RFC-045
+        §5.3), e o resultado precisa ser o que o arquivo teria dado. `None`
+        lê a imagem do local dela, como antes.
         """

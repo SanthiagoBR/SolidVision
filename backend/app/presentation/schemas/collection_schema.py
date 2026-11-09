@@ -1,1 +1,1 @@
-"""Collection schema placeholder for the presentation layer."""
+"""Placeholder do schema de coleção da camada de apresentação."""

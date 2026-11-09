@@ -1,16 +1,16 @@
-"""Thumbnails on local disk, in a directory the application owns (RFC-030 section 7.1).
+"""Thumbnails em disco local, num diretório que pertence à aplicação (RFC-030 §7.1).
 
-The directory is `settings.thumbnail_directory`, and the one rule that
-matters about it is where it is *not*: never inside a user's collection.
-RFC-028 section 10 says the system never writes to the collection, and
-RFC-030 section 7.1 adds the reason that is specific to thumbnails -- kept
-beside the photos, they would go into the drawer with the disk, which is
-exactly when they are the only way to see what a search found.
+O diretório é `settings.thumbnail_directory`, e a única regra que importa sobre
+ele é onde ele *não* fica: nunca dentro da coleção de um usuário. O RFC-028 §10
+diz que o sistema nunca escreve na coleção, e o RFC-030 §7.1 acrescenta a razão
+específica das thumbnails -- guardadas ao lado das fotos, elas iriam para a
+gaveta junto com o disco, que é exatamente quando são o único jeito de ver o que
+uma busca encontrou.
 
-The indexing scan skips this directory even when it lies inside a scanned
-folder (`FilesystemImageProvider(excluded_directories=...)`). Without that,
-indexing a whole system disk would discover the thumbnails as photographs,
-render thumbnails of them, and discover those on the next run.
+O scan de indexação pula este diretório mesmo quando ele está dentro de uma
+pasta varrida (`FilesystemImageProvider(excluded_directories=...)`). Sem isso,
+indexar um disco de sistema inteiro descobriria as thumbnails como fotos,
+renderizaria thumbnails delas e descobriria essas na execução seguinte.
 """
 
 from __future__ import annotations
@@ -25,14 +25,14 @@ from app.infrastructure.filesystem.thumbnail_generator import THUMBNAIL_SUFFIX
 
 
 class FilesystemThumbnailStore(ThumbnailStorePort):
-    """One JPEG per image id, sharded by the id's first two hex digits."""
+    """Um JPEG por id de imagem, distribuído pelos dois primeiros dígitos hex do id."""
 
     def __init__(self, directory: Path) -> None:
-        """Keep thumbnails under `directory`, which is created on first write.
+        """Guarda as thumbnails sob `directory`, que é criado na primeira escrita.
 
-        Resolved once here, so that a relative setting means the same
-        directory for every call, and so that `locate()` has a fixed root
-        to check a location against.
+        Resolvido uma vez aqui, para que uma configuração relativa signifique o
+        mesmo diretório em toda chamada, e para que `locate()` tenha uma raiz
+        fixa contra a qual checar uma localização.
         """
         self._directory = directory.resolve()
 
@@ -41,27 +41,27 @@ class FilesystemThumbnailStore(ThumbnailStorePort):
         return self._directory
 
     def save(self, image_id: ImageId, data: bytes) -> str:
-        """Write `data` for `image_id` atomically and return its location.
+        """Escreve `data` para `image_id` atomicamente e devolve a localização.
 
-        **The location is relative to the store's directory**, so moving
-        the cache means moving a folder rather than rewriting every row --
-        the argument RFC-027 made for `relative_path`.
+        **A localização é relativa ao diretório do store**, então mover o cache
+        significa mover uma pasta, e não reescrever todas as linhas -- o
+        argumento que o RFC-027 fez para `relative_path`.
 
-        **Sharded by the first two hex digits of the id.** A hundred
-        thousand files in one directory work, but make that directory
-        unusable in Explorer and slow to back up; 256 subdirectories of a
-        few hundred files each cost nothing to address, because the shard
-        is derived from the id rather than looked up.
+        **Distribuído pelos dois primeiros dígitos hex do id.** Cem mil arquivos
+        num diretório funcionam, mas tornam o diretório inutilizável no Explorer
+        e lento de copiar para backup; 256 subdiretórios de algumas centenas de
+        arquivos cada não custam nada para endereçar, porque o subdiretório é
+        derivado do id, e não consultado.
 
-        **Written to a temporary name, then renamed over the target.**
-        The same id is overwritten whenever its bytes change (RFC-030
-        section 7.2), and a request served while a plain write was in
-        progress would stream half a JPEG. `os.replace` is atomic on the
-        same volume. The temporary name does not end in `.jpg`, so even a
-        scan that did walk this directory would not take it for a photo.
-        If the replace fails -- on Windows, because a response is streaming
-        the old file at that instant -- the error propagates and the
-        caller records a thumbnail failure; the temporary file is removed.
+        **Escrito com um nome temporário e depois renomeado sobre o destino.**
+        O mesmo id é sobrescrito sempre que os seus bytes mudam (RFC-030 §7.2),
+        e uma requisição servida durante uma escrita simples transmitiria meio
+        JPEG. `os.replace` é atômico no mesmo volume. O nome temporário não
+        termina em `.jpg`, então mesmo um scan que percorresse este diretório
+        não o tomaria por foto. Se a substituição falhar -- no Windows, porque
+        uma resposta está transmitindo o arquivo antigo naquele instante -- o
+        erro se propaga e quem chama registra uma falha de thumbnail; o arquivo
+        temporário é removido.
         """
         hex_id = image_id.value.hex
         location = f"{hex_id[:2]}/{image_id.value}{THUMBNAIL_SUFFIX}"
@@ -77,13 +77,14 @@ class FilesystemThumbnailStore(ThumbnailStorePort):
         return location
 
     def locate(self, location: str) -> Path | None:
-        """Return the stored file for `location`, or `None` if it is not there.
+        """Devolve o arquivo guardado para `location`, ou `None` se não estiver lá.
 
-        The location came from this application's own database, not from a
-        client, and is still checked against the directory: a row edited by
-        hand to `../../somewhere` must not turn the thumbnail endpoint into
-        a way to read an arbitrary file. The check is on the resolved path,
-        so a link inside the cache pointing out of it is refused too.
+        A localização veio do próprio banco desta aplicação, não de um cliente,
+        e ainda assim é checada contra o diretório: uma linha editada à mão para
+        `../../algum-lugar` não pode transformar o endpoint de thumbnails num
+        jeito de ler um arquivo qualquer. A checagem é sobre o caminho resolvido,
+        então um link dentro do cache apontando para fora dele também é
+        recusado.
         """
         candidate = (self._directory / location).resolve()
         if not candidate.is_relative_to(self._directory):
@@ -93,12 +94,12 @@ class FilesystemThumbnailStore(ThumbnailStorePort):
         return candidate
 
     def delete(self, location: str) -> None:
-        """Remove the file behind `location`; nothing there, nothing done (RFC-046).
+        """Remove o arquivo por trás de `location`; nada lá, nada feito (RFC-046).
 
-        Found through `locate()`, so a location that resolves outside the
-        store's directory removes nothing, as it serves nothing. The shard
-        directory stays: it is one of 256, and the next thumbnail of an id
-        that starts the same way needs it again.
+        Achado por `locate()`, então uma localização que resolve para fora do
+        diretório do store não remove nada, assim como não serve nada. O
+        subdiretório fica: ele é um de 256, e a próxima thumbnail de um id que
+        comece igual vai precisar dele de novo.
         """
         found = self.locate(location)
         if found is not None:

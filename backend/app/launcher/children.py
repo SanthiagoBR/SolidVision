@@ -1,34 +1,34 @@
-r"""One child: how it is created, read, asked to stop, and ended (RFC-036 5.5, 7).
+r"""Um filho: como é criado, lido, chamado a parar e encerrado (RFC-036 §5.5, §7).
 
     <python> -X utf8 -m app.presentation.api --port 51234 --supervised
     <python> -X utf8 -m app.infrastructure.workers.job_runner --supervised
 
-`<python>` is the launcher's own interpreter, and `child_command()` is the one
-function to change when the runtime is frozen, as `detect_layout()` is for the
-root (RFC-034 section 4.1).
+`<python>` é o próprio interpretador do launcher, e `child_command()` é a única
+função a mudar quando o runtime for congelado, como `detect_layout()` é para a
+raiz (RFC-034 §4.1).
 
-* **`CREATE_NO_WINDOW`.** Each child gets a console nobody sees: no window
-  opens when the launcher has no console, and a Ctrl+C in the developer's
-  terminal reaches only the launcher, which orders the stop (section 7.2).
-* **stdin is a pipe only the launcher holds, and never writes.** It exists to
-  be closed: that is the request to stop (section 7.1). When the launcher
-  dies, Windows closes it, and the request arrives just the same (7.4).
-* **stdout and stderr are pipes**, each read by a thread that never stops
-  reading -- a pipe nobody empties fills up, and blocks the child on its next
-  write. Each line goes to the launcher's stderr with the child's name in
-  front, and the last 50 stay in memory, for the `child` event and for the
-  launcher's log when the child dies. The children still write their own
-  logs (RFC-034 section 8.2).
-* **`-X utf8`.** Through a pipe, Python writes in the ANSI code page, and a
-  path outside it in a log line becomes an encoding error in the console
-  handler; in UTF-8 mode the pipe carries everything, decoded here as UTF-8.
-* **Nobody inherits these pipes.** `subprocess` hands a child only the
-  handles it is given (`close_fds`, the default since Python 3.7 on Windows),
-  and neither child starts a long-lived process of its own: the API's one is
-  Explorer, for the reveal, with its three handles on `DEVNULL`. So the two
-  readers end when the child does (section 16 checks it).
-* **The environment is the launcher's, with nothing added.** The children
-  compute the same layout and read the same file (RFC-034 section 5.2).
+* **`CREATE_NO_WINDOW`.** Cada filho recebe um console que ninguém vê: nenhuma
+  janela abre quando o launcher não tem console, e um Ctrl+C no terminal do
+  desenvolvedor chega só ao launcher, que ordena a parada (§7.2).
+* **O stdin é um pipe que só o launcher segura, e no qual nunca escreve.** Ele
+  existe para ser fechado: esse é o pedido de parada (§7.1). Quando o launcher
+  morre, o Windows o fecha, e o pedido chega do mesmo jeito (§7.4).
+* **stdout e stderr são pipes**, cada um lido por uma thread que nunca para de
+  ler -- um pipe que ninguém esvazia enche, e bloqueia o filho na próxima
+  escrita. Cada linha vai para o stderr do launcher com o nome do filho na
+  frente, e as últimas 50 ficam em memória, para o evento `child` e para o log
+  do launcher quando o filho morre. Os filhos continuam escrevendo os próprios
+  logs (RFC-034 §8.2).
+* **`-X utf8`.** Por um pipe, o Python escreve na code page ANSI, e um caminho
+  fora dela numa linha de log vira um erro de codificação no handler do
+  console; no modo UTF-8 o pipe carrega tudo, decodificado aqui como UTF-8.
+* **Ninguém herda esses pipes.** O `subprocess` entrega a um filho só os
+  handles que recebe (`close_fds`, o padrão desde o Python 3.7 no Windows), e
+  nenhum dos filhos inicia um processo de vida longa próprio: o único da API é
+  o Explorer, para o "mostrar", com os três handles em `DEVNULL`. Então os dois
+  leitores terminam quando o filho termina (§16 verifica isso).
+* **O ambiente é o do launcher, sem nada acrescentado.** Os filhos calculam o
+  mesmo layout e leem o mesmo arquivo (RFC-034 §5.2).
 """
 
 from __future__ import annotations
@@ -46,14 +46,14 @@ CREATE_NO_WINDOW = 0x08000000
 TAIL_LINES = 50
 
 DRAIN_SECONDS = 2.0
-"""How long the readers of a child that exited get to deliver its last lines."""
+"""Quanto tempo os leitores de um filho que saiu têm para entregar as últimas linhas."""
 
 TERMINATE_WAIT_SECONDS = 10.0
 
 
 @dataclass(frozen=True)
 class Program:
-    """A child, by the name the events use and the module `-m` runs."""
+    """Um filho, pelo nome que os eventos usam e pelo módulo que o `-m` roda."""
 
     name: str
     module: str
@@ -64,12 +64,12 @@ JOB_RUNNER = Program("job_runner", "app.infrastructure.workers.job_runner")
 
 
 def child_command(program: Program, arguments: Sequence[str]) -> list[str]:
-    """The command line of a child, built in one place."""
+    """A linha de comando de um filho, montada num lugar só."""
     return [sys.executable, "-X", "utf8", "-m", program.module, *arguments]
 
 
 def last_line(lines: Sequence[str]) -> str | None:
-    """The last line that says something: the `detail` of a `child` event."""
+    """A última linha que diz alguma coisa: o `detail` de um evento `child`."""
     for line in reversed(lines):
         if line.strip():
             return line.strip()
@@ -77,7 +77,7 @@ def last_line(lines: Sequence[str]) -> str | None:
 
 
 class Child(Protocol):
-    """What the supervisor needs of a child; the tests stand in a double."""
+    """O que o supervisor precisa de um filho; os testes põem um dublê no lugar."""
 
     @property
     def name(self) -> str: ...
@@ -86,26 +86,26 @@ class Child(Protocol):
     def pid(self) -> int: ...
 
     def poll(self) -> int | None:
-        """The exit code, or `None` while it runs."""
+        """O código de saída, ou `None` enquanto ele roda."""
 
     def request_stop(self) -> None:
-        """Close its stdin: the Ctrl+C of section 7.1."""
+        """Fecha o stdin dele: o Ctrl+C de §7.1."""
 
     def terminate(self) -> None:
-        """`TerminateProcess`, and wait for it to be gone."""
+        """`TerminateProcess`, e espera que ele suma."""
 
     def drain(self, timeout: float = DRAIN_SECONDS) -> bool:
-        """Wait for the readers of an exited child to reach the end."""
+        """Espera os leitores de um filho que saiu chegarem ao fim."""
 
     def last_lines(self) -> tuple[str, ...]:
-        """The last lines it wrote, oldest first."""
+        """As últimas linhas que ele escreveu, da mais antiga para a mais nova."""
 
 
 class StderrEcho:
-    """Where the children's lines go: the launcher's stderr, a line at a time.
+    """Para onde vão as linhas dos filhos: o stderr do launcher, uma linha por vez.
 
-    One lock for every reader, so that two children's lines never interleave.
-    A stderr that went away -- the window closed the pipe -- is ignored.
+    Um lock para todos os leitores, para que as linhas de dois filhos nunca se
+    intercalem. Um stderr que sumiu -- a janela fechou o pipe -- é ignorado.
     """
 
     def __init__(self, stream: TextIO) -> None:
@@ -122,7 +122,7 @@ class StderrEcho:
 
 
 class ChildProcess:
-    """A real child process, with its two readers."""
+    """Um processo filho real, com os seus dois leitores."""
 
     def __init__(
         self,

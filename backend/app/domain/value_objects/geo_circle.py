@@ -1,11 +1,11 @@
-"""A point and a radius: "photos taken near here" (RFC-032 section 6).
+"""Um ponto e um raio: "fotos tiradas perto daqui" (RFC-032 §6).
 
-**The query is a circle, never a point.** The user does not know coordinates;
-they know a place when they see it on a map, so the search is a click and a
-distance -- and the distance is part of the question, not an implementation
-detail (RFC-032 section 2.2). The coordinate in the file is where the
-*aircraft* was, tens to hundreds of metres from what it photographed, and the
-radius is what absorbs that.
+**A consulta é um círculo, nunca um ponto.** O usuário não sabe coordenadas;
+ele reconhece um lugar quando o vê num mapa, então a busca é um clique e uma
+distância -- e a distância faz parte da pergunta, e não é um detalhe de
+implementação (RFC-032 §2.2). A coordenada no arquivo é onde a *aeronave*
+estava, a dezenas ou centenas de metros do que ela fotografou, e o raio é o
+que absorve isso.
 """
 
 from __future__ import annotations
@@ -23,55 +23,58 @@ from app.domain.value_objects.position import (
 )
 
 _BOX_MARGIN = 1e-9
-"""Relative slack on the pre-filter box's radius, so it can only ever be too large.
+"""Folga relativa no raio da caixa do pré-filtro, para que ela só possa sobrar.
 
-The box must contain the whole circle or it hides photos the exact distance
-would have kept. In exact arithmetic it does; in floating point a point on
-the circle's very edge could land a rounding error outside it. A billionth
-of the radius -- a micrometre on a kilometre -- removes that without letting
-in anything the exact clause then has to discard in noticeable numbers.
+A caixa precisa conter o círculo inteiro, ou esconde fotos que a distância
+exata teria mantido. Em aritmética exata ela contém; em ponto flutuante, um
+ponto bem na borda do círculo poderia cair um erro de arredondamento fora
+dela. Um bilionésimo do raio -- um micrômetro num quilômetro -- elimina isso
+sem deixar entrar nada que a cláusula exata depois precise descartar em
+números perceptíveis.
 """
 
 _BOX_PAD_DEGREES = 1e-9
-"""Absolute slack on every side of the box: about 0.1 mm.
+"""Folga absoluta em cada lado da caixa: cerca de 0,1 mm.
 
-The relative margin vanishes for a small radius, and the rounding it guards
-against is in the *degrees*, whose last bit near 90 is ~1e-14. Belt and
-braces, and free: a tenth of a millimetre lets in nothing.
+A margem relativa some para um raio pequeno, e o arredondamento contra o
+qual ela protege está nos *graus*, cujo último bit perto de 90 é ~1e-14.
+Cinto e suspensório, e de graça: um décimo de milímetro não deixa entrar
+nada.
 """
 
 _MAX_HALF_WIDTH_SINE = 1 - 1e-6
-"""Above this, `asin` is too steep to trust, and the box is dropped instead.
+"""Acima disto, o `asin` é íngreme demais para confiar, e a caixa é descartada.
 
-The longitude half-width is `asin(sin(d) / cos(latitude))`, and `asin` has
-an infinite slope at 1: for a circle that almost reaches a pole, a rounding
-error in the argument becomes a large error in the width. Those circles are
-inside a hair's breadth of the pole case, which has no box anyway.
+A meia-largura em longitude é `asin(sin(d) / cos(latitude))`, e o `asin` tem
+inclinação infinita em 1: para um círculo que quase alcança um polo, um erro
+de arredondamento no argumento vira um erro grande na largura. Esses
+círculos estão a um fio do caso do polo, que de todo jeito não tem caixa.
 """
 
 
 @dataclass(frozen=True)
 class GeoCircle:
-    """Every position within `radius_m` metres of `center`, edge included.
+    """Toda posição a até `radius_m` metros de `center`, borda incluída.
 
-    **`radius_m` must be positive and finite, and a zero radius is refused**
-    -- where `DateRange(x, x)` is accepted as an empty interval. The
-    difference is deliberate (RFC-032 section 6): "from X until X" is what a
-    client computing ranges arithmetically legitimately produces, while no
-    click on a map produces a circle of radius zero. Refusing says so;
-    answering with nothing would look exactly like "no photo here".
+    **`radius_m` precisa ser positivo e finito, e um raio zero é recusado**
+    -- enquanto `DateRange(x, x)` é aceito como intervalo vazio. A diferença
+    é deliberada (RFC-032 §6): "de X até X" é o que um cliente que calcula
+    intervalos aritmeticamente produz de forma legítima, enquanto nenhum
+    clique num mapa produz um círculo de raio zero. Recusar diz isso;
+    responder com nada pareceria exatamente "não há foto aqui".
 
-    **No upper bound.** "Anywhere in Brazil" is a legitimate request; what a
-    large radius changes is selectivity, not correctness. A radius larger
-    than half the planet simply contains every position.
+    **Sem limite superior.** "Em qualquer lugar do Brasil" é um pedido
+    legítimo; o que um raio grande muda é a seletividade, e não a correção.
+    Um raio maior que meio planeta simplesmente contém todas as posições.
 
-    **Metres, everywhere.** In this value object, in the SQL, and in the
-    HTTP parameter: two units and a conversion between them is a bug no
-    test notices until it inverts (RFC-032 section 9).
+    **Metros, em todo lugar.** Neste value object, no SQL e no parâmetro
+    HTTP: duas unidades e uma conversão entre elas é um bug que nenhum teste
+    percebe até ela se inverter (RFC-032 §9).
 
-    The application's minimum (`MIN_RADIUS_M`) is not checked here. It is
-    product policy about aircraft offsets, not a property of circles, and
-    it lives in the Application layer where it is injected from settings.
+    O mínimo da aplicação (`MIN_RADIUS_M`) não é verificado aqui. Ele é
+    política do produto sobre os deslocamentos da aeronave, e não uma
+    propriedade dos círculos, e mora na camada Application, onde é injetado
+    a partir das configurações.
     """
 
     center: Position
@@ -89,38 +92,40 @@ class GeoCircle:
             )
 
     def contains(self, position: Position) -> bool:
-        """Whether `position` is within the radius, by exact haversine distance.
+        """Se `position` está dentro do raio, pela distância de haversine exata.
 
-        Takes a `Position`, never `None`. Whether an unknown position "is
-        near" anything is not a question this object answers: RFC-020's rule
-        is that unknown never matches, and every caller has to say so
-        explicitly rather than inherit it from a default here.
+        Recebe uma `Position`, nunca `None`. Se uma posição desconhecida "está
+        perto" de alguma coisa não é uma pergunta que este objeto responde: a
+        regra do RFC-020 é que desconhecido nunca casa, e todo chamador
+        precisa dizer isso explicitamente, em vez de herdá-lo de um padrão
+        daqui.
         """
         return haversine_m(self.center, position) <= self.radius_m
 
     def bounding_box(self) -> BoundingBox | None:
-        """The pre-filter box that contains the circle, or `None` when there is none.
+        """A caixa do pré-filtro que contém o círculo, ou `None` quando não há.
 
-        **Disposable by correctness.** The box exists only so an index can
-        narrow the rows before the exact distance runs, and the distance is
-        what answers. Two circles have no correct axis-aligned box in
-        `min <= x <= max` form, and for them this returns `None` so that only
-        the exact clause is emitted -- slower, and right:
+        **Descartável pela correção.** A caixa existe só para que um índice
+        possa restringir as linhas antes de a distância exata rodar, e é a
+        distância que responde. Dois círculos não têm caixa alinhada aos
+        eixos correta na forma `min <= x <= max`, e para eles isto devolve
+        `None`, para que só a cláusula exata seja emitida -- mais lento, e
+        certo:
 
-        - **a circle containing a pole**: every longitude is inside it, and
-          the longitude half-width, `asin(sin(d) / cos(latitude))`, has no
-          value once `d` reaches the pole;
-        - **a circle crossing the 180th meridian**: its box would wrap, which
-          `min <= longitude <= max` cannot express -- an inverted box would
-          match nothing.
+        - **um círculo que contém um polo**: toda longitude está dentro dele,
+          e a meia-largura em longitude, `asin(sin(d) / cos(latitude))`, não
+          tem valor quando `d` alcança o polo;
+        - **um círculo que cruza o meridiano 180**: a caixa dele daria a
+          volta, o que `min <= longitude <= max` não consegue expressar --
+          uma caixa invertida não casaria com nada.
 
-        For a collection in Brazil neither ever happens, which is exactly why
-        it has to be written down: the case that never fires is the one
-        nobody tests.
+        Para uma coleção no Brasil nenhum dos dois jamais acontece, e é
+        exatamente por isso que precisa ficar escrito: o caso que nunca
+        dispara é o que ninguém testa.
 
-        The longitude half-width uses the exact spherical-cap formula rather
-        than `d / cos(latitude)`, which is an approximation that undershoots
-        -- and a box that undershoots hides photos.
+        A meia-largura em longitude usa a fórmula exata da calota esférica, e
+        não `d / cos(latitude)`, que é uma aproximação que fica aquém -- e
+        uma caixa que fica aquém esconde fotos.
         """
         angular = self.radius_m / EARTH_RADIUS_M * (1 + _BOX_MARGIN)
         latitude = math.radians(self.center.latitude)

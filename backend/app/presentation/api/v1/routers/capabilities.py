@@ -1,24 +1,22 @@
-"""What this installation can do, behind the loopback guard (RFC-031 section 9).
+"""O que esta instalação sabe fazer, atrás da guarda de loopback (RFC-031 §9).
 
-The UI has to know whether to draw *"open in Explorer"*. Today it cannot:
-with `allow_local_file_actions` off, `POST /images/{id}/reveal` answers
-**404 with the body of a route that does not exist** (RFC-030 section 6),
-so discovering the answer by trying means a button that vanishes after
-the user has clicked it.
+A UI precisa saber se desenha o *"abrir no Explorer"*. Hoje não consegue: com
+`allow_local_file_actions` desligado, `POST /images/{id}/reveal` responde
+**404 com o corpo de uma rota que não existe** (RFC-030 §6), então descobrir a
+resposta tentando significa um botão que some depois que o usuário clicou nele.
 
-**One guard, and the asymmetry is the design.** This route carries
-`require_loopback_client` and *not*
-`require_local_file_actions_enabled`, which is the kind of inconsistency
-somebody tidies up by adding the second one. Adding it would break the
-route: with the configuration off, the route would disappear -- and
-"off" is precisely the answer the UI came here to get.
+**Uma guarda, e a assimetria é o desenho.** Esta rota leva
+`require_loopback_client` e *não* `require_local_file_actions_enabled`, que é
+o tipo de inconsistência que alguém arruma acrescentando a segunda. Acrescentá-la
+quebraria a rota: com a configuração desligada, a rota sumiria -- e "desligado"
+é justamente a resposta que a UI veio buscar aqui.
 
-The loopback guard alone is what keeps the 404 honest. Its point is that
-*a client probing the API learns nothing a wrong path would not tell it*;
-a route announcing the configuration to anyone would undo half of that.
-So whoever is on this machine -- the local UI, the only legitimate client
--- gets the answer, and anybody else gets a 403 and learns nothing about
-how this server is configured.
+Só a guarda de loopback é o que mantém o 404 honesto. A razão dela é que *um
+cliente sondando a API não aprende nada que um caminho errado não lhe diria*;
+uma rota anunciando a configuração a qualquer um desfaria metade disso. Então
+quem está nesta máquina -- a UI local, o único cliente legítimo -- recebe a
+resposta, e qualquer outro recebe um 403 e não aprende nada sobre como este
+servidor está configurado.
 """
 
 from __future__ import annotations
@@ -51,37 +49,37 @@ router = APIRouter(tags=["capabilities"])
     },
 )
 def get_capabilities() -> CapabilitiesSchema:
-    """Report the six things a client draws differently because of.
+    """Informa as seis coisas por causa das quais um cliente desenha diferente.
 
-    `local_file_actions` mirrors `settings.allow_local_file_actions`
-    exactly, including when it is `False` -- a `200` saying "no" is the
-    whole reason this route exists, and is why the configuration guard is
-    not on it.
+    `local_file_actions` espelha `settings.allow_local_file_actions`
+    exatamente, inclusive quando é `False` -- um `200` dizendo "não" é a razão
+    inteira de esta rota existir, e é por isso que a guarda de configuração
+    não está nela.
 
-    `platform` is `sys.platform`, read here rather than inferred from
-    anything: only the Windows volume adapter and the Windows file
-    revealer ship, and a client is entitled to know which operating
-    system answered (RFC-027 section 4.1).
+    `platform` é `sys.platform`, lido aqui em vez de inferido de qualquer
+    coisa: só o adaptador de volumes do Windows e o revelador de arquivos do
+    Windows são distribuídos, e um cliente tem direito de saber qual sistema
+    operacional respondeu (RFC-027 §4.1).
 
-    `version` is `settings.project_version` -- the package version, which
-    is `0.1.0`. RFC-031 section 9's example shows `0.5.0`; that is the
-    sprint number, and the sprint number is not the version of anything
-    that ships. The setting is reported as it stands rather than the
-    project being renumbered to match an illustration.
+    `version` é `settings.project_version` -- a versão do pacote, que é
+    `0.1.0`. O exemplo do RFC-031 §9 mostra `0.5.0`; esse é o número da
+    sprint, e o número da sprint não é a versão de nada que é distribuído. A
+    configuração é informada como está, em vez de o projeto ser renumerado
+    para bater com uma ilustração.
 
-    `max_search_limit` and `min_radius_m` came with RFC-038 (section 2.4),
-    and each passes the bar: the size *"Mostrar mais"* asks for, and the
-    smallest radius of the list. Both are policy the API already enforces
-    -- `MAX_SEARCH_LIMIT` in the use case, `settings.min_radius_m` from the
-    user's file -- and a copy of either in the interface is the copy RFC-026
-    section 8.2 refused to put in the route's signature: it would drift.
+    `max_search_limit` e `min_radius_m` vieram com o RFC-038 (§2.4), e cada um
+    passa pelo critério: o tamanho que o *"Mostrar mais"* pede, e o menor raio
+    da lista. Os dois são política que a API já impõe -- `MAX_SEARCH_LIMIT` no
+    caso de uso, `settings.min_radius_m` do arquivo do usuário -- e uma cópia
+    de qualquer um deles na interface é a cópia que o RFC-026 §8.2 se recusou
+    a pôr na assinatura da rota: ela divergiria.
 
-    `address_search` came with RFC-043: the address field is drawn only
-    when `/geocode` answers.
+    `address_search` veio com o RFC-043: o campo de endereço só é desenhado
+    quando o `/geocode` responde.
 
-    The bar for a seventh field is *the UI draws something different
-    because of it*. Without a criterion this becomes a configuration
-    dump, which is the risk RFC-031 section 15 names.
+    O critério para um sétimo campo é *a UI desenha algo diferente por causa
+    dele*. Sem um critério isto vira um despejo de configuração, que é o risco
+    que o RFC-031 §15 nomeia.
     """
     return CapabilitiesSchema(
         local_file_actions=settings.allow_local_file_actions,

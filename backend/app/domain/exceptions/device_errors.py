@@ -1,4 +1,4 @@
-"""Device-specific domain exceptions (RFC-027)."""
+"""Exceções de domínio próprias dos dispositivos (RFC-027)."""
 
 from app.domain.exceptions.domain_error import (
     ConflictError,
@@ -8,20 +8,20 @@ from app.domain.exceptions.domain_error import (
 
 
 class InvalidDeviceIdentifierError(DomainError):
-    """Raised when a device identifier is invalid."""
+    """Levantada quando um identificador de dispositivo é inválido."""
 
     def __init__(self, message: str = "Device identifier must be a valid UUID") -> None:
         super().__init__(message)
 
 
 class InvalidVolumeIdentityError(DomainError):
-    """Raised when a volume identity is empty or of an unknown platform kind.
+    """Levantada quando a identidade de um volume é vazia ou de plataforma desconhecida.
 
-    The identity is the only thing standing between a remounted disk and a
-    second full re-index (RFC-027 section 2.1), so an empty or unrecognised
-    one has to fail loudly at construction. The alternative -- accepting
-    `""` and letting it reach the `UNIQUE` constraint -- would collapse
-    every unidentifiable volume into a single device row.
+    A identidade é a única coisa entre um disco remontado e uma segunda
+    reindexação completa (RFC-027 §2.1), então uma vazia ou não reconhecida
+    tem de falhar de forma ruidosa na construção. A alternativa -- aceitar
+    `""` e deixá-la chegar à restrição `UNIQUE` -- fundiria todo volume não
+    identificável numa única linha de dispositivo.
     """
 
     def __init__(self, message: str = "Invalid volume identity.") -> None:
@@ -29,13 +29,13 @@ class InvalidVolumeIdentityError(DomainError):
 
 
 class DeviceNotFoundError(NotFoundError):
-    """Raised when a device cannot be found.
+    """Levantada quando um dispositivo não é encontrado.
 
-    Re-based from `DomainError` onto `NotFoundError` by RFC-029, which
-    gave the first route able to raise it: `POST /api/v1/jobs` names a
-    device, and "that device id is not one of mine" is a 404 rather than
-    a 400. Nothing that already answered 400 changed status, because
-    until RFC-029 no route could raise this at all.
+    Mudada de base, de `DomainError` para `NotFoundError`, pelo RFC-029, que
+    trouxe a primeira rota capaz de levantá-la: `POST /api/v1/jobs` nomeia um
+    dispositivo, e "esse id de dispositivo não é um dos meus" é um 404, e não
+    um 400. Nada que já respondia 400 mudou de status, porque até o RFC-029
+    nenhuma rota podia levantá-la.
     """
 
     def __init__(self, message: str = "Device not found.") -> None:
@@ -43,23 +43,22 @@ class DeviceNotFoundError(NotFoundError):
 
 
 class DeviceNotConnectedError(ConflictError):
-    """Raised when an operation needs bytes from a volume that is not mounted.
+    """Levantada quando uma operação precisa de bytes de um volume não montado.
 
-    The honest failure for the case RFC-027 section 2.3 describes: the
-    system knows exactly which image is wanted and exactly which disk it
-    is on, and that disk is in a drawer. Reading it is impossible and no
-    amount of retrying changes that -- what the user needs is the name of
-    the disk to plug in, which the raiser is expected to put in the
-    message.
+    A falha honesta para o caso que o RFC-027 §2.3 descreve: o sistema sabe
+    exatamente qual imagem se quer e exatamente em que disco ela está, e esse
+    disco está numa gaveta. Lê-lo é impossível e nenhuma quantidade de novas
+    tentativas muda isso -- o que o usuário precisa é do nome do disco a
+    plugar, que quem levanta a exceção deve pôr na mensagem.
 
-    Distinct from a plain `FileNotFoundError` on purpose. "The file is
-    gone" and "the disk is unplugged" call for opposite reactions: the
-    first justifies dropping a row, the second must never be allowed to.
+    Distinta de um simples `FileNotFoundError` de propósito. "O arquivo
+    sumiu" e "o disco está desplugado" pedem reações opostas: a primeira
+    justifica descartar uma linha; a segunda nunca pode ter essa permissão.
 
-    A `ConflictError` since RFC-029, which corrected its own section 7.1:
-    the draft sent "device disconnected" to 400, and 400 says the request
-    needs fixing. It does not -- the identical request succeeds once the
-    disk is plugged in, which is exactly what 409 describes.
+    Uma `ConflictError` desde o RFC-029, que corrigiu a própria §7.1: o
+    rascunho mandava "dispositivo desconectado" para 400, e 400 diz que o
+    pedido precisa ser corrigido. Não precisa -- o pedido idêntico dá certo
+    assim que o disco é plugado, que é exatamente o que 409 descreve.
     """
 
     def __init__(self, message: str = "Device is not connected.") -> None:

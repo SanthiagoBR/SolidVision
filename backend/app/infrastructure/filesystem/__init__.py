@@ -1,1 +1,1 @@
-"""Filesystem infrastructure package."""
+"""Pacote de infraestrutura do sistema de arquivos."""

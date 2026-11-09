@@ -1,4 +1,4 @@
-"""Abstract contract for computing a content fingerprint of an image's bytes."""
+"""Contrato abstrato para calcular uma impressão digital dos bytes de uma imagem."""
 
 from __future__ import annotations
 
@@ -8,31 +8,33 @@ from app.domain.entities.image import Image
 
 
 class ContentHasherPort(ABC):
-    """Compute a stable fingerprint of the bytes an `Image` points at.
+    """Calcula uma impressão digital estável dos bytes para os quais uma `Image` aponta.
 
-    Mirrors `EmbeddingModelPort`: the Application layer depends on this
-    contract, never on the filesystem access an implementation needs to
-    satisfy it. Reading a file is I/O, and I/O belongs in Infrastructure.
+    Espelha `EmbeddingModelPort`: a camada Application depende deste
+    contrato, nunca do acesso ao sistema de arquivos de que uma implementação
+    precisa para cumpri-lo. Ler um arquivo é I/O, e I/O é da Infrastructure.
 
-    The returned fingerprint is a *change-detection* value only. It must
-    never be used for identity, deduplication, or row lookup: `ImageId` is
-    derived from the path on purpose (RFC-022 7.1), so two byte-identical
-    files at two paths are two distinct images that happen to share a
-    fingerprint.
+    A impressão digital devolvida é só um valor de *detecção de mudança*.
+    Nunca pode ser usada para identidade, deduplicação ou busca de linha: o
+    `ImageId` deriva do caminho de propósito (RFC-022 §7.1), então dois
+    arquivos idênticos byte a byte em dois caminhos são duas imagens
+    distintas que por acaso têm a mesma impressão digital.
 
-    Implementations must treat the supplied `Image` as read-only, and must
-    let I/O errors propagate rather than returning a sentinel -- a caller
-    that cannot read the bytes has to decide what that means, and only the
-    caller knows whether the right answer is "skip this file" or "stop".
+    As implementações precisam tratar a `Image` recebida como somente
+    leitura, e deixar os erros de I/O se propagarem em vez de devolver um
+    sentinela -- um chamador que não consegue ler os bytes precisa decidir o
+    que isso quer dizer, e só ele sabe se a resposta certa é "pular este
+    arquivo" ou "parar".
     """
 
     @abstractmethod
     def hash_image(self, image: Image) -> str:
-        """Return the fingerprint of the bytes at the image\'s resolved location.
+        """Devolve a impressão digital dos bytes no local resolvido da imagem.
 
-        Implementations read `Image.require_absolute_path()`. Since
-        RFC-027 an image records where it lives on its *device*, and an
-        image whose device is unplugged has no bytes to fingerprint --
-        that raises `DeviceNotConnectedError` rather than returning a
-        sentinel, for the same reason I/O errors propagate.
+        As implementações leem `Image.require_absolute_path()`. Desde o
+        RFC-027 uma imagem grava onde mora no *dispositivo* dela, e uma
+        imagem cujo dispositivo está desplugado não tem bytes de que tirar a
+        impressão digital -- isso levanta `DeviceNotConnectedError` em vez
+        de devolver um sentinela, pela mesma razão de os erros de I/O se
+        propagarem.
         """

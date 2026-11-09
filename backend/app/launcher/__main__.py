@@ -1,34 +1,33 @@
-r"""The launcher's commands (RFC-036 section 4.3), and the one module that reads
-the `Settings`.
+r"""Os comandos do launcher (RFC-036 §4.3), e o único módulo que lê os `Settings`.
 
-    python -m app.launcher                 start everything and supervise it,
-                                           until stopped
-    python -m app.launcher --supervised    the same, and stop when stdin ends
-    python -m app.launcher status          what is up, and where
-    python -m app.launcher stop            ask the launcher that is up to stop,
-                                           and wait for it
+    python -m app.launcher                 inicia tudo e supervisiona, até ser
+                                           parado
+    python -m app.launcher --supervised    o mesmo, e para quando o stdin acaba
+    python -m app.launcher status          o que está de pé, e onde
+    python -m app.launcher stop            pede ao launcher de pé que pare, e
+                                           espera por ele
 
-    exit  when
-    0     stopped in order; or another launcher was up, and this one said where
-    78    could not start, and trying again does not change that: the
-          configuration, the cluster refused, the API that gave up
-    1     anything else, with the traceback in the log
+    saída quando
+    0     parou em ordem; ou outro launcher estava de pé, e este disse onde
+    78    não pôde iniciar, e tentar de novo não muda isso: a configuração, o
+          cluster recusou, a API que desistiu
+    1     qualquer outra coisa, com o traceback no log
 
-**The order of the first lines is the order of section 5.1**, and it is why
-most imports here are inside functions. The signal handler first, so that a
-Ctrl+C or the end of stdin is never a `KeyboardInterrupt` in the middle of
-something. Then the lock of the data root: a second launcher reads the state
-file, writes `already_running`, and leaves with 0 -- without ever reading the
-configuration, whose import alone could refuse. Only then the `Settings`, the
-logger, and everything that imports them.
+**A ordem das primeiras linhas é a ordem de §5.1**, e é por isso que a maioria
+dos imports aqui fica dentro de funções. Primeiro o handler de sinais, para que
+um Ctrl+C ou o fim do stdin nunca seja um `KeyboardInterrupt` no meio de
+alguma coisa. Depois o lock da raiz de dados: um segundo launcher lê o arquivo
+de estado, escreve `already_running` e sai com 0 -- sem nunca ler a
+configuração, cujo import sozinho poderia recusar. Só então os `Settings`, o
+logger e tudo o que os importa.
 
-`stdout` is the events' and nothing else's: the real stream is kept for them,
-and `sys.stdout` points at stderr, so that a stray `print` -- of this code or
-of a library -- cannot break a line of the protocol.
+O `stdout` é dos eventos e de mais nada: o stream real fica guardado para eles,
+e `sys.stdout` aponta para o stderr, para que um `print` perdido -- deste
+código ou de uma biblioteca -- não quebre uma linha do protocolo.
 
-In a checkout, run from the repository root with `backend` on the path, as the
-cluster's CLI is (RFC-033 section 11). Installed, the shortcut or the window
-run the same module with the installation's interpreter.
+Num checkout, rode a partir da raiz do repositório com `backend` no path, como
+a CLI do cluster (RFC-033 §11). Instalado, o atalho ou a janela rodam o mesmo
+módulo com o interpretador da instalação.
 """
 
 from __future__ import annotations
@@ -66,15 +65,15 @@ from .instance import (
 )
 
 STOP_WAIT_SECONDS = 180.0
-"""How long `stop` waits for the launcher to let go of its lock: the deadlines
-of both children (15 s and 30 s), the cluster's `stop()`, and the margin."""
+"""Quanto tempo o `stop` espera o launcher soltar o lock: os prazos dos dois
+filhos (15 s e 30 s), o `stop()` do cluster e a margem."""
 
 EVENT_WAIT_SECONDS = 5.0
-"""How long `stop` retries a launcher that holds the lock and has not created
-its event yet -- it is in its first instants."""
+"""Por quanto tempo o `stop` insiste com um launcher que segura o lock e ainda
+não criou o evento -- ele está nos primeiros instantes."""
 
 SESSION_STOP_SECONDS = 30.0
-"""How long the window of the session end waits for the stop (section 7.5)."""
+"""Quanto tempo a janela do fim de sessão espera pela parada (§7.5)."""
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -106,7 +105,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 # ----------------------------------------------------------------------
-# The launcher
+# O launcher
 
 
 def _launch(where: Layout, *, supervised: bool) -> int:
@@ -145,14 +144,14 @@ def _launch(where: Layout, *, supervised: bool) -> int:
 def _claim(
     state: StateFile, previous: InstanceRecord | None, now: LauncherState
 ) -> None:
-    """Say at once that this launcher holds the data root.
+    """Diz de imediato que este launcher segura a raiz de dados.
 
-    Before the configuration is read, so that a second opening in the next
-    instants says `starting` and this PID, and not what the last launcher left
-    -- measured: `already_running` with `"state": "stopped"` and no PID, for a
-    launcher 0.5 s into its start. What the last one left about the cluster
-    and the port is kept: if this launcher dies before it writes its own, the
-    next one still needs them (sections 5.4 and 7.3).
+    Antes de a configuração ser lida, para que uma segunda abertura nos
+    instantes seguintes diga `starting` e este PID, e não o que o último
+    launcher deixou -- medido: `already_running` com `"state": "stopped"` e
+    sem PID, para um launcher a 0,5 s do início. O que o último deixou sobre o
+    cluster e a porta é mantido: se este launcher morrer antes de gravar os
+    seus, o próximo ainda precisa deles (§5.4 e §7.3).
     """
     state.write(
         InstanceRecord(
@@ -180,8 +179,8 @@ def _run(
     try:
         from app.infrastructure.config.settings import DatabaseSource, settings
     except CannotStart as refusal:
-        # The children would read the same file in the same mode, and refuse
-        # the same way: the launcher refuses for them (section 5.1).
+        # Os filhos leriam o mesmo arquivo no mesmo modo, e recusariam do
+        # mesmo jeito: o launcher recusa por eles (§5.1).
         events.emit(Event.STARTING, **starting)
         events.emit(Event.FAILED, detail=refusal.line)
         _claim(state, previous, LauncherState.STOPPED)
@@ -256,11 +255,11 @@ def _run(
 
 
 def _streams_for_the_protocol() -> TextIO:
-    """The real stdout, kept for the events; `sys.stdout` pointed at stderr.
+    """O stdout real, guardado para os eventos; `sys.stdout` apontado para o stderr.
 
-    Both in UTF-8: the children's lines pass through stderr, and a window
-    reading the pipe would otherwise get them in the ANSI code page, with
-    whatever does not fit in it escaped.
+    Os dois em UTF-8: as linhas dos filhos passam pelo stderr, e uma janela
+    lendo o pipe as receberia, do contrário, na code page ANSI, com o que não
+    cabe nela escapado.
     """
     if sys.stderr is None:
         sys.stderr = open(os.devnull, "w", encoding="utf-8")
@@ -270,19 +269,19 @@ def _streams_for_the_protocol() -> TextIO:
             reconfigure(encoding="utf-8", errors="backslashreplace")
     events_stream = sys.stdout
     if events_stream is None:
-        # No stdout at all (`pythonw`): nobody reads the events.
+        # Nenhum stdout (`pythonw`): ninguém lê os eventos.
         events_stream = open(os.devnull, "w", encoding="utf-8")
     sys.stdout = sys.stderr
     return events_stream
 
 
 def _listen_for_interrupts(requests: StopRequests) -> None:
-    """Ctrl+C, Ctrl+Break, and the SIGINT of the stdin watch: a request, counted.
+    """Ctrl+C, Ctrl+Break e o SIGINT da vigia do stdin: um pedido, contado.
 
-    Never a `KeyboardInterrupt`: the supervisor honours the request at the next
-    safe point, and nothing -- an `initdb`, a recovery, a migration -- is cut
-    in half. The second request during the stop is the order that skips the
-    deadlines (section 7.2).
+    Nunca um `KeyboardInterrupt`: o supervisor atende o pedido no próximo ponto
+    seguro, e nada -- um `initdb`, uma recuperação, uma migration -- é cortado
+    ao meio. O segundo pedido durante a parada é a ordem que pula os prazos
+    (§7.2).
     """
 
     def interrupted(signum: int, frame: FrameType | None) -> None:
@@ -292,18 +291,18 @@ def _listen_for_interrupts(requests: StopRequests) -> None:
     if hasattr(signal, "SIGBREAK"):
         signal.signal(signal.SIGBREAK, interrupted)
     if sys.platform == "win32":
-        # Ignoring Ctrl+C is an attribute a process inherits from its parent,
-        # and a parent may have left it on: measured, a launcher started that
-        # way never saw the Ctrl+C sent to its console, while Ctrl+Break got
-        # through. Restored here, for this process only -- the children have
-        # consoles of their own, which no Ctrl+C of this one reaches.
+        # Ignorar o Ctrl+C é um atributo que um processo herda do pai, e um pai
+        # pode tê-lo deixado ligado: medido, um launcher iniciado assim nunca
+        # viu o Ctrl+C mandado ao seu console, enquanto o Ctrl+Break passou.
+        # Restaurado aqui, só para este processo -- os filhos têm consoles
+        # próprios, que nenhum Ctrl+C deste alcança.
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.SetConsoleCtrlHandler.argtypes = [ctypes.c_void_p, wintypes.BOOL]
         kernel32.SetConsoleCtrlHandler(None, False)
 
 
 # ----------------------------------------------------------------------
-# status and stop
+# status e stop
 
 
 def _say(message: str) -> None:
@@ -311,7 +310,7 @@ def _say(message: str) -> None:
 
 
 def _status(where: Layout) -> int:
-    """What is up, and where. Never the password; reads, and starts nothing."""
+    """O que está de pé, e onde. Nunca a senha; lê, e não inicia nada."""
     instance = Instance(where.data_directory)
     running = InstanceLock(instance.lock).held_elsewhere()
     record = StateFile(instance.state).read()
@@ -340,11 +339,11 @@ def _status(where: Layout) -> int:
 
 
 def _stop(where: Layout) -> int:
-    """Ask the launcher of this data root to stop, and wait for it to go.
+    """Pede ao launcher desta raiz de dados que pare, e espera que ele saia.
 
-    With no launcher up, the state file decides (section 4.3): a cluster a
-    launcher started, and that is still up, is stopped -- what is left of a
-    launcher that died (7.4). Anything else is left alone.
+    Sem launcher de pé, o arquivo de estado decide (§4.3): um cluster que um
+    launcher iniciou, e que ainda está de pé, é parado -- o que sobrou de um
+    launcher que morreu (§7.4). Qualquer outra coisa fica como está.
     """
     instance = Instance(where.data_directory)
     lock = InstanceLock(instance.lock)

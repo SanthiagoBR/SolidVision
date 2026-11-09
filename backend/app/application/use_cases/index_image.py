@@ -1,4 +1,4 @@
-"""Application use case for indexing a single image."""
+"""Caso de uso da aplicação para indexar uma única imagem."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from app.domain.services.embedding_model_port import EmbeddingModelPort
 
 
 class IndexImageUseCase:
-    """Coordinate repository persistence and embedding generation for an image."""
+    """Coordena a persistência no repositório e a geração do embedding de uma imagem."""
 
     def __init__(
         self,
@@ -20,7 +20,7 @@ class IndexImageUseCase:
         self._embedding_model = embedding_model
 
     def execute(self, image: Image) -> None:
-        """Persist an image after verifying it does not already exist."""
+        """Persiste uma imagem depois de verificar que ela ainda não existe."""
         if self._repository.exists(image.id):
             raise ImageAlreadyExistsError()
 

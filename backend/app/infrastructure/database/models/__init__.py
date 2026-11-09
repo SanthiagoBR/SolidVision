@@ -1,4 +1,4 @@
-"""Database model package for persistence infrastructure."""
+"""Pacote dos modelos de banco da infraestrutura de persistência."""
 
 from app.infrastructure.database.models.device_model import DeviceModel
 from app.infrastructure.database.models.image_model import ImageModel

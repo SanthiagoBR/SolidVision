@@ -1,24 +1,25 @@
-r"""One launcher per data root: the lock, the state file, the stop event (RFC-036 8).
+r"""Um launcher por raiz de dados: o lock, o estado, o evento de parada (RFC-036 §8).
 
-    <data>\launcher.lock    held exclusively for the launcher's whole life
-    <data>\launcher.json    what it is doing, rewritten in one rename
-    Local\SolidVision-launcher-<16 hex of the sha256 of the data root>
-                            the named event `python -m app.launcher stop` signals
+    <data>\launcher.lock    detido com exclusividade pela vida inteira do launcher
+    <data>\launcher.json    o que ele está fazendo, reescrito num único rename
+    Local\SolidVision-launcher-<16 hex do sha256 da raiz de dados>
+                            o evento nomeado que `python -m app.launcher stop`
+                            sinaliza
 
-**The lock is the truth about there being a launcher.** Windows releases it
-when the process ends, however it ends, so there is no stale lock to clean.
-The state file never says whether a launcher is up: one whose lock is free was
-left by a launcher that is gone, and is read for two things only -- the port of
-the last start that reached `ready` (section 5.4), and whether the cluster that
-may still be up was started by a launcher (section 7.3).
+**O lock é a verdade sobre haver um launcher.** O Windows o libera quando o
+processo termina, como quer que termine, então não há lock velho a limpar. O
+arquivo de estado nunca diz se há um launcher no ar: um cujo lock está livre foi
+deixado por um launcher que já se foi, e é lido para duas coisas apenas -- a
+porta do último início que chegou a `ready` (§5.4) e se o cluster que talvez
+ainda esteja no ar foi iniciado por um launcher (§7.3).
 
-Per data root, and not per user, because the data root is what cannot have two
-owners: the cluster, the logs, the thumbnails. A checkout (`SolidVision-dev`)
-and an installed app (`SolidVision`) run side by side, each with its own.
+Por raiz de dados, e não por usuário, porque a raiz de dados é o que não pode ter
+dois donos: o cluster, os logs, as thumbnails. Um checkout (`SolidVision-dev`) e
+um app instalado (`SolidVision`) rodam lado a lado, cada um com a sua.
 
-Nothing here imports the `Settings` or the logger: the second launcher reads
-the state file and leaves without either (section 8). Its records go to the
-standard logger of its name, which the app's logger takes over once configured.
+Nada aqui importa o `Settings` nem o logger: o segundo launcher lê o arquivo de
+estado e sai sem nenhum dos dois (§8). Os seus registros vão para o logger padrão
+do seu nome, que o logger do app assume depois de configurado.
 """
 
 from __future__ import annotations
@@ -47,17 +48,17 @@ ADMINISTRATORS_SID = "S-1-5-32-544"
 
 LOCK_ATTEMPTS = 4
 LOCK_PAUSE_SECONDS = 0.05
-"""A busy lock is tried again for 150 ms before it means "another launcher".
+"""Um lock ocupado é tentado de novo por 150 ms antes de significar "outro launcher".
 
-`status` and `stop` take the lock for a moment to see whether it is held, and
-a launcher starting in that moment would otherwise take that for another one.
+`status` e `stop` tomam o lock por um instante para ver se ele está detido, e um
+launcher que iniciasse nesse instante tomaria isso, de outro modo, por um outro.
 """
 
 REPLACE_SECONDS = 2.0
-"""How long a rename of the state file is retried while a reader holds it.
+"""Quanto tempo o rename do arquivo de estado é retentado enquanto um leitor o lê.
 
-Python opens files without `FILE_SHARE_DELETE`, so a `status` reading the
-state at that instant makes Windows refuse to replace it.
+O Python abre arquivos sem `FILE_SHARE_DELETE`, então um `status` lendo o estado
+nesse instante faz o Windows recusar a substituição.
 """
 
 _WAIT_OBJECT_0 = 0
@@ -69,23 +70,23 @@ class LauncherState(StrEnum):
     READY = "ready"
     STOPPING = "stopping"
     STOPPED = "stopped"
-    """Written by an ordered stop: no launcher, and nothing of one left up."""
+    """Escrito por uma parada ordenada: nenhum launcher, e nada de um deixado no ar."""
 
 
 class ClusterArrival(StrEnum):
-    """How the cluster came to the launcher (section 7.3)."""
+    """Como o cluster chegou ao launcher (§7.3)."""
 
     STARTED = "started"
-    """A launcher started it: a launcher stops it."""
+    """Um launcher o iniciou: um launcher o para."""
     ADOPTED = "adopted"
-    """Someone else started it -- `embedded start`, `run --`: left up."""
+    """Outro o iniciou -- `embedded start`, `run --`: fica no ar."""
     EXTERNAL = "external"
-    """The `external` source: the launcher touches no database (section 9)."""
+    """A fonte `external`: o launcher não toca em banco nenhum (§9)."""
 
 
 @dataclass(frozen=True)
 class InstanceRecord:
-    """What `launcher.json` says."""
+    """O que o `launcher.json` diz."""
 
     state: LauncherState
     pid: int | None = None
@@ -93,11 +94,11 @@ class InstanceRecord:
     children: Mapping[str, int] = field(default_factory=dict)
     cluster: ClusterArrival | None = None
     postmaster_pid: int | None = None
-    """The server the launcher started or adopted, so that a launcher that
-    inherits a cluster inherits that one, and not a server somebody started
-    by hand since (section 7.3)."""
+    """O servidor que o launcher iniciou ou adotou, para que um launcher que
+    herda um cluster herde esse, e não um servidor que alguém iniciou à mão
+    depois (§7.3)."""
     last_ready_port: int | None = None
-    """The port of the last start that reached `ready` (section 5.4)."""
+    """A porta do último início que chegou a `ready` (§5.4)."""
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -113,7 +114,7 @@ class InstanceRecord:
 
     @classmethod
     def from_json(cls, raw: object) -> InstanceRecord:
-        """The record, or `ValueError` for anything this version did not write."""
+        """O registro, ou `ValueError` para tudo o que esta versão não escreveu."""
         if not isinstance(raw, dict) or raw.get("format") != STATE_FORMAT:
             raise ValueError("not a launcher state of this format")
         children = raw.get("children") or {}
@@ -140,7 +141,7 @@ def _optional_int(value: object) -> int | None:
 
 
 class StateFile:
-    """`launcher.json`, read leniently and written in one rename."""
+    """`launcher.json`, lido com tolerância e escrito num único rename."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -150,10 +151,11 @@ class StateFile:
         return self._path
 
     def read(self) -> InstanceRecord | None:
-        """The record, or `None` when there is none this version can read.
+        """O registro, ou `None` quando não há nenhum que esta versão saiba ler.
 
-        A file that cannot be parsed is treated as absent: the worst that
-        costs is a new port, and a cluster left up instead of stopped.
+        Um arquivo que não pode ser interpretado é tratado como ausente: o pior
+        que isso custa é uma porta nova, e um cluster deixado no ar em vez de
+        parado.
         """
         try:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
@@ -171,10 +173,11 @@ class StateFile:
             return None
 
     def write(self, record: InstanceRecord) -> bool:
-        """Replace the file with `record`, so that no reader sees half of one.
+        """Substitui o arquivo por `record`, para que nenhum leitor veja meio registro.
 
-        A state that cannot be written is logged and otherwise ignored: the
-        launcher works without it, and the next start chooses a new port.
+        Um estado que não pode ser escrito vai para o log e é, fora isso,
+        ignorado: o launcher funciona sem ele, e o próximo início escolhe uma
+        porta nova.
         """
         temporary = self._path.with_name(f"{self._path.name}.{os.getpid()}.tmp")
         try:
@@ -198,10 +201,10 @@ class StateFile:
 
 
 class InstanceLock:
-    """`launcher.lock`, locked with `msvcrt.locking`, like the adapter's lock.
+    """`launcher.lock`, travado com `msvcrt.locking`, como o lock do adaptador.
 
-    Held for the life of the launcher, never released while it runs. Windows
-    releases it when the process ends, killed or not.
+    Detido pela vida do launcher, nunca liberado enquanto ele roda. O Windows o
+    libera quando o processo termina, morto ou não.
     """
 
     def __init__(self, path: Path) -> None:
@@ -211,7 +214,7 @@ class InstanceLock:
     def acquire(
         self, attempts: int = LOCK_ATTEMPTS, pause: float = LOCK_PAUSE_SECONDS
     ) -> bool:
-        """Take the lock, or report that another process holds it."""
+        """Toma o lock, ou informa que outro processo o detém."""
         import msvcrt
 
         if self._descriptor is not None:
@@ -243,7 +246,7 @@ class InstanceLock:
             self._descriptor = None
 
     def held_elsewhere(self) -> bool:
-        """Whether a launcher holds the lock now; takes it for an instant."""
+        """Se um launcher detém o lock agora; toma-o por um instante."""
         if self._descriptor is not None:
             return False
         if self.acquire(attempts=1):
@@ -254,7 +257,7 @@ class InstanceLock:
 
 @dataclass(frozen=True)
 class Instance:
-    """The three things of one data root, by their paths and name."""
+    """As três coisas de uma raiz de dados, pelos seus caminhos e nome."""
 
     data_directory: Path
 
@@ -268,25 +271,25 @@ class Instance:
 
     @property
     def stop_event_name(self) -> str:
-        """Per session (`Local\\`) and per data root: the `stop` of a checkout
-        does not stop the installed app."""
+        """Por sessão (`Local\\`) e por raiz de dados: o `stop` de um checkout
+        não para o app instalado."""
         key = os.path.normcase(str(self.data_directory)).encode("utf-8")
         return EVENT_PREFIX + hashlib.sha256(key).hexdigest()[:16]
 
 
 class StopRequests:
-    """Every way a stop is asked, counted where the supervisor can poll them.
+    """Todo modo de pedir uma parada, contado onde o supervisor pode consultá-los.
 
-    `ask()` is a Ctrl+C, the end of stdin or a `stop`; the second one during
-    a stop skips the deadlines (section 7.2). `end_session()` is the window of
-    section 7.5: it shortens the deadlines and never skips them, because what
-    the deadlines protect -- the job going back to the queue -- is the point of
-    stopping in order at a logoff at all.
+    `ask()` é um Ctrl+C, o fim do stdin ou um `stop`; o segundo durante uma
+    parada pula os prazos (§7.2). `end_session()` é a janela de §7.5: encurta os
+    prazos e nunca os pula, porque o que os prazos protegem -- o job voltando
+    para a fila -- é a razão de parar em ordem num logoff, para começo de
+    conversa.
 
-    Here, before any `Settings`: the signal handler that feeds it is installed
-    before the lock is even tried. A re-entrant lock, because that handler
-    runs in the main thread between any two instructions -- including those
-    of a `count()` that already holds the lock.
+    Aqui, antes de qualquer `Settings`: o signal handler que o alimenta é
+    instalado antes mesmo de o lock ser tentado. Um lock reentrante, porque esse
+    handler roda na thread principal entre duas instruções quaisquer --
+    inclusive as de um `count()` que já detém o lock.
     """
 
     def __init__(self) -> None:
@@ -304,7 +307,7 @@ class StopRequests:
             self._session_ending = True
 
     def poll(self, source: Callable[[], bool]) -> None:
-        """Add a source that says, when asked, whether a request arrived."""
+        """Acrescenta uma fonte que diz, quando perguntada, se chegou um pedido."""
         self._sources.append(source)
 
     def count(self) -> int:
@@ -320,10 +323,10 @@ class StopRequests:
 
 
 class StopEvent:
-    """The named event the launcher waits on, and `stop` signals.
+    """O evento nomeado que o launcher espera, e que o `stop` sinaliza.
 
-    Auto-reset: each signal is one request. The second request during a stop
-    is the order that skips the deadlines (section 7.2).
+    Auto-reset: cada sinal é um pedido. O segundo pedido durante uma parada é a
+    ordem que pula os prazos (§7.2).
     """
 
     def __init__(self, handle: int) -> None:
@@ -335,13 +338,13 @@ class StopEvent:
         handle = kernel32.CreateEventW(None, False, False, name)
         if not handle:
             raise OSError(ctypes.get_last_error(), f"Could not create the event {name}")
-        # A signal left from before -- a `stop` that arrived as the previous
-        # launcher was leaving -- is not addressed to this one.
+        # Um sinal deixado de antes -- um `stop` que chegou enquanto o launcher
+        # anterior saía -- não é endereçado a este.
         kernel32.ResetEvent(handle)
         return cls(handle)
 
     def is_set(self) -> bool:
-        """Whether a request arrived since the last look; consumes it."""
+        """Se chegou um pedido desde a última olhada; consome-o."""
         if self._handle is None:
             return False
         return bool(_kernel32().WaitForSingleObject(self._handle, 0) == _WAIT_OBJECT_0)
@@ -353,7 +356,7 @@ class StopEvent:
 
     @staticmethod
     def signal(name: str) -> bool:
-        """Ask the launcher of `name` to stop. `False` when there is none."""
+        """Pede ao launcher de `name` que pare. `False` quando não há nenhum."""
         kernel32 = _kernel32()
         handle = kernel32.OpenEventW(_EVENT_MODIFY_STATE, False, name)
         if not handle:
@@ -365,12 +368,12 @@ class StopEvent:
 
 
 def administrators_enabled() -> bool | None:
-    """Whether the Administrators group is in force in this process's token.
+    """Se o grupo Administradores está em vigor no token deste processo.
 
-    The group, and not `TokenElevation`, which RFC-033 section 8.3 measured
-    reading `True` even in the token `pg_ctl` restricts. `CheckTokenMembership`
-    answers yes only for a group that is enabled, not one kept to deny. `None`
-    when Windows would not say.
+    O grupo, e não `TokenElevation`, que o RFC-033 §8.3 mediu lendo `True` até no
+    token que o `pg_ctl` restringe. `CheckTokenMembership` responde sim só para
+    um grupo habilitado, não para um mantido apenas para negar. `None` quando o
+    Windows não diz.
     """
     from ctypes import wintypes
 
@@ -398,10 +401,11 @@ def administrators_enabled() -> bool | None:
 
 
 def _kernel32() -> Any:
-    """`kernel32` with the signatures this module calls, set every time.
+    """`kernel32` com as assinaturas que este módulo chama, definidas toda vez.
 
-    Typed `Any` for the reason `windows_processes.py` gives: a `ctypes` DLL
-    has no static signature, and the `argtypes` keep 64-bit handles whole.
+    Tipado como `Any` pela razão que o `windows_processes.py` dá: uma DLL do
+    `ctypes` não tem assinatura estática, e os `argtypes` mantêm inteiros os
+    handles de 64 bits.
     """
     from ctypes import wintypes
 

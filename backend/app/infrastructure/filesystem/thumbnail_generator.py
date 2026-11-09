@@ -1,18 +1,18 @@
-"""Pillow implementation of the thumbnail port (RFC-030 section 7.2).
+"""Implementação em Pillow da porta de thumbnails (RFC-030 §7.2).
 
-**A fresh decode of the file, not a by-product of the embedding.** RFC-030
-as proposed expected thumbnails to come almost free, from the picture CLIP
-had already decoded. In this codebase that picture never leaves
-`ClipEmbeddingModel._preprocess()`, so this module opens the file again --
-the fourth independent open per indexed image, after the content hash, the
-EXIF header and the model. What that costs is measured in
-`experiments/rfc-030-file-access/measure_thumbnail_cost.py`, against the
-inference it sits beside rather than against zero.
+**Uma decodificação nova do arquivo, não um subproduto do embedding.** O
+RFC-030, como proposto, esperava que as thumbnails saíssem quase de graça, da
+imagem que o CLIP já tinha decodificado. Nesta base de código essa imagem nunca
+sai de `ClipEmbeddingModel._preprocess()`, então este módulo abre o arquivo de
+novo -- a quarta abertura independente por imagem indexada, depois do hash do
+conteúdo, do cabeçalho EXIF e do modelo. O quanto isso custa está medido em
+`experiments/rfc-030-file-access/measure_thumbnail_cost.py`, contra a inferência
+ao lado da qual ela fica, e não contra zero.
 
-Since RFC-045 the decode may come from bytes already in memory -- the ones
-the read-ahead read for the hash -- instead of from the file. Still a decode
-of its own; only the source of the bytes changes, and the thumbnail is the
-same, byte for byte.
+Desde o RFC-045, a decodificação pode vir de bytes já em memória -- os que a
+leitura antecipada leu para o hash -- em vez do arquivo. Continua sendo uma
+decodificação própria; só muda a origem dos bytes, e a thumbnail é a mesma,
+byte a byte.
 """
 
 from __future__ import annotations
@@ -27,63 +27,64 @@ from app.domain.services.thumbnail_generator_port import ThumbnailGeneratorPort
 
 THUMBNAIL_FORMAT = "JPEG"
 THUMBNAIL_SUFFIX = ".jpg"
-"""The one encoding every thumbnail has, and the suffix the store names it by.
+"""A única codificação que toda thumbnail tem, e o sufixo pelo qual o store a nomeia.
 
-JPEG because thumbnails of photographs are photographs: it is the smallest
-widely decodable format for them, every browser renders it, and the
-alternatives that beat it on size (WebP, AVIF) buy bytes the local-first
-deployment has no network to save them on. Transparency is flattened onto
-white (`_flatten()`), which is the one thing the choice gives up.
+JPEG porque thumbnails de fotos são fotos: é o menor formato amplamente
+decodificável para elas, todo navegador o renderiza, e as alternativas que o
+batem em tamanho (WebP, AVIF) economizam bytes numa implantação local-first que
+não tem rede onde economizá-los. A transparência é achatada sobre branco
+(`_flatten()`), que é a única coisa de que a escolha abre mão.
 """
 
 JPEG_QUALITY = 85
-"""Not configuration, for the reason `READ_CHUNK_BYTES` is not.
+"""Não é configuração, pela mesma razão que `READ_CHUNK_BYTES` não é.
 
-Nothing about the product changes between 80 and 90 that a user would
-choose; what matters is that it is fixed, so two runs produce the same
-bytes. The resulting size per thumbnail is measured in RFC-030 section 9.
+Nada no produto muda entre 80 e 90 que um usuário fosse escolher; o que importa
+é que seja fixo, para que duas execuções produzam os mesmos bytes. O tamanho
+resultante por thumbnail está medido no RFC-030 §9.
 """
 
 _SIXTEEN_BIT_MODES = frozenset({"I;16", "I;16L", "I;16B", "I;16N"})
 
 
 class PillowThumbnailGenerator(ThumbnailGeneratorPort):
-    """Decode, shrink, orient, flatten and encode one image as a JPEG."""
+    """Decodifica, reduz, orienta, achata e codifica uma imagem como JPEG."""
 
     def generate(
         self, image: Image, max_edge: int, content: bytes | None = None
     ) -> bytes:
-        """Return JPEG bytes whose longer side is at most `max_edge` pixels.
+        """Devolve bytes JPEG cujo lado maior tem no máximo `max_edge` pixels.
 
-        The order of the steps is the performance, and each one is there
-        for a case the demo corpus's RFC-022 hard cases actually contain.
+        A ordem dos passos é o desempenho, e cada um está aí por um caso que os
+        casos difíceis do RFC-022 no corpus de demonstração de fato contêm.
 
-        1. **`thumbnail()` before anything forces a full decode.** For a
-           JPEG it asks the decoder for a reduced-scale draft (DCT scaling
-           to 1/2, 1/4 or 1/8) before resizing, so a 20 MP drone photo is
-           never decoded at full resolution. `exif_transpose()` or
-           `convert()` first would load every pixel and throw that away.
-           It never enlarges a smaller source.
-        2. **EXIF orientation is applied to the small image.** A camera
-           held vertically writes landscape pixels plus an orientation tag;
-           ignoring the tag shows the user a sideways photo. The tag
-           survives `thumbnail()`, and a 90-degree turn keeps the result
-           inside the `max_edge` square. The output carries no EXIF, so no
-           viewer can apply the rotation a second time.
-        3. **Everything becomes 8-bit RGB.** CMYK and grayscale convert
-           directly; 16-bit TIFFs are scaled down first, because Pillow's
-           direct conversion clips every value above 255 and renders a
-           16-bit photo almost entirely white; transparency is flattened
-           onto white, since JPEG has no alpha and a plain conversion would
-           put transparent regions on black.
+        1. **`thumbnail()` antes de qualquer coisa forçar uma decodificação
+           completa.** Para um JPEG, ele pede ao decodificador um rascunho em
+           escala reduzida (escala DCT para 1/2, 1/4 ou 1/8) antes de
+           redimensionar, então uma foto de drone de 20 MP nunca é decodificada
+           em resolução cheia. `exif_transpose()` ou `convert()` antes
+           carregariam todos os pixels e jogariam isso fora. Ele nunca amplia
+           uma origem menor.
+        2. **A orientação EXIF é aplicada à imagem pequena.** Uma câmera segura
+           na vertical grava pixels em paisagem mais uma tag de orientação;
+           ignorar a tag mostra ao usuário uma foto deitada. A tag sobrevive a
+           `thumbnail()`, e um giro de 90 graus mantém o resultado dentro do
+           quadrado de `max_edge`. A saída não leva EXIF, então nenhum
+           visualizador pode aplicar a rotação uma segunda vez.
+        3. **Tudo vira RGB de 8 bits.** CMYK e tons de cinza convertem direto;
+           TIFFs de 16 bits são reescalados antes, porque a conversão direta do
+           Pillow corta todo valor acima de 255 e deixa uma foto de 16 bits
+           quase inteiramente branca; a transparência é achatada sobre branco,
+           já que JPEG não tem alfa e uma conversão simples poria as regiões
+           transparentes sobre preto.
 
-        A zero-byte or truncated file raises from the decoder, and that is
-        the correct outcome: the caller reports a thumbnail failure and
-        the image stays indexed without one.
+        Um arquivo de zero bytes ou truncado levanta exceção no decodificador,
+        e esse é o desfecho correto: quem chama relata uma falha de thumbnail e
+        a imagem continua indexada sem ela.
 
-        `content` is the file's bytes when the caller already read them
-        (RFC-045 section 5.3); they are decoded instead of the file, which
-        is then not opened at all.
+        `content` são os bytes do arquivo, quando quem chama já os leu
+        (RFC-045 §5.3); eles são decodificados no lugar do arquivo, que então
+        nem é aberto.
         """
         if max_edge < 1:
             raise ValueError(f"max_edge must be at least 1, got {max_edge}")
@@ -105,14 +106,14 @@ class PillowThumbnailGenerator(ThumbnailGeneratorPort):
 
 
 def _to_eight_bit(picture: PILImage.Image) -> PILImage.Image:
-    """Scale a 16-bit single-channel image into 8 bits instead of clipping it."""
+    """Reescala uma imagem de 16 bits e um canal para 8 bits, em vez de cortá-la."""
     if picture.mode not in _SIXTEEN_BIT_MODES:
         return picture
     return picture.convert("I").point(lambda value: value / 257).convert("L")
 
 
 def _flatten(picture: PILImage.Image) -> PILImage.Image:
-    """Return an RGB image, compositing any transparency onto white."""
+    """Devolve uma imagem RGB, compondo qualquer transparência sobre branco."""
     has_alpha = picture.mode in ("RGBA", "LA", "PA") or (
         picture.mode == "P" and "transparency" in picture.info
     )

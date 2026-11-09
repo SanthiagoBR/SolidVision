@@ -1,21 +1,21 @@
-"""The warm-up of the models, in a thread, and what `/health` says of it (RFC-036).
+"""O aquecimento dos modelos, numa thread, e o que o `/health` diz dele (RFC-036).
 
-The API answers in two times (section 5.3). The port opens as soon as the API
-is imported, which no longer imports `torch`; the warm-up of RFC-026 section
-10 runs afterwards in a daemon thread, and this is where it says how it went.
+A API responde em dois tempos (§5.3). A porta abre assim que a API é
+importada, o que não importa mais o `torch`; o aquecimento do RFC-026 §10 roda
+depois, numa thread daemon, e é aqui que ele diz como foi.
 
-    search        when
-    loading       the warm-up is running
-    ready         it ended, and both models are loaded
-    unavailable   it failed with `ModelUnavailableError`; the detail is the line
-    on_demand     it is off, or failed for another reason: the first search loads
+    search        quando
+    loading       o aquecimento está rodando
+    ready         terminou, e os dois modelos estão carregados
+    unavailable   falhou com `ModelUnavailableError`; o detail é a linha
+    on_demand     está desligado, ou falhou por outro motivo: a 1ª busca carrega
 
-"Ready" in `/health` does not depend on it (section 5.2): a 200 with `search:
-unavailable` is the API of RFC-035 section 6.5, which shows the collection and
-cannot search it. What the window draws for each value is the frontend's.
+O "pronto" do `/health` não depende dele (§5.2): um 200 com `search:
+unavailable` é a API do RFC-035 §6.5, que mostra a coleção e não consegue
+buscar nela. O que a janela desenha para cada valor é com o frontend.
 
-Here and not in `app.presentation.api`, so that the route that reads it does
-not import the package that includes the route.
+Aqui, e não em `app.presentation.api`, para que a rota que o lê não importe o
+pacote que inclui a rota.
 """
 
 from __future__ import annotations
@@ -37,15 +37,15 @@ class SearchState(StrEnum):
 class SearchReadiness:
     state: SearchState
     detail: str | None = None
-    """The line of RFC-035 section 6.4, when `state` is `unavailable`."""
+    """A linha do RFC-035 §6.4, quando `state` é `unavailable`."""
 
 
 class ModelWarmUp:
-    """Runs the warm-up in a daemon thread, and remembers what it came to.
+    """Roda o aquecimento numa thread daemon, e guarda no que ele deu.
 
-    Daemon, so that a process asked to stop while the thread is still
-    importing `torch` -- 14 to 40 s on the hard disk of the measurements -- is
-    not held up by it: the stop of RFC-036 section 7.2 gives the API 15 s.
+    Daemon, para que um processo que recebe ordem de parar enquanto a thread
+    ainda importa `torch` -- 14 a 40 s no disco rígido das medições -- não
+    fique preso a ela: a parada do RFC-036 §7.2 dá 15 s à API.
     """
 
     def __init__(self) -> None:
@@ -58,16 +58,16 @@ class ModelWarmUp:
             return self._readiness
 
     def skip(self) -> None:
-        """The warm-up is off: the first search loads the models."""
+        """O aquecimento está desligado: a primeira busca carrega os modelos."""
         with self._lock:
             self._readiness = SearchReadiness(SearchState.ON_DEMAND)
 
     def start(self, warm_up: Callable[[], SearchReadiness]) -> threading.Thread:
-        """Run `warm_up` in a thread, unless one is already running.
+        """Roda `warm_up` numa thread, a menos que uma já esteja rodando.
 
-        `warm_up` returns what it came to, and should not raise. If it does,
-        the state is `on_demand` -- the lazy path is still there -- and the
-        error is the thread's, reported by `threading.excepthook`.
+        `warm_up` devolve no que deu, e não deve levantar exceção. Se
+        levantar, o estado fica `on_demand` -- o caminho preguiçoso continua
+        lá -- e o erro é da thread, informado por `threading.excepthook`.
         """
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
@@ -80,7 +80,7 @@ class ModelWarmUp:
             return self._thread
 
     def wait(self, timeout: float | None = None) -> bool:
-        """Whether the warm-up has ended, waiting up to `timeout` for it."""
+        """Se o aquecimento terminou, esperando por ele até `timeout`."""
         with self._lock:
             thread = self._thread
         if thread is not None:
@@ -98,4 +98,4 @@ class ModelWarmUp:
 
 
 model_warm_up = ModelWarmUp()
-"""The process's one warm-up, started by the API's lifespan."""
+"""O aquecimento único do processo, iniciado pelo lifespan da API."""

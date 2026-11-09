@@ -1,22 +1,21 @@
-"""Paths as a PostgreSQL program can receive them (RFC-033 section 10).
+"""Caminhos como um programa do PostgreSQL consegue recebê-los (RFC-033 §10).
 
-`initdb`, `pg_ctl` and `postgres` are C programs with a narrow `main`: on
-Windows they get their arguments in the ANSI code page. A path with a
-character outside it does not arrive. Measured on a code page 1252 machine
-with a directory named `Łukasz 東京`: `initdb` was handed `Lukasz ??` -- the
-`Ł` replaced by its best-fit `L`, which names *another* directory, and the
-ideographs by `?` -- and failed looking for the password file there. With the
-runtime itself under such a directory, `initdb` could not even find its own
-executable.
+`initdb`, `pg_ctl` e `postgres` são programas em C com um `main` estreito: no
+Windows, recebem os argumentos na code page ANSI. Um caminho com um caractere
+fora dela não chega. Medido numa máquina com code page 1252 e um diretório
+chamado `Łukasz 東京`: o `initdb` recebeu `Lukasz ??` -- o `Ł` trocado pelo
+`L` de best-fit, que nomeia *outro* diretório, e os ideogramas por `?` -- e
+falhou procurando o arquivo de senha lá. Com o próprio runtime sob um
+diretório assim, o `initdb` não achou nem o próprio executável.
 
-`João Silva` is not this problem: every character of it is in code page
-1252, and it worked untouched.
+`João Silva` não é esse problema: todos os caracteres dele estão na code page
+1252, e funcionou sem mudança.
 
-So the second branch RFC-033 wrote before measuring is the one in force. A
-path that does not fit is replaced by its 8.3 short form, which is ASCII and
-names the same directory; `initdb` ran through one in the same measurement.
-A volume that generates no short names leaves nothing to hand over, and the
-adapter refuses, naming the setting that moves the directory elsewhere.
+Então o segundo ramo que o RFC-033 escreveu antes de medir é o que vale. Um
+caminho que não cabe é trocado pela sua forma curta 8.3, que é ASCII e nomeia
+o mesmo diretório; o `initdb` rodou por uma na mesma medição. Um volume que
+não gera nomes curtos não deixa nada para entregar, e o adaptador recusa,
+nomeando a configuração que move o diretório para outro lugar.
 """
 
 from __future__ import annotations
@@ -32,10 +31,10 @@ _BUFFER_LENGTH = 32768
 
 
 def fits_ansi_code_page(text: str) -> bool:
-    """Whether every character survives the trip through the ANSI code page.
+    """Se todo caractere sobrevive à passagem pela code page ANSI.
 
-    `mbcs` in strict mode refuses best-fit substitutions, so `Ł` on a 1252
-    machine is a "no" rather than a silent `L`.
+    O `mbcs` em modo estrito recusa as substituições de best-fit, então `Ł`
+    numa máquina 1252 é um "não", e não um `L` silencioso.
     """
     if sys.platform != "win32":
         return True
@@ -47,11 +46,11 @@ def fits_ansi_code_page(text: str) -> bool:
 
 
 def short_path(path: Path) -> str:
-    """`GetShortPathNameW`: the 8.3 form, or `""` when Windows gives none.
+    """`GetShortPathNameW`: a forma 8.3, ou `""` quando o Windows não dá uma.
 
-    The path must exist. On a volume without short names the call succeeds
-    and answers with the long name unchanged, which the caller tells apart by
-    testing the answer, not the return code.
+    O caminho precisa existir. Num volume sem nomes curtos a chamada dá certo
+    e responde com o nome longo sem mudança, o que quem chama distingue
+    testando a resposta, não o código de retorno.
     """
     kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.GetShortPathNameW.argtypes = [
@@ -66,10 +65,10 @@ def short_path(path: Path) -> str:
 
 
 def argv_safe(path: Path, *, setting: str) -> Path:
-    """`path`, spelt so that it reaches a narrow-`main` program intact.
+    """`path`, escrito de modo a chegar intacto a um programa de `main` estreito.
 
-    Unchanged when it already fits the code page; its short form when it does
-    not; and a refusal that names `setting` when there is no short form.
+    Sem mudança quando já cabe na code page; a forma curta quando não cabe; e
+    uma recusa que nomeia `setting` quando não há forma curta.
     """
     if fits_ansi_code_page(str(path)):
         return path

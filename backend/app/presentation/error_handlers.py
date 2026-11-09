@@ -1,41 +1,42 @@
-"""Translation from domain failures to HTTP status codes (RFC-026 section 8).
+"""Tradução das falhas de domínio em códigos de status HTTP (RFC-026 §8).
 
-One handler for the whole `DomainError` hierarchy, registered on the app
-rather than caught in a route. Two properties follow from that, and both
-are the point:
+Um handler para toda a hierarquia de `DomainError`, registrado no app em
+vez de capturado numa rota. Duas propriedades decorrem disso, e as duas
+são o objetivo:
 
-* every route stays free of `try/except`, so it keeps the shape RFC-026
-  section 4 requires -- call the use case, map the result, return;
-* every domain error a future use case raises already has a status code,
-  without anyone remembering to add one.
+* toda rota fica livre de `try/except`, e mantém a forma que o RFC-026
+  §4 exige -- chamar o caso de uso, mapear o resultado, devolver;
+* todo erro de domínio que um caso de uso futuro levantar já tem um
+  código de status, sem que ninguém precise lembrar de acrescentar um.
 
-**RFC-029 added two statuses without adding a registry.** The status comes
-from where an error sits in the hierarchy, not from a table of exception
-classes kept in Presentation: `NotFoundError` answers 404, `ConflictError`
-answers 409, and everything else still answers 400. A new "not found"
-error inherits its status; it does not have to be registered anywhere, and
-nobody can forget to. RFC-030 added a third base the same way:
-`GoneError` answers 410.
+**O RFC-029 acrescentou dois status sem acrescentar um registro.** O
+status vem de onde o erro fica na hierarquia, não de uma tabela de
+classes de exceção mantida na Apresentação: `NotFoundError` responde 404,
+`ConflictError` responde 409, e todo o resto continua respondendo 400. Um
+novo erro de "não encontrado" herda seu status; não precisa ser
+registrado em lugar nenhum, e ninguém pode esquecer de registrá-lo. O
+RFC-030 acrescentou uma terceira base do mesmo jeito: `GoneError`
+responde 410.
 
-    situation                          error                         status
+    situação                           erro                          status
     ---------------------------------- ----------------------------- ------
-    job id names nothing               JobNotFoundError                 404
-    device id names nothing            DeviceNotFoundError              404
-    image id names nothing             ImageNotFoundError               404
-    image known, never indexed         ImageNotIndexedError             409
-    image has no thumbnail to serve    ThumbnailNotFoundError           404
-    device already has an active job   DeviceBusyError                  409
-    cancelling a finished job          IllegalJobTransitionError        409
-    device is not plugged in           DeviceNotConnectedError          409
-    disk plugged in, file not on it    FileGoneError                    410
-    scope is absolute / has .. / gone  InvalidJobScopeError             400
+    id de job não aponta para nada     JobNotFoundError                 404
+    id de disp. não aponta para nada   DeviceNotFoundError              404
+    id de imagem não aponta para nada  ImageNotFoundError               404
+    imagem conhecida, nunca indexada   ImageNotIndexedError             409
+    imagem sem thumbnail para servir   ThumbnailNotFoundError           404
+    dispositivo já tem um job ativo    DeviceBusyError                  409
+    cancelar um job já terminado       IllegalJobTransitionError        409
+    dispositivo não está plugado       DeviceNotConnectedError          409
+    disco plugado, arquivo fora dele   FileGoneError                    410
+    escopo absoluto / com .. / sumiu   InvalidJobScopeError             400
 
-The last two rows are worth reading together. RFC-029 section 7.1 sent
-"device disconnected" to 400; that is wrong, and the correction is
-recorded in the RFC. 400 says *the request needs fixing*, and nothing
-about that request does -- the identical bytes succeed once the disk is
-plugged in. An invalid scope is the opposite: it would not start working
-whatever happened in the world.
+As duas últimas linhas valem ser lidas juntas. O RFC-029 §7.1 mandava
+"dispositivo desconectado" para 400; isso está errado, e a correção está
+registrada no RFC. 400 diz *a requisição precisa ser corrigida*, e nada
+nessa requisição precisa -- os mesmos bytes funcionam assim que o disco é
+plugado. Um escopo inválido é o oposto: não passaria a funcionar por nada
+que acontecesse no mundo.
 """
 
 from __future__ import annotations
@@ -62,35 +63,36 @@ STATUS_BY_BASE: tuple[tuple[type[DomainError], int], ...] = (
     (ConflictError, status.HTTP_409_CONFLICT),
     (GoneError, status.HTTP_410_GONE),
 )
-"""The status-bearing bases, and nothing else.
+"""As bases que carregam um status, e nada mais.
 
-Deliberately short, and it must stay that way: an entry per exception
-class would be the registry this design exists to avoid, and would drift
-the first time somebody added an error without touching this file.
+Curta de propósito, e precisa continuar assim: uma entrada por classe de
+exceção seria o registro que este desenho existe para evitar, e se
+desalinharia na primeira vez que alguém acrescentasse um erro sem tocar
+neste arquivo.
 """
 
 DEFAULT_STATUS = status.HTTP_400_BAD_REQUEST
-"""What a plain `DomainError` still means: understood, and refused.
+"""O que um `DomainError` puro ainda quer dizer: entendido, e recusado.
 
-400, not 422, and the difference is deliberate. FastAPI already returns
-422 for a request that does not match the endpoint at all -- a missing
-`q`, a `limit` that is not an integer -- and that means something
-different: *this is not a well-formed request*. A `DomainError` means the
-request was understood and the application refused it. Flattening the two
-would erase that distinction and put Presentation in the business of
-re-describing failures the Application layer never saw.
+400, não 422, e a diferença é deliberada. O FastAPI já devolve 422 para uma
+requisição que nem casa com o endpoint -- um `q` ausente, um `limit` que não
+é inteiro --, e isso quer dizer outra coisa: *esta não é uma requisição bem
+formada*. Um `DomainError` quer dizer que a requisição foi entendida e a
+aplicação a recusou. Achatar os dois apagaria essa distinção e poria a
+Apresentação no papel de redescrever falhas que a camada de Aplicação nunca
+viu.
 """
 
 
 def status_for(error: Exception) -> int:
-    """Return the status of the most specific matching base, or 400.
+    """Devolve o status da base correspondente mais específica, ou 400.
 
-    "Most specific" is resolved through the exception's own MRO rather
-    than through the order of the table above, so the answer does not
-    depend on how the tuple happens to be written. With three disjoint
-    bases that is the same answer either way today; it stops being the same
-    answer the moment a third base is added under one of these two, which
-    is exactly when a subtle mapping bug would be hardest to see.
+    "Mais específica" é resolvida pelo próprio MRO da exceção, e não pela
+    ordem da tabela acima, então a resposta não depende de como a tupla
+    calhou de ser escrita. Com três bases disjuntas, hoje a resposta é a
+    mesma de um jeito ou de outro; deixa de ser a mesma no momento em que
+    uma terceira base for acrescentada sob uma dessas duas, que é
+    exatamente quando um bug sutil de mapeamento seria mais difícil de ver.
     """
     mro = type(error).__mro__
     matches = [
@@ -104,17 +106,17 @@ def status_for(error: Exception) -> int:
 
 
 def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Answer a refused-but-understood request with its status and message.
+    """Responde a uma requisição entendida, mas recusada, com status e mensagem.
 
-    The parameter is typed `Exception` rather than `DomainError` because
-    that is the signature Starlette's handler registry declares;
-    `add_exception_handler` below is what narrows it to the subclass this
-    actually receives.
+    O parâmetro é tipado como `Exception`, e não `DomainError`, porque essa
+    é a assinatura que o registro de handlers do Starlette declara;
+    `add_exception_handler`, abaixo, é o que o estreita para a subclasse
+    que este handler de fato recebe.
 
-    The message is the domain error's own. Those messages are written to
-    be read by whoever made the request -- "Device 'HD2' is not connected.
-    Plug it in and try again." -- and rewriting them here would mean
-    Presentation describing failures it never saw.
+    A mensagem é a do próprio erro de domínio. Essas mensagens são escritas
+    para quem fez a requisição ler -- "Device 'HD2' is not connected.
+    Plug it in and try again." -- e reescrevê-las aqui seria a
+    Apresentação descrevendo falhas que nunca viu.
     """
     code = status_for(exc)
     logger.info("Domain error refused a request: %s -> %d", type(exc).__name__, code)
@@ -122,16 +124,17 @@ def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
 
 
 def model_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Answer a request that needs a model the installation cannot load.
+    """Responde a uma requisição que precisa de um modelo impossível de carregar.
 
-    503, and not 500, for the reason `/health` answers 503 when the database
-    is away (RFC-034): the service is unavailable, not broken (RFC-035
-    section 6.5). Only the routes that load a model reach this -- search,
-    today -- so devices, folders, the map and thumbnails keep answering.
+    503, e não 500, pelo mesmo motivo de `/health` responder 503 quando o
+    banco está fora (RFC-034): o serviço está indisponível, não quebrado
+    (RFC-035 §6.5). Só as rotas que carregam um modelo chegam aqui -- a
+    busca, hoje --, então dispositivos, pastas, o mapa e as thumbnails
+    continuam respondendo.
 
-    Not a `DomainError`, and so a handler of its own: the domain has no
-    opinion about a hash. The `detail` is the error's one line, which names
-    the model, the file and what to do, and holds no file content.
+    Não é um `DomainError`, e por isso tem handler próprio: o domínio não
+    tem opinião sobre um hash. O `detail` é a única linha do erro, que diz
+    o modelo, o arquivo e o que fazer, e não traz conteúdo de arquivo.
     """
     logger.warning("A request needed a model that cannot be loaded: %s", exc)
     return JSONResponse(
@@ -143,9 +146,10 @@ def model_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
 def address_search_unavailable_handler(
     request: Request, exc: Exception
 ) -> JSONResponse:
-    """503, as for a model: the same address may be found a minute later (RFC-043).
+    """503, como para um modelo: o endereço pode ser achado um minuto depois (RFC-043).
 
-    The adapter already logged the reason, and its message never holds the address.
+    O adaptador já registrou o motivo no log, e a mensagem dele nunca traz o
+    endereço.
     """
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -154,7 +158,7 @@ def address_search_unavailable_handler(
 
 
 def register_error_handlers(app: FastAPI) -> None:
-    """Attach the domain-error mapping, and the two 503s, to `app`."""
+    """Liga a `app` o mapeamento dos erros de domínio, e os dois 503."""
     app.add_exception_handler(DomainError, domain_error_handler)
     app.add_exception_handler(ModelUnavailableError, model_unavailable_handler)
     app.add_exception_handler(

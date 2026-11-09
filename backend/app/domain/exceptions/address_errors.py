@@ -1,4 +1,4 @@
-"""Address-search domain exceptions (RFC-043)."""
+"""Exceções de domínio da busca por endereço (RFC-043)."""
 
 from app.domain.exceptions.domain_error import DomainError
 

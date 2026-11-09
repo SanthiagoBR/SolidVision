@@ -1,1 +1,1 @@
-"""Collections router placeholder for the presentation layer."""
+"""Placeholder do router de coleções da camada de apresentação."""

@@ -1,21 +1,21 @@
-"""Narrowing applied to a semantic search before ranking (RFC-027 section 9).
+"""O recorte aplicado a uma busca semântica antes do ranqueamento (RFC-027 §9).
 
-RFC-025 scoped search globally on purpose and named the condition for
-changing that: *"scoping search by collection is a change to what a
+O RFC-025 deixou a busca global de propósito e nomeou a condição para
+mudar isso: *"scoping search by collection is a change to what a
 collection means, and needs the table, the foreign key and the ownership
-rules first."* RFC-027 delivers a table and a foreign key -- for devices,
-which are a physical fact rather than a modelling choice -- so the
-condition is met and the first filter can exist.
+rules first."* O RFC-027 entrega uma tabela e uma foreign key -- de
+dispositivos, que são um fato físico, e não uma escolha de modelagem --,
+então a condição está cumprida e o primeiro filtro pode existir.
 
-The structure, not just the filter, is the deliverable. RFC-028 added a
-capture-date range to this same object; introducing the mechanism in
-RFC-027 with one field and extending it with a second follows what RFC-024
-did when it added `content_hash` to RFC-020's `IndexMetadata`. RFC-032
-extended it a second time, with a circle -- which is the evidence that the
-structure serves: each axis is a named field with a `WHERE` that can be
-read, a plan that can be measured, and a contract test that makes the three
-repositories agree, rather than a query language the client assembles
-(RFC-032 section 2.4).
+A estrutura, e não só o filtro, é a entrega. O RFC-028 acrescentou um
+intervalo de data de captura a este mesmo objeto; introduzir o mecanismo no
+RFC-027 com um campo e estendê-lo com um segundo segue o que o RFC-024 fez
+ao acrescentar `content_hash` ao `IndexMetadata` do RFC-020. O RFC-032 o
+estendeu uma segunda vez, com um círculo -- e essa é a prova de que a
+estrutura serve: cada eixo é um campo nomeado com um `WHERE` que dá para
+ler, um plano que dá para medir e um teste de contrato que faz os três
+repositórios concordarem, em vez de uma linguagem de consulta que o cliente
+monta (RFC-032 §2.4).
 """
 
 from __future__ import annotations
@@ -29,69 +29,72 @@ from app.domain.value_objects.geo_circle import GeoCircle
 
 @dataclass(frozen=True)
 class SearchFilters:
-    """Which subset of the index a search is allowed to rank.
+    """Qual subconjunto do índice uma busca pode ranquear.
 
-    An empty `SearchFilters()` means *no narrowing at all* and must
-    produce exactly the query RFC-025 shipped -- not "an empty IN list",
-    which would match nothing and turn a defaulted argument into a search
-    that silently returns zero results. That is why the default is the
-    empty set rather than `None`: there is one representation of "no
-    filter", and it is the one every caller gets by default.
+    Um `SearchFilters()` vazio quer dizer *nenhum recorte* e tem de produzir
+    exatamente a consulta que o RFC-025 entregou -- não "uma lista IN
+    vazia", que não casaria com nada e transformaria um argumento com
+    default numa busca que devolve zero resultados em silêncio. Por isso o
+    default é o conjunto vazio, e não `None`: há uma única representação de
+    "sem filtro", e é a que todo chamador recebe por default.
 
-    `frozenset` rather than a list or a tuple because the field carries a
-    *set* of devices: order is meaningless, duplicates are meaningless,
-    and the object has to stay hashable to keep the dataclass frozen in
-    the way `Image` and `ImageId` are.
+    `frozenset`, e não uma lista ou uma tupla, porque o campo carrega um
+    *conjunto* de dispositivos: a ordem não importa, duplicatas não
+    importam, e o objeto tem de continuar hashable para manter o dataclass
+    congelado como `Image` e `ImageId`.
 
-    The three fields narrow independently and combine with AND: naming a
-    device, a range and a circle asks for images on that device *and* in
-    that range *and* near that point. Any may be absent without affecting
-    the others.
+    Os três campos recortam de forma independente e se combinam com AND:
+    nomear um dispositivo, um intervalo e um círculo pede imagens naquele
+    dispositivo *e* naquele intervalo *e* perto daquele ponto. Qualquer um
+    pode faltar sem afetar os outros.
     """
 
     device_ids: frozenset[DeviceId] = field(default_factory=frozenset)
-    """Restrict results to images stored on these devices; empty means all.
+    """Restringe os resultados a imagens guardadas nestes dispositivos; vazio é todos.
 
-    A device that is not connected is still a legitimate member. Search
-    ranks what is *indexed*, and the whole product argument for devices
-    (RFC-027 section 2.3) is that a hit on a disk in a drawer -- reported
-    as such -- is a useful answer, not a broken one.
+    Um dispositivo desconectado continua sendo um membro legítimo. A busca
+    ranqueia o que está *indexado*, e todo o argumento de produto dos
+    dispositivos (RFC-027 §2.3) é que um acerto num disco guardado na gaveta
+    -- informado como tal -- é uma resposta útil, não uma resposta quebrada.
     """
 
     captured_between: DateRange | None = None
-    """Restrict results to images whose capture date is in this range.
+    """Restringe os resultados a imagens cuja data de captura está neste intervalo.
 
-    `None` means no date narrowing, and is the *only* way to say so. An
-    absent range must not be represented as `[datetime.min, datetime.max)`:
-    that range excludes every image with an unknown date, so a defaulted
-    argument would silently hide every photo without EXIF (RFC-028
-    section 4.1) and add a clause to the query RFC-025 shipped.
+    `None` quer dizer sem recorte por data, e é a *única* forma de dizer
+    isso. Um intervalo ausente não pode ser representado como
+    `[datetime.min, datetime.max)`: esse intervalo exclui toda imagem com
+    data desconhecida, então um argumento com default esconderia em
+    silêncio toda foto sem EXIF (RFC-028 §4.1) e acrescentaria uma cláusula
+    à consulta que o RFC-025 entregou.
 
-    An image whose capture date is unknown never matches a range, however
-    wide. Unknown never means "matches" (RFC-020).
+    Uma imagem cuja data de captura é desconhecida nunca casa com um
+    intervalo, por mais largo que seja. Desconhecido nunca quer dizer "casa"
+    (RFC-020).
     """
 
     taken_within: GeoCircle | None = None
-    """Restrict results to images whose position is inside this circle (RFC-032).
+    """Restringe os resultados a imagens cuja posição está neste círculo (RFC-032).
 
-    `None` means no spatial narrowing, and is the only way to say so -- not
-    a circle around the planet, which would add a clause to the query
-    RFC-025 shipped and silently drop every image without coordinates.
+    `None` quer dizer sem recorte espacial, e é a única forma de dizer isso
+    -- e não um círculo em volta do planeta, que acrescentaria uma cláusula
+    à consulta que o RFC-025 entregou e descartaria em silêncio toda imagem
+    sem coordenadas.
 
-    An image whose position is unknown never matches a circle, however
-    large (RFC-020). The position compared is the aircraft's, recorded by
-    the GPS, not the photographed point; the radius is what absorbs the
-    difference (RFC-032 section 2.2).
+    Uma imagem cuja posição é desconhecida nunca casa com um círculo, por
+    maior que seja (RFC-020). A posição comparada é a da aeronave, gravada
+    pelo GPS, e não o ponto fotografado; é o raio que absorve a diferença
+    (RFC-032 §2.2).
     """
 
     def is_empty(self) -> bool:
-        """Return whether this filter narrows anything at all.
+        """Diz se este filtro recorta alguma coisa.
 
-        Named rather than left to each repository's own `if not
-        filters.device_ids`, so that RFC-028's second field could not be
-        added while one implementation kept checking only the first -- and
-        updated in the same change as RFC-032's third, which is what it is
-        for.
+        Tem nome, em vez de ficar a cargo do `if not filters.device_ids` de
+        cada repositório, para que o segundo campo do RFC-028 não pudesse
+        ser acrescentado enquanto uma implementação continuava verificando
+        só o primeiro -- e foi atualizado na mesma mudança que o terceiro, do
+        RFC-032, que é para isso que ele existe.
         """
         return (
             not self.device_ids

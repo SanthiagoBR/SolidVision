@@ -1,4 +1,4 @@
-"""Carrier pairing an image with how well it matched one search."""
+"""Portador que junta uma imagem ao quanto ela casou com uma busca."""
 
 from __future__ import annotations
 
@@ -9,39 +9,38 @@ from app.domain.entities.image import Image
 
 @dataclass(frozen=True)
 class SearchHit:
-    """One ranked result: the image that matched, and how strongly.
+    """Um resultado ranqueado: a imagem que casou, e com que força.
 
-    The score is deliberately *not* a field on `Image`. An `Image` is the
-    picture itself -- it is frozen, compares by id, and means the same
-    thing to every caller. A similarity means nothing without the query
-    that produced it: the same image scores differently for every search,
-    and would score nothing at all if it were merely listed. Storing a
-    per-query number on a per-image entity would make two `Image` values
-    for the same file carry contradictory data while still comparing
-    equal.
+    A pontuação, deliberadamente, *não* é um campo de `Image`. Uma `Image` é
+    a própria foto -- é congelada, compara por id e quer dizer a mesma coisa
+    para todo chamador. Uma similaridade não quer dizer nada sem a consulta
+    que a produziu: a mesma imagem pontua diferente em cada busca, e não
+    pontuaria nada se fosse só listada. Guardar um número por consulta numa
+    entidade por imagem faria dois valores `Image` do mesmo arquivo
+    carregarem dados contraditórios e, ainda assim, serem iguais.
 
-    Lives in Domain for the same reason as `IndexingRecord`: it is part of
-    the `ImageRepository` port's own contract, so keeping it here leaves
-    the port self-contained within its layer instead of making Domain
-    depend on Application for its own return type.
+    Mora no Domain pelo mesmo motivo de `IndexingRecord`: faz parte do
+    contrato da própria porta `ImageRepository`, então mantê-lo aqui deixa a
+    porta autocontida na sua camada, em vez de fazer o Domain depender da
+    Application para o próprio tipo de retorno.
     """
 
     image: Image
     similarity: float
-    """Cosine similarity in [-1, 1], where 1 is identical direction.
+    """Similaridade de cosseno em [-1, 1], em que 1 é a mesma direção.
 
-    Not rescaled into [0, 1] anywhere along the way. Negative values are
-    legitimate and mean the vectors point in opposing directions; folding
-    them away would destroy the distinction between "unrelated" (~0) and
-    "opposite" (~-1). Whether the number is comparable across queries is
-    a property of the embedding space, not of this carrier.
+    Não é reescalada para [0, 1] em nenhum ponto do caminho. Valores
+    negativos são legítimos e querem dizer que os vetores apontam em
+    direções opostas; dobrá-los para dentro destruiria a distinção entre
+    "sem relação" (~0) e "oposto" (~-1). Se o número é comparável entre
+    consultas é uma propriedade do espaço de embedding, não deste portador.
     """
 
 
-# Every `ImageRepository` implementation defines a `list()` method, which
-# shadows the builtin `list` inside its class body: an annotation written
-# as `-> list[SearchHit]` on a method of one of those classes resolves to
-# the method, not to the type. The alias is evaluated here at module
-# scope, where `list` still means `list`, and is the same object as
-# `list[SearchHit]` for anything that compares annotations.
+# Toda implementação de `ImageRepository` define um método `list()`, que
+# encobre o builtin `list` dentro do corpo da classe: uma anotação escrita
+# como `-> list[SearchHit]` num método de uma dessas classes resolve para o
+# método, não para o tipo. O alias é avaliado aqui, no escopo do módulo,
+# onde `list` ainda quer dizer `list`, e é o mesmo objeto que
+# `list[SearchHit]` para qualquer coisa que compare anotações.
 SearchHits = list[SearchHit]

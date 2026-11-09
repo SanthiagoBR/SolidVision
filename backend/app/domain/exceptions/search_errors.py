@@ -1,15 +1,15 @@
-"""Search-specific domain exceptions (RFC-025)."""
+"""Exceções de domínio próprias da busca (RFC-025)."""
 
 from app.domain.exceptions.domain_error import DomainError
 
 
 class EmptySearchQueryError(DomainError):
-    """Raised when a search query carries no searchable text.
+    """Levantada quando uma consulta de busca não traz texto buscável.
 
-    A blank query is rejected rather than answered. There is no sensible
-    ranking of every image against nothing, and the embedding model would
-    happily encode `""` into a vector that ranks the corpus by an
-    accident of the text tower.
+    Uma consulta em branco é rejeitada, e não respondida. Não há ranking que
+    faça sentido de todas as imagens contra nada, e o modelo de embedding
+    codificaria `""` de bom grado num vetor que ranqueia o acervo por um
+    acidente da torre de texto.
     """
 
     def __init__(self, message: str = "Search query cannot be empty.") -> None:
@@ -17,12 +17,12 @@ class EmptySearchQueryError(DomainError):
 
 
 class InvalidSearchLimitError(DomainError):
-    """Raised when the requested number of results is outside the allowed range.
+    """Levantada quando o número de resultados pedido está fora do intervalo permitido.
 
-    Both ends raise rather than clamp. Silently returning 100 results to a
-    caller that asked for 10,000 -- or 1 to a caller that asked for 0 --
-    hides the disagreement in data the caller then draws conclusions from,
-    where an exception puts it in front of whoever wrote the call.
+    As duas pontas levantam exceção, em vez de cortar. Devolver em silêncio
+    100 resultados a um chamador que pediu 10.000 -- ou 1 a um que pediu 0 --
+    esconde a discordância em dados dos quais o chamador vai tirar
+    conclusões, enquanto uma exceção a põe diante de quem escreveu a chamada.
     """
 
     def __init__(self, message: str = "Invalid search limit.") -> None:
@@ -30,16 +30,16 @@ class InvalidSearchLimitError(DomainError):
 
 
 class EmbeddingDimensionMismatchError(DomainError):
-    """Raised when a query vector does not match the indexed embedding space.
+    """Levantada quando um vetor de consulta não casa com o espaço do índice.
 
-    Comparing vectors of different widths is meaningless, not empty. The
-    distinction matters because the plausible failure is silent: Python's
-    `zip` truncates to the shorter operand, so a hand-rolled cosine loop
-    over a 3-dimensional query and 512-dimensional rows returns a
-    perfectly reasonable-looking number computed from three of the 512
-    dimensions. Every repository implementation raises this instead, so
-    that a wrong-sized vector fails the same way in memory as it does
-    against a `vector(512)` column.
+    Comparar vetores de larguras diferentes não tem sentido, e não é vazio. A
+    distinção importa porque a falha plausível é silenciosa: o `zip` do
+    Python trunca no operando mais curto, então um laço de cosseno escrito à
+    mão sobre uma consulta de 3 dimensões e linhas de 512 devolve um número
+    de aparência perfeitamente razoável, calculado com três das 512
+    dimensões. Toda implementação de repositório levanta esta exceção, para
+    que um vetor do tamanho errado falhe em memória do mesmo jeito que falha
+    contra uma coluna `vector(512)`.
     """
 
     def __init__(
@@ -49,12 +49,13 @@ class EmbeddingDimensionMismatchError(DomainError):
 
 
 class UnreadableQueryImageError(DomainError):
-    """Raised when a picture sent as a query cannot be decoded (RFC-038 4.2).
+    """Levantada quando uma imagem enviada como consulta não pode ser decodificada.
 
-    Bytes that are not an image, a JPEG cut short, a format other than the one
-    declared, or more pixels than the decoder agrees to open. Refused before
-    the model sees it: the adapter lets its decoding errors through on
-    purpose, and one reaching it would be a 500 for what is the caller's file.
+    Ver RFC-038 §4.2. Bytes que não são uma imagem, um JPEG cortado, um
+    formato diferente do declarado, ou mais pixels do que o decodificador
+    aceita abrir. Recusada antes de o modelo vê-la: o adaptador deixa passar
+    os erros de decodificação de propósito, e um que chegasse a ele seria um
+    500 para o que é problema do arquivo do chamador.
     """
 
     def __init__(self, message: str = "The query image cannot be read.") -> None:

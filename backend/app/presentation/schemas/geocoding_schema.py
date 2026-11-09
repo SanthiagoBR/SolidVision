@@ -1,4 +1,4 @@
-"""The answer of `GET /api/v1/geocode` (RFC-043)."""
+"""A resposta de `GET /api/v1/geocode` (RFC-043)."""
 
 from __future__ import annotations
 

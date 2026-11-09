@@ -1,14 +1,15 @@
-"""Filesystem indexing worker orchestrating discovery and incremental indexing.
+"""Worker de indexação do sistema de arquivos, que orquestra descoberta e indexação.
 
-Also the worker CLI entry point promised by `AI_Context.md`:
+Também o ponto de entrada de CLI do worker prometido pelo `AI_Context.md`:
 
     python -m app.infrastructure.workers.indexing_worker --root PATH
 
-`AI_Context.md` writes that path as `infrastructure.workers.indexing_worker`,
-without the `app.` prefix. That form has never been runnable -- the package is
-`app.infrastructure`, and `pyproject.toml` puts `backend/` (not `backend/app/`)
-on `pythonpath` -- so the documented path was corrected to match the code
-rather than the code reshaped to match the documentation (RFC-024 section 12).
+O `AI_Context.md` escreve esse caminho como
+`infrastructure.workers.indexing_worker`, sem o prefixo `app.`. Essa forma nunca
+foi executável -- o pacote é `app.infrastructure`, e o `pyproject.toml` põe
+`backend/` (não `backend/app/`) no `pythonpath` --, então o caminho documentado
+foi corrigido para bater com o código, em vez de o código ser remodelado para
+bater com a documentação (RFC-024 §12).
 """
 
 from __future__ import annotations
@@ -53,32 +54,33 @@ logger = get_logger(__name__)
 
 
 class IndexingWorker:
-    """Discovers image files and drives incremental indexing for all of them.
+    """Descobre arquivos de imagem e conduz a indexação incremental de todos eles.
 
-    A dependency-injected orchestration component: it does not construct
-    its own filesystem provider or use case, and it never touches
-    SQLAlchemy, pgvector, or embedding-model internals directly.
+    Um componente de orquestração com dependências injetadas: não constrói o
+    próprio provedor de sistema de arquivos nem o caso de uso, e nunca toca
+    diretamente o SQLAlchemy, o pgvector ou os detalhes internos do modelo de
+    embedding.
 
-    RFC-024 moved the per-file `try/except` that used to live in `run()`
-    into the use case, because batching is where isolation is actually at
-    risk -- a batch that fails as a unit has to be retried one image at a
-    time, and only the component assembling batches can do that. What
-    stays here is the guard around building the domain entity itself,
-    which happens before a file is ever a candidate, and the logging of
-    everything the run reports back.
+    O RFC-024 levou o `try/except` por arquivo que morava em `run()` para o
+    caso de uso, porque é no lote que o isolamento de fato corre risco -- um
+    lote que falha como unidade precisa ser tentado de novo uma imagem por vez,
+    e só o componente que monta os lotes pode fazer isso. O que fica aqui é a
+    guarda em volta da construção da própria entidade de domínio, que acontece
+    antes de um arquivo virar candidato, e o log de tudo o que a execução
+    reporta de volta.
 
-    RFC-027 added `device` and `mount_point`, both resolved by the
-    composition root *before* the scan starts rather than looked up per
-    file. Resolving once is not an optimisation: if the disk were
-    identified per file, a volume that went away mid-run would produce
-    half a scan attributed to one device and half attributed to nothing,
-    and the ids minted in the two halves would disagree about the same
-    files.
+    O RFC-027 acrescentou `device` e `mount_point`, os dois resolvidos pela
+    raiz de composição *antes* de o scan começar, em vez de consultados por
+    arquivo. Resolver uma vez só não é otimização: se o disco fosse
+    identificado por arquivo, um volume que sumisse no meio da execução
+    produziria metade de um scan atribuída a um dispositivo e metade atribuída
+    a nada, e os ids gerados nas duas metades discordariam sobre os mesmos
+    arquivos.
 
-    `mount_point` is passed alongside the device rather than read off it
-    because a `Device` deliberately has no such field -- where a volume is
-    attached is a fact about this instant, and persisting it is the defect
-    RFC-027 exists to remove (RFC-027 section 4).
+    `mount_point` é passado junto com o dispositivo em vez de lido dele
+    porque um `Device` de propósito não tem esse campo -- onde um volume está
+    montado é um fato deste instante, e persisti-lo é o defeito que o RFC-027
+    existe para remover (RFC-027 §4).
     """
 
     def __init__(
@@ -94,12 +96,13 @@ class IndexingWorker:
         self._mount_point = mount_point
 
     def run(self) -> IndexingSummary:
-        """Discover and incrementally index every supported image file.
+        """Descobre e indexa de forma incremental cada arquivo de imagem suportado.
 
-        Returns the run's counters and timings so a caller -- a test, a
-        benchmark, a future scheduler -- can assert on them instead of
-        parsing log output. Failures are logged here rather than inside the
-        use case, keeping the logging factory an Infrastructure concern.
+        Devolve os contadores e os tempos da execução para que quem chama --
+        um teste, um benchmark, um futuro agendador -- possa verificá-los em
+        vez de interpretar a saída do log. As falhas vão para o log aqui, e não
+        dentro do caso de uso, o que mantém a fábrica de logging um assunto da
+        Infraestrutura.
         """
         logger.info("Indexing started")
 
@@ -139,29 +142,29 @@ class IndexingWorker:
     def _candidates(
         self, undiscoverable: list[IndexingFailure]
     ) -> Iterator[IndexCandidate]:
-        """Stream discovered files as Application-layer candidates.
+        """Entrega os arquivos descobertos como candidatos da camada de Aplicação.
 
-        A generator, not a list: the use case consumes it lazily, so
-        discovery, hashing, inference, and persistence interleave and the
-        pipeline never holds the whole collection in memory.
+        Um gerador, não uma lista: o caso de uso o consome de forma preguiçosa,
+        então descoberta, hash, inferência e persistência se intercalam e o
+        pipeline nunca segura a coleção inteira em memória.
 
-        Building `ImagePath`/`ImageId` can reject a path outright, and one
-        such file must not end the run. Those failures are collected rather
-        than raised, because raising out of a generator would close it and
-        silently truncate the scan at that file. Since RFC-027 the same
-        guard also covers `relative_to()`, which raises for a discovered
-        file that is somehow not under the mount point the run resolved.
+        Construir `ImagePath`/`ImageId` pode rejeitar um caminho de saída, e um
+        arquivo assim não pode encerrar a execução. Essas falhas são coletadas
+        em vez de levantadas, porque levantar exceção de dentro de um gerador o
+        fecharia e truncaria o scan em silêncio naquele arquivo. Desde o
+        RFC-027, a mesma guarda cobre também `relative_to()`, que levanta
+        exceção para um arquivo descoberto que, por algum motivo, não está sob
+        o ponto de montagem que a execução resolveu.
 
-        Both paths are attached to the entity, and they are not
-        redundant. `relative_path` is the durable half that gets persisted
-        and hashed into the id; `absolute_path` is where the file happens
-        to be while this disk is plugged in, so that the hasher and the
-        model can open it, and it is never written to the database
-        (RFC-027 section 5.2).
+        Os dois caminhos vão para a entidade, e não são redundantes.
+        `relative_path` é a metade durável, que é persistida e entra no hash do
+        id; `absolute_path` é onde o arquivo está enquanto este disco está
+        conectado, para que o hasher e o modelo possam abri-lo, e nunca é
+        gravado no banco (RFC-027 §5.2).
 
-        The capture date the scan read goes onto the entity too (RFC-028
-        section 6), so the use case can write it for a row it skips -- and
-        so does the position (RFC-032 section 8), for the same reason.
+        A data de captura que o scan leu também vai para a entidade (RFC-028
+        §6), para que o caso de uso possa gravá-la numa linha que ele pula -- e
+        a posição também (RFC-032 §8), pelo mesmo motivo.
         """
         yield from discovered_candidates(
             self._filesystem_provider, self._device, self._mount_point, undiscoverable
@@ -171,15 +174,16 @@ class IndexingWorker:
 def listed_identity(
     device_id: DeviceId, relative: str | Path
 ) -> tuple[ImagePath, ImageId]:
-    """The stored path and the id of a file listed on a device (RFC-046 §4).
+    """O caminho gravado e o id de um arquivo listado num dispositivo (RFC-046 §4).
 
-    **The one translation from a listed file to an `ImageId`**, called by
-    `discovered_candidates()` for every file it hands to indexing and by the
-    job runner's sweep for every file of a whole disk's listing. The sweep
-    marks a row missing when its id is not among the listing's, so a second
-    copy of this -- one that normalised a separator or a case another way --
-    would mark as missing a photo that is on the disk. `relative` is relative
-    to the mount point, as a path or as the posix text of `RootListing`.
+    **A única tradução de um arquivo listado para um `ImageId`**, chamada por
+    `discovered_candidates()` para cada arquivo que ela entrega à indexação e
+    pela varredura do job runner para cada arquivo da listagem de um disco
+    inteiro. A varredura marca uma linha como ausente quando o id dela não está
+    entre os da listagem, então uma segunda cópia disto -- uma que
+    normalizasse um separador ou uma caixa de outro jeito -- marcaria como
+    ausente uma foto que está no disco. `relative` é relativo ao ponto de
+    montagem, como caminho ou como o texto posix de `RootListing`.
     """
     relative_path = ImagePath(relative)
     return relative_path, compute_image_id(device_id, relative_path)
@@ -191,13 +195,13 @@ def discovered_candidates(
     mount_point: Path,
     undiscoverable: list[IndexingFailure],
 ) -> Iterator[IndexCandidate]:
-    """Turn discovered files into candidates for one device; see `_candidates()`.
+    """Faz dos arquivos descobertos candidatos de um dispositivo; ver `_candidates()`.
 
-    A module function rather than a private method so that `exif_backfill`
-    mints the same ids from the same discovered files. The backfill writes
-    to rows the indexing worker created, so a second copy of this
-    translation would be a second chance to compute a different `ImageId`
-    for the same file -- and to fill nothing.
+    Uma função de módulo em vez de um método privado para que `exif_backfill`
+    gere os mesmos ids a partir dos mesmos arquivos descobertos. O backfill
+    grava em linhas que o worker de indexação criou, então uma segunda cópia
+    desta tradução seria uma segunda chance de calcular um `ImageId` diferente
+    para o mesmo arquivo -- e de não preencher nada.
     """
     for discovered in filesystem_provider.discover():
         logger.info("Discovered file: %s", discovered.path)
@@ -239,49 +243,48 @@ def register_device(
     label: str,
     persist: bool = True,
 ) -> tuple[Device, ResolvedVolume]:
-    """Identify the volume holding `root` and make sure it has a device row.
+    """Identifica o volume que contém `root` e garante a linha do dispositivo dele.
 
-    Runs once per invocation, before a single file is discovered. That
-    ordering is what RFC-027 section 14 means by "resolves the device
-    before scanning", and it is not merely tidy: every `ImageId` the run
-    mints is `uuid5` over `f"{device_id}/{relative_path}"`, so the device
-    has to be fixed before the first id can be computed, and the foreign
-    key on `images.device_id` means its row has to be committed before the
-    first image is written.
+    Roda uma vez por invocação, antes de um único arquivo ser descoberto. Essa
+    ordem é o que o RFC-027 §14 quer dizer com "resolve o dispositivo antes do
+    scan", e não é mera arrumação: todo `ImageId` que a execução gera é
+    `uuid5` sobre `f"{device_id}/{relative_path}"`, então o dispositivo
+    precisa estar fixado antes de o primeiro id poder ser calculado, e a chave
+    estrangeira em `images.device_id` obriga a linha dele a estar commitada
+    antes de a primeira imagem ser gravada.
 
-    Returns the `ResolvedVolume` as well, because the run needs the mount
-    point to turn discovered absolute paths into device-relative ones --
-    and the mount point is exactly the thing a `Device` refuses to carry.
+    Devolve também o `ResolvedVolume`, porque a execução precisa do ponto de
+    montagem para transformar os caminhos absolutos descobertos em caminhos
+    relativos ao dispositivo -- e o ponto de montagem é exatamente o que um
+    `Device` se recusa a carregar.
 
-    A device that is already known keeps its `first_seen_at` and, unless
-    `--label` was given, its label. `last_seen_at` moves every run, which
-    is what makes it history rather than state.
+    Um dispositivo já conhecido mantém o `first_seen_at` e, a menos que
+    `--label` tenha sido dado, o rótulo. O `last_seen_at` anda a cada
+    execução, o que faz dele histórico, e não estado.
 
-    `persist=False` computes the device without writing it, which is what
-    `device_reconcile --dry-run` needs: a dry run that created a row would
-    not be a dry run, and the device id is derived rather than allocated,
-    so nothing has to be written for it to be known.
+    `persist=False` calcula o dispositivo sem gravá-lo, que é do que o
+    `device_reconcile --dry-run` precisa: um dry run que criasse uma linha não
+    seria um dry run, e o id do dispositivo é derivado, não alocado, então
+    nada precisa ser gravado para que ele seja conhecido.
 
-    **Since RFC-031 the merge rule itself lives in the Application
-    layer**, in `RegisterDeviceUseCase`, because an HTTP route needs it
-    too and a route cannot reach into `app.infrastructure.workers`. What
-    is left here is the half that genuinely belongs below the line:
-    asking the platform *which volume holds this path*, which is a
-    question only a `--root` has and which the route replaces with a
-    lookup in an enumeration.
+    **Desde o RFC-031, a própria regra de mesclagem mora na camada de
+    Aplicação**, em `RegisterDeviceUseCase`, porque uma rota HTTP também
+    precisa dela, e uma rota não pode alcançar `app.infrastructure.workers`. O
+    que sobra aqui é a metade que de fato pertence abaixo da linha: perguntar à
+    plataforma *qual volume contém este caminho*, uma pergunta que só um
+    `--root` tem e que a rota substitui por uma consulta numa enumeração.
 
-    **The signature did not change, and that is load-bearing.** Six
-    callers pass `root` and `label` and read the tuple back --
-    `indexing_worker.main()`, `device_reconcile` (with `persist=False`),
-    both backfills, `dataset_tools/seed_demo.py` and the RFC-029
-    measurement script -- and `test_cli_job_equivalence.py` is the net
-    under the move. A refactor that required touching any of them would
-    be the wrong refactor.
+    **A assinatura não mudou, e isso é essencial.** Seis chamadores passam
+    `root` e `label` e leem a tupla de volta -- `indexing_worker.main()`,
+    `device_reconcile` (com `persist=False`), os dois backfills,
+    `dataset_tools/seed_demo.py` e o script de medição do RFC-029 -- e o
+    `test_cli_job_equivalence.py` é a rede embaixo da mudança. Uma refatoração
+    que exigisse tocar em qualquer um deles seria a refatoração errada.
 
-    Shared rather than written twice, for the reason it always was: the
-    rules about which fields survive an existing row are the kind that
-    drift apart in two copies, and every caller mints image ids from the
-    device it produces.
+    Compartilhada em vez de escrita duas vezes, pelo motivo de sempre: as
+    regras sobre quais campos sobrevivem numa linha existente são do tipo que
+    se desencontra em duas cópias, e todo chamador gera ids de imagem a partir
+    do dispositivo que ela produz.
     """
     volume = volume_provider.resolve(root)
     device = RegisterDeviceUseCase(
@@ -325,16 +328,16 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def scope_for(root: Path, mount_point: Path) -> JobScope:
-    """Turn a scan root into the device-relative scope that means the same thing.
+    """Transforma a raiz de um scan no escopo relativo ao dispositivo que diz o mesmo.
 
-    **The correction RFC-029 section 12 needed.** The draft said the CLI
-    becomes "a job with an empty scope, the whole device" -- but
-    `--root D:\fotos\2018` has never indexed a whole disk, it indexes one
-    folder. An empty scope would have turned a refactor into a behaviour
-    change measured in hours.
+    **A correção de que o RFC-029 §12 precisava.** O rascunho dizia que a CLI
+    vira "um job com escopo vazio, o dispositivo inteiro" -- mas
+    `--root D:\fotos\2018` nunca indexou um disco inteiro, indexa uma pasta.
+    Um escopo vazio teria transformado uma refatoração numa mudança de
+    comportamento medida em horas.
 
-    Empty comes out only when the root *is* the mount point, which is the
-    one case where "this folder" and "this disk" are the same request.
+    O vazio só sai quando a raiz *é* o ponto de montagem, o único caso em que
+    "esta pasta" e "este disco" são o mesmo pedido.
     """
     relative = root.relative_to(mount_point)
     return JobScope(relative)
@@ -346,12 +349,12 @@ def follow(
     poll_interval: float,
     sleep: Callable[[float], None] = time.sleep,
 ) -> IndexingJob | None:
-    """Watch a job somebody else is running, until it stops moving.
+    """Acompanha um job que outro está rodando, até ele parar de andar.
 
-    Reached only when a separate executor claimed the job first. That is
-    not a failure and not a reason to exit: the user asked for a folder to
-    be indexed, it is being indexed, and the command reports the same
-    outcome either way (RFC-029 section 12).
+    Só se chega aqui quando um executor separado reivindicou o job primeiro.
+    Isso não é falha nem motivo para sair: o usuário pediu que uma pasta fosse
+    indexada, ela está sendo indexada, e o comando reporta o mesmo desfecho de
+    um jeito ou de outro (RFC-029 §12).
     """
     while True:
         job = jobs.get(job_id)
@@ -361,38 +364,38 @@ def follow(
 
 
 def run(root: Path, label: str) -> None:
-    """Create a job for `root` and run it in this very process.
+    """Cria um job para `root` e o roda neste mesmo processo.
 
-    The composition root -- the one place allowed to know every concrete
-    class at once. Two decisions here are RFC-029 corrections, and both
-    are about not making this command worse than it was:
+    A raiz de composição -- o único lugar autorizado a conhecer todas as
+    classes concretas de uma vez. Duas decisões aqui são correções do RFC-029,
+    e as duas tratam de não deixar este comando pior do que era:
 
-    * `--root` becomes a **scope**, not the whole device (`scope_for()`);
-    * the job is executed **here**, by claiming it with the same atomic
-      `UPDATE` the polling loop uses. RFC-029 section 12 accepted that
-      "the CLI comes to require the worker running"; that would make
-      `indexing_worker --root PATH` a command that waits for ever in
-      silence whenever nobody started an executor. It requires no second
-      process, and there is still exactly one indexing code path -- this
-      calls `JobRunner.run_job()`, which is what the executor calls.
+    * `--root` vira um **escopo**, não o dispositivo inteiro (`scope_for()`);
+    * o job é executado **aqui**, reivindicado com o mesmo `UPDATE` atômico
+      que o laço de polling usa. O RFC-029 §12 aceitou que "a CLI passa a
+      exigir o worker rodando"; isso faria de `indexing_worker --root PATH`
+      um comando que espera para sempre em silêncio sempre que ninguém
+      iniciou um executor. Não exige um segundo processo, e continua havendo
+      exatamente um caminho de código de indexação -- isto chama
+      `JobRunner.run_job()`, que é o que o executor chama.
 
-    If an executor *is* running and claims the job first, this follows it
-    by polling and reports the same outcome.
+    Se um executor *está* rodando e reivindica o job primeiro, isto o
+    acompanha por polling e reporta o mesmo desfecho.
 
-    Extracted out of `main()` so `app.cli`'s `index` subcommand can call the
-    same composition after parsing its own arguments, without a second copy
-    of this wiring.
+    Extraída de `main()` para que o subcomando `index` do `app.cli` possa
+    chamar a mesma composição depois de interpretar os próprios argumentos,
+    sem uma segunda cópia desta fiação.
 
-    The provider imports are function-local rather than module-level so
-    that importing `IndexingWorker` never drags Presentation, and through
-    it the CLIP adapter, into an Infrastructure import graph. Most of the
-    test suite imports this module; paying a torch import for a CLI that
-    is not being run would be a real cost, not a hypothetical one.
+    Os imports dos provedores ficam dentro da função, e não no nível do
+    módulo, para que importar `IndexingWorker` nunca arraste a Apresentação,
+    e por ela o adaptador CLIP, para um grafo de imports da Infraestrutura. A
+    maior parte da suíte de testes importa este módulo; pagar um import do
+    torch por uma CLI que não está rodando seria um custo real, não hipotético.
 
-    The models are checked for presence before anything is registered or
-    queued (RFC-035 section 6.1): without them there is nothing this
-    command can do, and it says so in one line (`main()`) rather than
-    leaving a job behind that no model will run.
+    A presença dos modelos é verificada antes de qualquer coisa ser registrada
+    ou enfileirada (RFC-035 §6.1): sem eles não há nada que este comando possa
+    fazer, e ele diz isso numa linha (`main()`) em vez de deixar para trás um
+    job que nenhum modelo vai rodar.
     """
     from app.infrastructure.ai.model_runtime import default_runtime
 
@@ -469,17 +472,17 @@ def run(root: Path, label: str) -> None:
 
 
 def main() -> None:
-    """Parse `sys.argv` and run the command, as a standalone entry point.
+    """Interpreta `sys.argv` e roda o comando, como ponto de entrada independente.
 
         python -m app.infrastructure.workers.indexing_worker --root PATH
 
-    `app.cli`'s `index` subcommand parses its own arguments the same way and
-    calls `run()` directly; this function exists so the module keeps working
-    as a script on its own.
+    O subcomando `index` do `app.cli` interpreta os próprios argumentos do
+    mesmo jeito e chama `run()` direto; esta função existe para que o módulo
+    continue funcionando sozinho como script.
 
-    A model that cannot be loaded is one line on stderr (RFC-035 section 6.5),
-    not a traceback, and exit code 78: running the command again will not
-    help (RFC-036 section 6.1).
+    Um modelo que não pode ser carregado é uma linha no stderr (RFC-035 §6.5),
+    não um traceback, e o código de saída 78: rodar o comando de novo não vai
+    adiantar (RFC-036 §6.1).
     """
     from app.infrastructure.ai.model_runtime import ModelUnavailableError
     from app.infrastructure.process.supervision import refuse_to_start

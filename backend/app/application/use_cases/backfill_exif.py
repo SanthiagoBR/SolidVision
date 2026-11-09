@@ -1,25 +1,26 @@
-"""Give already-indexed images their EXIF facts without an embedding (RFC-032 §8.1).
+"""Dá às imagens já indexadas os seus fatos EXIF, sem embedding (RFC-032 §8.1).
 
-**One backfill, not two.** RFC-028 section 7 shipped a capture-date backfill;
-a sibling position backfill would read the same bytes of the same files in a
-second pass -- two seeks per file on a spinning external disk, to fill columns
-that come out of one header. This use case writes both facts from the single
-read the scan already makes (`read_exif_facts()`), and supersedes
-`BackfillCaptureDatesUseCase` rather than standing beside it.
+**Um backfill, não dois.** O RFC-028 §7 entregou um backfill de data de captura;
+um backfill irmão de posição leria os mesmos bytes dos mesmos arquivos numa
+segunda passada -- dois seeks por arquivo num disco externo giratório, para
+preencher colunas que saem de um só cabeçalho. Este caso de uso grava os dois
+fatos a partir da única leitura que o scan já faz (`read_exif_facts()`), e
+substitui `BackfillCaptureDatesUseCase` em vez de ficar ao lado dele.
 
-It is still the indexing scan with inference switched off: the same discovered
-candidates, the same metadata prefetch per window, and the same write policies
--- `capture_date_to_write()` and `position_to_write()` -- deciding which rows
-may be written. What it removes is everything that costs: hashing, the model,
-the embedding write.
+Continua sendo o scan de indexação com a inferência desligada: os mesmos
+candidatos descobertos, a mesma leitura antecipada de metadados por janela e as
+mesmas políticas de gravação -- `capture_date_to_write()` e `position_to_write()`
+-- decidindo quais linhas podem ser gravadas. O que ele tira é tudo o que custa:
+o hash, o modelo, a gravação do embedding.
 
-**The two facts are judged independently, always.** Each has its own stored
-source, its own decision and its own write; a file that has lost its date
-today keeps its position, and the other way round (RFC-032 section 8.1).
+**Os dois fatos são julgados de forma independente, sempre.** Cada um tem a sua
+fonte guardada, a sua decisão e a sua gravação; um arquivo que perdeu a data
+hoje mantém a posição, e vice-versa (RFC-032 §8.1).
 
-It needs no embedding model and no content hasher, and takes neither -- the
-property `tests/infrastructure/workers/test_exif_backfill.py` checks on the
-import graph.
+Não precisa de modelo de embedding nem de hasher de conteúdo, e não recebe
+nenhum dos dois -- a propriedade que
+`tests/infrastructure/workers/test_exif_backfill.py` verifica no grafo de
+imports.
 """
 
 from __future__ import annotations
@@ -46,26 +47,26 @@ from app.domain.value_objects.position_source import PositionSource
 
 @dataclass
 class FactTally:
-    """What one backfill did about one fact -- the capture date, or the position."""
+    """O que um backfill fez com um fato -- a data de captura ou a posição."""
 
     written: int = 0
-    """Rows given this fact -- or, in a dry run, rows that would be."""
+    """Linhas que receberam este fato -- ou, num dry run, as que receberiam."""
 
     written_by_source: dict[str, int] = field(default_factory=dict)
-    """`written`, split by the source recorded: "what fraction has a real one?"."""
+    """`written`, dividido pela fonte gravada: "que fração tem uma fonte real?"."""
 
     already_examined: int = 0
-    """Rows skipped because a previous scan or backfill already looked.
+    """Linhas puladas porque um scan ou backfill anterior já olhou.
 
-    Nearly everything on a second run without `--force`: the mode is
-    idempotent, and this counter is how that shows.
+    Quase tudo numa segunda execução sem `--force`: o modo é idempotente, e
+    este contador é como isso aparece.
     """
 
     kept_stronger: int = 0
-    """`--force` rows where the file now reads weaker than what is stored.
+    """Linhas do `--force` em que o arquivo agora lê mais fraco que o guardado.
 
-    Kept, not overwritten. A non-zero count is worth a look: damage to the
-    files, or a regression in the reader.
+    Mantidas, não sobrescritas. Uma contagem diferente de zero merece um olhar:
+    dano nos arquivos, ou uma regressão no leitor.
     """
 
     def count(self, source: str) -> None:
@@ -75,7 +76,7 @@ class FactTally:
 
 @dataclass
 class ExifBackfillSummary:
-    """What one backfill run found and did, as data (RFC-024 section 11)."""
+    """O que uma execução do backfill achou e fez, como dados (RFC-024 §11)."""
 
     force: bool
     dry_run: bool
@@ -84,10 +85,10 @@ class ExifBackfillSummary:
     positions: FactTally = field(default_factory=FactTally)
 
     not_indexed: int = 0
-    """Files on disk with no row. The backfill fills rows; it never creates them."""
+    """Arquivos no disco sem linha. O backfill preenche linhas; nunca as cria."""
 
     not_readable: int = 0
-    """Files that could not be opened now. Left unexamined, so a later run retries."""
+    """Arquivos que não abriram agora. Ficam sem exame; uma execução futura tenta."""
 
     elapsed_seconds: float = 0.0
     failures: list[IndexingFailure] = field(default_factory=list)
@@ -136,21 +137,21 @@ Source = CaptureSource | PositionSource
 
 
 class BackfillExifUseCase:
-    """Write capture dates and positions for the indexed rows behind a scan.
+    """Grava datas de captura e posições das linhas indexadas por trás de um scan.
 
-    **Two modes, and the difference is the reason `NULL` and `'unknown'`
-    are different values** (RFC-028 section 4.2, RFC-032 section 4.4).
+    **Dois modos, e a diferença entre eles é o motivo de `NULL` e `'unknown'`
+    serem valores diferentes** (RFC-028 §4.2, RFC-032 §4.4).
 
-    The default -- `--only-unknown` -- examines only rows whose source is
-    NULL, for each fact separately. Idempotent: a second run over the same
-    disk writes nothing.
+    O padrão -- `--only-unknown` -- examina só as linhas cuja fonte é NULL,
+    para cada fato separadamente. Idempotente: uma segunda execução sobre o
+    mesmo disco não grava nada.
 
-    `force=True` also re-examines rows already examined, for one situation
-    only: the extraction improved, so rows marked `unknown` may now have a
-    value, and nothing about those files changed for a scan to notice. It
-    **never replaces a stored source with a weaker one**, per fact: an
-    `exif_original` survives a file whose date reads `unknown` today, and an
-    `exif_gps` survives a file whose position does, each judged on its own.
+    `force=True` reexamina também as linhas já examinadas, para uma única
+    situação: a extração melhorou, então linhas marcadas `unknown` podem ter um
+    valor agora, e nada mudou nesses arquivos para um scan perceber. Ele
+    **nunca troca uma fonte guardada por uma mais fraca**, fato a fato: um
+    `exif_original` sobrevive a um arquivo cuja data hoje lê `unknown`, e um
+    `exif_gps` sobrevive a um arquivo cuja posição lê, cada um julgado por si.
     """
 
     def __init__(
@@ -171,7 +172,7 @@ class BackfillExifUseCase:
         self._dry_run = dry_run
 
     def execute(self, candidates: Iterable[IndexCandidate]) -> ExifBackfillSummary:
-        """Stream `candidates` in prefetch windows, writing at most twice per window."""
+        """Percorre `candidates` em janelas, gravando no máximo duas vezes em cada."""
         summary = ExifBackfillSummary(force=self._force, dry_run=self._dry_run)
         started = time.perf_counter()
 
@@ -239,7 +240,7 @@ class BackfillExifUseCase:
     def _tally_skip(
         self, tally: FactTally, stored: Source | None, read: Source
     ) -> None:
-        """Say why a fact was not written: kept stronger, or already examined."""
+        """Diz por que um fato não foi gravado: mantido mais forte, ou já examinado."""
         if self._force and stored is not None and read.precedence < stored.precedence:
             tally.kept_stronger += 1
         else:
@@ -253,12 +254,11 @@ class BackfillExifUseCase:
         tally: FactTally,
         summary: ExifBackfillSummary,
     ) -> None:
-        """One bulk write per window and fact; on failure, per row.
+        """Uma gravação em massa por janela e fato; em caso de falha, linha a linha.
 
-        The same trade every bulk write in the pipeline makes (RFC-024
-        section 7.2): attempt the batch, and when it fails pay the
-        sequential price once, so one bad row costs one fact rather than
-        the window's.
+        A mesma troca que toda gravação em massa do pipeline faz (RFC-024
+        §7.2): tentar o lote e, quando ele falha, pagar o preço sequencial uma
+        vez, para que uma linha ruim custe um fato e não a janela inteira.
         """
         if not to_write:
             return

@@ -1,66 +1,66 @@
-"""Root exception for the domain layer, and the three bases that carry a status.
+"""A exceção raiz da camada de domínio, e as três bases que carregam um status.
 
-`DomainError` alone was enough while every refusal meant the same thing:
-*the request was understood and the application declined it*, which
-`error_handlers.py` answered with 400. RFC-029 introduces refusals that
-400 actively misdescribes -- a job id that names nothing, a disk that is
-already busy -- so two intermediate bases were added rather than a table
-of exception classes in Presentation. RFC-030 added the third, for a file
-that was indexed and is no longer where it was.
+`DomainError` sozinha bastava enquanto toda recusa queria dizer a mesma
+coisa: *o pedido foi entendido e a aplicação o recusou*, que o
+`error_handlers.py` respondia com 400. O RFC-029 introduz recusas que o 400
+descreve mal -- um id de job que não nomeia nada, um disco que já está
+ocupado --, então duas bases intermediárias foram acrescentadas, em vez de
+uma tabela de classes de exceção na Presentation. O RFC-030 acrescentou a
+terceira, para um arquivo que foi indexado e não está mais onde estava.
 
-The bases are here, beside `DomainError`, rather than in a file of their
-own: they are the hierarchy's root, and a caller that imports `DomainError`
-is exactly the caller that needs to know these exist.
+As bases estão aqui, ao lado de `DomainError`, e não num arquivo próprio: são
+a raiz da hierarquia, e um chamador que importa `DomainError` é exatamente o
+chamador que precisa saber que elas existem.
 
-**They name a *kind of refusal*, not an HTTP code.** `NotFoundError` means
-the thing referred to does not exist; `ConflictError` means it exists and
-the current state does not permit what was asked; `GoneError` means it
-existed and has since disappeared. That Presentation maps them to 404, 409
-and 410 is Presentation's business -- the Domain still never returns HTTP
-codes (`ARCHITECTURE.md` section 18).
+**Elas nomeiam um *tipo de recusa*, e não um código HTTP.** `NotFoundError`
+quer dizer que a coisa referida não existe; `ConflictError`, que ela existe e
+o estado atual não permite o que foi pedido; `GoneError`, que ela existiu e
+desde então desapareceu. Que a Presentation as mapeie para 404, 409 e 410 é
+problema da Presentation -- o Domain continua nunca devolvendo códigos HTTP
+(`ARCHITECTURE.md` §18).
 """
 
 
 class DomainError(Exception):
-    """Base class for all domain-layer exceptions."""
+    """Classe base de todas as exceções da camada de domínio."""
 
 
 class NotFoundError(DomainError):
-    """Raised when an operation names something that does not exist.
+    """Levantada quando uma operação nomeia algo que não existe.
 
-    Deliberately *not* used for an empty result. "No images matched this
-    query" is a successful answer; "there is no job with this id" is a
-    caller operating on a wrong assumption, and the distinction is the
-    one RFC-029 section 7 needs so that polling a job can tell "not
-    finished yet" from "never existed".
+    Deliberadamente *não* usada para um resultado vazio. "Nenhuma imagem casou
+    com esta consulta" é uma resposta bem-sucedida; "não há job com este id" é
+    um chamador agindo sobre uma suposição errada, e a distinção é a de que o
+    RFC-029 §7 precisa para que consultar um job saiba diferenciar "ainda não
+    terminou" de "nunca existiu".
     """
 
 
 class ConflictError(DomainError):
-    """Raised when the request is well formed but the current state refuses it.
+    """Levantada quando o pedido é bem formado, mas o estado atual o recusa.
 
-    The test is whether the same request would succeed later, or with the
-    world in a different state: a job creation for a disk that already has
-    an active job would be accepted once that job ends, and one for an
-    unplugged disk would be accepted with the disk plugged in. Nothing
-    about the request needs fixing, which is precisely what separates this
-    from the 400 case.
+    O teste é se o mesmo pedido daria certo mais tarde, ou com o mundo em
+    outro estado: criar um job para um disco que já tem um job ativo seria
+    aceito quando esse job terminasse, e criar um para um disco desplugado
+    seria aceito com o disco plugado. Nada no pedido precisa ser corrigido, e
+    é justamente isso que separa este caso do 400.
     """
 
 
 class GoneError(DomainError):
-    """Raised when the thing referred to existed but no longer does.
+    """Levantada quando a coisa referida existiu, mas não existe mais.
 
-    Distinct from `NotFoundError`: an id that never existed is 404; an id
-    that named something real, which is now gone, is 410. The caller is
-    not wrong to have asked -- the world changed under the request.
+    Distinta de `NotFoundError`: um id que nunca existiu é 404; um id que
+    nomeava algo real, que agora sumiu, é 410. O chamador não errou ao
+    perguntar -- o mundo mudou por baixo do pedido.
 
-    Distinct from `ConflictError` too, and the difference is whether
-    waiting helps. A disk in a drawer is a conflict, because the identical
-    request succeeds once it is plugged in; a file deleted from a disk that
-    *is* plugged in will not come back by itself, and telling the caller
-    to retry would be telling them something false (RFC-030 section 5.1).
+    Distinta de `ConflictError` também, e a diferença é se esperar ajuda. Um
+    disco na gaveta é um conflito, porque o pedido idêntico dá certo assim que
+    ele é plugado; um arquivo apagado de um disco que *está* plugado não volta
+    sozinho, e dizer ao chamador para tentar de novo seria dizer algo falso
+    (RFC-030 §5.1).
 
-    Added by RFC-030, which needed the status and found no base to carry
-    it: until then `error_handlers.py` knew 404 and 409 and nothing else.
+    Acrescentada pelo RFC-030, que precisava do status e não achou base que o
+    carregasse: até então, o `error_handlers.py` conhecia o 404 e o 409, e
+    nada mais.
     """

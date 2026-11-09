@@ -1,28 +1,29 @@
-"""Application use case coordinating incremental indexing over many images.
+"""Caso de uso da aplicação que coordena a indexação incremental de muitas imagens.
 
-This is where RFC-024's batching actually happens, and it exists because
-`IndexOrUpdateImageUseCase.execute()` structurally could not host it: that
-method takes one image and performs the skip check, the embed, and the
-persist for that one image in one call. Looping over it N times to "fill a
-batch" would still be N sequential single-image inferences with extra
-bookkeeping around them.
+É aqui que os lotes do RFC-024 de fato acontecem, e este caso de uso existe
+porque `IndexOrUpdateImageUseCase.execute()` não tinha, pela sua estrutura, como
+abrigá-los: aquele método recebe uma imagem e faz a verificação de pulo, o
+embedding e a persistência dessa imagem numa só chamada. Chamá-lo N vezes em
+loop para "encher um lote" continuaria sendo N inferências sequenciais de uma
+imagem, com contabilidade extra em volta.
 
-The stages are explicit and composed as a stream, not as queues or threads
-(RFC-024 section 10):
+As etapas são explícitas e compostas como um fluxo, não como filas ou threads
+(RFC-024 §10):
 
-    candidates -> prefetch window -> skip decision -> inference batch
-               -> thumbnails -> persistence
+    candidatos -> janela de leitura antecipada -> decisão de pulo
+               -> lote de inferência -> thumbnails -> persistência
 
-Still one thread here since RFC-045. The thread that reads files ahead of
-this stream lives in the *source* of the candidates, in Infrastructure
-(`ReadAheadCandidates`): what reaches this class is a candidate that may
-carry its file's bytes (`IndexCandidate.content`), which it hands to the
-model and the thumbnail and releases as soon as the file needs them no more.
+Continua sendo uma thread só aqui, desde o RFC-045. A thread que lê os arquivos
+à frente deste fluxo fica na *fonte* dos candidatos, na infraestrutura
+(`ReadAheadCandidates`): o que chega a esta classe é um candidato que pode
+trazer os bytes do seu arquivo (`IndexCandidate.content`), que ela entrega ao
+modelo e à thumbnail e libera assim que o arquivo não precisa mais deles.
 
-Two window sizes appear below and they are deliberately different. Metadata
-prefetch reads a handful of scalars per row, so it wants a large window;
-inference holds decoded pixels in memory, so it wants a small one. See
-`Settings.metadata_prefetch_size` for the full argument.
+Dois tamanhos de janela aparecem abaixo, e são diferentes de propósito. A
+leitura antecipada de metadados lê um punhado de escalares por linha, então
+quer uma janela grande; a inferência segura pixels decodificados em memória,
+então quer uma pequena. Ver `Settings.metadata_prefetch_size` para o argumento
+completo.
 """
 
 from __future__ import annotations
@@ -60,12 +61,12 @@ from app.domain.value_objects.position import PositionReading
 
 @dataclass(frozen=True)
 class IndexingFailure:
-    """One file that could not be indexed, and the error that stopped it.
+    """Um arquivo que não pôde ser indexado, e o erro que o parou.
 
-    Carries the original exception, never a wrapper. RFC-024 section 6 is
-    explicit that the individual retry must surface the real error and the
-    offending path; a generic wrapper would tell an operator nothing they
-    could act on.
+    Carrega a exceção original, nunca um invólucro. O RFC-024 §6 é explícito:
+    a nova tentativa individual precisa mostrar o erro real e o caminho
+    culpado; um invólucro genérico não diria a um operador nada sobre o que
+    ele pudesse agir.
     """
 
     path: str
@@ -74,16 +75,15 @@ class IndexingFailure:
 
 @dataclass(frozen=True)
 class BatchFallback:
-    """A batch that failed as a unit and was retried one item at a time.
+    """Um lote que falhou como unidade e foi tentado de novo item a item.
 
-    Recorded because the batch-level exception is otherwise lost: when the
-    retry then succeeds for every item, the run reports no failures at all
-    and the only trace that anything went wrong would be the missing time.
+    Registrado porque, do contrário, a exceção do lote se perde: quando a nova
+    tentativa dá certo para todos os itens, a execução não relata falha
+    nenhuma, e o único rastro de que algo deu errado seria o tempo perdido.
 
-    Used for both batching dimensions -- inference and persistence -- which
-    resolve the same tension the same way: attempt the batch, and on
-    failure pay the sequential price once so that only the genuinely bad
-    item is lost.
+    Usado nas duas dimensões de lote -- inferência e persistência --, que
+    resolvem a mesma tensão do mesmo jeito: tentar o lote e, na falha, pagar o
+    preço sequencial uma vez, para que só o item de fato ruim se perca.
     """
 
     paths: tuple[str, ...]
@@ -92,12 +92,12 @@ class BatchFallback:
 
 @dataclass
 class IndexingSummary:
-    """Counters and timings for one indexing run.
+    """Contadores e tempos de uma execução de indexação.
 
-    Machine-readable as it stands -- the fields are the data -- and
-    rendered for humans by `format_report()`. Returned rather than logged
-    so the Application layer stays free of a logging dependency; the
-    Infrastructure caller decides what to do with it (RFC-024 section 11).
+    Legível por máquina como está -- os campos são os dados -- e apresentado
+    para humanos por `format_report()`. Devolvido em vez de logado, para que a
+    camada de aplicação fique livre de dependência de logging; quem chama, na
+    infraestrutura, decide o que fazer com ele (RFC-024 §11).
     """
 
     discovered: int = 0
@@ -110,102 +110,103 @@ class IndexingSummary:
     persistence_writes: int = 0
     persistence_seconds: float = 0.0
     capture_dates_written: int = 0
-    """Already-indexed rows that gained a capture date without re-embedding.
+    """Linhas já indexadas que ganharam data de captura sem refazer o embedding.
 
-    Large on the first scan after RFC-028 and zero on every later scan of
-    an unchanged collection. A non-zero value on a re-scan of a collection
-    nobody touched would mean the conditional write has stopped being
-    conditional, which is why it is reported rather than left implicit.
+    Grande no primeiro scan depois do RFC-028 e zero em todo scan seguinte de
+    uma coleção inalterada. Um valor diferente de zero num novo scan de uma
+    coleção em que ninguém mexeu significaria que a gravação condicional
+    deixou de ser condicional, e é por isso que ele é relatado em vez de
+    ficar implícito.
     """
     positions_written: int = 0
-    """Already-indexed rows that gained a position without re-embedding (RFC-032).
+    """Linhas já indexadas que ganharam posição sem refazer o embedding (RFC-032).
 
-    Counted apart from `capture_dates_written` although both come from one
-    header read: the two writes are decided separately, and a row can need
-    one and not the other -- examined for a date before RFC-032, never
-    examined for a position. Same reading as its neighbour: large on the
-    first scan after RFC-032, zero on every later scan of an unchanged
-    collection.
+    Contado à parte de `capture_dates_written`, embora os dois venham de uma
+    leitura de cabeçalho: as duas gravações são decididas separadamente, e uma
+    linha pode precisar de uma e não da outra -- examinada para data antes do
+    RFC-032, nunca examinada para posição. A mesma leitura do vizinho: grande
+    no primeiro scan depois do RFC-032, zero em todo scan seguinte de uma
+    coleção inalterada.
     """
     thumbnails_written: int = 0
     thumbnail_seconds: float = 0.0
-    """Rendering and storing thumbnails, kept apart from inference time.
+    """Renderizar e guardar thumbnails, mantido à parte do tempo de inferência.
 
-    Apart because RFC-030 section 7.2 asked how much thumbnails move the
-    RFC-024 throughput, and folded into `inference_seconds` the answer
-    would be unreadable -- the report's img/s figure for the model would
-    silently start including a JPEG encoder.
+    À parte porque o RFC-030 §7.2 perguntou quanto as thumbnails mexem na
+    vazão do RFC-024, e, somada a `inference_seconds`, a resposta ficaria
+    ilegível -- o img/s do modelo no relatório passaria, em silêncio, a
+    incluir um codificador JPEG.
     """
     thumbnail_failures: list[IndexingFailure] = field(default_factory=list)
-    """Images indexed successfully whose thumbnail could not be made.
+    """Imagens indexadas com sucesso cuja thumbnail não pôde ser feita.
 
-    **Not in `failures`, and not counted by `failed`.** Each of these
-    images was embedded and persisted and is searchable; it shows a
-    placeholder instead of a picture until the thumbnail backfill runs
-    (RFC-030 section 7.2). Reporting it as a failed file would tell a job
-    that a photo was lost when nothing was.
+    **Não ficam em `failures`, e não são contadas por `failed`.** Cada uma
+    dessas imagens ganhou embedding, foi persistida e é buscável; ela mostra
+    um placeholder em vez de uma imagem até o backfill de thumbnails rodar
+    (RFC-030 §7.2). Relatá-la como arquivo com falha diria a um job que uma
+    foto se perdeu quando nada se perdeu.
     """
     candidate_wait_seconds: float = 0.0
-    """Time spent waiting for the next candidate (RFC-045 section 5.8).
+    """Tempo gasto esperando o próximo candidato (RFC-045 §5.8).
 
-    Without the read-ahead, the time of discovery itself -- the walk, the
-    `stat` and the EXIF read. With it, the time the pipeline waited for the
-    reading thread: when it is large, the disk is what limits the run, and
-    a faster model would not make it shorter.
+    Sem a leitura antecipada, o tempo da própria descoberta -- o percurso, o
+    `stat` e a leitura do EXIF. Com ela, o tempo que o pipeline esperou pela
+    thread de leitura: quando é grande, o disco é o que limita a execução, e
+    um modelo mais rápido não a encurtaria.
     """
     contents_prefetched: int = 0
-    """Candidates whose bytes came from the read-ahead (RFC-045 section 5.8).
+    """Candidatos cujos bytes vieram da leitura antecipada (RFC-045 §5.8).
 
-    Every one of them was read from the disk, whether or not the decision
-    then needed it: zero on a re-scan of an unchanged disk, and the number
-    of touched files on a re-scan of one where some were touched.
+    Todos eles foram lidos do disco, a decisão precisando deles ou não: zero
+    num novo scan de um disco inalterado, e o número de arquivos mexidos num
+    novo scan de um disco em que alguns foram mexidos.
     """
     contents_read_late: int = 0
-    """Files whose hash was read from their location (RFC-045 section 5.8).
+    """Arquivos cujo hash foi lido da sua localização (RFC-045 §5.8).
 
-    Without the read-ahead, every file that was hashed. With it, the ones
-    the thread did not read -- a prediction that missed, a file above the
-    per-file limit, a budget that was full -- and so were read here, in
-    series with the model.
+    Sem a leitura antecipada, todo arquivo que passou pelo hash. Com ela, os
+    que a thread não leu -- uma previsão que errou, um arquivo acima do limite
+    por arquivo, um orçamento que estava cheio -- e que, por isso, foram lidos
+    aqui, em série com o modelo.
     """
     elapsed_seconds: float = 0.0
     failures: list[IndexingFailure] = field(default_factory=list)
     inference_fallbacks: list[BatchFallback] = field(default_factory=list)
     persistence_fallbacks: list[BatchFallback] = field(default_factory=list)
     stopped: bool = False
-    """Whether an observer asked the run to wind up before the stream ended.
+    """Se um observer pediu à execução que encerrasse antes do fim do fluxo.
 
-    Not a failure, and deliberately not an exception (RFC-029 section 8).
-    A cancelled run leaves everything it indexed in place and searchable,
-    and the next run over the same scope skips it through the incremental
-    decision. The flag is how a caller tells "finished the scope" from
-    "stopped part way", which are two different things to write on a job.
+    Não é uma falha, e deliberadamente não é uma exceção (RFC-029 §8). Uma
+    execução cancelada deixa tudo o que indexou no lugar e buscável, e a
+    próxima execução sobre o mesmo escopo pula isso pela decisão incremental.
+    A flag é como quem chama distingue "terminou o escopo" de "parou no meio
+    do caminho", que são duas coisas diferentes a escrever num job.
     """
 
     @property
     def failed(self) -> int:
-        """How many individual files could not be indexed."""
+        """Quantos arquivos individuais não puderam ser indexados."""
         return len(self.failures)
 
     def as_progress(self) -> IndexingProgress:
-        """Project the counters a watcher needs out of the ones a human reads.
+        """Projeta, dos contadores que um humano lê, os que um observador precisa.
 
-        The two shapes are separate on purpose. This class carries
-        timings, fallback records and every individual failure because a
-        finished run is reported to a person; `IndexingProgress` carries
-        four integers because a client is drawing a progress bar. Handing
-        this object to the Domain port would also mean the Domain
-        importing the Application, which nothing here does.
+        As duas formas são separadas de propósito. Esta classe carrega tempos,
+        registros de fallback e cada falha individual porque uma execução
+        terminada é relatada a uma pessoa; `IndexingProgress` carrega quatro
+        inteiros porque um cliente está desenhando uma barra de progresso.
+        Entregar este objeto à porta do domínio significaria também o domínio
+        importar a aplicação, o que nada aqui faz.
 
-        Both kinds of skip are one number to a watcher. "Unchanged" and
-        "mtime moved, bytes did not" are a meaningful distinction in the
-        report RFC-024 section 11 specifies and no distinction at all to
-        somebody waiting for a bar to move.
+        Os dois tipos de pulo são um número só para quem observa. "Inalterado"
+        e "o mtime mudou, os bytes não" são uma distinção que tem sentido no
+        relatório que o RFC-024 §11 especifica, e nenhuma distinção para
+        alguém esperando uma barra andar.
 
-        `discovery_complete` is left false here, always. This class
-        counts what the *pipeline* consumed, and it cannot know whether
-        the stream feeding it has ended -- only the scan knows that, and
-        it says so through `IndexingObserver.discovered()`.
+        `discovery_complete` fica falso aqui, sempre. Esta classe conta o que
+        o *pipeline* consumiu, e não tem como saber se o fluxo que a alimenta
+        acabou -- só o scan sabe disso, e o diz por
+        `IndexingObserver.discovered()`.
         """
         return IndexingProgress(
             discovered_files=self.discovered,
@@ -215,13 +216,13 @@ class IndexingSummary:
         )
 
     def format_report(self) -> str:
-        """Render the run as the block RFC-024 section 11 specifies.
+        """Apresenta a execução como o bloco que o RFC-024 §11 especifica.
 
-        The persistence percentage is not decoration. RFC-024 section 7.2
-        gates bulk upsert writes on whether database time is still a
-        visible fraction of a run once the mandatory metadata prefetch is
-        in place, and this is the line that answers it from a real run
-        instead of by assertion.
+        A porcentagem da persistência não é enfeite. O RFC-024 §7.2 condiciona
+        os upserts em massa a o tempo de banco ainda ser uma fração visível de
+        uma execução depois que a leitura antecipada obrigatória de metadados
+        está no lugar, e esta é a linha que responde a isso a partir de uma
+        execução real, em vez de por afirmação.
         """
         average_batch = self._average(self.inference_seconds, self.inference_batches)
         average_write = self._average(
@@ -301,34 +302,33 @@ class IndexingSummary:
 
 
 class DurableFrontier:
-    """How far a run may claim to have got, given what is still unwritten.
+    """Até onde uma execução pode dizer que chegou, dado o que ainda não foi gravado.
 
-    **The checkpoint is not "the last file processed", and the difference
-    is data loss.** The batch buffer survives across prefetch windows: a
-    file decided `EMBED` in window 1 can still be sitting in `pending`
-    while files from window 3 have been skipped and are already accounted
-    for. A checkpoint taken from the last file *seen* would therefore
-    stand past files that were never written, and a crash would resume
-    beyond them -- silently, and for good, because the resumed scan never
-    looks at them again.
+    **O checkpoint não é "o último arquivo processado", e a diferença é perda
+    de dados.** O buffer do lote sobrevive de uma janela de leitura antecipada
+    para outra: um arquivo decidido `EMBED` na janela 1 pode ainda estar em
+    `pending` enquanto arquivos da janela 3 já foram pulados e contabilizados.
+    Um checkpoint tirado do último arquivo *visto* ficaria, portanto, depois de
+    arquivos que nunca foram gravados, e uma queda retomaria além deles -- em
+    silêncio, e para sempre, porque o scan retomado nunca mais olha para eles.
 
-    So the rule (RFC-029 section 10, made precise): the checkpoint is the
-    greatest path `P` such that every discovered file up to and including
-    `P` has been written, skipped, or recorded as a failure. In practice
-    that is the file immediately *before* the oldest plan still buffered,
-    or the last file seen when nothing is buffered.
+    Daí a regra (RFC-029 §10, tornada precisa): o checkpoint é o maior caminho
+    `P` tal que todo arquivo descoberto até `P`, inclusive, foi gravado, pulado
+    ou registrado como falha. Na prática, é o arquivo imediatamente *anterior*
+    ao plano mais antigo ainda no buffer, ou o último arquivo visto quando não
+    há nada no buffer.
 
-    Erring is asymmetric and this errs the safe way. A checkpoint that
-    lags costs a re-scan of a few files whose work the incremental
-    decision then skips for nothing; a checkpoint that leads loses
-    photographs.
+    Errar é assimétrico, e isto erra para o lado seguro. Um checkpoint
+    atrasado custa um novo scan de uns poucos arquivos cujo trabalho a decisão
+    incremental então pula à toa; um checkpoint adiantado perde fotografias.
 
-    One nuance, accepted and stated: a skipped file counts as durable
-    before its capture date and position are written, because those writes
-    happen once per window (RFC-028 section 6, RFC-032 section 8). A resume
-    past it leaves the row with `capture_source` or `position_source` NULL
-    -- which means *never examined*, so the next full scan or `exif_backfill`
-    writes it. A deferred metadata write, not a lost one.
+    Uma nuance, aceita e declarada: um arquivo pulado conta como durável antes
+    de a sua data de captura e a sua posição serem gravadas, porque essas
+    gravações acontecem uma vez por janela (RFC-028 §6, RFC-032 §8). Uma
+    retomada depois dele deixa a linha com `capture_source` ou
+    `position_source` NULL -- o que significa *nunca examinada*, então o
+    próximo scan completo ou o `exif_backfill` a grava. Uma gravação de
+    metadados adiada, não perdida.
     """
 
     def __init__(self) -> None:
@@ -337,14 +337,14 @@ class DurableFrontier:
         self._buffering = False
 
     def decided(self, path: ImagePath) -> None:
-        """Record a file that needs nothing further -- skipped, refreshed, failed."""
+        """Registra um arquivo resolvido -- pulado, atualizado ou com falha."""
         self._last_seen = path
 
     def buffered(self, path: ImagePath) -> None:
-        """Record a file that went into the batch and is not written yet.
+        """Registra um arquivo que entrou no lote e ainda não foi gravado.
 
-        The frontier freezes at the file before this one, and stays there
-        until the batch is flushed -- however many windows that takes.
+        A fronteira congela no arquivo anterior a este, e fica ali até o lote
+        ser descarregado -- quantas janelas isso levar.
         """
         if not self._buffering:
             self._buffered_after = self._last_seen
@@ -352,36 +352,36 @@ class DurableFrontier:
         self._last_seen = path
 
     def flushed(self) -> None:
-        """Record that the batch was written, releasing the frozen frontier.
+        """Registra que o lote foi gravado, liberando a fronteira congelada.
 
-        Called after the flush whether or not every row in it survived:
-        a row that failed was recorded as a failure, which accounts for
-        its file just as a successful write does.
+        Chamado depois da descarga, tenha toda linha dela sobrevivido ou não:
+        uma linha que falhou foi registrada como falha, o que contabiliza o
+        seu arquivo tanto quanto uma gravação bem-sucedida.
         """
         self._buffering = False
         self._buffered_after = None
 
     @property
     def durable_through(self) -> ImagePath | None:
-        """The checkpoint right now, or `None` when nothing is durable yet.
+        """O checkpoint agora, ou `None` quando nada é durável ainda.
 
-        `None` is a real answer rather than a missing one -- a run whose
-        very first file went straight into the batch has nothing durable
-        behind it -- and a caller must treat it as "leave the stored
-        checkpoint alone", never as "clear it".
+        `None` é uma resposta de verdade, não uma ausência de resposta -- uma
+        execução cujo primeiríssimo arquivo foi direto para o lote não tem nada
+        durável atrás de si --, e quem chama deve tratá-lo como "deixe o
+        checkpoint guardado como está", nunca como "apague-o".
         """
         return self._buffered_after if self._buffering else self._last_seen
 
 
 class IndexOrUpdateImagesUseCase:
-    """Index a stream of candidates in batches without giving up error isolation.
+    """Indexa um fluxo de candidatos em lotes sem abrir mão do isolamento de erros.
 
-    Per-file isolation survives the move to batching (RFC-024 section 6).
-    A batch is attempted as a unit; if it raises, the exact same images are
-    retried one at a time, so N-1 of them still land and the one genuinely
-    at fault is reported with its real path and its real exception.
-    Hashing and persistence are guarded per file for the same reason, and
-    so, since RFC-030, is rendering a thumbnail.
+    O isolamento por arquivo sobrevive à passagem para lotes (RFC-024 §6). Um
+    lote é tentado como unidade; se ele levanta exceção, exatamente as mesmas
+    imagens são tentadas de novo uma a uma, então N-1 delas ainda chegam ao
+    banco e a de fato culpada é relatada com o seu caminho real e a sua exceção
+    real. O hash e a persistência são protegidos por arquivo pelo mesmo motivo,
+    e, desde o RFC-030, a renderização de uma thumbnail também.
     """
 
     def __init__(
@@ -393,14 +393,14 @@ class IndexOrUpdateImagesUseCase:
         metadata_prefetch_size: int,
         thumbnail_writer: ThumbnailWriter | None = None,
     ) -> None:
-        """Compose the pipeline.
+        """Compõe o pipeline.
 
-        `thumbnail_writer` is optional so that every composition written
-        before RFC-030 -- the benchmarks, the measurement scripts, the
-        tests of control flow -- keeps doing exactly what it measured. The
-        executor that runs real jobs passes one (`build_runner()`), and a
-        pipeline without one persists `thumbnail_path = NULL`, which is
-        the state the backfill exists to repair.
+        `thumbnail_writer` é opcional para que toda composição escrita antes do
+        RFC-030 -- os benchmarks, os scripts de medição, os testes de fluxo de
+        controle -- continue fazendo exatamente o que mediu. O executor que
+        roda os jobs reais passa um (`build_runner()`), e um pipeline sem ele
+        persiste `thumbnail_path = NULL`, que é o estado que o backfill existe
+        para consertar.
         """
         if batch_size < 1:
             raise ValueError(f"batch_size must be at least 1, got {batch_size}")
@@ -422,25 +422,25 @@ class IndexOrUpdateImagesUseCase:
         candidates: Iterable[IndexCandidate],
         observer: IndexingObserver | None = None,
     ) -> IndexingSummary:
-        """Run the full pipeline over `candidates` and return what happened.
+        """Roda o pipeline inteiro sobre `candidates` e devolve o que aconteceu.
 
-        `candidates` is consumed lazily and never materialized in full, so
-        memory stays bounded by the two window sizes no matter how many
-        files were discovered.
+        `candidates` é consumido sob demanda e nunca materializado por
+        inteiro, então a memória fica limitada pelos dois tamanhos de janela,
+        não importa quantos arquivos foram descobertos.
 
-        `observer` is optional and defaults to one that does nothing, so
-        every caller written before RFC-029 -- and every test of this class
-        -- behaves exactly as it did. It is the seam RFC-029 needs for
-        progress (section 7.3) and for cooperative cancellation (section
-        8), and it is deliberately a Domain port that knows nothing about
-        jobs: this method must not learn that jobs exist, or "the CLI
-        re-indexes what the UI skips" becomes a thing that can happen.
+        `observer` é opcional e tem como padrão um que não faz nada, para que
+        todo chamador escrito antes do RFC-029 -- e todo teste desta classe --
+        se comporte exatamente como antes. Ele é a costura de que o RFC-029
+        precisa para o progresso (§7.3) e para o cancelamento cooperativo
+        (§8), e é de propósito uma porta do domínio que não sabe nada de jobs:
+        este método não pode aprender que jobs existem, ou "a CLI reindexa o
+        que a interface pula" vira algo que pode acontecer.
 
-        `should_stop()` is consulted between windows and after each flush,
-        never inside a forward pass. A stop flushes whatever has already
-        been inferred -- throwing away inference that has been paid for
-        buys nothing -- sets `summary.stopped`, and returns normally. A
-        cancellation is not a failure and does not raise.
+        `should_stop()` é consultado entre janelas e depois de cada descarga,
+        nunca no meio de uma passada do modelo. Uma parada descarrega o que já
+        foi inferido -- jogar fora inferência já paga não compra nada --,
+        marca `summary.stopped` e volta normalmente. Um cancelamento não é uma
+        falha e não levanta exceção.
         """
         watcher = observer if observer is not None else NullIndexingObserver()
         summary = IndexingSummary()
@@ -469,9 +469,9 @@ class IndexOrUpdateImagesUseCase:
             for position_in_window, candidate in enumerate(window):
                 plan = self._plan(candidate, existing, summary)
                 if plan is None:
-                    # Reported as a failure, which accounts for the file:
-                    # a checkpoint may pass it, because resuming would
-                    # only fail on it again.
+                    # Relatado como falha, o que contabiliza o arquivo: um
+                    # checkpoint pode passar dele, porque retomar só falharia
+                    # nele de novo.
                     frontier.decided(candidate.image.relative_path)
                     _release([candidate])
                     continue
@@ -492,7 +492,7 @@ class IndexOrUpdateImagesUseCase:
                             break
                     continue
 
-                # Skipped or refreshed: the bytes have done their job.
+                # Pulado ou atualizado: os bytes já cumpriram o seu papel.
                 _release([candidate])
                 frontier.decided(candidate.image.relative_path)
                 if plan.action is IndexAction.SKIP_UNCHANGED:
@@ -533,16 +533,17 @@ class IndexOrUpdateImagesUseCase:
         existing: dict[ImageId, IndexMetadata],
         summary: IndexingSummary,
     ) -> IndexPlan | None:
-        """Decide one candidate, turning a hashing failure into a reported one.
+        """Decide um candidato, transformando uma falha de hash numa falha relatada.
 
-        Hashing reads the file, so it can fail for exactly the reasons
-        indexing can -- a file deleted between discovery and processing, a
-        permission change, unreadable media -- and that must not abort the
-        run any more than a corrupt JPEG does.
+        O hash lê o arquivo, então pode falhar exatamente pelos motivos pelos
+        quais a indexação pode -- um arquivo apagado entre a descoberta e o
+        processamento, uma mudança de permissão, uma mídia ilegível --, e isso
+        não pode abortar a execução, assim como um JPEG corrompido não aborta.
 
-        A file hashed here without bytes from the read-ahead is counted in
-        `contents_read_late`, whether the read succeeded or not: either way
-        it was read in series with the model (RFC-045 section 5.8).
+        Um arquivo que passa pelo hash aqui sem bytes da leitura antecipada é
+        contado em `contents_read_late`, a leitura tendo dado certo ou não: de
+        um jeito ou de outro, ele foi lido em série com o modelo (RFC-045
+        §5.8).
         """
         try:
             plan = plan_indexing(
@@ -563,28 +564,28 @@ class IndexOrUpdateImagesUseCase:
         return plan
 
     def _flush(self, plans: list[IndexPlan], summary: IndexingSummary) -> None:
-        """Encode one assembled batch and persist whatever survived it.
+        """Codifica um lote montado e persiste o que sobreviveu a ele.
 
-        The persistence batch is the inference batch, not a separately
-        sized buffer. RFC-024 section 7.2 required this to be a stated
-        decision rather than an accident, and the reason to couple them is
-        that the rows to write are exactly the output of the batch just
-        encoded: holding them back to fill a larger persistence batch would
-        keep N more 512-float embeddings alive for no measured gain, and
-        would break the property that a batch's work is durable before the
-        next batch starts -- which is what makes crash-restart cheap under
-        the incremental skip (section 13). Should a future measurement
-        favour decoupling, `Settings` is where the second knob goes.
+        O lote de persistência é o lote de inferência, não um buffer de tamanho
+        próprio. O RFC-024 §7.2 exigiu que isso fosse uma decisão declarada, e
+        não um acaso, e o motivo de acoplar os dois é que as linhas a gravar
+        são exatamente a saída do lote recém-codificado: segurá-las para
+        encher um lote de persistência maior manteria vivos N embeddings de
+        512 floats a mais sem ganho medido, e quebraria a propriedade de que o
+        trabalho de um lote é durável antes de o próximo começar -- que é o que
+        torna barato reiniciar depois de uma queda, com o pulo incremental
+        (§13). Se uma medição futura favorecer o desacoplamento, `Settings` é
+        onde entra o segundo botão.
 
-        Thumbnails are rendered between the two, so that the row is
-        written once with its thumbnail location in it rather than written
-        and then updated -- a second round trip per batch for a value known
-        before the first.
+        As thumbnails são renderizadas entre os dois, para que a linha seja
+        gravada uma vez já com a localização da thumbnail, em vez de gravada e
+        depois atualizada -- uma segunda ida e volta por lote para um valor
+        conhecido antes da primeira.
 
-        **The batch's bytes are released here, however it ended** (RFC-045
-        section 5.5): after the write, whether every row landed or none
-        did. Past this point nothing reads them again -- a row that failed
-        is reported, not retried.
+        **Os bytes do lote são liberados aqui, seja como ele terminou**
+        (RFC-045 §5.5): depois da gravação, tenha toda linha chegado ao banco
+        ou nenhuma. Depois deste ponto, nada os lê de novo -- uma linha que
+        falhou é relatada, não tentada de novo.
         """
         try:
             encoded = self._encode_batch(plans, summary)
@@ -596,7 +597,7 @@ class IndexOrUpdateImagesUseCase:
     def _encode_batch(
         self, plans: list[IndexPlan], summary: IndexingSummary
     ) -> list[tuple[IndexPlan, EmbeddingVector]]:
-        """Time one batch, however it ends up being encoded."""
+        """Cronometra um lote, seja qual for o jeito como ele acaba codificado."""
         started = time.perf_counter()
         try:
             return self._encode_group(plans, summary)
@@ -608,9 +609,9 @@ class IndexOrUpdateImagesUseCase:
         self, plans: list[IndexPlan], summary: IndexingSummary
     ) -> list[tuple[IndexPlan, EmbeddingVector]]:
         if len(plans) == 1:
-            # A batch of one has no per-call overhead to amortize, and
-            # attempting it as a batch first would only run the same
-            # failing call twice before reporting the same error.
+            # Um lote de um não tem custo fixo por chamada a amortizar, e
+            # tentá-lo primeiro como lote só rodaria a mesma chamada falha
+            # duas vezes antes de relatar o mesmo erro.
             return self._encode_individually(plans, summary)
 
         images = [plan.candidate.image for plan in plans]
@@ -630,9 +631,9 @@ class IndexOrUpdateImagesUseCase:
             return self._encode_individually(plans, summary)
 
         if len(embeddings) != len(plans):
-            # A contract violation in an adapter, not a bad input file.
-            # Degrading to per-image here would hide it permanently, so
-            # this one stops the run instead.
+            # Uma violação de contrato num adaptador, não um arquivo de
+            # entrada ruim. Recuar para imagem a imagem aqui a esconderia
+            # para sempre, então esta para a execução.
             raise ValueError(
                 f"{type(self._embedding_model).__name__}.encode_images returned "
                 f"{len(embeddings)} embeddings for {len(plans)} images"
@@ -643,7 +644,7 @@ class IndexOrUpdateImagesUseCase:
     def _encode_individually(
         self, plans: list[IndexPlan], summary: IndexingSummary
     ) -> list[tuple[IndexPlan, EmbeddingVector]]:
-        """Restore exact per-file isolation by paying the sequential price once."""
+        """Restaura o isolamento exato por arquivo, pagando o preço sequencial."""
         encoded: list[tuple[IndexPlan, EmbeddingVector]] = []
         for plan in plans:
             try:
@@ -665,28 +666,28 @@ class IndexOrUpdateImagesUseCase:
         encoded: list[tuple[IndexPlan, EmbeddingVector]],
         summary: IndexingSummary,
     ) -> dict[ImageId, str]:
-        """Render a thumbnail for every image that survived inference.
+        """Renderiza uma thumbnail para cada imagem que sobreviveu à inferência.
 
-        **Only survivors.** `encoded` is what `_encode_batch()` returned,
-        which excludes every image whose embedding failed -- including the
-        ones that failed only on the per-image retry. Rendering those would
-        pay a full decode for a row that is never written.
+        **Só as sobreviventes.** `encoded` é o que `_encode_batch()` devolveu,
+        o que exclui toda imagem cujo embedding falhou -- inclusive as que só
+        falharam na nova tentativa imagem a imagem. Renderizá-las pagaria uma
+        decodificação completa por uma linha que nunca é gravada.
 
-        **Only `EMBED`.** Nothing reaches this method for a file the skip
-        decision passed over: an unchanged file already has the thumbnail
-        its bytes deserve, or has none and is the backfill's to render.
-        Rendering here for skipped files would turn a re-scan, which costs
-        a `stat` per file, into a full decode per file (RFC-030 section
-        7.2).
+        **Só `EMBED`.** Nada chega a este método para um arquivo que a decisão
+        de pulo deixou passar: um arquivo inalterado já tem a thumbnail que os
+        seus bytes merecem, ou não tem nenhuma e cabe ao backfill renderizá-la.
+        Renderizar aqui para arquivos pulados transformaria um novo scan, que
+        custa um `stat` por arquivo, numa decodificação completa por arquivo
+        (RFC-030 §7.2).
 
-        **A failure is reported and never propagated** (RFC-030 section
-        7.2): the embedding was paid for and the image is searchable. The
-        image is persisted with no thumbnail location, and the failure goes
-        to `thumbnail_failures`, never to `failures`.
+        **Uma falha é relatada e nunca propagada** (RFC-030 §7.2): o embedding
+        foi pago e a imagem é buscável. A imagem é persistida sem localização
+        de thumbnail, e a falha vai para `thumbnail_failures`, nunca para
+        `failures`.
 
-        One known imperfection, accepted: the file is stored before the
-        row is written. If the row then fails to persist, the stored file is
-        an orphan until the next run for that image overwrites it.
+        Uma imperfeição conhecida, aceita: o arquivo é guardado antes de a
+        linha ser gravada. Se a linha então não persistir, o arquivo guardado
+        fica órfão até a próxima execução para aquela imagem sobrescrevê-lo.
         """
         if self._thumbnail_writer is None or not encoded:
             return {}
@@ -715,15 +716,15 @@ class IndexOrUpdateImagesUseCase:
         thumbnails: dict[ImageId, str],
         summary: IndexingSummary,
     ) -> None:
-        """Write a batch behind one transaction, degrading to per-row on failure.
+        """Grava um lote numa transação, recuando para linha a linha se falhar.
 
-        "One transaction per batch" and "isolate errors per file" genuinely
-        conflict: a strict transactional batch discards every row when one
-        of them violates a constraint, throwing away embeddings that cost
-        real inference time. RFC-024 section 7.2 resolves it exactly as
-        section 6 resolves the same tension for inference -- attempt the
-        batch, and when it fails, pay the sequential price once so only the
-        bad row is lost.
+        "Uma transação por lote" e "isolar erros por arquivo" de fato
+        conflitam: um lote transacional estrito descarta todas as linhas quando
+        uma delas viola uma restrição, jogando fora embeddings que custaram
+        tempo real de inferência. O RFC-024 §7.2 resolve isso exatamente como a
+        §6 resolve a mesma tensão para a inferência -- tentar o lote e, quando
+        ele falha, pagar o preço sequencial uma vez, para que só a linha ruim
+        se perca.
         """
         if not encoded:
             return
@@ -779,7 +780,7 @@ class IndexOrUpdateImagesUseCase:
             summary.indexed += 1
 
     def _refresh_metadata(self, plan: IndexPlan, summary: IndexingSummary) -> None:
-        """Record the new mtime and size for a file whose bytes never changed."""
+        """Registra o novo mtime e o tamanho de um arquivo cujos bytes não mudaram."""
         started = time.perf_counter()
         try:
             self._repository.update_index_metadata(
@@ -807,28 +808,28 @@ class IndexOrUpdateImagesUseCase:
         capture_dates: list[tuple[IndexCandidate, CaptureDate]],
         summary: IndexingSummary,
     ) -> None:
-        """Date the rows this window skipped, in one write, degrading per row.
+        """Data as linhas que esta janela pulou, numa gravação, recuando por linha.
 
-        **Both skipping branches feed this, not only `SKIP_UNCHANGED`.**
-        `REFRESH_METADATA` -- mtime moved, bytes did not -- is the branch
-        that is easy to forget, and forgetting it would leave every file
-        that was ever copied or restored without a capture date for good:
-        its next scans are `SKIP_UNCHANGED` against a row that still has
-        none, and the condition below would have been the only chance.
-        `EMBED` does not come through here, because `save_indexed_many()`
-        writes the whole row from the entity, capture date included.
+        **Os dois ramos que pulam alimentam isto, não só `SKIP_UNCHANGED`.**
+        `REFRESH_METADATA` -- o mtime mudou, os bytes não -- é o ramo fácil de
+        esquecer, e esquecê-lo deixaria todo arquivo já copiado ou restaurado
+        sem data de captura para sempre: os scans seguintes dele são
+        `SKIP_UNCHANGED` contra uma linha que continua sem data, e a condição
+        abaixo teria sido a única chance. `EMBED` não passa por aqui, porque
+        `save_indexed_many()` grava a linha inteira a partir da entidade,
+        data de captura incluída.
 
-        Which rows get written is `capture_date_to_write()`'s decision:
-        only rows never examined, so the first scan after RFC-028 dates the
-        collection and every later scan of an unchanged collection writes
-        nothing (RFC-028 section 6).
+        Quais linhas são gravadas é decisão de `capture_date_to_write()`: só
+        as nunca examinadas, então o primeiro scan depois do RFC-028 data a
+        coleção e todo scan seguinte de uma coleção inalterada não grava nada
+        (RFC-028 §6).
 
-        One bulk call per prefetch window rather than per file, and a
-        failed bulk write is retried row by row so one bad row costs one
-        date, not the window's -- the same trade `_persist_batch()` makes.
-        Counted in `capture_dates_written` and kept out of the persistence
-        counters, whose averages RFC-024 section 7.2 reads as the cost of
-        writing embeddings.
+        Uma chamada em massa por janela de leitura antecipada, e não por
+        arquivo, e uma gravação em massa que falha é tentada de novo linha a
+        linha, para que uma linha ruim custe uma data e não a janela -- a mesma
+        troca que `_persist_batch()` faz. Contado em `capture_dates_written` e
+        mantido fora dos contadores de persistência, cujas médias o RFC-024
+        §7.2 lê como o custo de gravar embeddings.
         """
         if not capture_dates:
             return
@@ -858,20 +859,19 @@ class IndexOrUpdateImagesUseCase:
         positions: list[tuple[IndexCandidate, PositionReading]],
         summary: IndexingSummary,
     ) -> None:
-        """Place the rows this window skipped, in one write, degrading per row.
+        """Posiciona as linhas que esta janela pulou, numa gravação, recuando por linha.
 
-        `_write_capture_dates()`'s twin, for RFC-032 section 8, and fed by
-        the same two branches for the same reason: forgetting
-        `REFRESH_METADATA` would leave every file ever copied between disks
-        without a position for good -- and copying between disks is the
-        central operation of the collection this RFC serves (RFC-027
-        section 2.3). `EMBED` does not come through here; `save_indexed_many()`
-        writes the whole row from the entity, position included.
+        O gêmeo de `_write_capture_dates()`, para o RFC-032 §8, e alimentado
+        pelos mesmos dois ramos pelo mesmo motivo: esquecer `REFRESH_METADATA`
+        deixaria todo arquivo já copiado entre discos sem posição para sempre
+        -- e copiar entre discos é a operação central da coleção a que este RFC
+        serve (RFC-027 §2.3). `EMBED` não passa por aqui; `save_indexed_many()`
+        grava a linha inteira a partir da entidade, posição incluída.
 
-        A separate write rather than one combined with the dates, because
-        the two decisions are separate: a row can need a position and not a
-        date, and folding them into one statement would either write a
-        value nobody decided to write or need a third code path to avoid it.
+        Uma gravação separada, e não uma combinada com as datas, porque as duas
+        decisões são separadas: uma linha pode precisar de posição e não de
+        data, e juntá-las num só comando gravaria um valor que ninguém decidiu
+        gravar ou precisaria de um terceiro caminho de código para evitar isso.
         """
         if not positions:
             return
@@ -900,10 +900,10 @@ class IndexOrUpdateImagesUseCase:
 def _timed(
     candidates: Iterable[IndexCandidate], summary: IndexingSummary
 ) -> Iterator[IndexCandidate]:
-    """Yield `candidates`, adding the wait for each to `candidate_wait_seconds`.
+    """Produz `candidates`, somando a espera de cada um a `candidate_wait_seconds`.
 
-    The time spent inside `next()` and nothing else: what the consumer
-    does with a candidate happens between two waits and is not counted.
+    O tempo gasto dentro de `next()` e nada mais: o que o consumidor faz com
+    um candidato acontece entre duas esperas e não é contado.
     """
     iterator = iter(candidates)
     while True:
@@ -918,17 +918,17 @@ def _timed(
 
 
 def _bytes_of(candidate: IndexCandidate) -> bytes | None:
-    """The bytes the read-ahead read for this file, or `None` to read the file."""
+    """Os bytes que a leitura antecipada leu deste arquivo, ou `None` para lê-lo."""
     return candidate.content.data if candidate.content is not None else None
 
 
 def _release(candidates: Iterable[IndexCandidate]) -> None:
-    """Give back the bytes of files the pipeline needs no more (RFC-045 section 5.5).
+    """Devolve os bytes dos arquivos de que o pipeline não precisa mais (RFC-045 §5.5).
 
-    Called on every way a file leaves the pipeline: skipped, refreshed,
-    failed to hash, written in a batch, or left in a window a stop
-    abandoned. Releasing twice is harmless, so no path has to know whether
-    another one got there first.
+    Chamado em todo caminho pelo qual um arquivo sai do pipeline: pulado,
+    atualizado, com falha no hash, gravado num lote, ou deixado numa janela
+    que uma parada abandonou. Liberar duas vezes não faz mal, então nenhum
+    caminho precisa saber se outro chegou antes.
     """
     for candidate in candidates:
         if candidate.content is not None:
@@ -938,14 +938,15 @@ def _release(candidates: Iterable[IndexCandidate]) -> None:
 def windowed(
     candidates: Iterable[IndexCandidate], size: int
 ) -> Iterator[Sequence[IndexCandidate]]:
-    """Yield consecutive fixed-size windows without materializing the source.
+    """Produz janelas consecutivas de tamanho fixo sem materializar a fonte.
 
-    `FilesystemImageProvider.discover()` sorts its output, and RFC-024
-    section 10 relies on that: identical input produces identical windows,
-    identical batches, and therefore a reproducible run.
+    `FilesystemImageProvider.discover()` ordena a sua saída, e o RFC-024 §10
+    conta com isso: entrada idêntica produz janelas idênticas, lotes idênticos
+    e, portanto, uma execução reproduzível.
 
-    Public since RFC-028, because the capture-date backfill walks candidates
-    in the same prefetch windows and should not carry a second copy.
+    Pública desde o RFC-028, porque o backfill de data de captura percorre os
+    candidatos nas mesmas janelas de leitura antecipada e não deveria carregar
+    uma segunda cópia.
     """
     iterator = iter(candidates)
     while window := list(islice(iterator, size)):

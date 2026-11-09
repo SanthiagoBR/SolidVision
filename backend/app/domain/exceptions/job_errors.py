@@ -1,4 +1,4 @@
-"""Indexing-job domain exceptions (RFC-029)."""
+"""Exceções de domínio dos jobs de indexação (RFC-029)."""
 
 from app.domain.exceptions.domain_error import (
     ConflictError,
@@ -8,12 +8,12 @@ from app.domain.exceptions.domain_error import (
 
 
 class JobNotFoundError(NotFoundError):
-    """Raised when no indexing job carries the requested id.
+    """Levantada quando nenhum job de indexação tem o id pedido.
 
-    Distinct from "the job exists and has not started", which is a
-    perfectly ordinary `pending` job a client is polling. Collapsing the
-    two would make a typo in an id indistinguishable from a queue that is
-    merely slow (RFC-029 section 7.2).
+    Distinta de "o job existe e não começou", que é um job `pending`
+    perfeitamente comum que um cliente está consultando. Juntar os dois faria
+    um erro de digitação num id ficar indistinguível de uma fila que só está
+    lenta (RFC-029 §7.2).
     """
 
     def __init__(self, message: str = "Indexing job not found.") -> None:
@@ -21,11 +21,11 @@ class JobNotFoundError(NotFoundError):
 
 
 class InvalidJobIdentifierError(DomainError):
-    """Raised when a job identifier is not a UUID.
+    """Levantada quando um identificador de job não é um UUID.
 
-    A 400 rather than a 404, and the difference is real: `GET
-    /api/v1/jobs/banana` never named a job, whereas a well-formed id
-    that matches no row did and is a `JobNotFoundError`.
+    Um 400, e não um 404, e a diferença é real: `GET
+    /api/v1/jobs/banana` nunca nomeou um job, enquanto um id bem formado que
+    não casa com nenhuma linha nomeou, e é um `JobNotFoundError`.
     """
 
     def __init__(self, message: str = "Job identifier must be a valid UUID") -> None:
@@ -33,13 +33,12 @@ class InvalidJobIdentifierError(DomainError):
 
 
 class DeviceBusyError(ConflictError):
-    """Raised when a device already has a pending or running indexing job.
+    """Levantada quando um dispositivo já tem um job de indexação pendente ou rodando.
 
-    The Python-side face of the partial unique index of RFC-029 section 9,
-    never a replacement for it. The repository translates the database's
-    refusal into this; nothing asks the database whether a job exists
-    before inserting one, because that would be the check-then-act the
-    index exists to avoid.
+    A face, do lado do Python, do índice único parcial do RFC-029 §9, e nunca
+    um substituto dele. O repositório traduz a recusa do banco para esta
+    exceção; nada pergunta ao banco se um job existe antes de inserir um,
+    porque esse seria o check-then-act que o índice existe para evitar.
     """
 
     def __init__(self, message: str = "Device already has an active job.") -> None:
@@ -47,13 +46,13 @@ class DeviceBusyError(ConflictError):
 
 
 class IllegalJobTransitionError(ConflictError):
-    """Raised when a job is asked to move somewhere its current state forbids.
+    """Levantada quando se pede a um job um movimento que o estado atual proíbe.
 
-    Cancelling a `completed` job raises this rather than returning
-    quietly, because RFC-029 section 8 is explicit that a caller asking
-    for it is operating on a wrong assumption and deserves to find out. A
-    silent no-op would let a UI show "cancelling..." over a job that
-    finished an hour ago.
+    Cancelar um job `completed` levanta esta exceção, em vez de voltar em
+    silêncio, porque o RFC-029 §8 é explícito: um chamador que pede isso age
+    sobre uma suposição errada e merece ficar sabendo. Uma operação nula
+    silenciosa deixaria uma UI mostrar "cancelando..." sobre um job que
+    terminou há uma hora.
     """
 
     def __init__(self, message: str = "Illegal indexing job transition.") -> None:
@@ -61,14 +60,14 @@ class IllegalJobTransitionError(ConflictError):
 
 
 class InvalidJobScopeError(DomainError):
-    """Raised when a scope is not a usable folder within a device.
+    """Levantada quando um escopo não é uma pasta utilizável dentro de um dispositivo.
 
-    A plain `DomainError`, so 400: an absolute scope, a scope containing
-    `..`, a UNC path, or one naming a folder that is not on the disk are
-    all *malformed requests*, and none of them would start working if the
-    state of the world changed. That is what separates them from
-    `DeviceBusyError` and `DeviceNotConnectedError`, which are the same
-    request at a bad moment (RFC-029 section 7.1, corrected).
+    Uma `DomainError` simples, portanto 400: um escopo absoluto, um escopo com
+    `..`, um caminho UNC ou um que nomeia uma pasta que não está no disco são
+    todos *pedidos malformados*, e nenhum deles passaria a funcionar se o
+    estado do mundo mudasse. É isso que os separa de `DeviceBusyError` e
+    `DeviceNotConnectedError`, que são o mesmo pedido num mau momento
+    (RFC-029 §7.1, corrigido).
     """
 
     def __init__(self, message: str = "Invalid indexing job scope.") -> None:

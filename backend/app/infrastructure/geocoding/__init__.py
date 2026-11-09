@@ -1,1 +1,1 @@
-"""Geocoding adapters: a typed address to a place on the map (RFC-043)."""
+"""Adaptadores de geocodificação: do endereço digitado ao lugar no mapa (RFC-043)."""

@@ -1,25 +1,24 @@
-"""Infrastructure filesystem abstraction for discovering candidate image files.
+"""Abstração de infraestrutura do sistema de arquivos para descobrir imagens candidatas.
 
-**The order this module produces is a correctness requirement, not a
-convenience.** RFC-029 section 10 makes the checkpoint a *position* in the
-discovery sequence, so "continue after X" is only meaningful if a second
-scan of the same folders visits the same files in the same order. A
-`sorted()` removed in the name of performance would pass every other test
-in the suite and break resumption silently, in a way that depends on the
-filesystem.
+**A ordem que este módulo produz é um requisito de correção, não uma
+conveniência.** O RFC-029 §10 faz do checkpoint uma *posição* na sequência da
+descoberta, então "continuar depois de X" só tem sentido se um segundo scan das
+mesmas pastas visitar os mesmos arquivos na mesma ordem. Um `sorted()` removido
+em nome do desempenho passaria em todos os outros testes da suíte e quebraria a
+retomada em silêncio, de um jeito que depende do sistema de arquivos.
 
-**And the order is `Path` order, which is not string order.** On Windows
-`sorted()` over paths compares part by part and case-insensitively, so
+**E a ordem é a de `Path`, que não é a ordem de string.** No Windows, `sorted()`
+sobre caminhos compara parte por parte e sem distinguir maiúsculas, então
 
     sorted(Path)  ->  a/x.jpg, a/Z.jpg, a b/x.jpg, B/y.jpg
     sorted(str)   ->  B/y.jpg, a b/x.jpg, a/Z.jpg, a/x.jpg
 
-and PostgreSQL's collation would give a third answer. A resume written as
-`relative_path > :checkpoint`, in SQL or in Python, therefore skips and
-repeats arbitrary files -- and passes every test whose fixture names are
-lowercase and space-free, which is every test written without knowing
-this. `is_after_checkpoint()` below is the one comparison, and it compares
-paths with paths.
+e a collation do PostgreSQL daria uma terceira resposta. Uma retomada escrita
+como `relative_path > :checkpoint`, em SQL ou em Python, portanto pula e repete
+arquivos arbitrários -- e passa em todo teste cujos nomes de fixture sejam
+minúsculos e sem espaços, que é todo teste escrito sem saber disso.
+`is_after_checkpoint()`, abaixo, é a única comparação, e compara caminhos com
+caminhos.
 """
 
 from __future__ import annotations
@@ -44,30 +43,30 @@ logger = get_logger(__name__)
 
 
 def discovery_sort_key(relative_path: PurePath) -> PurePath:
-    """Return the value discovery order is established by.
+    """Devolve o valor pelo qual a ordem da descoberta é estabelecida.
 
-    The path itself. That looks like a no-op and is the point: `PurePath`
-    already implements the comparison this module needs -- part by part,
-    with the running platform's case rule -- so the ordering key is "a
-    path of the platform's flavour", and anything that turns one into text
-    before comparing has left the ordering behind.
+    O próprio caminho. Parece não fazer nada, e é esse o ponto: `PurePath` já
+    implementa a comparação de que este módulo precisa -- parte por parte, com
+    a regra de maiúsculas da plataforma em que roda --, então a chave de
+    ordenação é "um caminho do sabor da plataforma", e qualquer coisa que o
+    transforme em texto antes de comparar deixou a ordem para trás.
 
-    It exists as a named function so that the two places that must agree
-    -- the sort in `discover()` and the resume test below -- are visibly
-    the same decision rather than two independent `sorted()` calls.
+    Existe como função nomeada para que os dois lugares que precisam concordar
+    -- a ordenação em `discover()` e o teste de retomada abaixo -- sejam
+    visivelmente a mesma decisão, e não duas chamadas independentes a
+    `sorted()`.
     """
     return relative_path
 
 
 @dataclass(frozen=True)
 class ListedTree:
-    """What `_list_tree()` found under one directory.
+    """O que `_list_tree()` achou sob um diretório.
 
-    `entries` are what `sorted(root.rglob("*"))` used to give -- folders and
-    files, without the root itself -- unsorted; `files` are the entries the
-    walk classed as files, **the same objects** as in `entries`;
-    `unreadable` are the folders whose listing failed, absolute, in the order
-    they failed.
+    `entries` é o que `sorted(root.rglob("*"))` dava -- pastas e arquivos, sem
+    a própria raiz --, fora de ordem; `files` são as entradas que o walk
+    classificou como arquivos, **os mesmos objetos** de `entries`; `unreadable`
+    são as pastas cuja listagem falhou, absolutas, na ordem em que falharam.
     """
 
     entries: list[Path]
@@ -75,54 +74,55 @@ class ListedTree:
     unreadable: list[Path]
 
     def file_identities(self) -> set[int]:
-        """The `id()` of each file, to ask "is this entry a file" of `entries`.
+        """O `id()` de cada arquivo, para perguntar se uma entrada é arquivo.
 
-        **By identity, not by path.** Hashing a `WindowsPath` case-folds its
-        text, every time: a `set` of the 116,396 paths of `E:` was 1.5 s of
-        the 2.2 s the first listing took, and made the walk twice as slow as
-        the `rglob` it replaces (RFC-046 section 16.12). The objects are the
-        ones in `entries`, alive as long as this tree is, so their ids are
-        theirs.
+        **Por identidade, não por caminho.** O hash de um `WindowsPath` passa o
+        texto para minúsculas, toda vez: um `set` dos 116.396 caminhos do `E:`
+        foi 1,5 s dos 2,2 s que a primeira listagem levou, e deixou o walk duas
+        vezes mais lento que o `rglob` que ele substitui (RFC-046 §16.12). Os
+        objetos são os de `entries`, vivos enquanto esta árvore viver, então os
+        ids são deles.
         """
         return {id(path) for path in self.files}
 
 
 def _list_tree(scope_root: Path) -> ListedTree:
-    """List everything under `scope_root`, and say which folders could not be read.
+    """Lista tudo sob `scope_root`, e diz quais pastas não puderam ser lidas.
 
-    **`Path.walk(on_error=...)`, not `rglob("*")`** (RFC-046 section 5.2). In
-    the Python 3.12 of this installation `rglob("*")` finds the folders with a
-    `walk()` that has no `on_error`, and lists each one again with a
-    `scandir()` inside an `except OSError: pass` -- so a folder that cannot be
-    read vanishes from the listing, with everything in it, and nothing says
-    so. The pilot of section 2 showed it with a folder denied by `icacls`.
-    The walk gives the same entries and hands the failure here.
+    **`Path.walk(on_error=...)`, não `rglob("*")`** (RFC-046 §5.2). No Python
+    3.12 desta instalação, `rglob("*")` acha as pastas com um `walk()` sem
+    `on_error`, e lista cada uma de novo com um `scandir()` dentro de um
+    `except OSError: pass` -- então uma pasta que não pode ser lida some da
+    listagem, com tudo o que há nela, e nada o diz. O piloto de §2 mostrou isso
+    com uma pasta negada por `icacls`. O walk dá as mesmas entradas e entrega a
+    falha aqui.
 
-    What does not change, and why:
+    O que não muda, e por quê:
 
-    * **the entries**: the walk's `dirnames` and `filenames` of every folder
-      are what the `scandir()` of the `rglob` listed;
-    * **the links**: `follow_symlinks=False`, which is what the `rglob` used
-      inside; a link to a folder is an entry and is not walked into;
-    * **the order**: none here. It comes from the `sorted()` with
-      `discovery_sort_key` after the listing, as before.
+    * **as entradas**: os `dirnames` e `filenames` do walk em cada pasta são o
+      que o `scandir()` do `rglob` listava;
+    * **os links**: `follow_symlinks=False`, que é o que o `rglob` usava por
+      dentro; um link para uma pasta é uma entrada e não é percorrido;
+    * **a ordem**: nenhuma aqui. Ela vem do `sorted()` com `discovery_sort_key`
+      depois da listagem, como antes.
 
-    Two behaviours of the 3.12 `walk()` the callers rely on (section 5.2): an
-    error **while reading** a folder that did open is not given to `on_error`
-    -- it propagates, ends the scan, and the job fails, which marks nothing;
-    and an `is_dir()` that fails classes the entry as a file, whose folder is
-    then not walked into. On Windows the type comes from the listing itself.
+    Dois comportamentos do `walk()` do 3.12 de que quem chama depende (§5.2):
+    um erro **durante a leitura** de uma pasta que chegou a abrir não é passado
+    a `on_error` -- ele se propaga, encerra o scan e o job falha, o que não
+    marca nada; e um `is_dir()` que falha classifica a entrada como arquivo, e
+    a pasta dela então não é percorrida. No Windows, o tipo vem da própria
+    listagem.
 
-    One read per folder, where the `rglob` made two.
+    Uma leitura por pasta, onde o `rglob` fazia duas.
     """
     entries: list[Path] = []
     files: list[Path] = []
     unreadable: list[Path] = []
 
     def note(error: OSError) -> None:
-        # `filename` is the folder whose `scandir()` failed. Without one the
-        # failure has no place, and the conservative answer is the root:
-        # everything under it is then out of the sweep's reach.
+        # `filename` é a pasta cujo `scandir()` falhou. Sem ele, a falha não
+        # tem lugar, e a resposta conservadora é a raiz: tudo sob ela fica
+        # então fora do alcance da varredura.
         failed = None if error.filename is None else Path(error.filename)
         if failed is None or not failed.is_relative_to(scope_root):
             failed = scope_root
@@ -139,15 +139,15 @@ def _list_tree(scope_root: Path) -> ListedTree:
 
 
 def is_after_checkpoint(relative_path: PurePath, checkpoint: PurePath | None) -> bool:
-    """Whether `relative_path` still has to be visited after `checkpoint`.
+    """Se `relative_path` ainda precisa ser visitado depois de `checkpoint`.
 
-    `checkpoint` is the last file a run made durable, so the file *equal*
-    to it is already done and everything strictly greater is not. `None`
-    -- a job that has never checkpointed -- means everything is still to
-    do.
+    `checkpoint` é o último arquivo que uma execução tornou durável, então o
+    arquivo *igual* a ele já está feito e tudo o que for estritamente maior não
+    está. `None` -- um job que nunca gravou checkpoint -- significa que tudo
+    ainda está por fazer.
 
-    Both operands are paths of the same flavour, which is what makes this
-    the same comparison that ordered the scan.
+    Os dois operandos são caminhos do mesmo sabor, e é isso que faz desta a
+    mesma comparação que ordenou o scan.
     """
     if checkpoint is None:
         return True
@@ -155,15 +155,15 @@ def is_after_checkpoint(relative_path: PurePath, checkpoint: PurePath | None) ->
 
 
 class FilesystemImageProvider:
-    """Recursively discovers supported image files under a root directory.
+    """Descobre recursivamente os arquivos de imagem suportados sob uma raiz.
 
-    Knows nothing about repositories, embeddings, PostgreSQL, workers, or
-    use cases -- it only reads the filesystem via the standard library and,
-    since RFC-028, each file's EXIF header via Pillow -- once per file,
-    for both the date and, since RFC-032, the position. Since RFC-029 it
-    also knows how to walk *part* of a root and how to pick up where a
-    previous run stopped, which are both properties of a scan rather than
-    of a job: nothing here knows that jobs exist.
+    Não sabe nada de repositórios, embeddings, PostgreSQL, workers ou casos de
+    uso -- só lê o sistema de arquivos pela biblioteca padrão e, desde o
+    RFC-028, o cabeçalho EXIF de cada arquivo pelo Pillow -- uma vez por
+    arquivo, para a data e, desde o RFC-032, para a posição. Desde o RFC-029,
+    também sabe percorrer *parte* de uma raiz e retomar de onde uma execução
+    anterior parou, que são propriedades de um scan e não de um job: nada aqui
+    sabe que jobs existem.
     """
 
     def __init__(
@@ -178,53 +178,53 @@ class FilesystemImageProvider:
         excluded_directories: tuple[Path, ...] = (),
         extract_gps: bool = True,
     ) -> None:
-        """Configure a scan of `root`, or of some folders within it.
+        """Configura um scan de `root`, ou de algumas pastas dentro dela.
 
-        `extract_capture_date` is a constructor argument rather than a
-        read of `settings`, keeping this class free of configuration: the
-        composition root passes `settings.extract_capture_date` in. It
-        defaults to on because RFC-028 section 6 places extraction in the
-        scan, and it exists at all because section 11 names the one reason
-        to turn it off -- a measured per-file cost too high for a very
-        large collection.
+        `extract_capture_date` é um argumento do construtor, e não uma leitura
+        de `settings`, o que mantém esta classe livre de configuração: a raiz de
+        composição passa `settings.extract_capture_date`. O padrão é ligado
+        porque o RFC-028 §6 põe a extração no scan, e o argumento só existe
+        porque o §11 aponta a única razão para desligá-la -- um custo medido por
+        arquivo alto demais para uma coleção muito grande.
 
-        `scopes` are relative to `root` and default to none at all, which
-        means the whole root -- so every caller written before RFC-029
-        keeps the behaviour it had. They are expected to be normalised
-        already (`normalize_scopes()`): one scope nested inside another
-        would have its files discovered twice, and a sequence that visits
-        a file twice has no positions in it for a checkpoint to name.
+        `scopes` são relativos a `root` e por padrão não há nenhum, o que
+        significa a raiz inteira -- e assim todo chamador escrito antes do
+        RFC-029 mantém o comportamento que tinha. Espera-se que já venham
+        normalizados (`normalize_scopes()`): um escopo aninhado dentro de outro
+        teria os seus arquivos descobertos duas vezes, e uma sequência que
+        visita um arquivo duas vezes não tem posições para um checkpoint
+        nomear.
 
-        `resume_after` is a path relative to `root`, from a previous run's
-        checkpoint. Files up to and including it are skipped, which saves
-        the scan and not the inference -- the incremental decision already
-        makes re-processing them cheap (RFC-029 section 10).
+        `resume_after` é um caminho relativo a `root`, vindo do checkpoint de
+        uma execução anterior. Os arquivos até ele, inclusive, são pulados, o
+        que poupa o scan e não a inferência -- a decisão incremental já torna
+        barato reprocessá-los (RFC-029 §10).
 
-        `observer`, when given, is told how far the scan has got every
-        `report_every` files examined, and once more when it ends. That
-        exists for the heartbeat: a job whose files are all skipped by the
-        incremental decision never completes a batch, and one that resumes
-        skips most of its scan here without yielding anything -- both look
-        dead to a reaper watching for batches (RFC-029 section 9.1). The
-        provider still knows nothing about jobs; it reports to a port.
+        `observer`, quando dado, é avisado de quanto o scan avançou a cada
+        `report_every` arquivos examinados, e mais uma vez quando termina. Isso
+        existe para o heartbeat: um job cujos arquivos são todos pulados pela
+        decisão incremental nunca completa um lote, e um que retoma pula aqui
+        a maior parte do seu scan sem produzir nada -- os dois parecem mortos
+        para um reaper que espera lotes (RFC-029 §9.1). O provedor continua sem
+        saber nada de jobs; ele reporta a uma porta.
 
-        `excluded_directories` are absolute directories whose contents are
-        never yielded, wherever they sit under `root` (RFC-030). The one
-        caller that needs it passes the thumbnail cache: indexing a whole
-        system disk would otherwise discover every thumbnail as a photo,
-        embed it, render a thumbnail *of* it, and discover that on the next
-        run -- a collection that grows every time it is scanned. Excluded
-        files are skipped before they count as examined, so they are not
-        part of the sequence a checkpoint names either.
+        `excluded_directories` são diretórios absolutos cujo conteúdo nunca é
+        produzido, onde quer que fiquem sob `root` (RFC-030). O único chamador
+        que precisa disso passa o cache de thumbnails: indexar um disco de
+        sistema inteiro descobriria, sem isso, cada thumbnail como uma foto,
+        geraria o embedding dela, renderizaria uma thumbnail *dela* e a
+        descobriria na execução seguinte -- uma coleção que cresce a cada scan.
+        Os arquivos excluídos são pulados antes de contarem como examinados,
+        então também não fazem parte da sequência que um checkpoint nomeia.
 
-        `extract_gps` is `extract_capture_date`'s twin for RFC-032, in the
-        same mould and for the same reasons: passed in from
-        `settings.extract_gps`, on by default, and off means "not
-        examined", never "no position". The two are separate switches over
-        **one** header read: with either on, each file is opened once and
-        both requested facts come out of that open; with both off, the file
-        is not opened at all. Added last, as a keyword, so no existing
-        caller's positional arguments move.
+        `extract_gps` é o gêmeo de `extract_capture_date` para o RFC-032, no
+        mesmo molde e pelas mesmas razões: vem de `settings.extract_gps`, é
+        ligado por padrão, e desligado significa "não examinado", nunca "sem
+        posição". Os dois são chaves separadas sobre **uma** leitura de
+        cabeçalho: com qualquer um ligado, cada arquivo é aberto uma vez e os
+        dois fatos pedidos saem dessa abertura; com os dois desligados, o
+        arquivo nem é aberto. Acrescentado por último, como keyword, para que
+        os argumentos posicionais de nenhum chamador existente mudem de lugar.
         """
         self._root = root
         self._supported_extensions = {ext.lower() for ext in supported_extensions}
@@ -237,8 +237,9 @@ class FilesystemImageProvider:
         self._excluded = tuple(
             directory.resolve() for directory in excluded_directories
         )
-        # `pathlib`'s own rule: `PurePath` equality folds case where the
-        # platform does (`_str_normcase`), and so does `_is_excluded()`.
+        # A regra do próprio `pathlib`: a igualdade de `PurePath` ignora
+        # maiúsculas onde a plataforma ignora (`_str_normcase`), e
+        # `_is_excluded()` também.
         self._case_insensitive = PurePath("A") == PurePath("a")
         self._excluded_texts = tuple(
             (folded, folded if folded.endswith(os.sep) else folded + os.sep)
@@ -250,32 +251,32 @@ class FilesystemImageProvider:
         )
 
     def discover(self) -> Iterator[DiscoveredImageFile]:
-        """Yield metadata for every supported image file the scan covers.
+        """Produz os metadados de cada arquivo de imagem suportado que o scan cobre.
 
-        The order is stable across runs, and RFC-029 section 10 depends on
-        it -- see this module's docstring.
+        A ordem é estável entre execuções, e o RFC-029 §10 depende disso -- ver
+        a docstring deste módulo.
 
-        With several scopes, each is walked in full before the next, and
-        the scopes themselves are walked in path order. That ordering is
-        not cosmetic: it is what keeps the whole sequence in path order
-        *across* scope boundaries, because normalised scopes are disjoint
-        and every file under a scope shares its leading parts. Walk the
-        scopes in the order the client happened to send them and a resume
-        that lands mid-sequence would compare against a checkpoint from a
-        different ordering.
+        Com vários escopos, cada um é percorrido por inteiro antes do seguinte,
+        e os próprios escopos são percorridos na ordem dos caminhos. Essa ordem
+        não é cosmética: é ela que mantém a sequência inteira na ordem dos
+        caminhos *através* das fronteiras entre escopos, porque escopos
+        normalizados são disjuntos e todo arquivo sob um escopo compartilha as
+        partes iniciais dele. Percorra os escopos na ordem em que o cliente por
+        acaso os mandou, e uma retomada que caia no meio da sequência vai
+        comparar contra um checkpoint de outra ordenação.
 
-        The capture date and the position are read in the same pass as
-        `stat()`, from one open of the file (RFC-032 section 4.2), not in a
-        second walk and not lazily. A lazy field -- a callable on
-        `DiscoveredImageFile` -- was considered and deferred until a
-        measurement asks for it (RFC-028 section 11): it would move the
-        read out of the scan and into whichever consumer happened to call
-        it first, which is how a cost stops being visible.
+        A data de captura e a posição são lidas na mesma passada que o
+        `stat()`, de uma abertura do arquivo (RFC-032 §4.2), não num segundo
+        percurso e não de forma preguiçosa. Um campo preguiçoso -- um callable
+        em `DiscoveredImageFile` -- foi considerado e adiado até que uma
+        medição o peça (RFC-028 §11): ele tiraria a leitura do scan e a poria
+        em qualquer consumidor que por acaso a chamasse primeiro, que é como
+        um custo deixa de ser visível.
 
-        A scan of the whole root -- no scopes -- also tells the observer
-        how many supported files its listing holds, once, before the
-        first file comes out (`IndexingObserver.listed()`, RFC-039 section
-        4.1). A scan of some folders never does.
+        Um scan da raiz inteira -- sem escopos -- também diz ao observer
+        quantos arquivos suportados a sua listagem contém, uma vez, antes de o
+        primeiro arquivo sair (`IndexingObserver.listed()`, RFC-039 §4.1). Um
+        scan de algumas pastas nunca diz.
         """
         yielded = 0
         examined = 0
@@ -294,10 +295,10 @@ class FilesystemImageProvider:
         self._observer.discovered(yielded, complete=True)
 
     def _scope_roots(self) -> list[Path]:
-        """Return the directories to walk, in the order they will be walked.
+        """Devolve os diretórios a percorrer, na ordem em que serão percorridos.
 
-        Sorted by the same key that orders files, so that the boundary
-        between two scopes falls where the global path order puts it.
+        Ordenados pela mesma chave que ordena os arquivos, para que a fronteira
+        entre dois escopos caia onde a ordem global dos caminhos a põe.
         """
         if not self._scopes:
             return [self._root]
@@ -309,34 +310,33 @@ class FilesystemImageProvider:
     def _discover_under(
         self, scope_root: Path, report: bool = False
     ) -> Iterator[DiscoveredImageFile | None]:
-        """Walk one directory in path order, skipping anything already done.
+        """Percorre um diretório na ordem dos caminhos, pulando o que já foi feito.
 
-        Yields `None` for a supported file the resume skipped, so that the
-        caller can count it as examined without handing it downstream.
-        That is not bookkeeping for its own sake: on a resume, almost the
-        whole scan is skipped files, and a heartbeat driven by *yielded*
-        files alone would go silent for exactly as long as the resume
-        saves (RFC-029 section 9.1).
+        Produz `None` para um arquivo suportado que a retomada pulou, para que
+        quem chama possa contá-lo como examinado sem passá-lo adiante. Não é
+        contabilidade por si só: numa retomada, quase o scan inteiro são
+        arquivos pulados, e um heartbeat movido só pelos arquivos *produzidos*
+        ficaria em silêncio exatamente pelo tempo que a retomada poupa
+        (RFC-029 §9.1).
 
-        **The `sorted()` is what this cannot cover.** It consumes the
-        entire walk before the first file comes out, so a cold walk of
-        a large disk produces no callback at all until it finishes. That
-        is the gap `job_stale_timeout` has to clear, and it is why
-        RFC-029 section 9.1's timeout comes from a measured distribution
-        that includes the first window rather than from the length of a
-        batch.
+        **O `sorted()` é o que isto não consegue cobrir.** Ele consome o
+        percurso inteiro antes de o primeiro arquivo sair, então um percurso a
+        frio de um disco grande não produz callback nenhum até terminar. Essa é
+        a lacuna que `job_stale_timeout` precisa vencer, e é por isso que o
+        timeout do RFC-029 §9.1 vem de uma distribuição medida que inclui a
+        primeira janela, e não da duração de um lote.
 
-        With `report`, the listing goes to `IndexingObserver.listed()` as
-        soon as it exists and before the first file is yielded: that is
-        when the denominator of "% indexed" is known (RFC-039 section 4.1),
-        and since RFC-046 the files themselves, which the job compares with
-        the device's rows when it ends (`RootListing`).
+        Com `report`, a listagem vai para `IndexingObserver.listed()` assim que
+        existe e antes de o primeiro arquivo ser produzido: é quando o
+        denominador do "% indexado" é conhecido (RFC-039 §4.1) e, desde o
+        RFC-046, os próprios arquivos, que o job compara com as linhas do
+        dispositivo quando termina (`RootListing`).
 
-        **A folder that could not be read is a WARNING, in every scan** --
-        of some folders too -- with its name (RFC-046 section 5.2). Before,
-        it left no trace. One inside an excluded directory is not reported:
-        nothing there is listed anyway, and `System Volume Information` is
-        unreadable on every disk.
+        **Uma pasta que não pôde ser lida é um WARNING, em todo scan** --
+        também no de algumas pastas -- com o nome dela (RFC-046 §5.2). Antes,
+        não deixava rastro. Uma pasta dentro de um diretório excluído não é
+        relatada: nada ali é listado de qualquer jeito, e a
+        `System Volume Information` é ilegível em todo disco.
         """
         tree = _list_tree(scope_root)
         unreadable = [
@@ -384,18 +384,18 @@ class FilesystemImageProvider:
     def _root_listing(
         self, listing: list[Path], files: set[int], unreadable: list[Path]
     ) -> RootListing:
-        """The listing a whole-root scan reports: its photographs, and its holes.
+        """A listagem que um scan da raiz inteira relata: suas fotos, e seus buracos.
 
-        The files are the entries the walk classed as files, with a
-        supported extension, outside the excluded directories -- the
-        walk's own tests, and **no `stat`**: the walk already knows a
-        folder from a file, so a folder named `x.jpg` no longer counts
-        (RFC-046 section 5.2, which removes the imprecision RFC-039 section
-        4.1 declared). In listing order, as text relative to the root.
+        Os arquivos são as entradas que o walk classificou como arquivos, com
+        uma extensão suportada, fora dos diretórios excluídos -- os próprios
+        testes do walk, e **nenhum `stat`**: o walk já distingue uma pasta de um
+        arquivo, então uma pasta chamada `x.jpg` não conta mais (RFC-046 §5.2,
+        que remove a imprecisão que o RFC-039 §4.1 declarou). Na ordem da
+        listagem, como texto relativo à raiz.
 
-        Every file is in it, the ones before a checkpoint too: the
-        denominator is the size of the disk, and the sweep compares the
-        whole disk; a resume lists the whole tree again.
+        Todo arquivo está nela, também os de antes de um checkpoint: o
+        denominador é o tamanho do disco, e a varredura compara o disco
+        inteiro; uma retomada lista a árvore inteira de novo.
         """
         photographs = tuple(
             self._posix(path)
@@ -411,15 +411,14 @@ class FilesystemImageProvider:
         )
 
     def _posix(self, path: Path) -> str:
-        """`path` relative to the scan root, in the posix form `ImagePath` keeps.
+        """`path` relativo à raiz do scan, na forma posix que `ImagePath` guarda.
 
-        **The text after the root's, not `relative_to()`.** Every path of a
-        listing is the root joined with names, so its text begins with the
-        root's; `relative_to()` reaches the same answer by walking the
-        parents, and on the 123,353 files of `E:` that was 6.2 s per scan
-        (RFC-046 section 16.12). A path that does not begin with the root's
-        text -- the root itself, or one spelled otherwise -- goes the long
-        way.
+        **O texto depois do da raiz, e não `relative_to()`.** Todo caminho de
+        uma listagem é a raiz unida a nomes, então o texto dele começa com o da
+        raiz; `relative_to()` chega à mesma resposta percorrendo os pais, e nos
+        123.353 arquivos do `E:` isso eram 6,2 s por scan (RFC-046 §16.12). Um
+        caminho que não comece com o texto da raiz -- a própria raiz, ou um
+        escrito de outro jeito -- vai pelo caminho longo.
         """
         text = str(path)
         if text.startswith(self._root_prefix) and len(text) > len(self._root_prefix):
@@ -427,26 +426,27 @@ class FilesystemImageProvider:
         return path.relative_to(self._root).as_posix()
 
     def _is_excluded(self, path: Path) -> bool:
-        """Whether `path` lies inside one of the excluded directories.
+        """Se `path` está dentro de um dos diretórios excluídos.
 
-        Compared as paths, so the platform's case rule applies: on Windows
-        `AppData/Local` and `appdata/local` are the same directory.
+        Comparados como caminhos, então a regra de maiúsculas da plataforma se
+        aplica: no Windows, `AppData/Local` e `appdata/local` são o mesmo
+        diretório.
 
-        **As text, by the rule `pathlib` uses** (RFC-046 section 16.12):
-        the path's text, folded as `pathlib` folds it for its own
-        comparisons, either is the excluded directory's or begins with it
-        and a separator -- which is `is_relative_to()` for the absolute,
-        `..`-free paths a walk yields, and the separator is what keeps
-        `cache` from excluding `cache2`. `is_relative_to()` builds every
-        parent of the path to compare it; with the three directories of
-        RFC-046 that was 8.9 s on the files of `E:`, twice per scan.
+        **Como texto, pela regra que o `pathlib` usa** (RFC-046 §16.12): o
+        texto do caminho, normalizado como o `pathlib` o normaliza para as suas
+        próprias comparações, ou é o do diretório excluído ou começa com ele e
+        um separador -- o que equivale a `is_relative_to()` para os caminhos
+        absolutos e sem `..` que um walk produz, e o separador é o que impede
+        `cache` de excluir `cache2`. `is_relative_to()` constrói cada pai do
+        caminho para compará-lo; com os três diretórios do RFC-046, isso eram
+        8,9 s nos arquivos do `E:`, duas vezes por scan.
 
-        The discovered path is *not* resolved, although the excluded ones
-        are. Resolving is a system call per file on the one loop that runs
-        100,000 times, and it buys nothing here: the walk starts from a
-        resolved root and yields absolute paths spelled as the directory
-        listing spells them, which is how the excluded directory resolves
-        too.
+        O caminho descoberto *não* é resolvido, embora os excluídos sejam.
+        Resolver é uma chamada de sistema por arquivo no único laço que roda
+        100.000 vezes, e não compra nada aqui: o walk parte de uma raiz
+        resolvida e produz caminhos absolutos escritos como a listagem do
+        diretório os escreve, que é como o diretório excluído também se
+        resolve.
         """
         text = self._fold(str(path))
         return any(
@@ -455,14 +455,14 @@ class FilesystemImageProvider:
         )
 
     def _fold(self, text: str) -> str:
-        """`text` in the case `pathlib` compares paths in, on this platform."""
+        """`text` na caixa em que o `pathlib` compara caminhos, nesta plataforma."""
         return text.lower() if self._case_insensitive else text
 
     def _relative(self, path: Path) -> PurePath:
-        """Express a discovered file the way a checkpoint names it.
+        """Exprime um arquivo descoberto do jeito que um checkpoint o nomeia.
 
-        Relative to the scan root, which for a job is the device's mount
-        point -- so the value compared here is the value stored, and the
-        comparison is the one that ordered the scan.
+        Relativo à raiz do scan, que para um job é o ponto de montagem do
+        dispositivo -- então o valor comparado aqui é o valor guardado, e a
+        comparação é a que ordenou o scan.
         """
         return path.relative_to(self._root)

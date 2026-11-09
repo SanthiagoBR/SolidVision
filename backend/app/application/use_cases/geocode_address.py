@@ -1,4 +1,4 @@
-"""Find a typed address on the map (RFC-043): address -> GeocoderPort -> Place."""
+"""Acha no mapa um endereço digitado (RFC-043): endereço -> GeocoderPort -> Place."""
 
 from __future__ import annotations
 
@@ -14,6 +14,6 @@ class GeocodeAddressUseCase:
     def execute(self, address: str) -> Place | None:
         text = address.strip()
         if not text:
-            # Refused before anything leaves the machine.
+            # Recusado antes que qualquer coisa saia da máquina.
             raise EmptyAddressError()
         return self._geocoder.geocode(text)

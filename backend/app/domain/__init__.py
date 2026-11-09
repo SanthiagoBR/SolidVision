@@ -1,4 +1,4 @@
-"""Domain layer for the SolidVision backend."""
+"""Camada de domínio do backend do SolidVision."""
 
 from app.domain.entities.image import Image
 from app.domain.exceptions import InvalidImageIdentifierError, InvalidImagePathError

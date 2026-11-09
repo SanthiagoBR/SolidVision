@@ -1,18 +1,19 @@
-"""The user's cluster directory: paths, DACL, password, transition lock.
+"""O diretório do cluster do usuário: caminhos, DACL, senha, trava de transição.
 
-RFC-033 sections 6, 7.1 and 7.2. The layout, under `%LOCALAPPDATA%` by
-default (the `embedded_postgres_directory` setting)::
+RFC-033 §6, §7.1 e §7.2. O layout, sob `%LOCALAPPDATA%` por padrão (a
+configuração `embedded_postgres_directory`)::
 
-    postgres\\                   explicit DACL: the user and SYSTEM
+    postgres\\                   DACL explícita: o usuário e SYSTEM
         16\\
             data\\               PGDATA
-            password            one line
-            adapter.lock        transition lock (section 7.1)
-            startup.log         `pg_ctl -l`, rewritten on every start (8.1)
-            pg_ctl.log          `pg_ctl`'s own output, rewritten on every call
+            password            uma linha
+            adapter.lock        trava de transição (§7.1)
+            startup.log         `pg_ctl -l`, reescrito a cada subida (§8.1)
+            pg_ctl.log          a saída do próprio `pg_ctl`, reescrita a cada chamada
 
-The major version is in the path so that the `17\\` of a future upgrade fits
-beside `16\\` without renaming anything: `pg_upgrade` needs both sides at once.
+A versão major está no caminho para que o `17\\` de um upgrade futuro caiba
+ao lado do `16\\` sem renomear nada: o `pg_upgrade` precisa dos dois lados ao
+mesmo tempo.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 @dataclass(frozen=True)
 class ClusterFiles:
-    """Every path of one major version's cluster, and nothing else."""
+    """Todo caminho do cluster de uma versão major, e nada mais."""
 
     directory: Path
 
@@ -48,7 +49,7 @@ class ClusterFiles:
 
     @property
     def data_initdb(self) -> Path:
-        """Where `initdb` writes; renamed to `data` only when it succeeds (7.1)."""
+        """Onde o `initdb` escreve; renomeado para `data` só se der certo (§7.1)."""
         return self.directory / "data.initdb"
 
     @property
@@ -89,29 +90,29 @@ class ClusterFiles:
 
     @property
     def server_log_directory(self) -> Path:
-        """Where the logging collector writes: one file per weekday (8.1)."""
+        """Onde o logging collector escreve: um arquivo por dia da semana (§8.1)."""
         return self.data / "log"
 
     @property
     def server_conf(self) -> Path:
-        """`solidvision.conf`, included by `postgresql.conf` (section 8.1)."""
+        """`solidvision.conf`, incluído pelo `postgresql.conf` (§8.1)."""
         return self.data / "solidvision.conf"
 
 
 class DirectoryAcl(ABC):
-    """Port for restricting a directory to the current user and SYSTEM."""
+    """Porta para restringir um diretório ao usuário atual e ao SYSTEM."""
 
     @abstractmethod
     def restrict_to_current_user(self, directory: Path) -> None:
-        """Replace inheritance with full control for the user's SID and SYSTEM."""
+        """Troca a herança por controle total para o SID do usuário e o SYSTEM."""
 
 
 class IcaclsDirectoryAcl(DirectoryAcl):
-    """`icacls.exe` from `System32`, by absolute path, with SIDs, not names.
+    """`icacls.exe` do `System32`, por caminho absoluto, com SIDs, não nomes.
 
-    In a Portuguese Windows the `Everyone` group is called `Todos`: a
-    translated name must not decide a permission, so the user is named by the
-    SID read from the process token (RFC-033 section 6).
+    Num Windows em português o grupo `Everyone` se chama `Todos`: um nome
+    traduzido não pode decidir uma permissão, então o usuário é nomeado pelo
+    SID lido do token do processo (RFC-033 §6).
     """
 
     def restrict_to_current_user(self, directory: Path) -> None:
@@ -140,7 +141,7 @@ class IcaclsDirectoryAcl(DirectoryAcl):
 
 
 def current_user_sid() -> str:
-    """The string SID of the user this process runs as, read from its token."""
+    """O SID em string do usuário com que este processo roda, lido do token."""
     from ctypes import wintypes
 
     kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -185,7 +186,7 @@ def current_user_sid() -> str:
                 "Could not read the token user "
                 f"(Windows error {ctypes.get_last_error()})."
             )
-        # TOKEN_USER starts with SID_AND_ATTRIBUTES, which starts with the PSID.
+        # TOKEN_USER começa com SID_AND_ATTRIBUTES, que começa com o PSID.
         sid_pointer = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_void_p))[0]
         string_sid = wintypes.LPWSTR()
         if not advapi32.ConvertSidToStringSidW(sid_pointer, ctypes.byref(string_sid)):
@@ -202,7 +203,7 @@ def current_user_sid() -> str:
 
 
 class ClusterHome:
-    """The per-user directory every cluster of every major version lives under."""
+    """O diretório por usuário sob o qual mora todo cluster de toda versão major."""
 
     LOCK_POLL_SECONDS = 0.1
 
@@ -222,16 +223,16 @@ class ClusterHome:
         return ClusterFiles(self._root / str(major))
 
     def ensure_directory(self, files: ClusterFiles) -> None:
-        """Create `postgres\\` and the version directory, the lock's home."""
+        """Cria `postgres\\` e o diretório da versão, onde mora a trava."""
         files.directory.mkdir(parents=True, exist_ok=True)
 
     def for_commands(self, files: ClusterFiles) -> ClusterFiles:
-        """The same files, by a path `initdb` and `pg_ctl` can be given.
+        """Os mesmos arquivos, por um caminho que dá para passar a `initdb` e `pg_ctl`.
 
-        Section 10: under a user directory outside the ANSI code page, the
-        8.3 short form of the version directory. Everything below it has an
-        ASCII name of the adapter's own choosing. A directory that does not
-        exist yet has no short form, and nothing to run in it either.
+        §10: sob um diretório de usuário fora da code page ANSI, a forma curta
+        8.3 do diretório da versão. Tudo abaixo dele tem um nome ASCII
+        escolhido pelo próprio adaptador. Um diretório que ainda não existe não
+        tem forma curta, e também nada para rodar nele.
         """
         if not files.directory.exists():
             return files
@@ -240,18 +241,18 @@ class ClusterHome:
         )
 
     def secure(self) -> None:
-        """Apply the explicit DACL to `postgres\\` (section 6).
+        """Aplica a DACL explícita a `postgres\\` (§6).
 
-        Called on the first-run path, before the password is written, rather
-        than only on the `mkdir` that creates the directory: a process killed
-        between the two would otherwise leave the directory with the
-        inherited DACL for ever. `icacls` is idempotent, and this runs once
-        per cluster, beside an `initdb` that takes tens of seconds.
+        Chamado no caminho da primeira execução, antes de a senha ser escrita,
+        em vez de só no `mkdir` que cria o diretório: senão, um processo morto
+        entre os dois deixaria o diretório com a DACL herdada para sempre. O
+        `icacls` é idempotente, e isto roda uma vez por cluster, ao lado de um
+        `initdb` que leva dezenas de segundos.
         """
         self._root.mkdir(parents=True, exist_ok=True)
         self._acl.restrict_to_current_user(self._root)
 
-    # -- the password (section 7.2) ---------------------------------------
+    # -- a senha (§7.2) ----------------------------------------------------
 
     def read_password(self, files: ClusterFiles) -> str | None:
         try:
@@ -261,12 +262,12 @@ class ClusterHome:
         return password or None
 
     def write_new_password(self, files: ClusterFiles) -> str:
-        """Generate the cluster's password and write it before `initdb` runs.
+        """Gera a senha do cluster e a escreve antes de o `initdb` rodar.
 
-        `token_urlsafe` matters for its alphabet (`A-Z a-z 0-9 _ -`): nothing
-        in it needs escaping or quoting, in a URL or in a libpq connection
-        string, wherever the password is put. Written to a temporary name and
-        renamed, so a reader never sees half a password.
+        O `token_urlsafe` importa pelo alfabeto (`A-Z a-z 0-9 _ -`): nada nele
+        precisa de escape nem de aspas, numa URL ou numa string de conexão da
+        libpq, onde quer que a senha seja posta. Escrita com um nome temporário
+        e renomeada, para que um leitor nunca veja meia senha.
         """
         password = secrets.token_urlsafe(24)
         files.password_tmp.write_text(password + "\n", encoding="ascii")
@@ -274,20 +275,20 @@ class ClusterHome:
         return password
 
     def discard_password(self, files: ClusterFiles) -> None:
-        """A password without a `data` is not half of a pair (section 7.1)."""
+        """Uma senha sem um `data` não é metade de um par (§7.1)."""
         files.password.unlink(missing_ok=True)
         files.password_tmp.unlink(missing_ok=True)
 
-    # -- the transition lock (section 7.1) --------------------------------
+    # -- a trava de transição (§7.1) ---------------------------------------
 
     @contextmanager
     def transition_lock(self, files: ClusterFiles, timeout: float) -> Iterator[None]:
-        """Hold `adapter.lock` exclusively for one creation, start or stop.
+        """Segura `adapter.lock` com exclusividade por uma criação, subida ou parada.
 
-        Never held while the cluster lives: whoever arrives second waits and
-        then adopts. `msvcrt.locking` is released by the operating system
-        when the process dies, so a process killed in the middle of an
-        `initdb` does not leave the directory locked.
+        Nunca fica presa enquanto o cluster vive: quem chega em segundo espera
+        e depois adota. O `msvcrt.locking` é liberado pelo sistema operacional
+        quando o processo morre, então um processo morto no meio de um `initdb`
+        não deixa o diretório travado.
         """
         import msvcrt
 

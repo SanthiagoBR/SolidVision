@@ -1,13 +1,14 @@
-"""The process table, through `kernel32` (RFC-033 sections 8.4 and 9.3).
+"""A tabela de processos, pelo `kernel32` (RFC-033 §8.4 e §9.3).
 
-Four questions, each one call or two into `kernel32` via `ctypes`, in the
-style of the volume adapter and without a new dependency: which processes
-exist and who their parents are (`CreateToolhelp32Snapshot`), where a
-process's executable is (`QueryFullProcessImageNameW`), whether a PID is
-still alive, and how to end one (`TerminateProcess`).
+Quatro perguntas, cada uma com uma ou duas chamadas ao `kernel32` via
+`ctypes`, no estilo do adaptador de volumes e sem dependência nova: quais
+processos existem e quem são seus pais (`CreateToolhelp32Snapshot`), onde
+está o executável de um processo (`QueryFullProcessImageNameW`), se um PID
+ainda está vivo, e como encerrar um (`TerminateProcess`).
 
-Listing processes through PowerShell, as the RFC-033a script does, costs
-seconds per call -- more than a whole warm start should (section 2.1).
+Listar processos pelo PowerShell, como faz o script do RFC-033a, custa
+segundos por chamada -- mais do que uma subida a quente inteira deveria
+(§2.1).
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ _MAX_PATH = 32768
 
 @dataclass(frozen=True)
 class ProcessInfo:
-    """One row of a process snapshot."""
+    """Uma linha de um snapshot de processos."""
 
     pid: int
     parent_pid: int
@@ -41,35 +42,35 @@ class ProcessInfo:
 
 
 class ProcessTable(ABC):
-    """Port over the operating system's process table.
+    """Porta sobre a tabela de processos do sistema operacional.
 
-    The adapter decides who to adopt and who to end from these answers, so
-    the unit tests of the state machine (section 12) stand a double in for
-    the real table.
+    O adaptador decide quem adotar e quem encerrar a partir destas respostas,
+    então os testes unitários da máquina de estados (§12) põem um dublê no
+    lugar da tabela real.
     """
 
     @abstractmethod
     def snapshot(self) -> list[ProcessInfo]:
-        """Every process, with its parent PID, at this instant."""
+        """Todo processo, com o PID do pai, neste instante."""
 
     @abstractmethod
     def executable(self, pid: int) -> Path | None:
-        """The full path of a process's image, or `None` if it cannot be read."""
+        """O caminho completo da imagem de um processo, ou `None` se ilegível."""
 
     @abstractmethod
     def is_alive(self, pid: int) -> bool:
-        """Whether a process with this PID is running now."""
+        """Se um processo com este PID está rodando agora."""
 
     @abstractmethod
     def terminate(self, pid: int) -> bool:
-        """End a process and wait for it to be gone.
+        """Encerra um processo e espera que ele suma.
 
-        `False` when it was already gone or refused.
+        `False` quando ele já tinha sumido ou recusou.
         """
 
 
 class WindowsProcesses(ProcessTable):
-    """`ProcessTable` over `kernel32`. Refuses to be built off Windows."""
+    """`ProcessTable` sobre o `kernel32`. Recusa ser construída fora do Windows."""
 
     def __init__(self) -> None:
         if sys.platform != "win32":
@@ -79,11 +80,11 @@ class WindowsProcesses(ProcessTable):
 
     @staticmethod
     def _kernel32() -> Any:
-        """`kernel32` with the signatures this module calls, set every time.
+        """O `kernel32` com as assinaturas que este módulo chama, definidas toda vez.
 
-        Typed `Any` for the reason the volume adapter gives: a `ctypes` DLL
-        has no static signature. The `argtypes` and `restype` are what keep
-        64-bit handles from being truncated to a C `int`.
+        Tipado `Any` pelo motivo que o adaptador de volumes dá: uma DLL do
+        `ctypes` não tem assinatura estática. São o `argtypes` e o `restype`
+        que impedem que handles de 64 bits sejam truncados para um `int` de C.
         """
         from ctypes import wintypes
 
@@ -157,12 +158,12 @@ class WindowsProcesses(ProcessTable):
             kernel32.CloseHandle(handle)
 
     def is_alive(self, pid: int) -> bool:
-        """Alive means "has not exited", asked of the process object itself.
+        """Vivo quer dizer "não saiu", perguntado ao próprio objeto do processo.
 
-        `WaitForSingleObject` rather than `GetExitCodeProcess`, which cannot
-        tell a running process from one that exited with code 259. A process
-        Windows will not open for this user is alive: refusing access is
-        something only an existing process can do.
+        `WaitForSingleObject` em vez de `GetExitCodeProcess`, que não distingue
+        um processo rodando de um que saiu com o código 259. Um processo que o
+        Windows não abre para este usuário está vivo: recusar acesso é algo que
+        só um processo existente faz.
         """
         if pid <= 0:
             return False
@@ -178,12 +179,12 @@ class WindowsProcesses(ProcessTable):
             kernel32.CloseHandle(handle)
 
     def terminate(self, pid: int) -> bool:
-        """End a process and wait until Windows reports it gone.
+        """Encerra um processo e espera até o Windows informar que ele sumiu.
 
-        `TerminateProcess` only asks: it returns while the process object is
-        still unsignaled, so an `is_alive` right after it still says yes (49
-        of 50 tries). A caller that restarts the cluster at once would then
-        adopt a postmaster that is dying.
+        O `TerminateProcess` só pede: ele retorna com o objeto do processo
+        ainda não sinalizado, então um `is_alive` logo depois ainda diz sim (49
+        de 50 tentativas). Quem reinicia o cluster na hora adotaria então um
+        postmaster que está morrendo.
         """
         kernel32 = self._kernel32()
         handle = kernel32.OpenProcess(_PROCESS_TERMINATE | _SYNCHRONIZE, False, pid)
@@ -199,7 +200,7 @@ class WindowsProcesses(ProcessTable):
 
 
 class _ProcessEntry32W(ctypes.Structure):
-    """`PROCESSENTRY32W`, as `tlhelp32.h` declares it."""
+    """`PROCESSENTRY32W`, como o `tlhelp32.h` a declara."""
 
     _fields_ = [
         ("dwSize", ctypes.c_uint32),

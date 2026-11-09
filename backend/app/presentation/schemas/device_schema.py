@@ -1,21 +1,20 @@
-"""Request and response shapes for the device API (RFC-031).
+"""Formatos de requisição e de resposta da API de dispositivos (RFC-031).
 
-Every path published here is **device-relative**, with `/` on every
-platform, the form RFC-027 made the only durable one and RFC-030 already
-uses for images -- a JSON client should not have to know which operating
-system answered in order to split a path into parts.
+Todo caminho publicado aqui é **relativo ao dispositivo**, com `/` em toda
+plataforma, a forma que o RFC-027 tornou a única durável e que o RFC-030 já
+usa para imagens -- um cliente JSON não deveria ter de saber qual sistema
+operacional respondeu para dividir um caminho em partes.
 
-The one exception is `mount_point`, which is an absolute location and is
-in the response on purpose: it is what "plugged in at F:" means, it is
-true only for this instant, and it is exactly what the database refuses
-to hold (RFC-027 section 4). It is rendered posix-style for the same
-reason as everything else here.
+A única exceção é `mount_point`, que é uma localização absoluta e está na
+resposta de propósito: é o que "plugado em F:" quer dizer, só vale para este
+instante, e é exatamente o que o banco se recusa a guardar (RFC-027 §4). Ele
+é escrito no estilo posix pelo mesmo motivo de todo o resto aqui.
 
-**No field is a percentage, and none is a count of files on the disk.**
-`indexed_images`, `last_scan_file_count` and `last_scan_at` travel as
-three separate values so that whoever renders the ratio cannot do it
-without the date in hand (RFC-031 section 4.2); per folder there is no
-denominator at all, so there is no ratio to render (section 8.2).
+**Nenhum campo é uma porcentagem, e nenhum é uma contagem de arquivos no
+disco.** `indexed_images`, `last_scan_file_count` e `last_scan_at` viajam
+como três valores separados para que quem desenha a razão não consiga
+fazê-lo sem ter a data em mãos (RFC-031 §4.2); por pasta não há denominador
+nenhum, então não há razão a desenhar (§8.2).
 """
 
 from __future__ import annotations
@@ -34,32 +33,32 @@ from app.presentation.schemas.job_schema import JobSchema
 
 
 class RegisterDeviceRequestSchema(BaseModel):
-    r"""What a client sends to register a disk it saw in `GET /volumes`.
+    r"""O que um cliente envia para registrar um disco que viu em `GET /volumes`.
 
-    **There is no path field, and there must never be one.** The identity
-    is an opaque key the server minted; the server looks it up in an
-    enumeration it just performed and uses *its own* mount point as the
-    root. A client never composes a location, and an identity a client
-    invented resolves to nothing at all -- which is the difference between
-    this and accepting `{"path": "D:\\fotos"}`, and the whole of RFC-031
-    section 5.1. `test_device_registration_takes_no_path.py` asserts the
-    field set here is exactly these three.
+    **Não há campo de caminho, e nunca pode haver.** A identidade é uma
+    chave opaca que o servidor cunhou; o servidor a procura numa enumeração
+    que acabou de fazer e usa o *seu próprio* ponto de montagem como raiz.
+    Um cliente nunca compõe uma localização, e uma identidade que um cliente
+    inventou não resolve para nada -- essa é a diferença entre isto e
+    aceitar `{"path": "D:\\fotos"}`, e é todo o RFC-031 §5.1.
+    `test_device_registration_takes_no_path.py` afirma que o conjunto de
+    campos daqui é exatamente estes três.
 
-    Both identity fields are plain `str` rather than `VolumeIdentity` and
-    `VolumeKind`, and that is deliberate. Declaring `volume_kind:
-    VolumeKind` would have FastAPI refuse an unknown value with a `422`
-    before the use case ever runs, and the `400
-    InvalidVolumeIdentityError` RFC-031 section 6 specifies would become
-    unreachable. It is the argument `CreateJobRequestSchema` already
-    makes for `scopes`: what makes a value legal is a domain rule, and
-    answering it in Presentation produces a 422 where a 400 with a
-    readable message belongs.
+    Os dois campos de identidade são `str` simples, e não `VolumeIdentity` e
+    `VolumeKind`, e isso é deliberado. Declarar `volume_kind:
+    VolumeKind` faria o FastAPI recusar um valor desconhecido com um `422`
+    antes de o caso de uso sequer rodar, e o `400
+    InvalidVolumeIdentityError` que o RFC-031 §6 especifica ficaria
+    inalcançável. É o argumento que `CreateJobRequestSchema` já faz para
+    `scopes`: o que torna um valor válido é uma regra de domínio, e
+    responder a ela na Apresentação produz um 422 onde cabe um 400 com uma
+    mensagem legível.
 
-    Extra fields are **ignored**, which is Pydantic's default and is left
-    alone here. A client that smuggles in a `path` gets a successful
-    registration of the volume it named and no path is opened, which is
-    what the guard test asserts. Only `RenameDeviceRequestSchema` forbids
-    extras, and for a reason specific to it.
+    Campos extras são **ignorados**, que é o default do Pydantic e fica
+    como está aqui. Um cliente que contrabandeia um `path` recebe um
+    registro bem-sucedido do volume que nomeou, e nenhum caminho é aberto,
+    que é o que o teste de guarda afirma. Só `RenameDeviceRequestSchema`
+    proíbe extras, e por um motivo específico dele.
     """
 
     volume_identity: str = Field(
@@ -86,20 +85,20 @@ class RegisterDeviceRequestSchema(BaseModel):
 
 
 class RenameDeviceRequestSchema(BaseModel):
-    """What a client sends to rename a disk. Only the label, and strictly.
+    """O que um cliente envia para renomear um disco. Só o rótulo, e estrito.
 
-    **`extra="forbid"`, the only schema in the project that has it.** The
-    default is `extra="ignore"`, and the default is wrong here in a way
-    that is invisible: a client sending `last_scan_file_count` would get
-    a `200`, believe it had edited the declared denominator of the "%
-    indexed" figure, and have been silently ignored. A refusal is the
-    only honest answer, because the belief the request encodes is false
-    (RFC-031 section 7).
+    **`extra="forbid"`, o único schema do projeto que o tem.** O default é
+    `extra="ignore"`, e o default está errado aqui de um jeito invisível: um
+    cliente que enviasse `last_scan_file_count` receberia um `200`,
+    acreditaria ter editado o denominador declarado do número "%
+    indexado", e teria sido ignorado em silêncio. Uma recusa é a única
+    resposta honesta, porque a crença que a requisição carrega é falsa
+    (RFC-031 §7).
 
-    It is not being added to the other schemas of this RFC. This is the
-    route where a field a client might plausibly send is a field this
-    system deliberately does not let anyone write, and that is what makes
-    silence dangerous here and unremarkable elsewhere.
+    Ele não está sendo acrescentado aos outros schemas deste RFC. Esta é a
+    rota em que um campo que um cliente plausivelmente enviaria é um campo
+    que este sistema deliberadamente não deixa ninguém gravar, e é isso que
+    torna o silêncio perigoso aqui e banal nos outros lugares.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -112,15 +111,16 @@ class RenameDeviceRequestSchema(BaseModel):
     @field_validator("label")
     @classmethod
     def _must_not_be_blank(cls, value: str) -> str:
-        """Trim the label and refuse one that was nothing but spaces.
+        """Apara o rótulo e recusa um que era só espaços.
 
-        `min_length=1` alone accepts `"   "`, and a disk named with three
-        spaces is a sidebar row with a blank line in it. Refused as a
-        `422` rather than raised as a domain error: unlike an unknown
-        `volume_kind`, whose legality is a rule this system owns and
-        already has an error for, there is no domain rule about labels
-        anywhere -- a label with no characters in it is a malformed body,
-        which is precisely what 422 means.
+        `min_length=1` sozinho aceita `"   "`, e um disco com três espaços
+        no nome é uma linha da barra lateral com uma linha em branco nela.
+        Recusado como `422`, e não levantado como erro de domínio: ao
+        contrário de um `volume_kind` desconhecido, cuja validade é uma regra
+        que este sistema tem e para a qual já tem um erro, não há regra de
+        domínio sobre rótulos em lugar nenhum -- um rótulo sem nenhum
+        caractere é um corpo malformado, que é exatamente o que 422 quer
+        dizer.
         """
         trimmed = value.strip()
         if not trimmed:
@@ -129,13 +129,12 @@ class RenameDeviceRequestSchema(BaseModel):
 
 
 class ActiveJobSchema(BaseModel):
-    """The job currently holding a device, as a sidebar needs it.
+    """O job que segura um dispositivo agora, como a barra lateral precisa dele.
 
-    Two fields, because two is what the sidebar draws: something is
-    happening, and whether it has started. A client that wants counters
-    polls `GET /api/v1/jobs/{id}`, which is the route that publishes
-    them, rather than having them duplicated into every device list
-    (RFC-031 section 4).
+    Dois campos, porque dois é o que a barra lateral desenha: algo está
+    acontecendo, e se já começou. Um cliente que quer contadores consulta
+    `GET /api/v1/jobs/{id}`, que é a rota que os publica, em vez de tê-los
+    duplicados em toda lista de dispositivos (RFC-031 §4).
     """
 
     id: UUID = Field(description="The job holding this device")
@@ -143,7 +142,7 @@ class ActiveJobSchema(BaseModel):
 
 
 class DeviceDetailSchema(BaseModel):
-    """One device, resolved against the moment the request arrived."""
+    """Um dispositivo, resolvido no momento em que a requisição chegou."""
 
     id: UUID = Field(description="Identifier of this device")
     label: str = Field(description="The user's name for this disk -- 'HD2'")
@@ -232,17 +231,17 @@ class DeviceDetailSchema(BaseModel):
 
     @classmethod
     def from_summary(cls, summary: DeviceSummary) -> DeviceDetailSchema:
-        """Shape a resolved device for the wire.
+        """Monta um dispositivo resolvido para a resposta.
 
-        A classmethod rather than `from_attributes`, following
-        `JobSchema.from_domain`: the summary nests the entity, and
-        spelling the mapping out keeps the wire shape a decision rather
-        than a reflection of whatever the dataclass happens to hold.
+        Um classmethod, e não `from_attributes`, seguindo
+        `JobSchema.from_domain`: o resumo aninha a entidade, e escrever o
+        mapeamento por extenso mantém o formato da resposta como uma decisão,
+        e não um reflexo do que quer que a dataclass calhe de guardar.
 
-        `mount_point` is rendered with `as_posix()` so the response says
-        `F:/` rather than `F:\\`. Every other path in this API is
-        `/`-separated and a client should not have to special-case one
-        field for the server's platform.
+        `mount_point` é escrito com `as_posix()` para que a resposta diga
+        `F:/`, e não `F:\\`. Todo outro caminho desta API é separado por `/`,
+        e um cliente não deveria ter de tratar um campo à parte por causa da
+        plataforma do servidor.
         """
         device = summary.device
         return cls(
@@ -276,7 +275,7 @@ class DeviceDetailSchema(BaseModel):
 
 
 class PurgedImagesSchema(BaseModel):
-    """What `DELETE /devices/{id}/missing-images` removed (RFC-046 section 5.7)."""
+    """O que `DELETE /devices/{id}/missing-images` removeu (RFC-046 §5.7)."""
 
     purged: int = Field(
         description=(
@@ -287,7 +286,7 @@ class PurgedImagesSchema(BaseModel):
 
 
 class DeviceListSchema(BaseModel):
-    """Every device the system knows, sorted by label."""
+    """Todo dispositivo que o sistema conhece, ordenado por rótulo."""
 
     devices: list[DeviceDetailSchema] = Field(
         description="Known devices, connected and not, ordered by label"
@@ -301,7 +300,7 @@ class DeviceListSchema(BaseModel):
 
 
 class VolumeSchema(BaseModel):
-    """One volume attached to this machine right now."""
+    """Um volume conectado a esta máquina agora."""
 
     volume_identity: str = Field(
         description=(
@@ -339,7 +338,7 @@ class VolumeSchema(BaseModel):
 
 
 class VolumeListSchema(BaseModel):
-    """What is plugged into this machine, ordered by mount point."""
+    """O que está plugado nesta máquina, ordenado por ponto de montagem."""
 
     volumes: list[VolumeSchema] = Field(
         description=(
@@ -355,7 +354,7 @@ class VolumeListSchema(BaseModel):
 
 
 class FolderSchema(BaseModel):
-    """One folder inside a device, and what this system knows about it."""
+    """Uma pasta dentro de um dispositivo, e o que este sistema sabe dela."""
 
     name: str = Field(description="The folder's own name, as the filesystem spells it")
     path: str = Field(
@@ -412,12 +411,12 @@ class FolderSchema(BaseModel):
 
 
 class FolderListSchema(BaseModel):
-    """One level of one device's folder tree.
+    """Um nível da árvore de pastas de um dispositivo.
 
-    `path` and `parent` are both canonical spellings and both
-    `/`-separated, and `""` means the device root in either of them. The
-    root's parent is the root, so a client walking upwards stops there
-    rather than falling off.
+    `path` e `parent` são ambos grafias canônicas, ambos separados por `/`,
+    e `""` quer dizer a raiz do dispositivo em qualquer um dos dois. O pai
+    da raiz é a raiz, então um cliente que sobe a árvore para ali, em vez
+    de cair para fora.
     """
 
     device_id: UUID = Field(description="The device these folders are on")

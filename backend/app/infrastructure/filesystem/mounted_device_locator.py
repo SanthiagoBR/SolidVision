@@ -1,21 +1,20 @@
-"""Locating a device's files right now, over the volume enumeration (RFC-029).
+"""Localiza agora os arquivos de um dispositivo, pela enumeração de volumes (RFC-029).
 
-The adapter behind `DeviceLocator`: a thin shell on
-`VolumeIdentityProvider.mounted_volumes()`, which is RFC-027 section 7's
-answer to "is this disk connected" -- a question asked, never a column
-read.
+O adaptador por trás de `DeviceLocator`: uma casca fina sobre
+`VolumeIdentityProvider.mounted_volumes()`, que é a resposta do RFC-027 §7 a "este
+disco está conectado" -- uma pergunta feita, nunca uma coluna lida.
 
-**Nothing here caches, and the absence is the design.** A cached mount
-point is wrong from the moment the user pulls the cable, and Windows does
-not tell this process when they do. Every call enumerates again. That is
-also what makes the thing testable: a job created while a disk was plugged
-in can be claimed after it is gone, and this is the layer that notices.
+**Nada aqui guarda cache, e a ausência é o desenho.** Um ponto de montagem em
+cache está errado a partir do momento em que o usuário puxa o cabo, e o Windows
+não avisa este processo quando isso acontece. Toda chamada enumera de novo. É
+também isso que torna a coisa testável: um job criado enquanto um disco estava
+plugado pode ser assumido depois que o disco se foi, e é esta a camada que
+percebe.
 
-This is the only file in RFC-029 that knows what platform it is on, and
-even that is at one remove -- it depends on the port, not on `kernel32`.
-Jobs, claiming, the reaper and the checkpoint know nothing about Windows,
-so a Linux volume adapter would be a new file rather than a rewrite
-(RFC-029 section 6).
+Este é o único arquivo do RFC-029 que sabe em que plataforma está, e mesmo isso
+indiretamente -- ele depende da porta, não do `kernel32`. Jobs, a assunção de
+jobs, o reaper e o checkpoint não sabem nada de Windows, então um adaptador de
+volume para Linux seria um arquivo novo, e não uma reescrita (RFC-029 §6).
 """
 
 from __future__ import annotations
@@ -35,44 +34,43 @@ logger = get_logger(__name__)
 
 
 class MountedDeviceLocator(DeviceLocator):
-    """Answers from what the operating system reports as mounted, every time."""
+    """Responde a partir do que o sistema operacional relata como montado, sempre."""
 
     def __init__(self, volume_provider: VolumeIdentityProvider) -> None:
         self._volumes = volume_provider
 
     def mount_point(self, device: Device) -> Path | None:
-        """Return where `device` is attached at this instant, or `None`.
+        """Devolve onde `device` está ligado neste instante, ou `None`.
 
-        A device is connected exactly when its volume identity is among
-        the mounted ones -- the whole of RFC-027 section 7. `None` is the
-        honest answer for a disk in a drawer, and callers turn it into
-        `DeviceNotConnectedError` when they needed the bytes.
+        Um dispositivo está conectado exatamente quando a sua identidade de
+        volume está entre as montadas -- todo o RFC-027 §7. `None` é a resposta
+        honesta para um disco na gaveta, e quem chama a transforma em
+        `DeviceNotConnectedError` quando precisava dos bytes.
         """
         return self._volumes.mounted_volumes().get(device.volume_identity)
 
     def resolve_scope(self, device: Device, scope: JobScope) -> JobScope | None:
-        """Return the scope as the filesystem spells it, or `None` if absent.
+        """Devolve o escopo como o sistema de arquivos o escreve, ou `None` se ausente.
 
-        Three things happen here, and the third is the one that is easy to
-        leave out.
+        Três coisas acontecem aqui, e a terceira é a que é fácil deixar de fora.
 
-        1. The scope is joined onto the mount point and resolved. Resolving
-           is what turns `Fotos` into the directory's real spelling, which
-           `normalize_scopes()` needs: it compares parts exactly, so two
-           spellings of one case-insensitive folder would otherwise both
-           survive normalisation and be walked twice.
-        2. It has to be a directory. A file is not a scope, and neither is
-           a path that is simply not there.
-        3. **It has to still be inside the device.** `JobScope` already
-           refused `..`, a drive anchor and a UNC share -- but an NTFS
-           junction sitting inside the scope points at another volume
-           entirely and looks like an ordinary folder until it is
-           resolved. `..` is not the only way out of a root, so the check
-           is made against the resolved path rather than against the text.
+        1. O escopo é unido ao ponto de montagem e resolvido. Resolver é o que
+           transforma `Fotos` na grafia real do diretório, de que
+           `normalize_scopes()` precisa: ele compara as partes exatamente, então
+           duas grafias de uma mesma pasta sem distinção de maiúsculas
+           sobreviveriam ambas à normalização e seriam percorridas duas vezes.
+        2. Precisa ser um diretório. Um arquivo não é um escopo, nem um caminho
+           que simplesmente não está lá.
+        3. **Precisa continuar dentro do dispositivo.** `JobScope` já recusou
+           `..`, uma âncora de unidade e um compartilhamento UNC -- mas uma
+           junction NTFS dentro do escopo aponta para outro volume e parece uma
+           pasta comum até ser resolvida. `..` não é a única saída de uma raiz,
+           então a checagem é feita contra o caminho resolvido, e não contra o
+           texto.
 
-        A device that is not mounted answers `None` for every scope.
-        Callers check the connection first, so that the user is told which
-        disk to plug in rather than that their folder is wrong.
+        Um dispositivo que não está montado responde `None` para todo escopo.
+        Quem chama verifica a conexão antes, para que o usuário ouça qual disco
+        plugar, e não que a pasta dele está errada.
         """
         located = self._locate(device, scope)
         if located is None:
@@ -84,39 +82,37 @@ class MountedDeviceLocator(DeviceLocator):
         return JobScope(resolved.relative_to(root))
 
     def list_folders(self, device: Device, scope: JobScope) -> list[FolderEntry] | None:
-        """Return the folders directly inside `scope`, with `has_children` filled.
+        """Devolve as pastas logo dentro de `scope`, com `has_children` preenchido.
 
-        Goes through `_locate()` rather than joining the mount point onto
-        the scope itself, so that a junction inside the scope is caught
-        here exactly as it is caught by `resolve_scope()` -- a listing
-        that escaped the device would be reading the user's `C:` drive
-        through a route whose entire point is that no client-supplied
-        path ever reaches a filesystem (RFC-031 section 5.1).
+        Passa por `_locate()` em vez de unir o ponto de montagem ao escopo por
+        conta própria, para que uma junction dentro do escopo seja pega aqui
+        exatamente como é pega por `resolve_scope()` -- uma listagem que
+        escapasse do dispositivo estaria lendo o `C:` do usuário por uma rota
+        cujo propósito todo é que nenhum caminho enviado pelo cliente chegue a
+        um sistema de arquivos (RFC-031 §5.1).
 
-        **`has_children` is what this method costs.** Knowing whether
-        `2018/janeiro` has subfolders of its own means opening
-        `2018/janeiro`, so a listing of forty folders is forty-one
-        `readdir` calls rather than one, and on a cold mechanical disk
-        that is the read RFC-029 section 7.2 found dominant. Two things
-        keep the bill down, and neither is optional:
+        **`has_children` é o que este método custa.** Saber se `2018/janeiro`
+        tem subpastas próprias significa abrir `2018/janeiro`, então uma
+        listagem de quarenta pastas são quarenta e uma chamadas a `readdir`, e
+        não uma, e num disco mecânico frio essa é a leitura que o RFC-029 §7.2
+        achou dominante. Duas coisas seguram a conta, e nenhuma é opcional:
 
-        * the child scan short-circuits. `any()` over a `scandir`
-          generator stops at the first entry that is a directory, so a
-          folder whose first entry is a subfolder costs one entry rather
-          than a full listing;
-        * nothing recurses past that. The answer is a boolean, not a
-          count, and RFC-031 section 2.3 refuses the subtree walk a count
-          would need.
+        * a varredura dos filhos para cedo. `any()` sobre um gerador de
+          `scandir` para na primeira entrada que é diretório, então uma pasta
+          cuja primeira entrada é uma subpasta custa uma entrada, e não uma
+          listagem inteira;
+        * nada desce além disso. A resposta é um booleano, não uma contagem, e
+          o RFC-031 §2.3 recusa o percurso da subárvore que uma contagem
+          exigiria.
 
-        A child that will not open -- a permission wall, a disk pulled
-        mid-listing -- is reported as `has_children=False` and logged. It
-        is not allowed to end the listing: a protected folder is no
-        reason to stop showing the folders that answered, which is the
-        rule `mounted_volumes()` already applies to volumes that refuse
-        to be named.
+        Um filho que não abre -- uma barreira de permissão, um disco puxado no
+        meio da listagem -- é relatado como `has_children=False` e registrado no
+        log. Ele não pode encerrar a listagem: uma pasta protegida não é razão
+        para deixar de mostrar as pastas que responderam, que é a regra que
+        `mounted_volumes()` já aplica aos volumes que se recusam a ser nomeados.
 
-        Files are skipped. What this feeds is a folder picker whose
-        output goes back as `scopes[]`, and a file is not a scope.
+        Arquivos são pulados. O que isto alimenta é um seletor de pastas cuja
+        saída volta como `scopes[]`, e um arquivo não é um escopo.
         """
         located = self._locate(device, scope)
         if located is None:
@@ -136,38 +132,35 @@ class MountedDeviceLocator(DeviceLocator):
                         )
                     )
         except OSError:
-            # The folder resolved a moment ago and will not open now --
-            # the disk went away between the two calls. "Not a folder on
-            # this device" is the honest answer and the one the caller
-            # already knows how to report.
+            # A pasta foi resolvida há um instante e agora não abre -- o disco
+            # sumiu entre as duas chamadas. "Não é uma pasta deste dispositivo"
+            # é a resposta honesta, e a que quem chama já sabe relatar.
             return None
         return entries
 
     def _locate(self, device: Device, scope: JobScope) -> tuple[Path, Path] | None:
-        """Return `(device root, resolved scope)`, or `None` if that is not a folder.
+        """Devolve `(raiz do dispositivo, escopo resolvido)`, ou `None` se não é pasta.
 
-        Shared by `resolve_scope()` and `list_folders()` rather than
-        written twice. The containment check below is the security
-        property of both, and two copies of it would be two chances for
-        one of them to lose it quietly.
+        Compartilhado por `resolve_scope()` e `list_folders()` em vez de escrito
+        duas vezes. A checagem de contenção abaixo é a propriedade de segurança
+        de ambos, e duas cópias dela seriam duas chances de uma delas a perder
+        em silêncio.
 
-        Three things happen here, and the third is the one that is easy
-        to leave out.
+        Três coisas acontecem aqui, e a terceira é a que é fácil deixar de fora.
 
-        1. The scope is joined onto the mount point and resolved.
-           Resolving is what turns `Fotos` into the directory's real
-           spelling, which `normalize_scopes()` needs: it compares parts
-           exactly, so two spellings of one case-insensitive folder would
-           otherwise both survive normalisation and be walked twice.
-        2. It has to be a directory. A file is not a scope, and neither is
-           a path that is simply not there.
-        3. **It has to still be inside the device.** `JobScope` already
-           refused `..`, a drive anchor and a UNC share -- but an NTFS
-           junction sitting inside the scope points at another volume
-           entirely and looks like an ordinary folder until it is
-           resolved. `..` is not the only way out of a root, so the check
-           is made against the resolved path rather than against the
-           text.
+        1. O escopo é unido ao ponto de montagem e resolvido. Resolver é o que
+           transforma `Fotos` na grafia real do diretório, de que
+           `normalize_scopes()` precisa: ele compara as partes exatamente, então
+           duas grafias de uma mesma pasta sem distinção de maiúsculas
+           sobreviveriam ambas à normalização e seriam percorridas duas vezes.
+        2. Precisa ser um diretório. Um arquivo não é um escopo, nem um caminho
+           que simplesmente não está lá.
+        3. **Precisa continuar dentro do dispositivo.** `JobScope` já recusou
+           `..`, uma âncora de unidade e um compartilhamento UNC -- mas uma
+           junction NTFS dentro do escopo aponta para outro volume e parece uma
+           pasta comum até ser resolvida. `..` não é a única saída de uma raiz,
+           então a checagem é feita contra o caminho resolvido, e não contra o
+           texto.
         """
         mount = self.mount_point(device)
         if mount is None:
@@ -182,17 +175,17 @@ class MountedDeviceLocator(DeviceLocator):
             if resolved != root and not resolved.is_relative_to(root):
                 return None
         except OSError:
-            # A path the platform will not answer about -- a disconnected
-            # network mount, a permission wall -- is "not a folder on this
-            # device" rather than a crash, which is what the caller is
-            # asking and what it will report as an invalid scope.
+            # Um caminho sobre o qual a plataforma não responde -- uma montagem
+            # de rede desconectada, uma barreira de permissão -- é "não é uma
+            # pasta deste dispositivo", e não uma queda; é isso que quem chama
+            # pergunta, e o que vai relatar como escopo inválido.
             return None
 
         return root, resolved
 
     @staticmethod
     def _is_directory(entry: os.DirEntry[str]) -> bool:
-        """Whether one listed entry is a folder, tolerating one that will not say."""
+        """Se uma entrada listada é pasta, tolerando uma que não diz o que é."""
         try:
             return entry.is_dir()
         except OSError:
@@ -203,12 +196,12 @@ class MountedDeviceLocator(DeviceLocator):
 
     @staticmethod
     def _has_subdirectory(folder: Path) -> bool:
-        """Whether `folder` holds at least one folder, stopping at the first.
+        """Se `folder` contém pelo menos uma pasta, parando na primeira.
 
-        The generator inside `any()` is what makes this cheap: `scandir`
-        yields lazily, so a folder whose first entry is a directory costs
-        one entry read rather than a full listing of a folder that may
-        hold thousands of photos.
+        O gerador dentro de `any()` é o que torna isto barato: `scandir` produz
+        preguiçosamente, então uma pasta cuja primeira entrada é um diretório
+        custa a leitura de uma entrada, e não a listagem inteira de uma pasta
+        que pode ter milhares de fotos.
         """
         try:
             with os.scandir(folder) as scan:

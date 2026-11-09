@@ -1,16 +1,16 @@
-"""Show an indexed photo in the file manager (RFC-030 section 5).
+"""Mostrar uma foto indexada no gerenciador de arquivos (RFC-030 §5).
 
-**The only input is an id.** The path this opens is built here, from the row
-the id names and the mount point the device has right now; no route accepts
-a path in a body, a query or a header. That is what makes directory
-traversal, `..`, and a UNC path to another machine impossible rather than
-filtered: there is no client-supplied string to sanitise (RFC-030 section
-5.1).
+**A única entrada é um id.** O caminho que isto abre é montado aqui, a partir
+da linha que o id nomeia e do ponto de montagem que o dispositivo tem agora;
+nenhuma rota aceita um caminho num corpo, numa query ou num cabeçalho. É isso
+que torna directory traversal, `..` e um caminho UNC para outra máquina
+impossíveis, e não filtrados: não há string vinda do cliente para sanear
+(RFC-030 §5.1).
 
-The two guards of RFC-030 section 6 -- the operator's setting and the
-loopback check -- are not here. Both are facts about the HTTP request and
-the deployment, and the route enforces them before this use case is ever
-constructed.
+As duas guardas do RFC-030 §6 -- a configuração do operador e a checagem de
+loopback -- não estão aqui. As duas são fatos sobre o pedido HTTP e sobre a
+implantação, e a rota as impõe antes de este caso de uso sequer ser
+construído.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from app.domain.value_objects.image_id import ImageId
 
 
 class RevealImageUseCase:
-    """Open the platform's file manager with one indexed image selected."""
+    """Abre o gerenciador de arquivos da plataforma com uma imagem selecionada."""
 
     def __init__(
         self,
@@ -42,22 +42,22 @@ class RevealImageUseCase:
         self._revealer = file_revealer
 
     def execute(self, image_id: ImageId) -> None:
-        """Reveal the image, or say precisely why it cannot be revealed.
+        """Revela a imagem, ou diz com precisão por que ela não pode ser revelada.
 
-        Three refusals, each a different thing for the user to do:
+        Três recusas, cada uma uma coisa diferente para o usuário fazer:
 
-        * no such image -- `ImageNotFoundError`, 404;
-        * its disk is not plugged in -- `DeviceNotConnectedError`, 409,
-          raised by `Image.require_absolute_path()` rather than by a second
-          check written here. The message names the disk to fetch;
-        * the disk is plugged in and the file is not on it -- `FileGoneError`,
-          410. The photo was deleted, moved or renamed after indexing, and
-          fetching a disk would not help.
+        * a imagem não existe -- `ImageNotFoundError`, 404;
+        * o disco dela não está plugado -- `DeviceNotConnectedError`, 409,
+          levantado por `Image.require_absolute_path()`, e não por uma segunda
+          checagem escrita aqui. A mensagem nomeia o disco a buscar;
+        * o disco está plugado e o arquivo não está nele -- `FileGoneError`,
+          410. A foto foi apagada, movida ou renomeada depois da indexação, e
+          buscar um disco não ajudaria.
 
-        The missing-file check happens in the adapter, which raises
-        `FileNotFoundError` like any I/O would, and is translated to the
-        domain error here: reading the disk is Infrastructure's job, and
-        deciding that a missing file is a 410 rather than a 404 is not.
+        A checagem do arquivo ausente acontece no adaptador, que levanta
+        `FileNotFoundError` como qualquer E/S levantaria, e é traduzida para o
+        erro de domínio aqui: ler o disco é trabalho da Infrastructure, e
+        decidir que um arquivo ausente é um 410, e não um 404, não é.
         """
         image = self._repository.get(image_id)
         if image is None:
@@ -67,9 +67,10 @@ class RevealImageUseCase:
         try:
             path = located.image.require_absolute_path()
         except DeviceNotConnectedError as error:
-            # The same error, re-raised only to name the disk by the label
-            # the user gave it: the entity knows the device's id, and "plug
-            # in 564e9201-..." is not advice anyone can follow.
+            # O mesmo erro, levantado de novo só para nomear o disco pelo
+            # rótulo que o usuário deu: a entidade conhece o id do
+            # dispositivo, e "plugue o 564e9201-..." não é um conselho que
+            # alguém consiga seguir.
             raise DeviceNotConnectedError(
                 f"{image.relative_path} is on {located.device.label!r}, which is "
                 "not connected. Plug it in and try again."

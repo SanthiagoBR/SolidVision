@@ -1,4 +1,4 @@
-"""The launcher's events: one JSON object per line on stdout (RFC-036 section 4.4).
+"""Os eventos do launcher: um objeto JSON por linha no stdout (RFC-036 §4.4).
 
     {"event": "starting", "protocol": 1, "pid": 4120, "mode": "installed", ...}
     {"event": "phase", "phase": "starting"}
@@ -9,37 +9,38 @@
     {"event": "stopping", "reason": "requested"}
     {"event": "stopped", "exit_code": 0}
 
-stdout carries these and nothing else; text for people goes to stderr, as the
-CLI of RFC-033 section 11 does. Whoever started the launcher reads them to know
-when to open the window, and on what.
+O stdout leva esses eventos e nada mais; o texto para pessoas vai para o stderr,
+como faz a CLI do RFC-033 §11. Quem iniciou o launcher os lê para saber quando
+abrir a janela, e em quê.
 
-    event            when, and its fields
-    starting         first, with `protocol`, `pid`, `mode`; and `database`,
-                     `embedded` or `external`, once the configuration was read
-    phase            `initdb`, `starting`, `recovering`, `migrating` (the
-                     cluster's phases), then `api` and `job_runner` as each
-                     child is created
-    ready            once: `/health` answered 200. `url`, `search` (what
-                     `/health` said), `indexing` (`running`, `restarting`,
+    evento           quando, e os seus campos
+    starting         primeiro, com `protocol`, `pid`, `mode`; e `database`,
+                     `embedded` ou `external`, assim que a configuração foi lida
+    phase            `initdb`, `starting`, `recovering`, `migrating` (as fases
+                     do cluster), depois `api` e `job_runner`, à medida que
+                     cada filho é criado
+    ready            uma vez: o `/health` respondeu 200. `url`, `search` (o que
+                     o `/health` disse), `indexing` (`running`, `restarting`,
                      `unavailable`)
-    already_running  instead of everything else, when another launcher holds
-                     the data root: `protocol`, `pid`, `url`, `state`. Exit 0
-    child            a child -- `api`, `job_runner`, or the `database` -- is
-                     `restarting` (with `exit_code`, `delay`), `running` again,
-                     or `unavailable` (with `exit_code`), each with `detail`,
-                     the last line it left
-    address          the API came back on another port: `url`
-    stopping         the stop began: `reason` is `requested`, `session_end`
-                     or `failure` (with `detail`)
-    stopped          the stop ended: `exit_code`
-    failed           the launcher could not start: `detail`, the line. Exit 78
+    already_running  no lugar de todo o resto, quando outro launcher detém a
+                     raiz de dados: `protocol`, `pid`, `url`, `state`. Sai com 0
+    child            um filho -- `api`, `job_runner` ou o `database` -- está
+                     `restarting` (com `exit_code`, `delay`), `running` de novo
+                     ou `unavailable` (com `exit_code`), cada um com `detail`,
+                     a última linha que ele deixou
+    address          a API voltou em outra porta: `url`
+    stopping         a parada começou: `reason` é `requested`, `session_end`
+                     ou `failure` (com `detail`)
+    stopped          a parada terminou: `exit_code`
+    failed           o launcher não conseguiu iniciar: `detail`, a linha. Sai
+                     com 78
 
-`protocol` changes when an event changes its meaning; a field added does not
-change it. Every line is ASCII -- `ensure_ascii` -- so the encoding of the pipe
-does not matter to the reader.
+`protocol` muda quando um evento muda de significado; um campo acrescentado não o
+muda. Toda linha é ASCII -- `ensure_ascii` -- para que a codificação do pipe não
+importe a quem lê.
 
-Nothing here imports the `Settings` or the logger: `already_running` is written
-before the configuration is read, by a process that never reads it (section 8).
+Nada aqui importa o `Settings` nem o logger: o `already_running` é escrito antes
+de a configuração ser lida, por um processo que nunca a lê (§8).
 """
 
 from __future__ import annotations
@@ -66,16 +67,16 @@ class Event(StrEnum):
 
 class EventSink(Protocol):
     def emit(self, event: Event, **fields: object) -> None:
-        """Write one event, now."""
+        """Escreve um evento, agora."""
 
 
 class JsonLines:
-    """`EventSink` over a text stream, one line per event, flushed one by one.
+    """`EventSink` sobre um stream de texto, uma linha por evento, com flush a cada um.
 
-    Thread-safe: the stop of a session end is asked from the thread of a
-    window (section 7.5). A reader that went away -- the pipe closed -- does
-    not stop the launcher: the events were for it, and the stop it surely
-    asked for still has to happen.
+    Thread-safe: a parada de um fim de sessão é pedida a partir da thread de
+    uma janela (§7.5). Um leitor que foi embora -- o pipe fechou -- não para o
+    launcher: os eventos eram para ele, e a parada que ele com certeza pediu
+    ainda tem de acontecer.
     """
 
     def __init__(self, stream: TextIO) -> None:

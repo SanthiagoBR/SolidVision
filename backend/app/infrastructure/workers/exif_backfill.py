@@ -1,45 +1,48 @@
-"""Give already-indexed images their capture date and position, without the model.
+"""Dá às imagens já indexadas a data de captura e a posição, sem o modelo.
 
     python -m app.infrastructure.workers.exif_backfill --root PATH
     python -m app.infrastructure.workers.exif_backfill --root PATH --force
     python -m app.infrastructure.workers.exif_backfill --root PATH --dry-run
 
-**This command replaces `capture_date_backfill`** (RFC-032 section 8.1). A
-position backfill beside it would read the same header of the same files in a
-second pass -- two seeks per file on a spinning external disk -- to fill
-columns that come out of one read. One command now writes both facts from that
-read. The change of operator command is declared here and in RFC-032 rather
-than hidden behind an alias nobody would ever remove.
+**Este comando substitui o `capture_date_backfill`** (RFC-032 §8.1). Um backfill
+de posição ao lado dele leria o mesmo cabeçalho dos mesmos arquivos numa
+segunda passada -- dois seeks por arquivo num disco externo giratório -- para
+preencher colunas que saem de uma única leitura. Um comando só agora grava os
+dois fatos a partir dessa leitura. A troca de comando do operador fica
+declarada aqui e no RFC-032, em vez de escondida atrás de um alias que ninguém
+jamais removeria.
 
-Rows indexed before RFC-028 carry `capture_source = NULL`, and rows indexed
-before RFC-032 carry `position_source = NULL`. The next ordinary indexing scan
-of their disk fills both anyway, so this command is not a prerequisite for
-anything. It exists for the operator who wants the facts *now* without
-composing the indexing pipeline -- and for the one case no scan can ever reach:
-after the extraction improves, rows already marked `unknown` need to be read
-again (`--force`). Everything RFC-028 section 7 established is kept, per fact:
-`--only-unknown` is the idempotent default, and `--force` never replaces a
-stored source with a weaker one -- an `exif_gps` survives a file whose GPS
-reads `unknown` today, and a file can lose its date and keep its position.
+As linhas indexadas antes do RFC-028 têm `capture_source = NULL`, e as
+indexadas antes do RFC-032 têm `position_source = NULL`. O próximo scan comum
+de indexação do disco delas preenche os dois de qualquer jeito, então este
+comando não é pré-requisito de nada. Ele existe para o operador que quer os
+fatos *agora* sem compor o pipeline de indexação -- e para o único caso que
+nenhum scan alcança: depois que a extração melhora, as linhas já marcadas
+`unknown` precisam ser lidas de novo (`--force`). Tudo o que o RFC-028 §7
+estabeleceu é mantido, por fato: `--only-unknown` é o padrão idempotente, e
+`--force` nunca troca uma fonte gravada por uma mais fraca -- um `exif_gps`
+sobrevive a um arquivo cujo GPS hoje dá `unknown`, e um arquivo pode perder a
+data e manter a posição.
 
-**It never loads, imports, or constructs the embedding model.** That is the
-entire cost argument: a header read per file instead of the ~5 hours of
-inference a 40,000-photo reindex would take. The property is checked against
-the real import graph, in a fresh interpreter, by
-`tests/infrastructure/workers/test_exif_backfill.py` -- together with the
-guard of the guard, which proves the check can fail.
+**Ele nunca carrega, importa ou constrói o modelo de embedding.** Esse é todo
+o argumento de custo: uma leitura de cabeçalho por arquivo em vez das ~5 horas
+de inferência que uma reindexação de 40.000 fotos levaria. A propriedade é
+verificada contra o grafo real de imports, num interpretador novo, por
+`tests/infrastructure/workers/test_exif_backfill.py` -- junto com a guarda da
+guarda, que prova que a verificação pode falhar.
 
-It only reads the collection. Nothing is written to any file (RFC-032 section
-10), and no image row is created: a file with no row is reported as not
-indexed and left for the indexing worker. `--dry-run` reads everything and
-writes nothing, not even the device row.
+Ele só lê a coleção. Nada é escrito em arquivo algum (RFC-032 §10), e nenhuma
+linha de imagem é criada: um arquivo sem linha é relatado como não indexado e
+deixado para o worker de indexação. `--dry-run` lê tudo e não grava nada, nem
+a linha do dispositivo.
 
-The disk must be plugged in, because the facts are inside the files (RFC-027
-section 7). Rows on other disks are untouched; run the command once per disk.
+O disco precisa estar conectado, porque os fatos estão dentro dos arquivos
+(RFC-027 §7). As linhas de outros discos não são tocadas; rode o comando uma
+vez por disco.
 
-**`--root` is required and has no default**, for the reason the indexing
-worker gives: a command that walks a photo collection must never pick one on
-its own.
+**`--root` é obrigatório e não tem padrão**, pelo motivo que o worker de
+indexação dá: um comando que percorre uma coleção de fotos nunca deve escolher
+uma por conta própria.
 """
 
 from __future__ import annotations
@@ -139,13 +142,13 @@ def _log_summary(summary: ExifBackfillSummary) -> None:
 
 
 def main() -> None:
-    """Compose the backfill and run it against one explicitly named root.
+    """Compõe o backfill e o roda contra uma raiz nomeada explicitamente.
 
-    The concrete imports are function-local, as in the indexing worker, so
-    that importing this module for its argument parser or its tests pulls
-    in no database driver. What is deliberately absent from the list is
-    `app.presentation.dependencies`, the one place the CLIP adapter is
-    composed; the job executor needs it and this command must not.
+    Os imports concretos ficam dentro da função, como no worker de indexação,
+    para que importar este módulo pelo parser de argumentos ou pelos testes
+    não traga nenhum driver de banco. O que falta de propósito na lista é
+    `app.presentation.dependencies`, o único lugar onde o adaptador CLIP é
+    composto; o executor de jobs precisa dele, e este comando não pode.
     """
     from app.infrastructure.config.settings import settings
     from app.infrastructure.filesystem.filesystem_image_provider import (
@@ -182,9 +185,9 @@ def main() -> None:
             volume.mount_point,
         )
         undiscoverable: list[IndexingFailure] = []
-        # Both extractions are always on here, whatever `extract_capture_date`
-        # and `extract_gps` say: reading these two facts is the only thing
-        # this command does, and they come out of one open of each file.
+        # As duas extrações estão sempre ligadas aqui, digam o que disserem
+        # `extract_capture_date` e `extract_gps`: ler esses dois fatos é a única
+        # coisa que este comando faz, e eles saem de uma abertura de cada arquivo.
         provider = FilesystemImageProvider(
             root,
             settings.supported_extensions,

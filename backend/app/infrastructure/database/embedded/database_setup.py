@@ -1,24 +1,23 @@
-"""The database inside the cluster: create, migrate, check (RFC-033 section 7.4).
+"""O banco dentro do cluster: criar, migrar, conferir (RFC-033 §7.4).
 
-Three steps, in this order, all idempotent:
+Três passos, nesta ordem, todos idempotentes:
 
-1. **The database.** `initdb` creates only `postgres`, `template0` and
-   `template1`. `solidvision` is created from `template0` with the encoding
-   and the locale spelled out, so nothing depends on the state of
-   `template1`.
-2. **The migrations.** The heads in `alembic_version` against the heads of
-   the project's `ScriptDirectory`. Equal: nothing to do. Behind: `alembic
-   upgrade head` in this process, on this connection, handed over in
-   `config.attributes["connection"]`. A revision the code does not know:
-   **refuse** -- an older app opening a database a newer one migrated.
-3. **The facts.** The major version, `UTF8`, `C` and `C`, and `vector` at the
-   manifest's version. A divergence names its field. An older `vector` than
-   the runtime's is a warning: `ALTER EXTENSION vector UPDATE` belongs to
-   upgrades, which are out of scope.
+1. **O banco.** O `initdb` cria só `postgres`, `template0` e `template1`. O
+   `solidvision` é criado a partir de `template0` com o encoding e o locale
+   escritos por extenso, para que nada dependa do estado de `template1`.
+2. **As migrations.** Os heads em `alembic_version` contra os heads do
+   `ScriptDirectory` do projeto. Iguais: nada a fazer. Atrás: `alembic
+   upgrade head` neste processo, nesta conexão, entregue em
+   `config.attributes["connection"]`. Uma revisão que o código não conhece:
+   **recusar** -- um app mais antigo abrindo um banco que um mais novo migrou.
+3. **Os fatos.** A versão major, `UTF8`, `C` e `C`, e `vector` na versão do
+   manifesto. Uma divergência nomeia o seu campo. Um `vector` mais antigo que
+   o do runtime é um aviso: `ALTER EXTENSION vector UPDATE` pertence aos
+   upgrades, que estão fora do escopo.
 
-`CREATE EXTENSION vector` is not a step here. Migration `999b801e80f4`
-(RFC-018) already runs it, and a second place would have to be kept in step
-with the migration chain (section 2.3).
+`CREATE EXTENSION vector` não é um passo aqui. A migration `999b801e80f4`
+(RFC-018) já o roda, e um segundo lugar teria de ser mantido em sintonia com a
+cadeia de migrations (§2.3).
 """
 
 from __future__ import annotations
@@ -44,30 +43,30 @@ from .errors import ClusterRefusedError, ServerNotReadyError, StartupFailedError
 logger = get_logger(__name__)
 
 LOOPBACK = "127.0.0.1"
-"""The literal, not `localhost`: the server listens on IPv4 only, and the
-literal takes name resolution out of every connection (section 4.2)."""
+"""O literal, não `localhost`: o servidor escuta só em IPv4, e o literal tira a
+resolução de nomes de toda conexão (§4.2)."""
 
 SUPERUSER = "solidvision"
 DATABASE = "solidvision"
 EXPECTED_ENCODING = "UTF8"
 EXPECTED_LOCALE = "C"
 
-# The layout is the geometry of directories, not configuration: taking the
-# two paths from it keeps this package free of `settings`, as RFC-033 section
-# 4.1 asks, and of an anchor of its own (RFC-034 section 4.1).
+# O layout é a geometria dos diretórios, não configuração: tirar dele os dois
+# caminhos mantém este pacote livre de `settings`, como pede o RFC-033 §4.1, e
+# de uma âncora própria (RFC-034 §4.1).
 ALEMBIC_INI = layout.backend_directory / "alembic.ini"
 ALEMBIC_SCRIPTS = layout.backend_directory / "alembic"
 
 MIGRATION_LOCK_KEY = 0x5356_3033
-"""`pg_advisory_xact_lock` key ("SV03"): two callers migrating at once wait."""
+"""Chave do `pg_advisory_xact_lock` ("SV03"): dois migrando ao mesmo tempo esperam."""
 
 LIBPQ_OVERRIDES = {"options": "", "sslmode": "disable", "gssencmode": "disable"}
-"""Explicit, so that `PGOPTIONS`, `PGSSLMODE` or `PGGSSENCMODE` in the
-caller's environment cannot change a connection to the cluster. libpq falls
-back to the environment only for a parameter that was not given at all.
+"""Explícitos, para que `PGOPTIONS`, `PGSSLMODE` ou `PGGSSENCMODE` no ambiente
+de quem chama não possam mudar uma conexão ao cluster. A libpq recorre ao
+ambiente só para um parâmetro que não foi passado de jeito nenhum.
 
-One constant for the adapter's own connections and for the project's engine
-(RFC-034 section 7.5): a parameter added here protects both."""
+Uma constante para as conexões do próprio adaptador e para o engine do projeto
+(RFC-034 §7.5): um parâmetro acrescentado aqui protege os dois."""
 
 LIBPQ_VARIABLE_PREFIX = "PG"
 
@@ -75,26 +74,26 @@ CONNECT_TIMEOUT_SECONDS = 10
 
 
 def discard_libpq_environment() -> tuple[str, ...]:
-    """Take every `PG*` variable out of this process's environment.
+    """Tira toda variável `PG*` do ambiente deste processo.
 
-    `LIBPQ_OVERRIDES` answers a variable by giving libpq the parameter it
-    stands for, and some variables have no parameter to give. `PGTZ`,
-    `PGDATESTYLE` and `PGGEQO` are sent to the server as settings of the
-    session, and an invalid one makes the server refuse the connection;
-    `PGSERVICE` names an entry of a service file, and a name that is not
-    there is an error before any connection is tried. Measured, with every
-    variable libpq reads (RFC-034 section 16).
+    O `LIBPQ_OVERRIDES` responde a uma variável dando à libpq o parâmetro que
+    ela representa, e algumas variáveis não têm parâmetro para dar. `PGTZ`,
+    `PGDATESTYLE` e `PGGEQO` são mandadas ao servidor como configurações da
+    sessão, e uma inválida faz o servidor recusar a conexão; `PGSERVICE` nomeia
+    uma entrada de um arquivo de serviços, e um nome que não está lá é um erro
+    antes de qualquer conexão ser tentada. Medido, com toda variável que a
+    libpq lê (RFC-034 §16).
 
-    It is the rule `PostgresRuntime.child_environment` already applies to the
-    server's own processes, here applied to the process that connects. To the
-    whole process, and not around one connection: libpq reads the variables
-    while it connects, and putting them back afterwards would race with every
-    other thread that is connecting at the same moment. Called before every
-    connection to the cluster -- the adapter's and the engine's -- and never
-    for the `external` source, whose `PG*` variables stay the developer's.
+    É a regra que `PostgresRuntime.child_environment` já aplica aos processos
+    do próprio servidor, aqui aplicada ao processo que conecta. Ao processo
+    inteiro, e não em volta de uma conexão: a libpq lê as variáveis enquanto
+    conecta, e devolvê-las depois disputaria com toda outra thread que
+    estivesse conectando no mesmo momento. Chamada antes de toda conexão ao
+    cluster -- a do adaptador e a do engine -- e nunca para a fonte
+    `external`, cujas variáveis `PG*` continuam sendo do desenvolvedor.
 
-    Returns the names it removed: nothing, after the first call. They are
-    logged by name, never by value -- `PGPASSWORD` is one of them.
+    Devolve os nomes que removeu: nada, depois da primeira chamada. Eles vão
+    para o log pelo nome, nunca pelo valor -- `PGPASSWORD` é um deles.
     """
     removed = tuple(
         sorted(
@@ -116,8 +115,8 @@ def discard_libpq_environment() -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class ClusterConnection:
-    """Everything a client needs to reach the cluster. The password stays out
-    of `repr`, and so out of every log line and traceback that prints one."""
+    """Tudo de que um cliente precisa para alcançar o cluster. A senha fica fora
+    do `repr`, e assim fora de toda linha de log e traceback que imprima um."""
 
     port: int
     password: str = field(repr=False)
@@ -136,9 +135,9 @@ class ClusterConnection:
         )
 
     def conninfo(self, database: str | None = None) -> str:
-        """A libpq connection string for `psycopg.connect`, overrides included.
+        """Uma string de conexão da libpq para `psycopg.connect`, overrides inclusos.
 
-        It carries the password: build it where it is used, and do not log it.
+        Ela carrega a senha: monte-a onde é usada, e não a mande para o log.
         """
         return make_conninfo(
             host=self.host,
@@ -159,11 +158,11 @@ class HeadComparison(Enum):
 
 @dataclass(frozen=True)
 class PreparedDatabase:
-    """What `prepare()` found and did."""
+    """O que o `prepare()` achou e fez."""
 
     created_database: bool
     migrated_from: tuple[str, ...] | None
-    """The heads before the upgrade, or `None` when nothing ran."""
+    """Os heads antes do upgrade, ou `None` quando nada rodou."""
     heads: tuple[str, ...]
     warnings: tuple[str, ...]
 
@@ -173,7 +172,7 @@ def compare_heads(
     code_heads: frozenset[str],
     known_revisions: frozenset[str],
 ) -> HeadComparison:
-    """Section 7.4, step 2. A database with no revision at all is behind."""
+    """§7.4, passo 2. Um banco sem revisão nenhuma está atrás."""
     if database_heads == code_heads:
         return HeadComparison.CURRENT
     if database_heads - known_revisions:
@@ -187,21 +186,21 @@ NOT_READY_MESSAGES = (
     "the database system is not yet accepting connections",
     "the database system is not accepting connections",
 )
-"""What a live server answers with `cannot_connect_now` (SQLSTATE 57P03).
+"""O que um servidor vivo responde com `cannot_connect_now` (SQLSTATE 57P03).
 
-Matched by text because psycopg gives no SQLSTATE for a refusal at connection
-time, and the text is stable for the reason section 8.1 gives: this build
-has no translations.
+Comparado pelo texto porque o psycopg não dá SQLSTATE para uma recusa no
+momento da conexão, e o texto é estável pelo motivo que o §8.1 dá: este build
+não tem traduções.
 """
 
 
 def verify_login(connection: ClusterConnection) -> None:
-    """Connect with the password, or say which of three things went wrong.
+    """Conecta com a senha, ou diz qual de três coisas deu errado.
 
-    A refused password means the password-cluster pair is lost, and the
-    adapter refuses rather than trying anything else (section 8.4). A server
-    that says it cannot take connections *yet* is the one case worth
-    retrying. Any other failure is the server not answering.
+    Uma senha recusada quer dizer que o par senha-cluster se perdeu, e o
+    adaptador recusa em vez de tentar qualquer outra coisa (§8.4). Um servidor
+    que diz que *ainda* não aceita conexões é o único caso que vale tentar de
+    novo. Qualquer outra falha é o servidor não respondendo.
     """
     discard_libpq_environment()
     try:
@@ -243,7 +242,7 @@ def _alembic_config() -> Any:
 
 
 def ensure_database(connection: ClusterConnection) -> bool:
-    """`CREATE DATABASE` when `pg_database` lacks it. `True` when created."""
+    """`CREATE DATABASE` quando falta em `pg_database`. `True` quando criou."""
     engine = _engine(connection, "postgres")
     try:
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as admin:
@@ -261,7 +260,7 @@ def ensure_database(connection: ClusterConnection) -> bool:
                     )
                 )
             except DBAPIError as error:
-                # Another caller created it between the SELECT and here.
+                # Outro chamador o criou entre o SELECT e aqui.
                 if getattr(error.orig, "sqlstate", None) == "42P04":
                     return False
                 raise
@@ -277,7 +276,7 @@ def database_heads(db: Connection) -> frozenset[str]:
 
 
 def code_revisions() -> tuple[frozenset[str], frozenset[str]]:
-    """The code's heads, and every revision the code knows."""
+    """Os heads do código, e toda revisão que o código conhece."""
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(_alembic_config())
@@ -287,7 +286,7 @@ def code_revisions() -> tuple[frozenset[str], frozenset[str]]:
 
 
 def upgrade(db: Connection) -> None:
-    """`alembic upgrade head`, in this process, on this connection."""
+    """`alembic upgrade head`, neste processo, nesta conexão."""
     from alembic import command
 
     config = _alembic_config()
@@ -296,7 +295,7 @@ def upgrade(db: Connection) -> None:
 
 
 def check_facts(db: Connection, major: int, pgvector: str) -> tuple[str, ...]:
-    """Section 7.4, step 3: refuse a divergence, warn about an older `vector`."""
+    """§7.4, passo 3: recusa uma divergência, avisa de um `vector` mais antigo."""
     row = db.execute(
         text(
             "SELECT current_setting('server_version_num')::int / 10000, "
@@ -345,7 +344,7 @@ def prepare_database(
     pgvector: str,
     on_migrating: Callable[[], None] | None = None,
 ) -> PreparedDatabase:
-    """Section 7.4's three steps."""
+    """Os três passos do §7.4."""
     created = ensure_database(connection)
     engine = _engine(connection)
     try:
@@ -355,8 +354,8 @@ def prepare_database(
             comparison = compare_heads(found, heads, known)
             migrated_from: tuple[str, ...] | None = None
             if comparison is HeadComparison.BEHIND:
-                # Double-checked under a lock: a second caller that arrives
-                # while the first migrates waits here, then finds it current.
+                # Conferido de novo sob uma trava: um segundo chamador que chega
+                # enquanto o primeiro migra espera aqui, e então o acha em dia.
                 db.execute(
                     text("SELECT pg_advisory_xact_lock(:key)"),
                     {"key": MIGRATION_LOCK_KEY},

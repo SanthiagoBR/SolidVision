@@ -1,21 +1,21 @@
-"""SQLAlchemy engine configuration for the persistence infrastructure.
+"""Configuração do engine SQLAlchemy da infraestrutura de persistência.
 
-Two sources for the connection (RFC-034 section 7.1), and one function that
-builds the engine for either:
+Duas origens para a conexão (RFC-034 §7.1), e uma função que constrói o engine
+para qualquer das duas:
 
-`external` -- the five `DATABASE_*` settings: the `.env` and the Docker
-container. The URL is whole when the engine is built.
+`external` -- as cinco configurações `DATABASE_*`: o `.env` e o container
+Docker. A URL está inteira quando o engine é construído.
 
-`embedded` -- the user's cluster. Its port is chosen at every start of the
-server and can change under a running API (RFC-033 section 8.2), so the
-engine is built **without a port and without a password**, and a `do_connect`
-listener asks the adapter for both at every new physical connection. That is
-what lets this module be imported with the cluster stopped, lets the port
-move, and keeps the password out of `Settings` and out of every process's
-environment. A cluster that is not there is a connection error that says so,
-and never an attempt on `localhost:5432` (section 7.4). The environment
-reaches no such connection: the libpq parameters the adapter gives its own,
-and no `PG*` variable left in the process (section 7.5).
+`embedded` -- o cluster do usuário. A porta dele é escolhida a cada início do
+servidor e pode mudar sob uma API em execução (RFC-033 §8.2), então o engine é
+construído **sem porta e sem senha**, e um listener de `do_connect` pede as duas
+ao adaptador a cada nova conexão física. É isso que permite importar este
+módulo com o cluster parado, deixa a porta mudar e mantém a senha fora de
+`Settings` e fora do ambiente de todo processo. Um cluster que não está lá é um
+erro de conexão que diz isso, e nunca uma tentativa em `localhost:5432` (§7.4).
+O ambiente não chega a uma conexão dessas: os parâmetros de libpq que o
+adaptador dá às suas próprias conexões, e nenhuma variável `PG*` deixada no
+processo (§7.5).
 """
 
 from __future__ import annotations
@@ -57,13 +57,13 @@ def build_engine(
     poolclass: type[Pool] | None = None,
     locate: Locate | None = None,
 ) -> Engine:
-    """The engine for `configuration`'s database source.
+    """O engine da origem de banco de `configuration`.
 
-    `connect_timeout` goes to both: without it, a connection to a port nobody
-    listens on was still being attempted after 25 s, and that is how long
-    `/health` took to answer 503 (RFC-034 section 2.3).
+    `connect_timeout` vai para as duas: sem ele, uma conexão a uma porta em que
+    ninguém escuta ainda estava sendo tentada depois de 25 s, e foi esse o tempo
+    que o `/health` levou para responder 503 (RFC-034 §2.3).
 
-    `locate` replaces the adapter's own `locate()`; it is for tests.
+    `locate` substitui o próprio `locate()` do adaptador; é para os testes.
     """
     options: dict[str, Any] = {
         "echo": configuration.debug,
@@ -75,8 +75,8 @@ def build_engine(
     if configuration.database_source is DatabaseSource.EMBEDDED:
         return _embedded_engine(locate or _cluster_locator(configuration), options)
     return create_engine(
-        # `URL.create` escapes the password; interpolating it into a string,
-        # as `Settings.database_url` used to, did not (RFC-033 section 7.2).
+        # `URL.create` escapa a senha; interpolá-la numa string, como
+        # `Settings.database_url` fazia, não escapava (RFC-033 §7.2).
         URL.create(
             DRIVER,
             username=configuration.database_user,
@@ -93,9 +93,9 @@ def build_engine(
 def _embedded_engine(locate: Locate, options: dict[str, Any]) -> Engine:
     engine = create_engine(
         URL.create(DRIVER, username=SUPERUSER, host=LOOPBACK, database=DATABASE),
-        # The parameters the adapter gives its own connections, from the same
-        # constant: libpq reads `PGOPTIONS`, `PGSSLMODE` and `PGGSSENCMODE`
-        # only for a parameter it was not given (section 7.5).
+        # Os parâmetros que o adaptador dá às suas próprias conexões, da mesma
+        # constante: a libpq só lê `PGOPTIONS`, `PGSSLMODE` e `PGGSSENCMODE`
+        # para um parâmetro que não recebeu (§7.5).
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS, **LIBPQ_OVERRIDES},
         **options,
     )
@@ -107,11 +107,12 @@ def _embedded_engine(locate: Locate, options: dict[str, Any]) -> Engine:
         try:
             found = locate()
         except EmbeddedPostgresError as error:
-            # The exception SQLAlchemy wraps into its own `OperationalError`,
-            # which `/health` already answers with 503 (RFC-008).
+            # A exceção que o SQLAlchemy embrulha no seu próprio
+            # `OperationalError`, ao qual o `/health` já responde com 503
+            # (RFC-008).
             raise psycopg.OperationalError(str(error)) from None
-        # The variables no parameter answers (`PGTZ`, `PGSERVICE`...), taken
-        # out of the process right before libpq reads them (RFC-034 7.5).
+        # As variáveis que nenhum parâmetro cobre (`PGTZ`, `PGSERVICE`...),
+        # tiradas do processo logo antes de a libpq lê-las (RFC-034 §7.5).
         discard_libpq_environment()
         cparams.update(
             host=found.host,
@@ -125,10 +126,10 @@ def _embedded_engine(locate: Locate, options: dict[str, Any]) -> Engine:
 
 
 def _cluster_locator(configuration: Settings) -> Locate:
-    """`locate()` on the user's cluster, built on the first connection.
+    """`locate()` sobre o cluster do usuário, construído na primeira conexão.
 
-    Not when the engine is built: importing this module must not need the
-    runtime to be there, let alone the cluster to be up (section 7.3).
+    Não quando o engine é construído: importar este módulo não pode exigir que o
+    runtime esteja lá, muito menos que o cluster esteja de pé (§7.3).
     """
     clusters: list[EmbeddedPostgres] = []
 

@@ -1,4 +1,4 @@
-"""Listing jobs, so a UI can show what happened to a disk (RFC-029 section 7.2)."""
+"""Listagem de jobs, para a UI mostrar o que aconteceu com um disco (RFC-029 §7.2)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from app.domain.value_objects.device_id import DeviceId
 
 
 class ListIndexingJobsUseCase:
-    """Return jobs, newest first, optionally narrowed by device or status."""
+    """Devolve jobs, do mais novo ao mais velho, filtrados por dispositivo ou status."""
 
     def __init__(self, job_repository: IndexingJobRepository) -> None:
         self._jobs = job_repository
@@ -18,16 +18,16 @@ class ListIndexingJobsUseCase:
         device_id: DeviceId | None = None,
         status: JobStatus | None = None,
     ) -> list[IndexingJob]:
-        """Return the matching jobs.
+        """Devolve os jobs que casam.
 
-        An unknown device id is not rejected, for the reason RFC-027
-        section 9 gives about search filters: this narrows a set rather
-        than asserting that the named device exists, so a list for a disk
-        the system has never seen correctly comes back empty. Rejecting it
-        would mean a second lookup on every list request to answer a
-        question nobody asked.
+        Um id de dispositivo desconhecido não é rejeitado, pela razão que o
+        RFC-027 §9 dá sobre os filtros da busca: isto estreita um conjunto,
+        em vez de afirmar que o dispositivo nomeado existe, e então a lista
+        de um disco que o sistema nunca viu volta, corretamente, vazia.
+        Rejeitá-lo seria uma segunda consulta em todo pedido de lista para
+        responder a uma pergunta que ninguém fez.
 
-        Both filters omitted means every job, never no jobs -- the same
-        trap the search route's `device_id` had to avoid.
+        Os dois filtros omitidos dão todos os jobs, nunca nenhum -- a mesma
+        armadilha que o `device_id` da rota de busca teve de evitar.
         """
         return self._jobs.list(device_id=device_id, status=status)

@@ -1,22 +1,21 @@
-"""Application configuration: the fields, and where each mode reads them from.
+"""A configuração da aplicação: os campos, e de onde cada modo os lê.
 
-Two modes, read from the disk by `layout.py` and never declared (RFC-034
-section 4.2), and one precedence for each (section 5.1), strongest first:
+Dois modos, lidos do disco por `layout.py` e nunca declarados (RFC-034 §4.2),
+e uma precedência para cada um (§5.1), da mais forte para a mais fraca:
 
     development                         installed
-    1  constructor arguments (tests)    constructor arguments (tests)
-    2  the process environment          --
+    1  argumentos do construtor (testes) argumentos do construtor (testes)
+    2  o ambiente do processo           --
     3  <repository>\\.env                %LOCALAPPDATA%\\SolidVision\\solidvision.env
     4  defaults                         defaults
 
-Each mode reads one file and never the other's. Installed, the process
-environment is not a source: there it is whatever the other programs on the
-machine left behind, and a `DEBUG=*` meant for one of them would otherwise
-stop this one from importing (section 2.3).
+Cada modo lê um arquivo, e nunca o do outro. Instalado, o ambiente do
+processo não é uma fonte: ali ele é o que os outros programas da máquina
+deixaram para trás, e um `DEBUG=*` destinado a um deles impediria este de
+importar (§2.3).
 
-The connection to the embedded cluster is in neither column. The engine reads
-it from the cluster at every new connection, and it is never a field here
-(section 7).
+A conexão com o cluster embarcado não está em nenhuma das colunas. O engine a
+lê do cluster a cada nova conexão, e ela nunca é um campo aqui (§7).
 """
 
 from __future__ import annotations
@@ -45,11 +44,11 @@ from .constants import SUPPORTED_IMAGE_EXTENSIONS
 from .layout import Environment, Layout, layout
 
 CONFIG_FILE_ENCODING = "utf-8-sig"
-"""UTF-8, with or without a BOM (RFC-034 section 5.3).
+"""UTF-8, com ou sem BOM (RFC-034 §5.3).
 
-Notepad's "UTF-8 with BOM" is the silent case: read as plain `utf-8`, the BOM
-becomes part of the first key, and the first line of the file is dropped
-without an error. Measured in section 2.4.
+O "UTF-8 com BOM" do Bloco de Notas é o caso silencioso: lido como `utf-8`
+simples, o BOM vira parte da primeira chave, e a primeira linha do arquivo é
+descartada sem erro. Medido em §2.4.
 """
 
 PATH_DEFAULTS: dict[str, Callable[[Layout], Path]] = {
@@ -60,11 +59,10 @@ PATH_DEFAULTS: dict[str, Callable[[Layout], Path]] = {
     "model_runtime_directory": lambda where: where.model_runtime,
     "frontend_directory": lambda where: where.frontend_directory,
 }
-"""Every path setting, and where its default comes from: the layout.
+"""Todo setting de caminho, e de onde vem o default dele: o layout.
 
-The six are `Path`, and each leaves `Settings` absolute (section 6.3). A
-test checks that no other field is a path, and that none of these is ever
-relative.
+Os seis são `Path`, e cada um sai de `Settings` absoluto (§6.3). Um teste
+confere que nenhum outro campo é um caminho, e que nenhum destes é relativo.
 """
 
 MODE_DEFAULTS: dict[str, Callable[[Layout], Any]] = {
@@ -72,20 +70,20 @@ MODE_DEFAULTS: dict[str, Callable[[Layout], Any]] = {
     "allow_local_file_actions": lambda where: where.environment
     is Environment.INSTALLED,
 }
-"""The settings whose default depends on the mode rather than on a path.
+"""Os settings cujo default depende do modo, e não de um caminho.
 
-`warm_up_models` is on installed and off in a checkout (RFC-035 section 8), and
-`allow_local_file_actions` follows it (RFC-038 section 2.3).
+`warm_up_models` fica ligado instalado e desligado num checkout (RFC-035 §8),
+e `allow_local_file_actions` o acompanha (RFC-038 §2.3).
 """
 
 
 def _layout_default(name: str) -> Callable[[], Path]:
-    """The default of a path setting, for the layout of the running code."""
+    """O default de um setting de caminho, para o layout do código em execução."""
     return lambda: PATH_DEFAULTS[name](layout)
 
 
 def _mode_default(name: str) -> Callable[[], Any]:
-    """The default of a mode setting, for the layout of the running code."""
+    """O default de um setting de modo, para o layout do código em execução."""
     return lambda: MODE_DEFAULTS[name](layout)
 
 
@@ -98,7 +96,7 @@ RETIRED_KEYS = {
     "EMBEDDING_MODEL": "the model is the lockfile's, materialized in "
     "runtime\\models (RFC-035)",
 }
-"""Keys that used to be settings, with what replaced each (section 5.4)."""
+"""Chaves que já foram settings, com o que substituiu cada uma (§5.4)."""
 
 DATABASE_KEYS = (
     "database_source",
@@ -108,24 +106,24 @@ DATABASE_KEYS = (
     "database_user",
     "database_password",
 )
-"""Without effect in the user's file: installed, the connection is always the
-embedded cluster's (section 7.1)."""
+"""Sem efeito no arquivo do usuário: instalado, a conexão é sempre a do
+cluster embarcado (§7.1)."""
 
 
 class DatabaseSource(StrEnum):
-    """Where the database connection comes from (RFC-034 section 7.1)."""
+    """De onde vem a conexão com o banco (RFC-034 §7.1)."""
 
     EXTERNAL = "external"
     EMBEDDED = "embedded"
 
 
 class ConfigurationError(Exception):
-    """The configuration cannot be used, and the process must not start with it.
+    """A configuração não pode ser usada, e o processo não pode iniciar com ela.
 
-    One line: the file, the key and the problem (RFC-034 section 5.5). Starting
-    with the default in place of an invalid value would be worse -- whoever
-    pointed `THUMBNAIL_DIRECTORY` at another disk and mistyped the path would
-    get the thumbnails exactly where they said they did not want them.
+    Uma linha: o arquivo, a chave e o problema (RFC-034 §5.5). Iniciar com o
+    default no lugar de um valor inválido seria pior -- quem apontou
+    `THUMBNAIL_DIRECTORY` para outro disco e errou o caminho receberia as
+    thumbnails exatamente onde disse que não as queria.
     """
 
 
@@ -134,24 +132,23 @@ _PERCENT_VARIABLE = re.compile(r"%([A-Za-z_][A-Za-z0-9_()]*)%")
 
 
 def absolute_path(value: str, base: Path) -> Path:
-    """A path setting as it leaves `Settings`: absolute (RFC-034 section 6.3).
+    """Um setting de caminho como sai de `Settings`: absoluto (RFC-034 §6.3).
 
-    The five rules, in order. None of them consults the disk.
+    As cinco regras, em ordem. Nenhuma delas consulta o disco.
     """
     if not value.strip():
-        # Before the five: `THUMBNAIL_DIRECTORY=` is the path `.`, which rule
-        # 4 would anchor on the folder of the file itself -- installed, the
-        # thumbnails would land loose in the data directory. Nobody means
-        # that, and guessing the default instead would be the silence of
-        # section 5.5.
+        # Antes das cinco: `THUMBNAIL_DIRECTORY=` é o caminho `.`, que a regra
+        # 4 ancoraria na pasta do próprio arquivo -- instalado, as thumbnails
+        # cairiam soltas no diretório de dados. Ninguém quer isso, e adivinhar
+        # o default no lugar seria o silêncio de §5.5.
         raise ValueError(
             "the value is empty. Delete the line to use the default, or write "
             "the path after the equals sign."
         )
     if _CONTROL_CHARACTER.search(value):
-        # Rule 1. No Windows path has one. It is the trace of double quotes:
-        # the dotenv format reads `\f`, `\r`, `\t` and `\n` inside them, and
-        # `"D:\fotos\raw\thumbs"` arrives as six fragments (section 2.4).
+        # Regra 1. Nenhum caminho do Windows tem um. É o rastro de aspas
+        # duplas: o formato dotenv lê `\f`, `\r`, `\t` e `\n` dentro delas, e
+        # `"D:\fotos\raw\thumbs"` chega em seis fragmentos (§2.4).
         raise ValueError(
             f"{ascii(value)} has a control character in it. Double quotes turn "
             "the \\f, \\n, \\r and \\t of a Windows path into one: write the "
@@ -159,8 +156,8 @@ def absolute_path(value: str, base: Path) -> Path:
         )
     variable = _PERCENT_VARIABLE.search(value)
     if variable:
-        # Rule 2. The format does not expand this form, and the result would
-        # be a folder called `%LOCALAPPDATA%`.
+        # Regra 2. O formato não expande esta forma, e o resultado seria uma
+        # pasta chamada `%LOCALAPPDATA%`.
         name = variable.group(1)
         raise ValueError(
             f"{value!r} uses %{name}%, which is not expanded here. "
@@ -168,7 +165,7 @@ def absolute_path(value: str, base: Path) -> Path:
         )
     path = Path(value)
     if not path.is_absolute():
-        # Rule 3: the two halfway forms of Windows.
+        # Regra 3: as duas formas pela metade do Windows.
         if path.drive:
             raise ValueError(
                 f"{value!r} names a drive and no root, so it is relative to "
@@ -180,18 +177,18 @@ def absolute_path(value: str, base: Path) -> Path:
                 f"{value!r} starts with a slash and names no drive, so it "
                 "inherits the drive of wherever it is read from. Name the drive."
             )
-        # Rule 4: relative to the folder of the configuration file.
+        # Regra 4: relativo à pasta do arquivo de configuração.
         path = base / path
-    # Rule 5.
+    # Regra 5.
     return Path(os.path.normpath(path))
 
 
 class _LayoutDefaults(PydanticBaseSettingsSource):
-    """The weakest source: the defaults of the layout being loaded.
+    """A fonte mais fraca: os defaults do layout que está sendo carregado.
 
-    The path defaults and the mode defaults. The defaults written on the
-    fields are the running code's layout's. This is what gives any other
-    layout its own.
+    Os defaults de caminho e os de modo. Os defaults escritos nos campos são
+    os do layout do código em execução. É isto que dá a qualquer outro layout
+    os seus.
     """
 
     def __init__(self, settings_cls: type[BaseSettings], where: Layout) -> None:
@@ -207,7 +204,7 @@ class _LayoutDefaults(PydanticBaseSettingsSource):
 
 
 class _Without(PydanticBaseSettingsSource):
-    """Another source, minus the keys that have no effect in this mode."""
+    """Outra fonte, menos as chaves que não têm efeito neste modo."""
 
     def __init__(
         self,
@@ -231,19 +228,20 @@ class _Without(PydanticBaseSettingsSource):
 
 
 class Settings(BaseSettings):
-    """Strongly typed application settings for SolidVision.
+    """As configurações do SolidVision, com tipagem forte.
 
-    `Settings()` reads the sources of the layout the running code was found
-    in. A `Settings` for any other layout comes from `load_settings`.
+    `Settings()` lê as fontes do layout em que o código em execução foi
+    achado. Um `Settings` de qualquer outro layout vem de `load_settings`.
     """
 
     model_config = SettingsConfigDict(
         env_file=layout.config_file,
         env_file_encoding=CONFIG_FILE_ENCODING,
         case_sensitive=False,
-        # A key the class does not know is dropped here and named in the log
-        # by `load_settings`. Refusing to start over it would let an optional
-        # file take the app down for a typing mistake (RFC-034 section 5.4).
+        # Uma chave que a classe não conhece é descartada aqui e nomeada no log
+        # por `load_settings`. Recusar iniciar por causa dela deixaria um
+        # arquivo opcional derrubar o app por um erro de digitação (RFC-034
+        # §5.4).
         extra="ignore",
     )
 
@@ -257,15 +255,16 @@ class Settings(BaseSettings):
         default=DatabaseSource.EXTERNAL,
         description="Where the database connection comes from",
     )
-    """`external` or `embedded` (RFC-034 section 7.1).
+    """`external` ou `embedded` (RFC-034 §7.1).
 
-    `external` is the five `DATABASE_*` fields below: the `.env` and the
-    Docker container. `embedded` is the user's cluster, whose port and
-    password the engine asks the adapter for at every new connection; none of
-    the five fields is read then, not even as a fallback (section 7.4).
+    `external` são os cinco campos `DATABASE_*` abaixo: o `.env` e o
+    contêiner Docker. `embedded` é o cluster do usuário, cuja porta e cuja
+    senha o engine pede ao adaptador a cada nova conexão; nenhum dos cinco
+    campos é lido então, nem como fallback (§7.4).
 
-    Installed, this is always `embedded`, whatever a file says. In a checkout,
-    `DATABASE_SOURCE=embedded` in the `.env` is development without Docker.
+    Instalado, isto é sempre `embedded`, diga o arquivo o que disser. Num
+    checkout, `DATABASE_SOURCE=embedded` no `.env` é desenvolvimento sem
+    Docker.
     """
 
     database_host: str = Field(default="localhost", description="Database host")
@@ -277,27 +276,27 @@ class Settings(BaseSettings):
     )
     database_name: str = Field(default="solidvision", description="Database name")
     database_user: str = Field(default="solidvision", description="Database user")
-    # Out of `repr`, and so out of every log line and traceback that prints
-    # the settings (RFC-034 section 7.7). The embedded cluster's password is
-    # not here at all.
+    # Fora do `repr`, e portanto fora de toda linha de log e todo traceback que
+    # imprime as configurações (RFC-034 §7.7). A senha do cluster embarcado nem
+    # está aqui.
     database_password: str = Field(
         default="solidvision",
         description="Database password",
         repr=False,
     )
 
-    # `embedding_model` used to sit here and was removed by RFC-035. Since the
-    # models load from a directory checked against a lockfile in the code, the
-    # setting could only agree with that directory -- redundant -- or disagree
-    # and lie. The model is part of the version of the code, like the
-    # migration that fixes `vector(512)` (RFC-035 section 4.4).
+    # `embedding_model` ficava aqui e foi removido pelo RFC-035. Como os modelos
+    # carregam de um diretório conferido contra um lockfile no código, o setting
+    # só poderia concordar com esse diretório -- redundante -- ou discordar e
+    # mentir. O modelo é parte da versão do código, como a migration que fixa
+    # `vector(512)` (RFC-035 §4.4).
     embedding_dimension: int = Field(
         default=512,
         ge=1,
         description="Embedding vector size produced by the model of the lockfile",
     )
-    """A wrong value here does not swap the space in silence: the adapter
-    refuses every vector, on the first image, naming this setting."""
+    """Um valor errado aqui não troca o espaço em silêncio: o adaptador recusa
+    todo vetor, já na primeira imagem, nomeando este setting."""
     device: str = Field(
         default="auto",
         description="Inference device: 'auto' (CUDA when available, else CPU), "
@@ -308,21 +307,22 @@ class Settings(BaseSettings):
         default="default",
         description="Default collection name",
     )
-    # Two window sizes, deliberately separate (RFC-024 sections 5 and 7.1).
+    # Dois tamanhos de janela, separados de propósito (RFC-024 §5 e §7.1).
     #
-    # `batch_size` is bounded by memory: every image in a batch is decoded
-    # and preprocessed before the forward pass, so raising it costs RAM in
-    # proportion to the source photos. 8 is the shipped default because the
-    # measured CPU speedup curve plateaus there -- batch 8 captures ~87% of
-    # all the speedup available out to batch 128, and batch 64 was measurably
-    # *slower* than 32, so bigger is not reliably better. It is a default,
-    # not a ceiling: raise it on a machine with memory to spare.
+    # `batch_size` é limitado pela memória: toda imagem de um lote é
+    # decodificada e pré-processada antes da passada pelo modelo, então
+    # aumentá-lo custa RAM na proporção das fotos de origem. 8 é o default
+    # entregue porque a curva de ganho medida em CPU se achata ali -- o lote 8
+    # captura ~87% de todo o ganho disponível até o lote 128, e o lote 64 foi,
+    # de forma mensurável, *mais lento* que o 32, então maior não é melhor com
+    # segurança. É um default, não um teto: aumente-o numa máquina com memória
+    # sobrando.
     #
-    # `metadata_prefetch_size` is bounded by nothing comparable: it controls
-    # how many ids go into one SELECT of four scalar columns. Coupling the
-    # two would force a bad compromise in both directions -- 8 ids per query
-    # is barely better than the per-file round trips this exists to remove,
-    # and 512 decoded images at once would exhaust memory on real photos.
+    # `metadata_prefetch_size` não tem limite comparável: controla quantos ids
+    # entram num SELECT de quatro colunas escalares. Acoplar os dois forçaria
+    # um mau compromisso nas duas direções -- 8 ids por consulta mal é melhor
+    # que as idas e voltas por arquivo que isto existe para eliminar, e 512
+    # imagens decodificadas de uma vez esgotariam a memória com fotos reais.
     batch_size: int = Field(
         default=8,
         ge=1,
@@ -333,70 +333,73 @@ class Settings(BaseSettings):
         ge=1,
         description="Discovered files whose index metadata is read back per query",
     )
-    # RFC-045: a thread per job reads each file once, ahead of the pipeline,
-    # and hands the bytes to the hash, CLIP and the thumbnail. Four keys:
-    # the switch, the size of the queue -- which is also the job's metadata
-    # window while the switch is on, replacing `metadata_prefetch_size` --
-    # and two ceilings on the bytes held. The JPEG draft CLIP decodes with
-    # is deliberately not one of them: changing it changes the vectors.
+    # RFC-045: uma thread por job lê cada arquivo uma vez, à frente do
+    # pipeline, e entrega os bytes ao hash, ao CLIP e à thumbnail. Quatro
+    # chaves: a chave liga/desliga, o tamanho da fila -- que também é a janela
+    # de metadados do job enquanto a leitura está ligada, no lugar de
+    # `metadata_prefetch_size` -- e dois tetos para os bytes retidos. O
+    # rascunho JPEG com que o CLIP decodifica, de propósito, não é uma delas:
+    # mudá-lo muda os vetores.
     indexing_read_ahead: bool = Field(
         default=True,
         description="Read files ahead of the indexing pipeline, in a thread",
     )
-    """`false` is the pipeline as it was before RFC-045, whole: no thread, the
-    metadata window of `metadata_prefetch_size`, every file read from its path.
-    The emergency exit (section 5.7), for a machine where the thread does not
-    pay -- a fast SSD, or too little memory.
+    """`false` é o pipeline como era antes do RFC-045, inteiro: sem thread, a
+    janela de metadados de `metadata_prefetch_size`, todo arquivo lido do seu
+    caminho. A saída de emergência (§5.7), para uma máquina em que a thread
+    não compensa -- um SSD rápido, ou memória de menos.
     """
     read_ahead_files: int = Field(
         default=32,
         ge=1,
         description="Files the read-ahead keeps queued, and the job's metadata window",
     )
-    """How far ahead of the pipeline the thread may get, in files (RFC-045 4.4).
+    """Quanto a thread pode se adiantar ao pipeline, em arquivos (RFC-045 4.4).
 
-    Also the job's metadata window while the read-ahead is on: a window of 512
-    candidates would hold 512 files' bytes before the first decision, ~1.9 GB
-    of drone photos (section 3). The CLI with the read-ahead off and the
-    backfills keep `metadata_prefetch_size`.
+    Também é a janela de metadados do job enquanto a leitura antecipada está
+    ligada: uma janela de 512 candidatos reteria os bytes de 512 arquivos
+    antes da primeira decisão, ~1,9 GB de fotos de drone (§3). A CLI com a
+    leitura antecipada desligada e os backfills mantêm
+    `metadata_prefetch_size`.
     """
     read_ahead_bytes: int = Field(
         default=512 * 1024 * 1024,
         ge=1,
         description="Most bytes the read-ahead may hold at once",
     )
-    """The ceiling on the bytes read and not yet released (RFC-045 section 5.5).
+    """O teto dos bytes lidos e ainda não liberados (RFC-045 §5.5).
 
-    The thread never waits for it to fall: a file that would cross it goes
-    without its bytes, and is read from its path, as before. With 32 files
-    ahead and 3.8 MB per photo the pipeline holds ~400 MB at worst, so this
-    seldom cuts anything.
+    A thread nunca espera ele baixar: um arquivo que o ultrapassaria segue
+    sem os bytes, e é lido do seu caminho, como antes. Com 32 arquivos à
+    frente e 3,8 MB por foto, o pipeline retém ~400 MB no pior caso, então
+    isto raramente corta alguma coisa.
     """
     read_ahead_max_file_bytes: int = Field(
         default=64 * 1024 * 1024,
         ge=1,
         description="Largest file the read-ahead reads into memory",
     )
-    """A 200 MB TIFF goes by its path, streamed, as before (RFC-045 5.1)."""
-    # RFC-028 section 6 reads the EXIF capture date during the scan, for
-    # every discovered file, including the ones the incremental check then
-    # skips -- that is how an already-indexed photo gains a date without
-    # paying for inference. Section 11 names the risk: a small per-file cost
-    # times 100,000 files can still be a large total. The switch exists so
-    # that a measured cost can be answered by configuration rather than a
-    # code change. Off means "not examined", never "no date": rows scanned
-    # with it off keep `capture_source = NULL` and are picked up by the next
-    # scan that has it on, or by `exif_backfill`.
+    """Um TIFF de 200 MB vai pelo caminho, em fluxo, como antes (RFC-045 5.1)."""
+    # O RFC-028 §6 lê a data de captura do EXIF durante o scan, para todo
+    # arquivo descoberto, inclusive os que a verificação incremental depois
+    # pula -- é assim que uma foto já indexada ganha uma data sem pagar a
+    # inferência. O §11 nomeia o risco: um custo pequeno por arquivo vezes
+    # 100.000 arquivos ainda pode dar um total grande. A chave existe para que
+    # um custo medido possa ser respondido com configuração, e não com uma
+    # mudança de código. Desligada quer dizer "não examinado", nunca "sem
+    # data": linhas escaneadas com ela desligada mantêm `capture_source = NULL`
+    # e são pegas pelo próximo scan que a tenha ligada, ou por `exif_backfill`.
     extract_capture_date: bool = Field(
         default=True,
         description="Read each discovered file's EXIF capture date during the scan",
     )
-    # RFC-032 section 4.2: the GPS position, read in the same open of the
-    # file as the capture date -- one header read, two facts -- so turning
-    # it on costs a parse of the GPS IFD, not a second open. The same rule
-    # as its twin: off means "not examined", never "no position", and rows
-    # scanned with it off keep `position_source = NULL` for the next scan
-    # with it on, or for `exif_backfill`.
+    # RFC-032 §4.2: a posição GPS, lida na mesma abertura do arquivo que a
+    # data de captura -- uma leitura do cabeçalho, dois fatos --, então
+    # ligá-la custa interpretar o IFD de GPS, não uma segunda abertura. A
+    # mesma regra da gêmea: desligada quer dizer "não examinado", nunca "sem
+    # posição", e linhas escaneadas com ela desligada mantêm
+    # `position_source = NULL` para o próximo scan com ela ligada, ou para
+    # `exif_backfill`.
     extract_gps: bool = Field(
         default=True,
         description="Read each discovered file's EXIF GPS position during the scan",
@@ -406,40 +409,40 @@ class Settings(BaseSettings):
         ge=1,
         description="Indexing job executors this machine is expected to run",
     )
-    """Still without a reader in the code, and RFC-029 says why.
+    """Ainda sem leitor no código, e o RFC-029 diz por quê.
 
-    RFC-029 section 9 expected this to gain a consumer: several devices can
-    be indexed at once, one executor each. Nothing here spawns them,
-    because nothing here needs to -- an executor is
-    `python -m app.infrastructure.workers.job_runner`, and running two of
-    them is running the command twice. The pieces that would break under
-    concurrency are built for it and tested for it (the partial unique
-    index of section 9, and the `SKIP LOCKED` claim of section 4.10), so
-    the setting documents the expectation while the operating system
-    supplies the process manager.
+    O RFC-029 §9 esperava que isto ganhasse um consumidor: vários
+    dispositivos podem ser indexados ao mesmo tempo, um executor cada.
+    Nada aqui os cria, porque nada aqui precisa -- um executor é
+    `python -m app.infrastructure.workers.job_runner`, e rodar dois deles é
+    rodar o comando duas vezes. As peças que quebrariam sob concorrência
+    foram construídas e testadas para ela (o índice único parcial de §9, e
+    a reivindicação com `SKIP LOCKED` de §4.10), então o setting documenta
+    a expectativa enquanto o sistema operacional faz as vezes de
+    gerenciador de processos.
 
-    A supervisor that read this and forked would be a second way to start
-    the same program, and the first thing to get out of step with how it
-    is actually deployed -- a native Windows process, not a container
-    (RFC-029 section 6).
+    Um supervisor que lesse isto e fizesse fork seria um segundo jeito de
+    iniciar o mesmo programa, e a primeira coisa a sair de sintonia com a
+    forma como ele é de fato implantado -- um processo nativo do Windows,
+    não um contêiner (RFC-029 §6).
     """
 
-    # RFC-029's four knobs. The defaults below are chosen against the
-    # measurements in `experiments/rfc-029-indexing-jobs/`, which is
-    # where the numbers behind each one live -- RFC-029 sections 6.1 and
-    # 9.1 both insisted the timeout in particular come from a measured
-    # distribution rather than from "a few minutes".
+    # Os quatro ajustes do RFC-029. Os defaults abaixo foram escolhidos
+    # contra as medições em `experiments/rfc-029-indexing-jobs/`, que é onde
+    # estão os números por trás de cada um -- o RFC-029 §6.1 e §9.1
+    # insistiram, os dois, que o timeout em particular viesse de uma
+    # distribuição medida, e não de "alguns minutos".
     job_poll_interval: float = Field(
         default=2.0,
         gt=0.0,
         description="Seconds the job executor sleeps between polls of an empty queue",
     )
-    """Start-up latency for a job, against an operation lasting minutes.
+    """Latência de partida de um job, contra uma operação que dura minutos.
 
-    The declared cost of polling instead of pushing (RFC-029 section 6.1):
-    a job created just after a poll waits up to this long. Lowering it
-    trades idle queries for a shorter wait, and the measurement says how
-    much of each.
+    O custo declarado de consultar em vez de ser avisado (RFC-029 §6.1): um
+    job criado logo depois de uma consulta espera até este tanto. Baixá-lo
+    troca consultas ociosas por uma espera menor, e a medição diz quanto de
+    cada.
     """
 
     job_heartbeat_interval: float = Field(
@@ -447,12 +450,12 @@ class Settings(BaseSettings):
         gt=0.0,
         description="Minimum seconds between heartbeat writes during a scan",
     )
-    """Rate limit for the heartbeat emitted *while walking the disk*.
+    """Limite de frequência do heartbeat emitido *enquanto o disco é percorrido*.
 
-    Progress written at the end of a window or a batch is not rate-limited
-    -- that is already at most one write per 512 files or per 8 images
-    (RFC-029 section 7.3). This bounds the one callback that fires per
-    file, so a scan cannot turn into a write per file.
+    O progresso gravado no fim de uma janela ou de um lote não tem limite de
+    frequência -- já é no máximo uma escrita a cada 512 arquivos ou a cada 8
+    imagens (RFC-029 §7.3). Isto limita o único callback que dispara por
+    arquivo, para que um scan não vire uma escrita por arquivo.
     """
 
     job_stale_timeout: float = Field(
@@ -460,12 +463,13 @@ class Settings(BaseSettings):
         gt=0.0,
         description="Seconds without a heartbeat after which a job is abandoned",
     )
-    """How long silence has to last before the reaper acts.
+    """Quanto tempo o silêncio tem de durar antes de o reaper agir.
 
-    Must exceed the longest real gap between heartbeats, which is not the
-    length of a batch: a cold scan and a resume can both go a long time
-    without reaching one. Too short and the reaper kills healthy jobs; too
-    long and a device stays reserved after a genuine crash.
+    Tem de passar do maior intervalo real entre heartbeats, que não é a
+    duração de um lote: um scan a frio e uma retomada podem, os dois, passar
+    muito tempo sem chegar a um. Curto demais, e o reaper mata jobs
+    saudáveis; longo demais, e um dispositivo fica reservado depois de uma
+    queda de verdade.
     """
 
     job_max_attempts: int = Field(
@@ -473,41 +477,41 @@ class Settings(BaseSettings):
         ge=1,
         description="Times a job may be requeued by the reaper before it fails",
     )
-    """The bound that stops a requeue loop from running for ever.
+    """O limite que impede um laço de recolocação na fila de rodar para sempre.
 
-    The reaper puts an abandoned job back in the queue with its checkpoint
-    (RFC-029 section 9.1, corrected), which is what makes the checkpoint
-    have a reader at all. Without a bound, a file whose decoder takes the
-    whole process down would kill every worker that resumed onto it.
+    O reaper põe um job abandonado de volta na fila com o checkpoint dele
+    (RFC-029 §9.1, corrigido), e é isso que faz o checkpoint ter algum
+    leitor. Sem um limite, um arquivo cujo decodificador derruba o processo
+    inteiro mataria todo worker que retomasse em cima dele.
     """
-    # `NoDecode` opts this field out of pydantic-settings' default behaviour
-    # for complex types: without it, the dotenv/env source runs the raw
-    # string through `json.loads()` before validation ever sees it, and
-    # ".jpg,.jpeg,.png" is not JSON -- every `.env` shipped by this project
-    # would fail to load. With it, the raw string reaches
-    # `parse_supported_extensions` below, which does the comma-splitting
-    # that `SUPPORTED_EXTENSIONS=.jpg,.jpeg,...` in `.env.example` expects.
+    # `NoDecode` tira este campo do comportamento padrão do pydantic-settings
+    # para tipos complexos: sem ele, a fonte dotenv/env passa a string crua por
+    # `json.loads()` antes de a validação vê-la, e ".jpg,.jpeg,.png" não é
+    # JSON -- todo `.env` entregue por este projeto falharia ao carregar. Com
+    # ele, a string crua chega a `parse_supported_extensions` abaixo, que faz a
+    # separação por vírgulas que `SUPPORTED_EXTENSIONS=.jpg,.jpeg,...` em
+    # `.env.example` espera.
     supported_extensions: Annotated[tuple[str, ...], NoDecode] = Field(
         default=SUPPORTED_IMAGE_EXTENSIONS,
         description="Supported image extensions",
     )
-    # `indexing_root_path` used to sit here and was removed by RFC-034, on
-    # the precedent `minimum_similarity` set below: it had no reader. The
-    # indexing worker requires `--root`, and jobs index by device and scopes
-    # (RFC-029). Left in place, its relative default would also have been the
-    # one path setting that moved with the working directory.
+    # `indexing_root_path` ficava aqui e foi removido pelo RFC-034, pelo
+    # precedente que `minimum_similarity` abriu abaixo: não tinha leitor. O
+    # worker de indexação exige `--root`, e os jobs indexam por dispositivo e
+    # escopos (RFC-029). Se ficasse, o default relativo dele também seria o
+    # único setting de caminho que mudava com o diretório de trabalho.
 
-    # Injected into `SearchImagesUseCase` by the composition root as its
-    # default page size; the use case itself never reads settings.
+    # Injetado em `SearchImagesUseCase` pela composition root como o tamanho
+    # de página padrão; o caso de uso em si nunca lê configurações.
     #
-    # `minimum_similarity` used to sit here and was removed by RFC-025.
-    # It had no readers at all, and its declared `ge=0.0, le=1.0` range
-    # was wrong for the scores search actually produces: cosine
-    # similarity runs in [-1, 1], so the bound would have rejected
-    # legitimate configuration for a filter that did not exist. A
-    # similarity floor is future work, and it needs the measured
-    # distribution of real scores to choose a default -- not a range
-    # guessed before anything was ranked.
+    # `minimum_similarity` ficava aqui e foi removido pelo RFC-025. Não tinha
+    # leitor nenhum, e a faixa declarada, `ge=0.0, le=1.0`, estava errada para
+    # as pontuações que a busca de fato produz: a similaridade de cosseno vai
+    # de -1 a 1, então o limite teria rejeitado configuração legítima para um
+    # filtro que não existia. Um piso de similaridade é trabalho futuro, e
+    # precisa da distribuição medida das pontuações reais para escolher um
+    # default -- não de uma faixa adivinhada antes de qualquer coisa ser
+    # ranqueada.
     top_k_results: int = Field(
         default=10,
         ge=1,
@@ -519,22 +523,24 @@ class Settings(BaseSettings):
         ge=0.0,
         description="Smallest search radius, in metres, a 'near here' search accepts",
     )
-    """The floor under a search circle (RFC-032 sections 2.2 and 6). Injected.
+    """O piso de um círculo de busca (RFC-032 §2.2 e §6). Injetado.
 
-    The GPS records where the drone was, and an oblique shot shows ground
-    tens to hundreds of metres from it. A circle smaller than that offset is
-    a machine for wrong answers: it hides, with complete confidence and no
-    error, exactly the photo the user is looking for. So this is product
-    policy, not a UI detail -- and Application policy, injected into
-    `SearchImagesUseCase` by the composition root, never read by it.
+    O GPS grava onde o drone estava, e uma foto oblíqua mostra um terreno a
+    dezenas ou centenas de metros dele. Um círculo menor que esse
+    deslocamento é uma máquina de respostas erradas: esconde, com total
+    confiança e sem erro nenhum, justamente a foto que o usuário procura.
+    Então isto é política de produto, não detalhe de interface -- e política
+    da Application, injetada em `SearchImagesUseCase` pela composition root,
+    nunca lida por ele.
 
-    300 m is measured, by a criterion stated before the number: the 95th
-    percentile of the aircraft-to-subject ground offset, `altitude /
-    tan(|gimbal pitch|)`, over the real DJI files available, rounded up to
-    the next 50 m (`experiments/rfc-032-geolocation/measure_gps_cost.log`:
-    p50 96 m, p95 274 m, max 358 m, over the 20 frames whose camera records
-    its pitch -- the FC3682 writes a placeholder `0.00` and was excluded).
-    A larger sample of the collection may move it; the script re-measures.
+    300 m é medido, por um critério declarado antes do número: o percentil
+    95 do deslocamento no solo entre a aeronave e o assunto, `altitude /
+    tan(|gimbal pitch|)`, sobre os arquivos DJI reais disponíveis,
+    arredondado para cima até os próximos 50 m
+    (`experiments/rfc-032-geolocation/measure_gps_cost.log`: p50 96 m, p95
+    274 m, máx. 358 m, sobre os 20 quadros cuja câmera grava o pitch -- a
+    FC3682 grava um marcador `0.00` e foi excluída). Uma amostra maior da
+    coleção pode mudá-lo; o script mede de novo.
     """
 
     max_map_cells: int = Field(
@@ -542,77 +548,78 @@ class Settings(BaseSettings):
         ge=1,
         description="Most cells GET /images/map returns before coarsening its grid",
     )
-    """The ceiling on one map answer (RFC-032 section 7). Injected.
+    """O teto de uma resposta do mapa (RFC-032 §7). Injetado.
 
-    Above it the grid is coarsened a decimal place at a time and the
-    response says so in `precision_applied`, rather than truncating the
-    list -- coarser squares hide no photo, a cut list hides whole places.
+    Acima dele, a grade é engrossada uma casa decimal por vez e a resposta
+    diz isso em `precision_applied`, em vez de truncar a lista -- quadrados
+    mais grossos não escondem foto nenhuma, uma lista cortada esconde
+    lugares inteiros.
 
-    2000 is measured, by a criterion that bounds what the ceiling exists to
-    bound -- the payload: the largest of 500/1000/2000/5000 whose worst-case
-    answer stays within 256 KB, at the 54.8 bytes per cell measured on the
-    real `MapResponseSchema` JSON (2000 cells -> ~107 KB; 5000 -> ~268 KB).
-    `experiments/rfc-032-geolocation/planner_check.log` has the numbers,
-    and the first version of the criterion, which also bounded time and
-    selected nothing because the time it measured was the full scan, not
-    the ceiling.
+    2000 é medido, por um critério que limita o que o teto existe para
+    limitar -- o payload: o maior de 500/1000/2000/5000 cuja resposta no pior
+    caso fica dentro de 256 KB, aos 54,8 bytes por célula medidos no JSON
+    real de `MapResponseSchema` (2000 células -> ~107 KB; 5000 -> ~268 KB).
+    `experiments/rfc-032-geolocation/planner_check.log` tem os números, e a
+    primeira versão do critério, que também limitava o tempo e não escolheu
+    nada porque o tempo que media era o do scan completo, não o do teto.
     """
 
-    # Loading the CLIP checkpoint at API startup closes two problems at
-    # once (RFC-026 sections 9.1 and 10): the ~5 s cold start the first
-    # query would otherwise pay, and the check-then-act race inside the
-    # adapter's lazy load, which only exists because a `def` endpoint runs
-    # in a threadpool and two concurrent first requests can both find the
-    # model unloaded.
+    # Carregar o checkpoint CLIP no início da API fecha dois problemas de uma
+    # vez (RFC-026 §9.1 e §10): a partida a frio de ~5 s que a primeira
+    # consulta pagaria, e a corrida verificar-depois-agir dentro da carga sob
+    # demanda do adaptador, que só existe porque um endpoint `def` roda num
+    # threadpool e duas primeiras requisições concorrentes podem, as duas,
+    # achar o modelo descarregado.
     #
-    # The default comes from the mode (RFC-035 section 8): on installed, off
-    # in a checkout. RFC-026 chose `False` everywhere so that importing the
-    # app never downloaded 600 MB; loading no longer downloads anything, but
-    # the example still holds for another reason: `TestClient(app)` used as a
-    # context manager runs startup events, so a `True` in a checkout would
-    # make `tests/presentation/test_health.py` load and hash 924 MB, or fail
-    # without `runtime\models`. Installed there is no suite, and nobody
-    # writes the user's file: a `False` there would leave the API cold for
-    # ever. The file can still change it in both modes.
+    # O default vem do modo (RFC-035 §8): ligado instalado, desligado num
+    # checkout. O RFC-026 escolheu `False` em todo lugar para que importar o
+    # app nunca baixasse 600 MB; carregar não baixa mais nada, mas o exemplo
+    # continua valendo por outro motivo: `TestClient(app)` usado como context
+    # manager roda os eventos de startup, então um `True` num checkout faria
+    # `tests/presentation/test_health.py` carregar e calcular o hash de 924 MB,
+    # ou falhar sem `runtime\models`. Instalado, não há suíte, e ninguém
+    # escreve o arquivo do usuário: um `False` ali deixaria a API fria para
+    # sempre. O arquivo ainda pode mudá-lo nos dois modos.
     warm_up_models: bool = Field(
         default_factory=_mode_default("warm_up_models"),
         description="Load the embedding model at API startup "
         "instead of on the first request",
     )
 
-    # RFC-030 section 6, guard 1. With it off, `/reveal` answers 404 -- the
-    # route behaves as if it did not exist, rather than existing and refusing.
+    # RFC-030 §6, guarda 1. Com ela desligada, `/reveal` responde 404 -- a
+    # rota se comporta como se não existisse, em vez de existir e recusar.
     #
-    # The default comes from the mode since RFC-038 (section 2.3): on
-    # installed, off in a checkout. RFC-030 chose `False` everywhere on the
-    # precedent `warm_up_models` set then -- the safe default is the one that
-    # cannot act on a machine that never asked -- and that precedent moved
-    # (RFC-035 section 8): installed, nobody writes the user's file, and a
-    # `False` would mean an "open in Explorer" button that never appears. In
-    # a checkout it stays off, so nothing in the suite opens a window; the
-    # `.env` or the environment turns it on. The file decides in both modes.
+    # O default vem do modo desde o RFC-038 (§2.3): ligado instalado,
+    # desligado num checkout. O RFC-030 escolheu `False` em todo lugar pelo
+    # precedente que `warm_up_models` abria então -- o default seguro é o que
+    # não pode agir numa máquina que nunca pediu --, e esse precedente mudou
+    # (RFC-035 §8): instalado, ninguém escreve o arquivo do usuário, e um
+    # `False` significaria um botão "abrir no Explorer" que nunca aparece. Num
+    # checkout continua desligado, para que nada na suíte abra uma janela; o
+    # `.env` ou o ambiente o ligam. O arquivo decide nos dois modos.
     #
-    # It is *one* of two guards, and it does not replace the other: however
-    # this is set, `/reveal` refuses any caller that is not on loopback, and
-    # the `Host` and `Origin` checks of RFC-037 stand in front of both. This
-    # one is the operator's intention; that one is a fact about who is
-    # calling. The file path in search results is deliberately not behind
-    # this setting -- showing where a photo is is the product's main job.
+    # É *uma* de duas guardas, e não substitui a outra: seja qual for o valor
+    # disto, `/reveal` recusa todo chamador que não esteja no loopback, e as
+    # verificações de `Host` e `Origin` do RFC-037 ficam na frente das duas.
+    # Esta é a intenção do operador; aquela é um fato sobre quem está
+    # chamando. O caminho do arquivo nos resultados da busca, de propósito, não
+    # fica atrás deste setting -- mostrar onde uma foto está é o trabalho
+    # principal do produto.
     allow_local_file_actions: bool = Field(
         default_factory=_mode_default("allow_local_file_actions"),
         description="Allow POST /api/v1/images/{id}/reveal to open the file "
         "manager on this machine (loopback callers only)",
     )
 
-    # RFC-043 option B. On by default: the address leaves the machine only when
-    # the user presses Enter beside a line saying where it goes.
+    # RFC-043, opção B. Ligado por default: o endereço só sai da máquina quando
+    # o usuário aperta Enter ao lado de uma linha que diz para onde ele vai.
     allow_address_search: bool = Field(
         default=True,
         description="Let the interface find a typed address by sending it to "
         "ADDRESS_SEARCH_URL, an online service",
     )
-    # A setting because Nominatim's usage policy requires switching the service
-    # without a software update.
+    # Um setting porque a política de uso do Nominatim exige poder trocar o
+    # serviço sem uma atualização do software.
     address_search_url: str = Field(
         default="https://nominatim.openstreetmap.org/search",
         description="The Nominatim-compatible /search endpoint the address search asks",
@@ -624,37 +631,36 @@ class Settings(BaseSettings):
         le=65535,
         description="The port the launcher serves the API on; unset, it chooses one",
     )
-    """Unset, the launcher of RFC-036 chooses the port (section 5.4).
+    """Sem valor, o launcher do RFC-036 escolhe a porta (§5.4).
 
-    The port of the last start that reached `ready` if it is still free, and
-    otherwise one the system gives; never a fixed 8000, which is one of the
-    ports development servers use most. Set, it is a promise to somebody -- a
-    script, the proxy of a frontend's development server -- and the launcher
-    uses exactly this port or refuses to start, with a line saying so, rather
-    than choosing another. The address is always `127.0.0.1`, and is not a
-    setting: serving the network is not something this API does (RFC-030
-    section 6).
+    A porta da última partida que chegou a `ready`, se ainda estiver livre,
+    e senão uma que o sistema der; nunca um 8000 fixo, que é uma das portas
+    que servidores de desenvolvimento mais usam. Com valor, é uma promessa a
+    alguém -- um script, o proxy do servidor de desenvolvimento de um
+    frontend --, e o launcher usa exatamente esta porta ou se recusa a
+    iniciar, com uma linha dizendo isso, em vez de escolher outra. O
+    endereço é sempre `127.0.0.1`, e não é um setting: servir a rede não é
+    algo que esta API faça (RFC-030 §6).
     """
 
-    # The default of each of the six path settings comes from the layout,
-    # through `PATH_DEFAULTS`, because it depends on the mode. What is written
-    # on the field is the default for the layout of the running code; for any
-    # other layout, `load_settings` supplies that layout's. Each path is
-    # absolute by the time it leaves this class, whoever wrote it and however
-    # (RFC-034 section 6.3).
+    # O default de cada um dos seis settings de caminho vem do layout, por
+    # `PATH_DEFAULTS`, porque depende do modo. O que está escrito no campo é o
+    # default para o layout do código em execução; para qualquer outro layout,
+    # `load_settings` fornece o daquele layout. Todo caminho sai desta classe
+    # absoluto, seja quem for que o escreveu, e como (RFC-034 §6.3).
     thumbnail_directory: Path = Field(
         default_factory=_layout_default("thumbnail_directory"),
         description="Directory the application keeps thumbnails in",
     )
-    """The thumbnail cache (RFC-030 section 7.1). Never inside a collection.
+    """O cache de thumbnails (RFC-030 §7.1). Nunca dentro de uma coleção.
 
-    The default is `thumbnails` under the user's data directory --
-    `%LOCALAPPDATA%\\SolidVision`, or `SolidVision-dev` in a checkout, so that
-    a developer's thumbnails and an installed app's never share a folder:
-    they are named by image id, and an id only means something inside one
-    database (RFC-034 section 2.5). Wherever it is, scans skip it
-    (`FilesystemImageProvider(excluded_directories=...)`), so indexing a
-    whole system disk does not index the thumbnails.
+    O default é `thumbnails` sob o diretório de dados do usuário --
+    `%LOCALAPPDATA%\\SolidVision`, ou `SolidVision-dev` num checkout, para que
+    as thumbnails de um desenvolvedor e as de um app instalado nunca dividam
+    uma pasta: elas são nomeadas pelo id da imagem, e um id só quer dizer
+    algo dentro de um banco (RFC-034 §2.5). Esteja onde estiver, os scans a
+    pulam (`FilesystemImageProvider(excluded_directories=...)`), então
+    indexar um disco de sistema inteiro não indexa as thumbnails.
     """
 
     thumbnail_max_edge: int = Field(
@@ -662,72 +668,71 @@ class Settings(BaseSettings):
         ge=16,
         description="Longest side, in pixels, of a generated thumbnail",
     )
-    """512, the size RFC-030 section 7.2 used for its example.
+    """512, o tamanho que o RFC-030 §7.2 usou no seu exemplo.
 
-    Changing it does not re-render existing thumbnails -- run the
-    thumbnail backfill with `--force` for that. Their `ETag` does not
-    change either, because it is the content hash of the *photo*: a client
-    that already holds a thumbnail at the old size keeps it until the photo
-    itself changes, which is a smaller picture of the right photo rather
-    than a wrong one.
+    Mudá-lo não regera as thumbnails existentes -- para isso, rode o
+    backfill de thumbnails com `--force`. O `ETag` delas também não muda,
+    porque é o hash do conteúdo da *foto*: um cliente que já tem uma
+    thumbnail no tamanho antigo a mantém até a própria foto mudar, o que dá
+    uma imagem menor da foto certa, e não uma da foto errada.
     """
 
     embedded_postgres_runtime_directory: Path = Field(
         default_factory=_layout_default("embedded_postgres_runtime_directory"),
         description="Directory holding the vendored PostgreSQL runtime",
     )
-    """Where the embedded binaries are (RFC-033 section 5.2). Never the `PATH`.
+    """Onde estão os binários embarcados (RFC-033 §5.2). Nunca o `PATH`.
 
-    The default is `runtime\\postgres` under the layout's root. In a checkout
-    that is the repository root, and `scripts/vendor_postgres.py` materializes
-    the runtime there; installed, it is wherever the installer puts the code,
-    with the runtime beside it.
+    O default é `runtime\\postgres` sob a raiz do layout. Num checkout, essa é
+    a raiz do repositório, e `scripts/vendor_postgres.py` materializa o
+    runtime ali; instalado, é onde quer que o instalador ponha o código, com o
+    runtime ao lado.
 
-    `EMBEDDED_` keeps both names out of the `POSTGRES_*` namespace, which the
-    Docker image reads from the same `.env`.
+    `EMBEDDED_` mantém os dois nomes fora do namespace `POSTGRES_*`, que a
+    imagem Docker lê do mesmo `.env`.
     """
 
     model_runtime_directory: Path = Field(
         default_factory=_layout_default("model_runtime_directory"),
         description="Directory holding the two models, materialized from the lockfile",
     )
-    """Where CLIP and the translator are loaded from (RFC-035 section 4.5).
+    """De onde o CLIP e o tradutor são carregados (RFC-035 §4.5).
 
-    The default is `runtime\\models` under the layout's root, beside
-    `runtime\\postgres`: `scripts/vendor_models.py` materializes it in a
-    checkout, and the installer puts it beside the code. Configurable for the
-    reason the PostgreSQL runtime is: several checkouts can share one tree
-    instead of keeping 924 MB each. Pointing it elsewhere cannot change the
-    model, because whatever tree it names is checked against the lockfile of
-    the code before anything in it is loaded (section 6).
+    O default é `runtime\\models` sob a raiz do layout, ao lado de
+    `runtime\\postgres`: `scripts/vendor_models.py` o materializa num
+    checkout, e o instalador o põe ao lado do código. Configurável pelo mesmo
+    motivo do runtime do PostgreSQL: vários checkouts podem dividir uma árvore
+    em vez de guardar 924 MB cada um. Apontá-lo para outro lugar não muda o
+    modelo, porque qualquer árvore que ele nomeie é conferida com o lockfile
+    do código antes de qualquer coisa nela ser carregada (§6).
     """
 
     embedded_postgres_directory: Path = Field(
         default_factory=_layout_default("embedded_postgres_directory"),
         description="Per-user directory the embedded PostgreSQL cluster lives in",
     )
-    """The user's cluster (RFC-033 section 6): `postgres` under the data directory.
+    """O cluster do usuário (RFC-033 §6): `postgres` sob o diretório de dados.
 
-    `LOCALAPPDATA` for the thumbnails' reason and one more: OneDrive does not
-    sync it, and a sync client that locks or rewrites files inside a live
-    cluster corrupts the cluster. The adapter adds the major version below
-    this (`postgres\\16\\data`), so a future `17\\` fits beside it. A checkout's
-    cluster and an installed app's are apart by default since RFC-034; the
-    setting is for tests, for diagnosis, and for a system disk too small to
-    hold the cluster.
+    `LOCALAPPDATA` pelo motivo das thumbnails e mais um: o OneDrive não o
+    sincroniza, e um cliente de sincronização que trava ou reescreve arquivos
+    dentro de um cluster em funcionamento corrompe o cluster. O adaptador
+    acrescenta a versão major abaixo disto (`postgres\\16\\data`), para que um
+    `17\\` futuro caiba ao lado. O cluster de um checkout e o de um app
+    instalado ficam separados por default desde o RFC-034; o setting é para
+    testes, para diagnóstico e para um disco de sistema pequeno demais para o
+    cluster.
     """
 
     frontend_directory: Path = Field(
         default_factory=_layout_default("frontend_directory"),
         description="Directory holding the interface's build, which the API serves",
     )
-    """What the API serves at `/` and `/assets` (RFC-037 section 5.1).
+    """O que a API serve em `/` e `/assets` (RFC-037 §5.1).
 
-    The default is `frontend\\dist` under the layout's root: where `npm run
-    build` writes in a checkout. Without an `index.html` there, the API serves
-    only the API, and says where it looked in one line at its start -- `npm
-    run dev` serves the interface from Vite and needs none of this, and the
-    suite does not either.
+    O default é `frontend\\dist` sob a raiz do layout: onde `npm run build`
+    escreve num checkout. Sem um `index.html` ali, a API serve só a API, e
+    diz onde procurou numa linha ao iniciar -- `npm run dev` serve a
+    interface pelo Vite e não precisa de nada disto, nem a suíte.
     """
 
     log_level: str = Field(default="INFO", description="Logging level")
@@ -735,29 +740,30 @@ class Settings(BaseSettings):
         default_factory=_layout_default("log_directory"),
         description="Directory for log files",
     )
-    """`logs` under the data directory (RFC-034 section 8.1).
+    """`logs` sob o diretório de dados (RFC-034 §8.1).
 
-    The server's own log stays where RFC-033 put it, in `postgres\\16\\data\\log`:
-    two places, one per owner.
+    O log do próprio servidor fica onde o RFC-033 o pôs, em
+    `postgres\\16\\data\\log`: dois lugares, um por dono.
     """
 
     log_filename: str | None = Field(
         default=None,
         description="Log filename; unset, the name of the program that is running",
     )
-    """Unset, each program writes its own file (RFC-034 section 8.2).
+    """Sem valor, cada programa escreve o seu arquivo (RFC-034 §8.2).
 
-    `uvicorn.log`, `job_runner.log`, `pytest.log`: two programs appending to
-    one rotating file lose the lines of whichever writes most (section 2.6).
-    Setting it gives every process the one fixed name, as before.
+    `uvicorn.log`, `job_runner.log`, `pytest.log`: dois programas acrescentando
+    a um mesmo arquivo rotativo perdem as linhas de quem escreve mais (§2.6).
+    Definí-lo dá a todo processo o mesmo nome fixo, como antes.
     """
 
     @property
     def environment(self) -> Environment:
-        """The mode of the layout these settings were loaded for.
+        """O modo do layout para o qual estas configurações foram carregadas.
 
-        No longer a field: a mode someone writes down has a default that lies
-        when nobody writes it (RFC-034 section 4.2). `/health` still reports it.
+        Não é mais um campo: um modo que alguém escreve tem um default que
+        mente quando ninguém o escreve (RFC-034 §4.2). `/health` ainda o
+        informa.
         """
         return type(self)._layout.environment
 
@@ -770,7 +776,7 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """The precedence of RFC-034 section 5.1, decided by the mode."""
+        """A precedência do RFC-034 §5.1, decidida pelo modo."""
         defaults = _LayoutDefaults(settings_cls, cls._layout)
         if cls._layout.environment is Environment.INSTALLED:
             user_file = _Without(settings_cls, dotenv_settings, DATABASE_KEYS)
@@ -780,7 +786,7 @@ class Settings(BaseSettings):
     @field_validator(*PATH_DEFAULTS, mode="before")
     @classmethod
     def anchor_path(cls, value: object) -> object:
-        """Make every path absolute here, once, instead of in each consumer."""
+        """Torna todo caminho absoluto aqui, uma vez, em vez de em cada consumidor."""
         if isinstance(value, str | Path):
             return absolute_path(str(value), cls._layout.config_base)
         return value
@@ -792,7 +798,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def installed_is_always_embedded(self) -> Self:
-        """Installed, there is no external database to point at (section 7.1)."""
+        """Instalado, não há banco externo para onde apontar (§7.1)."""
         if type(self)._layout.environment is Environment.INSTALLED:
             self.database_source = DatabaseSource.EMBEDDED
         return self
@@ -800,11 +806,11 @@ class Settings(BaseSettings):
     @field_validator("supported_extensions", mode="before")
     @classmethod
     def parse_supported_extensions(cls, value: object) -> object:
-        """Split the comma-separated form `NoDecode` leaves untouched.
+        """Separa a forma com vírgulas que `NoDecode` deixa intocada.
 
-        Only strings need this: the default (already a tuple) and
-        programmatic construction (e.g. in tests) pass a tuple straight
-        through to `validate_supported_extensions`.
+        Só strings precisam disto: o default (já uma tupla) e a construção
+        programática (p. ex. nos testes) passam uma tupla direto para
+        `validate_supported_extensions`.
         """
         if isinstance(value, str):
             return tuple(item.strip() for item in value.split(",") if item.strip())
@@ -813,18 +819,18 @@ class Settings(BaseSettings):
     @field_validator("supported_extensions")
     @classmethod
     def validate_supported_extensions(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        """Ensure supported extensions are normalized to lowercase."""
+        """Garante que as extensões suportadas fiquem normalizadas em minúsculas."""
         return tuple(ext.lower() for ext in value)
 
 
 @dataclass(frozen=True)
 class ConfigurationReport:
-    """Where one process's configuration came from (RFC-034 section 5.6).
+    """De onde veio a configuração de um processo (RFC-034 §5.6).
 
-    What makes the precedence checkable on a user's machine: the log says
-    which file was read. `settings` cannot log it -- the logger imports this
-    module -- so it is returned beside the `Settings`, and the logger writes
-    it the first time it is configured. The password is not in it.
+    O que torna a precedência verificável na máquina de um usuário: o log diz
+    qual arquivo foi lido. `settings` não pode registrá-lo -- o logger importa
+    este módulo --, então ele é devolvido ao lado dos `Settings`, e o logger o
+    escreve na primeira vez em que é configurado. A senha não está nele.
     """
 
     environment: Environment
@@ -834,7 +840,7 @@ class ConfigurationReport:
     directories: tuple[tuple[str, Path], ...]
     database_source: DatabaseSource
     warnings: tuple[str, ...]
-    """Keys that do not do what they seem to (section 5.4), by name."""
+    """Chaves que não fazem o que parecem fazer (§5.4), pelo nome."""
 
     def lines(self) -> tuple[str, ...]:
         found = "read" if self.config_file_exists else "absent, defaults in use"
@@ -853,11 +859,11 @@ class LoadedSettings(NamedTuple):
 
 
 def load_settings(where: Layout, **overrides: Any) -> LoadedSettings:
-    """The settings of one layout, and the report of where they came from.
+    """As configurações de um layout, e o relatório de onde elas vieram.
 
-    The sources are decided here, before any `Settings` is built, because
-    they depend on the mode (section 5.2). `overrides` are constructor
-    arguments, the strongest source in both modes; they are for tests.
+    As fontes são decididas aqui, antes de qualquer `Settings` ser construído,
+    porque dependem do modo (§5.2). `overrides` são argumentos do construtor,
+    a fonte mais forte nos dois modos; existem para os testes.
     """
     file_keys = _keys_of(where.config_file)
     try:
@@ -869,8 +875,8 @@ def load_settings(where: Layout, **overrides: Any) -> LoadedSettings:
 
 @cache
 def _settings_class(where: Layout) -> type[Settings]:
-    """`Settings`, bound to a layout. One class per layout, so that two loads
-    of the same layout give instances that can be compared."""
+    """`Settings`, presa a um layout. Uma classe por layout, para que duas
+    cargas do mesmo layout deem instâncias que possam ser comparadas."""
     if where == Settings._layout:
         return Settings
 
@@ -883,7 +889,7 @@ def _settings_class(where: Layout) -> type[Settings]:
 
 
 def _keys_of(config_file: Path) -> tuple[str, ...]:
-    """The keys written in the file, as written. Empty when there is no file."""
+    """As chaves escritas no arquivo, como foram escritas. Vazio sem arquivo."""
     if not config_file.is_file():
         return ()
     try:
@@ -896,9 +902,9 @@ def _keys_of(config_file: Path) -> tuple[str, ...]:
 
 
 def _explain(error: ValidationError, where: Layout, file_keys: Sequence[str]) -> str:
-    """One line: where each bad value was written, its key, and what is wrong.
+    """Uma linha: onde cada valor ruim foi escrito, a chave dele e o que há de errado.
 
-    The value itself is left out. It may be a password.
+    O valor em si fica de fora. Pode ser uma senha.
     """
     in_file = {key.lower() for key in file_keys}
     in_environment = {name.lower() for name in os.environ}
@@ -933,7 +939,7 @@ def _report(
 
 
 def _warnings(where: Layout, file_keys: Sequence[str]) -> tuple[str, ...]:
-    """Section 5.4: the three kinds of key that fail in silence otherwise."""
+    """§5.4: os três tipos de chave que, sem isto, falham em silêncio."""
     file = where.config_file
     installed = where.environment is Environment.INSTALLED
     warnings = []
@@ -953,9 +959,9 @@ def _warnings(where: Layout, file_keys: Sequence[str]) -> tuple[str, ...]:
                 f"{file}: {key} is not a setting and was ignored. "
                 "Check the spelling against .env.example."
             )
-    # Notepad saves a new file named `solidvision.env` as `solidvision.env.txt`
-    # and hides the extension, so the file the user sees is not the file that
-    # is read (section 5.3; a hypothesis until section 16 tests it).
+    # O Bloco de Notas salva um arquivo novo chamado `solidvision.env` como
+    # `solidvision.env.txt` e esconde a extensão, então o arquivo que o usuário
+    # vê não é o arquivo que é lido (§5.3; uma hipótese até o §16 testá-la).
     mistaken = file.with_name(file.name + ".txt")
     if installed and not file.is_file() and mistaken.is_file():
         warnings.append(
@@ -967,11 +973,11 @@ def _warnings(where: Layout, file_keys: Sequence[str]) -> tuple[str, ...]:
 
 
 def _load_or_exit() -> LoadedSettings:
-    """The process's own settings, or one line on stderr and exit code 78.
+    """As configurações do próprio processo, ou uma linha no stderr e o código 78.
 
-    No traceback (section 5.5): whoever reads this is a user or the launcher
-    of RFC-036, and the line already names the file and the key. 78 is what
-    tells the launcher that restarting will not help (RFC-036 section 6.1).
+    Sem traceback (§5.5): quem lê isto é um usuário ou o launcher do RFC-036,
+    e a linha já nomeia o arquivo e a chave. 78 é o que diz ao launcher que
+    reiniciar não vai ajudar (RFC-036 §6.1).
     """
     try:
         return load_settings(layout)

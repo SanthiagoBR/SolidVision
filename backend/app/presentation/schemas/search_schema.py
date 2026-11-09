@@ -1,8 +1,8 @@
-"""Response shapes of the searches (RFC-026 section 5.2, RFC-030, RFC-038).
+"""Formatos das respostas das buscas (RFC-026 §5.2, RFC-030, RFC-038).
 
-The only place in the codebase allowed to decide what a search result
-looks like on the wire, and the decisions it makes are mostly about what
-to leave out.
+O único lugar do código autorizado a decidir como um resultado de busca
+aparece na resposta, e as decisões que ele toma são, na maioria, sobre o que
+deixar de fora.
 """
 
 from __future__ import annotations
@@ -19,36 +19,35 @@ from app.presentation.schemas.image_schema import ImageSchema, image_fields
 
 
 class SearchResultSchema(ImageSchema):
-    """One ranked image, as a client sees it: the image, plus how well it matched.
+    """Uma imagem ranqueada, como o cliente a vê: a imagem, mais o quanto casou.
 
-    **The path is published now, and RFC-030 section 2 is why.** RFC-026
-    kept it out with two arguments, recorded here rather than erased:
+    **O caminho agora é publicado, e o RFC-030 §2 diz por quê.** O RFC-026 o
+    deixou de fora com dois argumentos, registrados aqui em vez de apagados:
 
-    > *"Publishing it would leak the server's filesystem layout to every
-    > caller, and would hand clients an identifier that changes whenever a
-    > file moves."*
+    > *"Publicá-lo exporia o layout do sistema de arquivos do servidor a todo
+    > chamador, e entregaria aos clientes um identificador que muda sempre
+    > que um arquivo se move."*
 
-    The first dissolved. In a local-first deployment the server's
-    filesystem *is* the user's, and a search that ends in a filename and a
-    UUID has found a photo without telling anyone where it is -- the last
-    step of the product was missing. The second still holds, and it shapes
-    what is published: `id` remains the only identifier, and the paths are
-    display. No route accepts a path back.
+    O primeiro se desfez. Numa implantação local-first, o sistema de
+    arquivos do servidor *é* o do usuário, e uma busca que termina num nome
+    de arquivo e num UUID achou uma foto sem dizer a ninguém onde ela está
+    -- faltava o último passo do produto. O segundo continua valendo, e
+    molda o que é publicado: `id` continua sendo o único identificador, e os
+    caminhos são exibição. Nenhuma rota aceita um caminho de volta.
 
-    The shape is `ImageSchema` -- the body of `GET /images/{id}`, which
-    this docstring once promised "RFC-027" would add -- plus `similarity`,
-    which exists only inside a query (RFC-025 section 4.1).
+    O formato é `ImageSchema` -- o corpo de `GET /images/{id}`, que esta
+    docstring um dia prometeu que o "RFC-027" acrescentaria -- mais
+    `similarity`, que só existe dentro de uma consulta (RFC-025 §4.1).
 
-    **A hit on a disconnected disk is a full answer.** `device.connected`
-    is false, `absolute_path` is null, and `device.label` and
-    `relative_path` say "HD3, fotos/2018/junho" -- which, for someone with
-    twenty disks, is the expensive part of the question (RFC-030 section
-    4.1).
+    **Um acerto num disco desconectado é uma resposta completa.**
+    `device.connected` é falso, `absolute_path` é nulo, e `device.label` e
+    `relative_path` dizem "HD3, fotos/2018/junho" -- o que, para quem tem
+    vinte discos, é a parte cara da pergunta (RFC-030 §4.1).
 
-    `captured_at` and `capture_source` are attributes of the photograph,
-    identical for every caller and every query, and the two things that
-    make a date-filtered result legible (RFC-028 section 12). `latitude`,
-    `longitude` and `position_source` do the same for a circle (RFC-032).
+    `captured_at` e `capture_source` são atributos da fotografia, idênticos
+    para todo chamador e toda consulta, e as duas coisas que tornam legível
+    um resultado filtrado por data (RFC-028 §12). `latitude`, `longitude` e
+    `position_source` fazem o mesmo para um círculo (RFC-032).
     """
 
     similarity: float = Field(
@@ -57,26 +56,25 @@ class SearchResultSchema(ImageSchema):
 
     @classmethod
     def from_hit(cls, hit: SearchHit, located: LocatedImage) -> SearchResultSchema:
-        """Map one domain hit and its resolved location to the wire, adding nothing.
+        """Leva um acerto do domínio e a sua localização à resposta, sem acrescentar.
 
-        `located` must describe `hit.image`; the pairing is checked, because
-        a mismatch would publish one photo's score under another photo's
-        path, and nothing downstream could notice.
+        `located` precisa descrever `hit.image`; o pareamento é conferido,
+        porque um descompasso publicaria a pontuação de uma foto sob o caminho
+        de outra, e nada mais adiante conseguiria notar.
 
-        `similarity` is copied through unrounded and unclamped. Rescaling
-        it into [0, 1] for a progress bar would destroy the distinction
-        between "unrelated" (~0) and "opposite" (~-1) that RFC-025
-        section 14 kept on purpose, and this layer has the least
-        information about what the number means: it does not know the
-        score is a cosine, or that a vector was involved. A client that
-        wants a percentage can compute one from the measured
-        distribution.
+        `similarity` passa adiante sem arredondar e sem limitar. Reescalá-la
+        para [0, 1] para uma barra de progresso destruiria a distinção entre
+        "sem relação" (~0) e "oposto" (~-1) que o RFC-025 §14 manteve de
+        propósito, e esta camada é a que tem menos informação sobre o que o
+        número quer dizer: ela não sabe que a pontuação é um cosseno, nem que
+        houve um vetor no meio. Um cliente que queira uma porcentagem pode
+        calcular uma a partir da distribuição medida.
 
-        `captured_at` is copied through naive, and Pydantic serializes a
-        naive `datetime` as ISO 8601 with no `Z` and no offset. That is the
-        output RFC-028 section 5 needs, and it is pinned by a test rather
-        than trusted: a `Z` here would tell every client the camera clock
-        was UTC, undoing the reason the column has no zone.
+        `captured_at` passa adiante ingênuo, e o Pydantic serializa um
+        `datetime` ingênuo como ISO 8601 sem `Z` e sem offset. Essa é a saída
+        de que o RFC-028 §5 precisa, e ela é fixada por um teste, e não
+        presumida: um `Z` aqui diria a todo cliente que o relógio da câmera
+        estava em UTC, desfazendo o motivo de a coluna não ter fuso.
         """
         if located.image.id != hit.image.id:
             raise ValueError(
@@ -86,7 +84,7 @@ class SearchResultSchema(ImageSchema):
 
 
 class RankedFields(TypedDict):
-    """The keyword arguments every ranked response shares, typed for `**`."""
+    """Os argumentos nomeados comuns a toda resposta ranqueada, tipados para `**`."""
 
     limit: int
     results: list[SearchResultSchema]
@@ -101,17 +99,17 @@ def ranked_fields(
     excluded_unknown_date: int | None = None,
     excluded_unknown_position: int | None = None,
 ) -> RankedFields:
-    """Wrap a ranking without reordering, filtering, or truncating it.
+    """Embrulha um ranking sem reordená-lo, filtrá-lo nem truncá-lo.
 
-    The order is the repository's, which is PostgreSQL's, which is the
-    one the vector index produced. Re-sorting here by `similarity`
-    would at best reproduce it and at worst disagree with it about
-    ties, which the repository breaks by id on purpose.
+    A ordem é a do repositório, que é a do PostgreSQL, que é a que o índice
+    vetorial produziu. Reordenar aqui por `similarity` na melhor das
+    hipóteses a reproduziria e, na pior, discordaria dela nos empates, que o
+    repositório desempata por id de propósito.
 
-    `locations` is `ResolveImageLocationUseCase`'s answer for the same
-    hits, in the same order -- it keeps order by contract, so the two
-    are paired positionally and `strict=True` refuses a length mismatch
-    rather than dropping the tail of the ranking.
+    `locations` é a resposta de `ResolveImageLocationUseCase` para os mesmos
+    acertos, na mesma ordem -- ele mantém a ordem por contrato, então os
+    dois são pareados por posição, e `strict=True` recusa uma diferença de
+    tamanho em vez de descartar a cauda do ranking.
     """
     return {
         "limit": limit,
@@ -125,17 +123,16 @@ def ranked_fields(
 
 
 class RankedImagesSchema(BaseModel):
-    """A ranking of the index, whatever the query was (RFC-038 section 4.1).
+    """Um ranking do índice, qualquer que tenha sido a consulta (RFC-038 §4.1).
 
-    The body of `POST /images/search/by-image` as it stands, and the base of
-    the other two: the search by text adds the `query` it echoes, and
-    *"Parecidas com esta"* the id of the photo it started from. One shape
-    and one set of rules for the three, so a client reads them the same way.
+    O corpo de `POST /images/search/by-image` tal como é, e a base dos outros
+    dois: a busca por texto acrescenta a `query` que devolve, e *"Parecidas
+    com esta"*, o id da foto de onde partiu. Um formato e um conjunto de
+    regras para os três, para que um cliente os leia do mesmo jeito.
 
-    `limit` echoes the value actually used, not the one requested, which
-    is usually not sent at all: without it a caller receiving three
-    results cannot tell "there were only three images" from "the default
-    is smaller than I assumed".
+    `limit` devolve o valor de fato usado, não o pedido, que em geral nem é
+    enviado: sem ele, quem recebe três resultados não consegue distinguir
+    "só havia três imagens" de "o default é menor do que eu supunha".
     """
 
     limit: int = Field(description="The page size actually applied")
@@ -168,7 +165,7 @@ class RankedImagesSchema(BaseModel):
         excluded_unknown_date: int | None = None,
         excluded_unknown_position: int | None = None,
     ) -> RankedImagesSchema:
-        """The response of a search with no text to echo: a picture's."""
+        """A resposta de uma busca sem texto a devolver: a de uma imagem."""
         return RankedImagesSchema(
             **ranked_fields(
                 limit, hits, locations, excluded_unknown_date, excluded_unknown_position
@@ -177,18 +174,18 @@ class RankedImagesSchema(BaseModel):
 
 
 class SearchResponseSchema(RankedImagesSchema):
-    """The body of a successful search by text.
+    """O corpo de uma busca por texto bem-sucedida.
 
-    `query` echoes what the client sent, never what the model was asked.
-    The string CLIP actually encodes is the RFC-023 template wrapped
-    around a possibly translated query -- for a Portuguese input it comes
-    back as `a photo of . a rural property with a lake`, leading `". "`
-    and all (RFC-025 section 11.5). Publishing that would make an
-    internal artifact of the translation path part of the contract, and
-    would change the response the day the template changes.
+    `query` devolve o que o cliente enviou, nunca o que foi pedido ao
+    modelo. A string que o CLIP de fato codifica é o template do RFC-023 em
+    volta de uma consulta possivelmente traduzida -- para uma entrada em
+    português ela volta como `a photo of . a rural property with a lake`,
+    com o `". "` na frente e tudo (RFC-025 §11.5). Publicar isso tornaria um
+    artefato interno do caminho de tradução parte do contrato, e mudaria a
+    resposta no dia em que o template mudasse.
 
-    Since RFC-038 the rest is `RankedImagesSchema`'s, field for field: the
-    response did not change, only where its fields are declared.
+    Desde o RFC-038, o resto é de `RankedImagesSchema`, campo a campo: a
+    resposta não mudou, só o lugar onde seus campos são declarados.
     """
 
     query: str = Field(description="The query exactly as the client sent it")
@@ -203,7 +200,7 @@ class SearchResponseSchema(RankedImagesSchema):
         excluded_unknown_date: int | None = None,
         excluded_unknown_position: int | None = None,
     ) -> SearchResponseSchema:
-        """Wrap a ranking without reordering it; see `ranked_fields()`."""
+        """Embrulha um ranking sem reordená-lo; veja `ranked_fields()`."""
         return cls(
             query=query,
             **ranked_fields(
@@ -213,11 +210,11 @@ class SearchResponseSchema(RankedImagesSchema):
 
 
 class SimilarImagesResponseSchema(RankedImagesSchema):
-    """The body of *"Parecidas com esta"*: `GET /images/{id}/similar` (RFC-038).
+    """O corpo de *"Parecidas com esta"*: `GET /images/{id}/similar` (RFC-038).
 
-    `image_id` is the photo the ranking started from, which is never among the
-    `results`: it would come first with a similarity of 1. A copy of it -- the
-    same bytes under another id -- is, and comes near the top.
+    `image_id` é a foto de onde o ranking partiu, que nunca está entre os
+    `results`: viria em primeiro, com similaridade 1. Uma cópia dela -- os
+    mesmos bytes sob outro id -- está, e vem perto do topo.
     """
 
     image_id: UUID = Field(

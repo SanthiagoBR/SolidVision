@@ -1,24 +1,25 @@
-"""HTTP entry point for indexing jobs (RFC-029 section 7).
+"""Porta de entrada HTTP dos jobs de indexação (RFC-029 §7).
 
-**These routes do not index anything, and that is the entire design.**
-They write a row and read rows back. No file is opened here, no model is
-loaded, and `IndexOrUpdateImagesUseCase` is never reached from this
-module -- a separate host process polls the table and does the work.
+**Estas rotas não indexam nada, e todo o desenho é esse.** Elas gravam
+uma linha e leem linhas de volta. Nenhum arquivo é aberto aqui, nenhum
+modelo é carregado, e `IndexOrUpdateImagesUseCase` nunca é alcançado a
+partir deste módulo -- um processo separado, no host, consulta a tabela e
+faz o trabalho.
 
-That distinction is what separates this RFC from the thing RFC-026
-section 3 prohibited. The prohibition was never "indexing must not be
-exposed over HTTP"; it was that indexing must not happen *inside a
-request*, because a route that ran five hours of inference would hold a
-threadpool worker for five hours and take `/health` down with it. The
-asynchronous form was always compatible, and this is it.
+Essa distinção é o que separa este RFC daquilo que o RFC-026 §3 proibiu.
+A proibição nunca foi "a indexação não pode ser exposta por HTTP"; foi
+que a indexação não pode acontecer *dentro de uma requisição*, porque uma
+rota que rodasse cinco horas de inferência prenderia um worker do
+threadpool por cinco horas e derrubaria o `/health` junto. A forma
+assíncrona sempre foi compatível, e é esta.
 
-What that rules out, each of which is a plausible thing to reach for:
-no `BackgroundTasks`, no `SessionLocal`, no `ClipEmbeddingModel`, no
-`torch`, no deciding whether a cancellation is legal, and no checking for
-an existing active job before creating one.
-`tests/test_ai_layer_boundaries.py` walks this package's imports to keep
-the first four honest; the last two are decisions that live in the Domain
-and in the database respectively.
+O que isso exclui, e cada item é algo plausível de se usar: nada de
+`BackgroundTasks`, nada de `SessionLocal`, nada de `ClipEmbeddingModel`,
+nada de `torch`, nada de decidir se um cancelamento é válido, e nada de
+procurar um job ativo antes de criar outro.
+`tests/test_ai_layer_boundaries.py` percorre os imports deste pacote para
+manter honestos os quatro primeiros; os dois últimos são decisões que
+vivem no Domínio e no banco, respectivamente.
 """
 
 from __future__ import annotations
@@ -61,29 +62,29 @@ def create_job(
     request: CreateJobRequestSchema,
     use_case: CreateIndexingJobUseCase = Depends(get_create_indexing_job_use_case),
 ) -> JobSchema:
-    """Queue a job and answer immediately with what was queued.
+    """Enfileira um job e responde na hora com o que foi enfileirado.
 
-    **202, not 201.** 201 asserts that the resource the client asked for
-    exists and is ready. What exists is the *intention* to index; the
-    result does not exist yet and will take minutes or hours. 202
-    describes that, and the difference is observable by the client that
-    has to decide whether to poll (RFC-029 section 7.1).
+    **202, não 201.** 201 afirma que o recurso pedido pelo cliente existe
+    e está pronto. O que existe é a *intenção* de indexar; o resultado
+    ainda não existe e vai levar minutos ou horas. 202 descreve isso, e a
+    diferença é observável pelo cliente que precisa decidir se vai
+    consultar de novo (RFC-029 §7.1).
 
-    Synchronous `def`, not `async def`, following RFC-026 section 9:
-    everything below this line is a blocking DBAPI call, and an `async
-    def` would run it on the event loop and stall every concurrent
-    request -- `/health` included -- for its duration. The work itself is
-    somebody else's process, so what blocks here is one `INSERT`.
+    `def` síncrono, não `async def`, segundo o RFC-026 §9: tudo abaixo
+    desta linha é uma chamada DBAPI bloqueante, e um `async def` a rodaria
+    no event loop e travaria toda requisição concorrente -- `/health`
+    inclusive -- enquanto ela durasse. O trabalho em si é de outro
+    processo, então o que bloqueia aqui é um `INSERT`.
 
-    The response echoes the **normalised** scopes, which may not be the
-    ones that were sent: `2018` and `2018/junho` are one folder to walk,
-    and a client that asked for both should be able to see that it got
-    one. `[]` means the whole device.
+    A resposta devolve os escopos **normalizados**, que podem não ser os
+    que foram enviados: `2018` e `2018/junho` são uma pasta só a
+    percorrer, e um cliente que pediu as duas deve poder ver que recebeu
+    uma. `[]` quer dizer o dispositivo inteiro.
 
-    No `try/except`. A device that does not exist, a disk in a drawer, a
-    folder that is not there and a disk that is already busy are all
-    domain errors, and `error_handlers.py` turns each into 404, 409, 400
-    and 409 without this function knowing any of those numbers.
+    Sem `try/except`. Um dispositivo que não existe, um disco na gaveta,
+    uma pasta que não está lá e um disco já ocupado são todos erros de
+    domínio, e `error_handlers.py` transforma cada um em 404, 409, 400 e
+    409 sem que esta função conheça nenhum desses números.
     """
     logger.info(
         "job requested: device=%s, scopes=%d", request.device_id, len(request.scopes)
@@ -110,21 +111,21 @@ def list_jobs(
     ),
     use_case: ListIndexingJobsUseCase = Depends(get_list_indexing_jobs_use_case),
 ) -> JobListSchema:
-    """Return the history a UI shows beside a disk.
+    """Devolve o histórico que uma UI mostra ao lado de um disco.
 
-    Both filters are optional, and an omitted one means *all*, never
-    *none* -- the trap the search route's `device_id` had to avoid, where
-    an absent parameter turned into an empty `IN ()` and every unfiltered
-    request returned nothing.
+    Os dois filtros são opcionais, e um omitido quer dizer *todos*, nunca
+    *nenhum* -- a armadilha que o `device_id` da rota de busca teve de
+    evitar, em que um parâmetro ausente virava um `IN ()` vazio e toda
+    requisição sem filtro não devolvia nada.
 
-    An unknown device id is not rejected. The filter narrows a set rather
-    than asserting that its members exist, so a list for a disk the system
-    has never seen correctly comes back empty (the same reasoning RFC-027
-    section 9 applies to search filters).
+    Um id de dispositivo desconhecido não é recusado. O filtro estreita um
+    conjunto em vez de afirmar que seus membros existem, então a lista de
+    um disco que o sistema nunca viu volta vazia, e corretamente (o mesmo
+    raciocínio que o RFC-027 §9 aplica aos filtros da busca).
 
-    `job_status` is named `status` on the wire. The parameter cannot be
-    called `status` in this signature because that is FastAPI's status
-    module, imported above and used in every decorator here.
+    `job_status` se chama `status` na requisição. O parâmetro não pode se
+    chamar `status` nesta assinatura porque esse é o módulo de status do
+    FastAPI, importado acima e usado em todo decorator daqui.
     """
     jobs = use_case.execute(
         device_id=DeviceId(device_id) if device_id is not None else None,
@@ -143,18 +144,18 @@ def get_job(
     job_id: UUID,
     use_case: GetIndexingJobUseCase = Depends(get_indexing_job_use_case),
 ) -> JobSchema:
-    """Return the job, or 404 when the id names nothing.
+    """Devolve o job, ou 404 quando o id não aponta para nada.
 
-    Polling, not WebSocket or SSE (RFC-029 section 7.2). The client is a
-    local UI asking for a number that moves every few seconds; a
-    persistent channel would add connection management, reconnection and
-    an asynchronous path through the API in order to save requests that
-    cost almost nothing on localhost. It is future work if a measurement
-    ever shows the cost.
+    Polling, não WebSocket nem SSE (RFC-029 §7.2). O cliente é uma UI
+    local pedindo um número que muda a cada poucos segundos; um canal
+    persistente acrescentaria gestão de conexão, reconexão e um caminho
+    assíncrono pela API para economizar requisições que custam quase nada
+    em localhost. Fica como trabalho futuro, se uma medição algum dia
+    mostrar o custo.
 
-    A missing job is 404 rather than an empty 200, because "queued, not
-    started" and "that id was never a job" are the two things a polling
-    client most needs to tell apart.
+    Um job ausente é 404, e não um 200 vazio, porque "enfileirado, não
+    iniciado" e "esse id nunca foi um job" são as duas coisas que um
+    cliente que consulta periodicamente mais precisa distinguir.
     """
     return JobSchema.from_domain(use_case.execute(JobId(job_id)))
 
@@ -169,24 +170,24 @@ def cancel_job(
     job_id: UUID,
     use_case: CancelIndexingJobUseCase = Depends(get_cancel_indexing_job_use_case),
 ) -> JobSchema:
-    """Cancel a queued job outright, or ask a running one to wind up.
+    """Cancela de vez um job enfileirado, ou pede a um em execução que encerre.
 
-    **202, because cancelling a running job is also a request rather than
-    an outcome.** The worker owns every transition out of `running`: it
-    reads the flag between batches, finishes the batch in flight -- up to
-    `settings.batch_size` images of already-paid-for inference that
-    aborting would throw away for nothing -- writes its checkpoint, and
-    leaves. So the response can say the stop was recorded, and a client
-    watching `status` sees `running` with `cancel_requested` true until it
-    actually stops.
+    **202, porque cancelar um job em execução também é um pedido, e não um
+    resultado.** O worker é dono de toda transição para fora de `running`:
+    ele lê a flag entre lotes, termina o lote em andamento -- até
+    `settings.batch_size` imagens de inferência já paga, que abortar
+    jogaria fora por nada --, grava o checkpoint e sai. Então a resposta
+    pode dizer que a parada foi registrada, e um cliente que acompanha o
+    `status` vê `running` com `cancel_requested` verdadeiro até o job de
+    fato parar.
 
-    A queued job has nobody to ask and is cancelled immediately, which the
-    same response shape reports.
+    Um job enfileirado não tem a quem pedir e é cancelado na hora, o que o
+    mesmo formato de resposta informa.
 
-    Cancelling a job that has already finished is a 409, not a quiet
-    success: the caller is acting on a wrong belief about the system and a
-    202 would confirm it (RFC-029 section 8). Whether a cancellation is
-    legal is `IndexingJob`'s decision, not this route's.
+    Cancelar um job que já terminou é um 409, não um sucesso silencioso:
+    quem chama age com uma crença errada sobre o sistema, e um 202 a
+    confirmaria (RFC-029 §8). Se um cancelamento é válido é decisão de
+    `IndexingJob`, não desta rota.
     """
     logger.info("cancellation requested for job %s", job_id)
     return JobSchema.from_domain(use_case.execute(JobId(job_id)))

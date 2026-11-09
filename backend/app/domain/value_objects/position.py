@@ -1,25 +1,25 @@
-"""Where on Earth a photograph was taken, and what the file said about it (RFC-032).
+"""Onde na Terra uma foto foi tirada, e o que o arquivo dizia sobre isso (RFC-032).
 
-Three values, kept apart because they answer different questions:
+Três valores, mantidos separados porque respondem a perguntas diferentes:
 
-    Position         a point: latitude and longitude, ranges validated
-    PositionReading  the outcome of examining one file -- a point and its
-                     source, or `unknown`
-    BoundingBox      an axis-aligned area: the map's viewport, and the
-                     pre-filter a search circle hands the database
-    PositionCell     one square of the map, and how many photos are in it
+    Position         um ponto: latitude e longitude, com as faixas validadas
+    PositionReading  o resultado de examinar um arquivo -- um ponto e sua
+                     origem, ou `unknown`
+    BoundingBox      uma área alinhada aos eixos: o viewport do mapa, e o
+                     pré-filtro que um círculo de busca entrega ao banco
+    PositionCell     um quadrado do mapa, e quantas fotos há nele
 
-**The vocabulary is `position`, never `location`** (RFC-032 section 4.5).
-In this codebase *location* already means where the *file* is -- a mount
-point and an absolute path, resolved per request by
-`ResolveImageLocationUseCase` -- and a reviewer reading the word must never
-have to ask which of the two is meant.
+**O vocabulário é `position`, nunca `location`** (RFC-032 §4.5). Neste
+código, *location* já quer dizer onde o *arquivo* está -- um ponto de
+montagem e um caminho absoluto, resolvidos a cada requisição por
+`ResolveImageLocationUseCase` -- e quem revisa nunca deve ter de perguntar
+qual dos dois a palavra quer dizer.
 
-**Unit-naive on purpose.** A coordinate here is decimal degrees as the GNSS
-receiver recorded them, WGS 84, with no datum conversion and no unit of its
-own beyond "degrees". Metres appear in exactly one place, a circle's radius
-(`GeoCircle`), and nowhere is one converted into the other except by the
-haversine distance that compares them.
+**Sem unidade, de propósito.** Uma coordenada aqui é graus decimais como o
+receptor GNSS os gravou, WGS 84, sem conversão de datum e sem unidade
+própria além de "graus". Metros aparecem em um único lugar, o raio de um
+círculo (`GeoCircle`), e em nenhum lugar um é convertido no outro, a não ser
+pela distância de haversine que os compara.
 """
 
 from __future__ import annotations
@@ -36,19 +36,20 @@ MAX_LONGITUDE = 180.0
 
 @dataclass(frozen=True)
 class Position:
-    """A point on Earth, in decimal degrees.
+    """Um ponto na Terra, em graus decimais.
 
-    The range checks are the same ones `ck_images_latitude_range` and
-    `ck_images_longitude_range` enforce in SQL (RFC-032 section 5). Both
-    exist on purpose: this one produces a message a person can read, and
-    the CHECK is the part no future writer -- a manual `UPDATE`, a careless
-    backfill -- can go around.
+    As verificações de faixa são as mesmas que `ck_images_latitude_range` e
+    `ck_images_longitude_range` impõem em SQL (RFC-032 §5). As duas existem
+    de propósito: esta produz uma mensagem que uma pessoa consegue ler, e o
+    CHECK é a parte que nenhum escritor futuro -- um `UPDATE` manual, um
+    backfill descuidado -- consegue contornar.
 
-    **`0, 0` is a valid `Position`.** It is a real point in the Gulf of
-    Guinea, and a map click there is a legitimate search centre. That the
-    *EXIF* `0, 0` is a placeholder for "no satellite fix" is a fact about
-    how receivers write files, and it is recognised by name where files are
-    read (`exif_capture_date.py`), not hidden inside a range check here.
+    **`0, 0` é uma `Position` válida.** É um ponto real no Golfo da Guiné, e
+    um clique no mapa ali é um centro de busca legítimo. Que o `0, 0` do
+    *EXIF* seja um marcador de "sem sinal de satélite" é um fato sobre como
+    os receptores gravam arquivos, e é reconhecido pelo nome onde os
+    arquivos são lidos (`exif_capture_date.py`), não escondido aqui dentro
+    de uma verificação de faixa.
     """
 
     latitude: float
@@ -61,17 +62,16 @@ class Position:
 
 @dataclass(frozen=True)
 class PositionReading:
-    """The outcome of examining one file for where it was taken.
+    """O resultado de examinar um arquivo em busca de onde ele foi tirado.
 
-    The `CaptureDate` of position: always the result of an examination.
-    "Never examined" is not a `PositionReading` at all -- it is the
-    *absence* of one, `None` wherever a `PositionReading | None` is
-    expected -- and that asymmetry is the NULL / `'unknown'` distinction of
-    RFC-032 section 4.4 expressed as a type.
+    O `CaptureDate` da posição: sempre o resultado de um exame. "Nunca
+    examinado" não é um `PositionReading` -- é a *ausência* de um, `None`
+    onde se espera um `PositionReading | None` -- e essa assimetria é a
+    distinção NULL / `'unknown'` do RFC-032 §4.4 expressa como tipo.
 
-    Distinct from `Position` because the two are used differently: a
-    `GeoCircle` is centred on a point, which has no source; a file yields a
-    reading, which may have no point.
+    Distinto de `Position` porque os dois são usados de formas diferentes:
+    um `GeoCircle` é centrado num ponto, que não tem origem; um arquivo dá
+    uma leitura, que pode não ter ponto.
     """
 
     position: Position | None
@@ -91,7 +91,7 @@ class PositionReading:
 
     @classmethod
     def unknown(cls) -> PositionReading:
-        """The file was examined and holds no usable position."""
+        """O arquivo foi examinado e não tem posição utilizável."""
         return cls(position=None, source=PositionSource.UNKNOWN)
 
     @property
@@ -105,20 +105,21 @@ class PositionReading:
 
 @dataclass(frozen=True)
 class BoundingBox:
-    """An axis-aligned area, corners included: `min <= value <= max` on both axes.
+    """Uma área alinhada aos eixos, cantos incluídos: `min <= value <= max` nos dois.
 
-    Two users, one shape. `GET /images/map` receives the viewport as one,
-    and `GeoCircle.bounding_box()` produces one as the pre-filter that lets
-    an index help a circle search.
+    Dois usuários, uma forma. `GET /images/map` recebe o viewport como uma,
+    e `GeoCircle.bounding_box()` produz uma como o pré-filtro que deixa um
+    índice ajudar uma busca por círculo.
 
-    **`min > max` is refused on either axis.** On latitude it can only mean
-    the corners were swapped. On longitude it means the same -- or a
-    viewport that wraps across +/-180 degrees, which RFC-032 section 7
-    declares unsupported for now. The four numbers cannot tell those two
-    apart, so neither is guessed at.
+    **`min > max` é recusado em qualquer eixo.** Na latitude, só pode
+    significar cantos trocados. Na longitude, significa o mesmo -- ou um
+    viewport que atravessa +/-180 graus, que o RFC-032 §7 declara sem
+    suporte por enquanto. Os quatro números não distinguem os dois casos,
+    então nenhum é adivinhado.
 
-    A box of zero width or height is legal and matches only what lies
-    exactly on it, the way `DateRange(x, x)` is legal and matches nothing.
+    Uma caixa de largura ou altura zero é válida e casa só com o que está
+    exatamente sobre ela, como `DateRange(x, x)` é válido e não casa com
+    nada.
     """
 
     min_latitude: float
@@ -142,7 +143,7 @@ class BoundingBox:
             )
 
     def contains(self, position: Position) -> bool:
-        """Whether `position` lies in the box, edges included."""
+        """Se `position` está dentro da caixa, bordas incluídas."""
         return (
             self.min_latitude <= position.latitude <= self.max_latitude
             and self.min_longitude <= position.longitude <= self.max_longitude
@@ -151,15 +152,15 @@ class BoundingBox:
 
 @dataclass(frozen=True)
 class PositionCell:
-    """One square of the map: its centre, and how many photos fall in it (RFC-032 §7).
+    """Um quadrado do mapa: o centro, e quantas fotos caem nele (RFC-032 §7).
 
-    The centre is the coordinate pair rounded to the requested number of
-    decimal places, which is the middle of the square of everything that
-    rounds to it -- 3 places is roughly 100 m. A cell exists only because
-    at least one photo is in it, so `count` is never zero.
+    O centro é o par de coordenadas arredondado ao número pedido de casas
+    decimais, que é o meio do quadrado de tudo o que arredonda para ele --
+    3 casas são cerca de 100 m. Uma célula só existe porque há pelo menos
+    uma foto nela, então `count` nunca é zero.
 
-    Lives in Domain beside `Position` because it is part of the
-    `ImageRepository` port's contract, as `SearchHit` is.
+    Mora no Domain ao lado de `Position` porque faz parte do contrato da
+    porta `ImageRepository`, como `SearchHit`.
     """
 
     latitude: float
@@ -167,10 +168,10 @@ class PositionCell:
     count: int
 
 
-# Every `ImageRepository` implementation defines a `list()` method, which
-# shadows the builtin inside its class body; `-> list[PositionCell]` written
-# on one of its methods would resolve to the method. Evaluated here, at
-# module scope, for the reason `SearchHits` is.
+# Toda implementação de `ImageRepository` define um método `list()`, que
+# encobre o builtin dentro do corpo da classe; `-> list[PositionCell]` escrito
+# num dos métodos dela resolveria para o método. Avaliado aqui, no escopo do
+# módulo, pelo mesmo motivo de `SearchHits`.
 PositionCells = list[PositionCell]
 
 
@@ -179,17 +180,17 @@ def validate_position_fields(
     longitude: float | None,
     source: PositionSource | None,
 ) -> None:
-    """Enforce the pairing rules for a position held as three loose fields.
+    """Impõe as regras de pareamento a uma posição guardada em três campos soltos.
 
-    Used by `Image`, which stores the halves separately because they are
-    three columns. The rule with teeth is the first one -- **never half a
-    position** (RFC-032 section 4.3): a latitude with no longitude would pass
-    every range check and locate nothing. `ck_images_position_pairing` says
-    the same in SQL.
+    Usado por `Image`, que guarda as metades separadas porque são três
+    colunas. A regra que pesa é a primeira -- **nunca meia posição**
+    (RFC-032 §4.3): uma latitude sem longitude passaria em toda verificação
+    de faixa e não localizaria nada. `ck_images_position_pairing` diz o
+    mesmo em SQL.
 
-    `source is None` is legal here and nowhere in `PositionReading`: on
-    `Image` it means the row was never examined, and then there can be no
-    coordinates either.
+    `source is None` é válido aqui e em nenhum lugar de `PositionReading`:
+    em `Image`, quer dizer que a linha nunca foi examinada, e então também
+    não pode haver coordenadas.
     """
     if (latitude is None) != (longitude is None):
         raise InvalidPositionError(
@@ -209,10 +210,10 @@ def validate_position_fields(
 
 
 def _require_coordinate(name: str, value: object, limit: float) -> None:
-    """A finite number within `[-limit, limit]`, or `InvalidPositionError`.
+    """Um número finito dentro de `[-limit, limit]`, ou `InvalidPositionError`.
 
-    `bool` is refused although it is an `int` subclass: `True` as a latitude
-    is a caller bug, not the equator plus one degree.
+    `bool` é recusado, embora seja subclasse de `int`: `True` como latitude
+    é um bug de quem chama, não o equador mais um grau.
     """
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise InvalidPositionError(f"Position {name} must be a number.")

@@ -1,14 +1,14 @@
-"""Addresses found through Nominatim, OpenStreetMap's geocoder (RFC-043).
+"""Endereços achados pelo Nominatim, o geocodificador do OpenStreetMap (RFC-043).
 
-The usage policy (https://operations.osmfoundation.org/policies/nominatim/,
-read on 2026-10-22) asks for at most one request per second, a User-Agent
-naming the application, caching on the client, a service that can be switched
-without a software update (`ADDRESS_SEARCH_URL`) and no autocomplete. The
-address is never written down: not logged, not on disk, not in an error
-(RFC-026 section 16.1).
+A política de uso (https://operations.osmfoundation.org/policies/nominatim/,
+lida em 22/10/2026) pede no máximo uma requisição por segundo, um User-Agent
+que nomeie a aplicação, cache no cliente, um serviço que possa ser trocado sem
+atualizar o software (`ADDRESS_SEARCH_URL`) e nenhum autocompletar. O endereço
+nunca é escrito em lugar nenhum: nem no log, nem em disco, nem num erro
+(RFC-026 §16.1).
 
-`urllib`, not `httpx`: the API already imports it, and `httpx` added 146 to
-267 ms to the API's import.
+`urllib`, não `httpx`: a API já o importa, e o `httpx` acrescentava de 146 a
+267 ms ao import da API.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ PROJECT_URL = "https://github.com/SanthiagoBR/SolidVision"
 MIN_INTERVAL_S = 1.0
 TIMEOUT_S = 10.0
 CACHE_SIZE = 256
-# The map is Brazil's, and "Rua das Palmeiras, 123" exists in a dozen countries.
+# O mapa é o do Brasil, e "Rua das Palmeiras, 123" existe em uma dúzia de países.
 COUNTRY_CODES = "br"
 
 logger = get_logger(__name__)
@@ -47,7 +47,7 @@ class Opener(Protocol):
 
 
 class AddressSearchUnavailableError(Exception):
-    """The service could not be asked, or its answer could not be read: a 503."""
+    """Não deu para consultar o serviço, ou não deu para ler a resposta: um 503."""
 
 
 class NominatimGeocoder(GeocoderPort):
@@ -65,7 +65,8 @@ class NominatimGeocoder(GeocoderPort):
         self._open = opener
         self._clock = clock
         self._sleep = sleep
-        # Held across the request too, so no two lookups share a second.
+        # Mantido também durante a requisição, para que duas consultas nunca
+        # dividam o mesmo segundo.
         self._lock = threading.Lock()
         self._last_request_at: float | None = None
         self._cache: OrderedDict[str, Place | None] = OrderedDict()
@@ -131,7 +132,7 @@ class NominatimGeocoder(GeocoderPort):
         except (ValueError, KeyError, TypeError, InvalidPositionError):
             reason = "an unreadable answer"
         logger.warning("address search failed: %s", reason)
-        # `from None`: the chained error would carry the URL, which is the address.
+        # `from None`: o erro encadeado levaria a URL, que é o endereço.
         raise AddressSearchUnavailableError(
             f"The address search service did not answer ({reason})."
         ) from None

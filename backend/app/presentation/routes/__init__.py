@@ -1,4 +1,4 @@
-"""Presentation route package for the FastAPI application."""
+"""Pacote de rotas da camada de apresentação da aplicação FastAPI."""
 
 from .health import router as health_router
 

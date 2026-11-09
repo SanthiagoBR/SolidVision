@@ -1,26 +1,25 @@
-"""What a folder's indexing looks like from the outside (RFC-031 section 8.2).
+"""Como a indexação de uma pasta parece vista de fora (RFC-031 §8.2).
 
-Five values, derived per request from the job history and the indexed
-count. Nothing here is stored: a folder is not a row, and the state is a
-reading of `indexing_jobs` and `images` taken at the moment somebody
-asked.
+Cinco valores, derivados por requisição do histórico de jobs e da contagem de
+indexadas. Nada aqui é gravado: uma pasta não é uma linha, e o estado é uma
+leitura de `indexing_jobs` e `images` feita no momento em que alguém
+perguntou.
 
-**There is no percentage, and there is no room for one.** RFC-031 section
-2.3: a per-folder percentage would need a denominator -- how many
-supported files are on the disk under this folder -- and obtaining it
-means walking the subtree, which is the read RFC-029 section 7.2 measured
-as dominant on a cold mechanical disk. `discovered_files` is a rising
-counter for exactly that reason and is not a total. So the API reports
-`indexed_images`, which is an exact fact about our own table, beside one
-of these five words. *"1,204 indexed"* is true; *"30% indexed"* has
-nothing to be 30% of.
+**Não há porcentagem, e não há lugar para uma.** RFC-031 §2.3: uma
+porcentagem por pasta precisaria de um denominador -- quantos arquivos
+suportados há no disco abaixo desta pasta -- e obtê-lo quer dizer percorrer
+a subárvore, que é a leitura que o RFC-029 §7.2 mediu como dominante num
+disco mecânico a frio. `discovered_files` é um contador crescente
+exatamente por essa razão, e não é um total. Então a API informa
+`indexed_images`, que é um fato exato da nossa própria tabela, ao lado de
+uma destas cinco palavras. *"1.204 indexadas"* é verdade; *"30% indexada"*
+não tem do que ser 30%.
 
-The enum lives in the Domain although the derivation lives in the
-Application, and the split is deliberate: *which states exist* -- that
-`partial` is a thing a folder can be, and that it is not a failure -- is a
-rule about the product. *Reading the job list to pick one* composes two
-repositories and a locator, which is what a use case is for
-(`AI_Context.md`).
+O enum mora no Domain, embora a derivação more na Application, e a divisão é
+deliberada: *quais estados existem* -- que `partial` é algo que uma pasta
+pode ser, e que não é uma falha -- é uma regra do produto. *Ler a lista de
+jobs para escolher um* compõe dois repositórios e um localizador, que é para
+o que serve um caso de uso (`AI_Context.md`).
 """
 
 from __future__ import annotations
@@ -29,47 +28,47 @@ import enum
 
 
 class FolderState(enum.StrEnum):
-    """How much of a folder this system has indexed, as one word.
+    """Quanto de uma pasta este sistema indexou, numa palavra.
 
-    A `StrEnum` so the member *is* the string on the wire, following
-    `JobStatus`. Unlike `JobStatus` it is never written to a column --
-    there is no folder table and RFC-031 adds no migration -- so the
-    choice is only about the JSON.
+    Um `StrEnum`, para que o membro *seja* a string que vai na rede, como
+    `JobStatus`. Ao contrário de `JobStatus`, ele nunca é escrito numa coluna
+    -- não há tabela de pastas, e o RFC-031 não acrescenta migration -- então
+    a escolha é só sobre o JSON.
     """
 
     INDEXING = "indexing"
-    """A `running` job's scopes cover this folder."""
+    """Os escopos de um job `running` cobrem esta pasta."""
 
     QUEUED = "queued"
-    """A `pending` job's scopes cover this folder; nothing is moving yet."""
+    """Os escopos de um job `pending` cobrem esta pasta; nada se move ainda."""
 
     PARTIAL = "partial"
-    """Some of it has been indexed, and nothing claims all of it has.
+    """Parte dela foi indexada, e nada afirma que ela toda foi.
 
-    Three situations land here, and they are one situation seen three
-    ways -- *we have rows under this folder and no completed job that
-    covers the whole of it*:
+    Três situações caem aqui, e elas são uma situação só vista de três
+    jeitos -- *temos linhas abaixo desta pasta e nenhum job concluído que a
+    cubra inteira*:
 
-    * the most recent covering job ended `cancelled` or `failed`. Its
-      `last_processed_relative_path` travels in the response, because
-      *where it stopped* is what a user can act on;
-    * a job completed, but its scope was **inside** this folder rather
-      than over it -- indexing `2018/janeiro/casamento` leaves
-      `2018/janeiro` partly done, which is literally what this word says;
-    * images exist under the folder and no job in the history covers it
-      at all. That is a disk indexed before jobs existed, or one whose
-      history has been trimmed. `never_indexed` would be a false
-      statement about rows that are demonstrably there.
+    * o job mais recente que a cobre terminou `cancelled` ou `failed`. O
+      `last_processed_relative_path` dele vai na resposta, porque *onde ele
+      parou* é aquilo sobre o que um usuário pode agir;
+    * um job terminou, mas o escopo dele estava **dentro** desta pasta, e
+      não sobre ela -- indexar `2018/janeiro/casamento` deixa `2018/janeiro`
+      parcialmente feita, que é literalmente o que esta palavra diz;
+    * existem imagens abaixo da pasta e nenhum job do histórico a cobre.
+      É um disco indexado antes de os jobs existirem, ou um cujo histórico
+      foi aparado. `never_indexed` seria uma afirmação falsa sobre linhas que
+      comprovadamente estão lá.
     """
 
     INDEXED = "indexed"
-    """The most recent job covering the whole folder ended `completed`."""
+    """O job mais recente que cobre a pasta inteira terminou `completed`."""
 
     NEVER_INDEXED = "never_indexed"
-    """No job ever covered it **and** it has no indexed images.
+    """Nenhum job jamais a cobriu **e** ela não tem imagens indexadas.
 
-    Both halves are required. A folder with rows and no job is `partial`,
-    not this: saying "never indexed" about images the search can already
-    return is the kind of confidently wrong statement RFC-031 section 4.2
-    exists to keep out of the API.
+    As duas metades são obrigatórias. Uma pasta com linhas e sem job é
+    `partial`, e não isto: dizer "nunca indexada" sobre imagens que a busca já
+    consegue devolver é o tipo de afirmação confiante e errada que o RFC-031
+    §4.2 existe para manter fora da API.
     """

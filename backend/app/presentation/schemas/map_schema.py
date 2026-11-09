@@ -1,9 +1,9 @@
-"""Response shape for `GET /api/v1/images/map` (RFC-032 section 7).
+"""Formato da resposta de `GET /api/v1/images/map` (RFC-032 §7).
 
-The contract the map screen draws from (`frontend/src/map/`, RFC-040). Cells
-rather than photos -- a centre and a count per square -- because the question
-is "where are my photos", and the answer to that for 100,000 photos is a few
-hundred squares, not 100,000 points.
+O contrato de onde a tela do mapa desenha (`frontend/src/map/`, RFC-040).
+Células, e não fotos -- um centro e uma contagem por quadrado --, porque a
+pergunta é "onde estão as minhas fotos", e a resposta a ela, para 100.000
+fotos, são algumas centenas de quadrados, não 100.000 pontos.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from app.application.use_cases.aggregate_positions import PositionMap
 
 
 class MapCellSchema(BaseModel):
-    """One square of the grid: where its centre is, and how many photos are in it."""
+    """Um quadrado da grade: onde fica o centro, e quantas fotos há nele."""
 
     latitude: float = Field(
         description=(
@@ -32,13 +32,13 @@ class MapCellSchema(BaseModel):
 
 
 class MapResponseSchema(BaseModel):
-    """The body of a map request.
+    """O corpo da resposta a um pedido de mapa.
 
-    `precision_applied` echoes the precision actually used, the way search
-    echoes `limit` (RFC-026): when the requested grid would have had more
-    than `MAX_MAP_CELLS` squares, the grid was coarsened, and a client that
-    could not see that would mistake bigger squares for a sparser
-    collection.
+    `precision_applied` devolve a precisão de fato usada, do jeito que a
+    busca devolve `limit` (RFC-026): quando a grade pedida teria mais de
+    `MAX_MAP_CELLS` quadrados, a grade foi engrossada, e um cliente que não
+    conseguisse ver isso confundiria quadrados maiores com uma coleção mais
+    esparsa.
     """
 
     precision_applied: int = Field(
@@ -76,7 +76,7 @@ class MapResponseSchema(BaseModel):
 
     @classmethod
     def from_map(cls, answer: PositionMap) -> MapResponseSchema:
-        """Shape the use case's answer for the wire, adding nothing."""
+        """Monta a resposta do caso de uso para o envio, sem acrescentar nada."""
         return cls(
             precision_applied=answer.precision_applied,
             cells=[

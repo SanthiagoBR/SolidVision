@@ -1,4 +1,4 @@
-"""SQLAlchemy session factory and dependency for the persistence infrastructure."""
+"""Fábrica de sessões SQLAlchemy e dependência da infraestrutura de persistência."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ SessionLocal: sessionmaker[Session] = sessionmaker(
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Provide a database session for future FastAPI dependencies."""
+    """Fornece uma sessão do banco para futuras dependências do FastAPI."""
     logger.debug("Opening SQLAlchemy session")
     session = SessionLocal()
     try:

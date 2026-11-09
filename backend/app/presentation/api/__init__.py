@@ -1,4 +1,4 @@
-"""API presentation package: the FastAPI application and its wiring."""
+"""Pacote de apresentação da API: a aplicação FastAPI e a sua montagem."""
 
 from __future__ import annotations
 
@@ -24,51 +24,51 @@ from app.presentation.routes import health_router
 
 logger = get_logger(__name__)
 
-# The string encoded at startup when warm-up is enabled, and its content
-# is load-bearing in a way that is easy to miss.
+# O texto codificado no início quando o aquecimento está ligado, e o seu conteúdo
+# sustenta mais do que parece.
 #
-# RFC-025 section 12 recorded two cold starts, not one: ~4.95 s for the
-# CLIP checkpoint and a further ~4.20 s for the Marian translator on the
-# first *Portuguese* query. An English warm-up string would close the
-# first and leave the second, so the first Brazilian user of a fresh
-# process would still wait four seconds. A Portuguese sentence walks the
-# whole path -- detect, translate, template, encode -- and loads both.
+# O RFC-025 §12 registrou dois inícios a frio, não um: ~4,95 s para o checkpoint
+# do CLIP e mais ~4,20 s para o tradutor Marian na primeira consulta *em
+# português*. Um texto de aquecimento em inglês resolveria o primeiro e deixaria
+# o segundo, e o primeiro usuário brasileiro de um processo novo ainda esperaria
+# quatro segundos. Uma frase em português percorre o caminho inteiro -- detectar,
+# traduzir, aplicar o template, codificar -- e carrega os dois.
 #
-# It is a full sentence for the reason RFC-023 section 7.1 measured:
-# `langdetect` needs several words to be reliable, and calls `fazenda`
-# Turkish. A short Portuguese string would be read as some other language,
-# skip translation, and warm only CLIP while looking like it warmed both.
+# É uma frase completa pela razão que o RFC-023 §7.1 mediu: o `langdetect`
+# precisa de várias palavras para ser confiável, e chama `fazenda` de turco. Um
+# texto curto em português seria lido como outra língua, pularia a tradução e
+# aqueceria só o CLIP, parecendo ter aquecido os dois.
 _WARM_UP_QUERY = "uma fotografia de teste para aquecer o modelo de busca"
 
 
 def _warm_up_models() -> SearchReadiness:
-    """Load and exercise the embedding model before the first search.
+    """Carrega e exercita o modelo de embedding antes da primeira busca.
 
-    Latency is why (RFC-026 section 10): the first query of a process
-    otherwise pays ~4.95 s to load the CLIP checkpoint, which blows the
-    one-second target on its own, and the first Portuguese query pays
-    ~4.20 s more for the translator. Both are loaded here, which is what
-    `_WARM_UP_QUERY` being a Portuguese sentence is for.
+    O motivo é a latência (RFC-026 §10): sem isso, a primeira consulta de um
+    processo paga ~4,95 s para carregar o checkpoint do CLIP, o que sozinho
+    estoura a meta de um segundo, e a primeira consulta em português paga mais
+    ~4,20 s pelo tradutor. Os dois são carregados aqui, e é para isso que
+    `_WARM_UP_QUERY` é uma frase em português.
 
-    **It runs in a thread, beside the open port** (RFC-036 section 5.3).
-    It used to run before uvicorn opened the port, which also kept away a
-    race: the search endpoint is a `def`, two first requests run in two
-    threads, and both could find the adapter unloaded. The adapters now load
-    once under a lock, and a search that arrives during the warm-up waits for
-    the load in progress. Waiting is the declared cost; the gain is every
-    route that needs no model answering in the time of an import without
-    `torch`, instead of after it and both loads.
+    **Roda numa thread, ao lado da porta aberta** (RFC-036 §5.3). Antes rodava
+    antes de o uvicorn abrir a porta, o que também afastava uma corrida: o
+    endpoint de busca é um `def`, duas primeiras requisições rodam em duas
+    threads, e as duas podiam achar o adaptador não carregado. Os adaptadores
+    agora carregam uma vez sob um lock, e uma busca que chega durante o
+    aquecimento espera a carga em andamento. Esperar é o custo declarado; o
+    ganho é toda rota que não precisa de modelo responder no tempo de um import
+    sem `torch`, em vez de depois dele e das duas cargas.
 
-    The models are checked first for presence and size, which is cheap
-    and finds a broken installation now rather than on the first search
-    (RFC-035 section 6.1); the load then checks the hashes.
+    Os modelos são verificados primeiro quanto a presença e tamanho, o que é
+    barato e acha uma instalação quebrada agora, e não na primeira busca
+    (RFC-035 §6.1); a carga depois verifica os hashes.
 
-    A failure is logged and reported, never raised: the API stays up.
-    Refusing to start would take `/health` down with search -- the probe an
-    operator would use to diagnose exactly this -- and hide the devices,
-    folders, map and thumbnails, none of which needs a model (RFC-035
-    section 6.5). The lazy path remains: every search retries the load, and
-    answers 503 with the same line while it still cannot.
+    Uma falha vai para o log e é informada, nunca levantada: a API fica no ar.
+    Recusar-se a iniciar derrubaria o `/health` junto com a busca -- a sonda que
+    um operador usaria para diagnosticar justamente isso -- e esconderia os
+    dispositivos, as pastas, o mapa e as thumbnails, nenhum dos quais precisa de
+    modelo (RFC-035 §6.5). O caminho preguiçoso continua: toda busca tenta a
+    carga de novo, e responde 503 com a mesma linha enquanto ainda não conseguir.
     """
     from app.infrastructure.ai.model_runtime import default_runtime
     from app.presentation.dependencies import get_embedding_model
@@ -93,29 +93,28 @@ def _warm_up_models() -> SearchReadiness:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Run startup and shutdown work around the served lifetime of `app`.
+    """Roda o trabalho de início e de encerramento em volta da vida servida de `app`.
 
-    `lifespan` rather than `@app.on_event("startup")`, which current
-    FastAPI deprecates; this is the project's first startup hook, so
-    there is no existing style to match.
+    `lifespan` em vez de `@app.on_event("startup")`, que o FastAPI atual
+    marca como obsoleto; este é o primeiro hook de início do projeto, então
+    não há estilo existente a seguir.
 
-    It starts the warm-up and returns: uvicorn opens the port only after
-    this yields, and the warm-up imports `torch` (RFC-036 section 5.3).
-    `/health` reports how the warm-up is going, in `search`.
+    Inicia o aquecimento e retorna: o uvicorn só abre a porta depois que isto
+    faz o yield, e o aquecimento importa o `torch` (RFC-036 §5.3). O `/health`
+    informa como vai o aquecimento, em `search`.
 
-    Warm-up is `settings.warm_up_models`, whose default is the mode's: on
-    installed, off in a checkout (RFC-035 section 8). Off in a checkout is
-    not timidity about a config flag: `TestClient(app)` used as a context
-    manager -- which `tests/presentation/test_health.py` does -- runs
-    exactly this function, so an unconditional warm-up would start loading
-    and hashing 924 MB of checkpoints behind a plain `pytest`, in a test file
-    that has nothing to do with search, for a route that never touches the
-    model.
+    O aquecimento é `settings.warm_up_models`, cujo padrão é o do modo: ligado
+    no instalado, desligado num checkout (RFC-035 §8). Desligado num checkout
+    não é timidez quanto a uma flag de configuração: `TestClient(app)` usado
+    como context manager -- o que `tests/presentation/test_health.py` faz --
+    roda exatamente esta função, e um aquecimento incondicional começaria a
+    carregar e calcular o hash de 924 MB de checkpoints por trás de um simples
+    `pytest`, num arquivo de teste que nada tem a ver com busca, para uma rota
+    que nunca toca no modelo.
 
-    Before that, `cache\\query-images` is emptied of what a process that died
-    left there (RFC-038 section 4.2). The folder comes through
-    `app.dependency_overrides`, so that it is the one the upload route writes
-    to, in a test as in the app.
+    Antes disso, `cache\\query-images` é esvaziada do que um processo que morreu
+    deixou lá (RFC-038 §4.2). A pasta vem por `app.dependency_overrides`, para
+    que seja aquela em que a rota de upload escreve, num teste como no app.
     """
     directory = app.dependency_overrides.get(
         get_query_image_directory, get_query_image_directory
@@ -142,10 +141,10 @@ logger.info("FastAPI application initialized")
 register_error_handlers(app)
 app.include_router(health_router)
 app.include_router(api_v1_router)
-# In front of everything, `/health` and the interface included (RFC-037 5.2).
+# Na frente de tudo, `/health` e a interface inclusive (RFC-037 §5.2).
 app.add_middleware(LoopbackRequestGuard)
-# After the routers, and outside their routing: a mount at `/assets`, and the
-# 404 of a screen of the interface turned into `index.html` (section 5.1).
+# Depois dos routers, e fora do roteamento deles: um mount em `/assets`, e o 404
+# de uma tela da interface transformado em `index.html` (§5.1).
 serve_frontend(app, settings.frontend_directory)
 
 __all__ = ["app"]

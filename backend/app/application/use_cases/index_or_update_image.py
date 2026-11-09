@@ -1,4 +1,4 @@
-"""Application use case for incremental filesystem-driven image indexing."""
+"""Caso de uso da aplicação para a indexação incremental guiada pelo disco."""
 
 from __future__ import annotations
 
@@ -20,37 +20,37 @@ from app.domain.value_objects.indexing_record import IndexingRecord
 
 
 class IndexOrUpdateImageUseCase:
-    """Create, update, or skip a single image based on its filesystem state.
+    """Cria, atualiza ou pula uma única imagem conforme o seu estado no disco.
 
-    Separate from `IndexImageUseCase` (RFC-015), which always creates and
-    rejects duplicates. This use case runs the three-step incremental check
-    from `ARCHITECTURE.md` section 16 -- see `plan_indexing()`, which owns
-    the decision itself:
+    Separado de `IndexImageUseCase` (RFC-015), que sempre cria e rejeita
+    duplicatas. Este caso de uso roda a verificação incremental em três passos
+    do `ARCHITECTURE.md` §16 -- ver `plan_indexing()`, que é dona da decisão
+    em si:
 
-    - no persisted metadata at all -> new file, index it;
-    - persisted metadata exists but both fields are `None` (the image was
-      written by `IndexImageUseCase`'s plain `save()`) -> treated as
-      changed, not unchanged, so it gets indexed and backfilled;
-    - persisted metadata matches the filesystem exactly -> skip, without
-      reading the file at all;
-    - metadata differs but the content hash proves the bytes are identical
-      -> refresh the stored metadata and keep the existing embedding;
-    - metadata differs and the content genuinely changed -> re-index.
+    - nenhum metadado persistido -> arquivo novo, indexar;
+    - há metadados persistidos, mas os dois campos são `None` (a imagem foi
+      gravada pelo `save()` simples de `IndexImageUseCase`) -> tratada como
+      alterada, não como inalterada, e por isso é indexada e preenchida;
+    - os metadados persistidos batem exatamente com o disco -> pular, sem
+      nem ler o arquivo;
+    - os metadados diferem, mas o hash de conteúdo prova que os bytes são
+      idênticos -> atualizar os metadados guardados e manter o embedding;
+    - os metadados diferem e o conteúdo mudou de fato -> reindexar.
 
-    Since RFC-028 a skipped image whose row was never examined for a
-    capture date also gets the date `image` carries, without re-embedding
-    -- and since RFC-032 its position, decided separately by
+    Desde o RFC-028, uma imagem pulada cuja linha nunca foi examinada para
+    data de captura recebe também a data que `image` traz, sem refazer o
+    embedding -- e, desde o RFC-032, a sua posição, decidida à parte por
     `position_to_write()`.
 
-    RFC-024 kept this class deliberately, rather than retiring it in favour
-    of `IndexOrUpdateImagesUseCase`. It is the single-file entry point: the
-    decision logic is shared with the batch coordinator through
-    `plan_indexing()`, so there is no second copy of anything, but errors
-    here propagate to the caller instead of being collected into a run
-    summary. That is the right contract for indexing one known file --
-    a future single-file reindex or file-watcher path wants to be told
-    that its one file failed, not handed a report saying zero of one
-    succeeded.
+    O RFC-024 manteve esta classe de propósito, em vez de aposentá-la em favor
+    de `IndexOrUpdateImagesUseCase`. Ela é a porta de entrada de um arquivo só:
+    a lógica de decisão é compartilhada com o coordenador de lotes por
+    `plan_indexing()`, então não há segunda cópia de nada, mas aqui os erros se
+    propagam para quem chama em vez de serem reunidos num resumo da execução.
+    Esse é o contrato certo para indexar um arquivo conhecido -- um futuro
+    caminho de reindexação de um arquivo, ou de observação de arquivos, quer
+    ouvir que o seu arquivo falhou, não receber um relatório dizendo que zero
+    de um deu certo.
     """
 
     def __init__(
@@ -69,11 +69,11 @@ class IndexOrUpdateImageUseCase:
         file_size: int | None,
         file_modified_at: datetime.datetime | None,
     ) -> bool:
-        """Index `image`, skipping it when its content is unchanged.
+        """Indexa `image`, pulando-a quando o seu conteúdo não mudou.
 
-        Returns `True` when the image was (re-)indexed, `False` when no new
-        embedding was needed -- either because nothing about the file
-        changed, or because only its filesystem metadata did.
+        Devolve `True` quando a imagem foi (re)indexada, `False` quando não foi
+        preciso um embedding novo -- seja porque nada mudou no arquivo, seja
+        porque só os seus metadados de sistema de arquivos mudaram.
         """
         candidate = IndexCandidate(
             image=image,
@@ -84,7 +84,7 @@ class IndexOrUpdateImageUseCase:
         plan = plan_indexing(candidate, existing, self._content_hasher)
 
         if plan.action is not IndexAction.EMBED:
-            # Both skipping branches, not just one: see
+            # Os dois ramos que pulam, não só um: ver
             # `IndexOrUpdateImagesUseCase._write_capture_dates()`.
             if plan.action is IndexAction.REFRESH_METADATA:
                 self._repository.update_index_metadata(

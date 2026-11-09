@@ -1,19 +1,18 @@
-"""A volume the operating system reports as attached right now (RFC-031 section 5).
+"""Um volume que o sistema operacional diz estar conectado agora (RFC-031 §5).
 
-What `ResolvedVolume` is, written down on the Domain's side of the line.
-The Application has to answer *"what is plugged into this machine, and
-which of it do we already know?"*, and `ResolvedVolume` lives in
-`app.infrastructure.filesystem`, which `test_application_architecture.py`
-forbids a use case to import.
+O que `ResolvedVolume` é, escrito do lado do Domain da fronteira. A
+Application precisa responder *"o que está plugado nesta máquina, e o que
+disso já conhecemos?"*, e `ResolvedVolume` mora em
+`app.infrastructure.filesystem`, que `test_application_architecture.py`
+proíbe um caso de uso de importar.
 
-**The alternative, and why it was refused.** Moving
-`VolumeIdentityProvider` and `ResolvedVolume` into the Domain wholesale
-would drag `ctypes` and `kernel32` along with them -- the Windows adapter
-shares that module with the port -- and splitting the two is a refactor of
-RFC-027 inside an RFC about HTTP routes. Restating four fields is cheaper
-than that, and the restatement is not duplication for long: the adapter
-converts at its own boundary and nothing above it ever sees the
-Infrastructure type (RFC-031 section 4.2 of the build prompt).
+**A alternativa, e por que foi recusada.** Mover `VolumeIdentityProvider`
+e `ResolvedVolume` inteiros para o Domain arrastaria `ctypes` e `kernel32`
+junto -- o adaptador do Windows divide esse módulo com a porta -- e separar
+os dois é uma refatoração do RFC-027 dentro de um RFC sobre rotas HTTP.
+Repetir quatro campos sai mais barato, e a repetição não fica duplicação
+por muito tempo: o adaptador converte na própria fronteira, e nada acima
+dele vê o tipo da Infrastructure (RFC-031 §4.2 do build prompt).
 """
 
 from __future__ import annotations
@@ -26,38 +25,37 @@ from app.domain.value_objects.device_id import VolumeIdentity
 
 @dataclass(frozen=True)
 class MountedVolume:
-    """One attached volume: its durable name, and where it happens to be.
+    """Um volume conectado: o nome durável dele, e onde ele está agora.
 
-    Splits in two exactly as `ResolvedVolume` does, and the split is the
-    point. `identity` is durable and gets persisted. `mount_point` is not,
-    and must not: it is valid until the user unplugs the disk or reboots,
-    which is why it travels in a value like this one rather than in a
-    column (RFC-027 section 4).
+    Divide-se em dois exatamente como `ResolvedVolume`, e a divisão é o
+    ponto. `identity` é durável e é persistida. `mount_point` não é, e não
+    pode ser: vale até o usuário desplugar o disco ou reiniciar, e por isso
+    viaja num valor como este, e não numa coluna (RFC-027 §4).
     """
 
     identity: VolumeIdentity
     mount_point: Path
-    """Where the volume is attached *at this instant* -- `D:\\`, typically.
+    """Onde o volume está conectado *neste instante* -- `D:\\`, tipicamente.
 
-    **Never persist this, and never cache it across a request.** It is a
-    function of mount order, and storing it is the defect RFC-027 exists
-    to remove. Nothing notifies this process when a cable is pulled, so a
-    remembered answer is wrong from that moment and stays wrong.
+    **Nunca persista isto, e nunca o guarde em cache entre requisições.** É
+    função da ordem de montagem, e guardá-lo é o defeito que o RFC-027
+    existe para eliminar. Nada avisa este processo quando um cabo é puxado,
+    então uma resposta lembrada fica errada a partir daquele momento e
+    continua errada.
     """
 
     filesystem_label: str | None = None
-    """Whatever the volume itself reports -- often empty, often `Untitled`.
+    """O que o próprio volume informa -- muitas vezes vazio, muitas vezes `Untitled`.
 
-    Informative, never an identifier. `Device.label` is where the user's
-    name for a disk lives, precisely because this one cannot be relied on
-    to be either present or distinct.
+    Informativo, nunca um identificador. `Device.label` é onde fica o nome
+    que o usuário dá a um disco, justamente porque com este não dá para
+    contar nem que exista nem que seja único.
     """
 
     total_bytes: int | None = None
-    """The volume's capacity, or `None` when the platform will not say.
+    """A capacidade do volume, ou `None` quando a plataforma não informa.
 
-    The field that makes `VolumeCatalog.list_mounted()` more expensive
-    than `mount_points()`: reading it costs a `GetDiskFreeSpaceExW` per
-    volume, which can spin up a sleeping external disk (RFC-031 section
-    4.1 of the build prompt).
+    O campo que torna `VolumeCatalog.list_mounted()` mais caro que
+    `mount_points()`: lê-lo custa um `GetDiskFreeSpaceExW` por volume, o que
+    pode acordar um disco externo adormecido (RFC-031 §4.1 do build prompt).
     """

@@ -1,11 +1,11 @@
-"""Where an image's capture date came from (RFC-028 section 4.2).
+"""De onde veio a data de captura de uma imagem (RFC-028 §4.2).
 
-Without this, `captured_at` would be a timestamp whose reliability varies
-row by row and cannot be observed. With it, a caller can tell a date the
-camera wrote at the instant of the shot from one a scanner wrote at
-digitisation, a future backfill knows which rows are worth revisiting, and
-"what fraction of the collection has a known date?" is a `GROUP BY` rather
-than a re-read of every file.
+Sem isto, `captured_at` seria um timestamp cuja confiabilidade varia de
+linha para linha e não pode ser observada. Com isto, um chamador distingue
+uma data que a câmera escreveu no instante da foto de uma que um scanner
+escreveu na digitalização, um backfill futuro sabe quais linhas vale a pena
+revisitar, e "que fração da coleção tem data conhecida?" é um `GROUP BY`, e
+não uma releitura de todos os arquivos.
 """
 
 from __future__ import annotations
@@ -14,58 +14,58 @@ import enum
 
 
 class CaptureSource(enum.StrEnum):
-    """One link of the RFC-028 section 4 fallback chain, or the end of it.
+    """Um elo da cadeia de recuo do RFC-028 §4, ou o fim dela.
 
-    A `StrEnum` persisted into a plain `String` column rather than a native
-    PostgreSQL `ENUM`. Adding a member -- `gps_derived`, `filename_parsed`,
-    the sources RFC-028 section 11 anticipates -- would then cost a
-    migration for no benefit a closed database type actually provides here.
+    Um `StrEnum` persistido numa coluna `String` simples, e não num `ENUM`
+    nativo do PostgreSQL. Acrescentar um membro -- `gps_derived`,
+    `filename_parsed`, as fontes que o RFC-028 §11 antecipa -- custaria então
+    uma migration sem nenhum benefício que um tipo fechado do banco de fato
+    dê aqui.
 
-    **There is no `mtime` member, and there must never be one.** RFC-028
-    section 4 is a deliberate reversal of the draft that ended the chain on
-    the filesystem timestamp: `mtime` is systematically wrong for a
-    collection whose life consists of being copied from disk to disk
-    (RFC-028 section 2.1), and a member for it would make that wrong date
-    look like one more legitimate source.
+    **Não há membro `mtime`, e nunca pode haver.** O RFC-028 §4 é uma
+    reversão deliberada do rascunho que terminava a cadeia no timestamp do
+    sistema de arquivos: o `mtime` é sistematicamente errado para uma coleção
+    cuja vida consiste em ser copiada de disco em disco (RFC-028 §2.1), e um
+    membro para ele faria essa data errada parecer mais uma fonte legítima.
 
-    **The absence of a value is not a member either.** A row whose source
-    is `NULL` was *never examined* -- it predates RFC-028, or it was
-    scanned with extraction switched off -- while `UNKNOWN` means it *was*
-    examined and holds no date at all. The two must not collapse: a scan
-    rereads the first kind and leaves the second alone, which is what keeps
-    re-scanning an unchanged collection free of writes (RFC-028 section
-    4.2).
+    **A ausência de valor também não é um membro.** Uma linha cuja fonte é
+    `NULL` *nunca foi examinada* -- é anterior ao RFC-028, ou passou por um
+    scan com a extração desligada -- enquanto `UNKNOWN` quer dizer que ela
+    *foi* examinada e não tem data nenhuma. As duas não podem se fundir: um
+    scan relê o primeiro tipo e deixa o segundo em paz, e é isso que mantém
+    sem escritas um novo scan de uma coleção inalterada (RFC-028 §4.2).
     """
 
     EXIF_ORIGINAL = "exif_original"
-    """EXIF `DateTimeOriginal` (0x9003): the camera clock at the shot."""
+    """EXIF `DateTimeOriginal` (0x9003): o relógio da câmera na hora da foto."""
 
     EXIF_DIGITIZED = "exif_digitized"
-    """EXIF `DateTimeDigitized` (0x9004): when the image became digital.
+    """EXIF `DateTimeDigitized` (0x9004): quando a imagem virou digital.
 
-    For a digital camera the two are normally identical. They differ for a
-    scanned print or a film negative, where this is the date of the scan
-    -- still a fact written into the file, which is what separates it from
-    `mtime`, but a weaker claim about when the photograph was taken.
+    Numa câmera digital, as duas normalmente são idênticas. Elas diferem numa
+    cópia em papel escaneada ou num negativo de filme, em que esta é a data
+    do escaneamento -- ainda um fato escrito no arquivo, que é o que a separa
+    do `mtime`, mas uma afirmação mais fraca sobre quando a fotografia foi
+    tirada.
     """
 
     UNKNOWN = "unknown"
-    """The file was examined and carries no usable date.
+    """O arquivo foi examinado e não traz data utilizável.
 
-    Pairs with `captured_at = NULL`. An image with this source never
-    matches a date-range filter (RFC-028 section 4.1).
+    Faz par com `captured_at = NULL`. Uma imagem com esta fonte nunca casa
+    com um filtro de intervalo de datas (RFC-028 §4.1).
     """
 
     @property
     def precedence(self) -> int:
-        """Rank within the fallback chain; higher is a stronger claim.
+        """A posição na cadeia de recuo; mais alto é uma afirmação mais forte.
 
-        Exists for one rule, which is easy to get destructively wrong:
-        re-examining a row (the backfill's `--force`) may replace a source
-        only with one at least as strong. A naive "re-read everything and
-        write what came back" would overwrite `exif_original` with
-        `unknown` the first time a file failed to open -- and would pass
-        every test that only ever re-reads healthy files.
+        Existe para uma regra, fácil de errar de forma destrutiva: reexaminar
+        uma linha (o `--force` do backfill) só pode trocar uma fonte por outra
+        pelo menos tão forte. Um ingênuo "reler tudo e escrever o que voltou"
+        sobrescreveria `exif_original` com `unknown` na primeira vez que um
+        arquivo não abrisse -- e passaria em todo teste que só relê arquivos
+        saudáveis.
         """
         return _PRECEDENCE[self]
 

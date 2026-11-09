@@ -1,4 +1,4 @@
-"""Central inference-device resolution for the AI infrastructure adapters."""
+"""Resolução central do dispositivo de inferência dos adaptadores de IA."""
 
 from __future__ import annotations
 
@@ -13,21 +13,22 @@ AUTO_DEVICE = "auto"
 
 
 def resolve_device(configured: str | None = None) -> torch.device:
-    """Resolve the torch device every AI adapter in this package should use.
+    """Resolve o dispositivo torch que todo adaptador de IA deste pacote deve usar.
 
-    Resolved in exactly one place so device selection never gets scattered
-    across adapters (RFC-023 section 9). `configured` defaults to
-    `settings.device`, whose own default is `auto`:
+    Resolvido em um único lugar, para que a escolha do dispositivo nunca se
+    espalhe pelos adaptadores (RFC-023 §9). `configured` tem como default
+    `settings.device`, cujo próprio default é `auto`:
 
-    - `auto`  -- CUDA when torch reports it available, CPU otherwise, so a
-      plain CPU-only development machine stays fully usable;
-    - `cuda`  -- honoured when available, and degraded to CPU with a warning
-      when it is not. CUDA is an optimization here, never a requirement, so
-      an unsatisfiable request must not take the application down;
-    - anything else is passed to `torch.device` verbatim.
+    - `auto`  -- CUDA quando o torch diz que está disponível, CPU no
+      contrário, para que uma máquina de desenvolvimento só com CPU continue
+      plenamente usável;
+    - `cuda`  -- atendido quando disponível, e rebaixado para CPU com um
+      aviso quando não está. CUDA aqui é uma otimização, nunca um requisito,
+      então um pedido impossível de atender não pode derrubar a aplicação;
+    - qualquer outro valor vai para `torch.device` como está.
 
-    GPU backends other than CUDA (ROCm, MPS, XPU) are out of scope for
-    RFC-023 and are neither detected nor special-cased.
+    Backends de GPU além de CUDA (ROCm, MPS, XPU) estão fora do escopo do
+    RFC-023 e não são detectados nem tratados como caso especial.
     """
     raw = configured if configured is not None else settings.device
     requested = raw.strip().lower()

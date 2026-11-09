@@ -1,28 +1,28 @@
-"""Attaching to each device what is only true right now (RFC-031 §4).
+"""Anexar a cada dispositivo o que só é verdade agora (RFC-031 §4).
 
-Four routes need the same decoration -- `GET /devices` for every disk,
-`POST /devices` and `PATCH /devices/{id}` for the one they just touched --
-and none of them may compute it:
+Quatro rotas precisam da mesma decoração -- `GET /devices` para todos os
+discos, `POST /devices` e `PATCH /devices/{id}` para o que acabaram de tocar --,
+e nenhuma delas pode calculá-la:
 
-* not the route, because "is this disk plugged in, how many of its
-  photos are indexed, and is something running on it" is exactly the kind
-  of rule `AI_Context.md` keeps out of Presentation;
-* not `ListDevicesUseCase`, because decorating a device is not listing
-  them. Putting it inside would leave the register and rename routes
-  either duplicating it or answering `connected: false` for a disk they
-  had just found mounted -- which is not a simplification, it is wrong
-  data.
+* não a rota, porque "este disco está plugado, quantas fotos dele estão
+  indexadas, e há algo rodando nele" é exatamente o tipo de regra que o
+  `AI_Context.md` mantém fora da apresentação;
+* não `ListDevicesUseCase`, porque decorar um dispositivo não é listar
+  dispositivos. Colocar isso lá dentro deixaria as rotas de cadastro e de
+  renomear duplicando a lógica ou respondendo `connected: false` para um
+  disco que tinham acabado de achar montado -- o que não é simplificação, é
+  dado errado.
 
-So it is its own small use case, on the model of
-`ResolveImageLocationUseCase`, down to the `execute()` / `execute_one()`
-pair: the plural form is the real one and the singular is its
-one-element case, so a caller with one device cannot accidentally take a
-cheaper, different path.
+Então é um pequeno caso de uso próprio, no modelo de
+`ResolveImageLocationUseCase`, até o par `execute()` / `execute_one()`: a forma
+plural é a real, e a singular é o seu caso de um elemento, para que quem chama
+com um dispositivo não possa, sem querer, seguir um caminho mais barato e
+diferente.
 
-**Nothing here is persisted and nothing here is cached.** `mount_point`
-lives on the returned summary for the length of one request. The answer
-is wrong from the moment the user pulls the cable, and nothing tells this
-process when that happens (RFC-027 §7).
+**Nada aqui é persistido e nada aqui vai para cache.** `mount_point` vive no
+resumo devolvido pela duração de uma requisição. A resposta está errada desde o
+momento em que o usuário puxa o cabo, e nada avisa este processo quando isso
+acontece (RFC-027 §7).
 """
 
 from __future__ import annotations
@@ -40,70 +40,70 @@ from app.domain.services.volume_catalog import VolumeCatalog
 from app.domain.value_objects.device_id import DeviceId
 
 ACTIVE_STATUSES: tuple[JobStatus, ...] = (JobStatus.RUNNING, JobStatus.PENDING)
-"""Exactly the states `JobStatus.is_active` names, written as a query plan.
+"""Exatamente os estados que `JobStatus.is_active` nomeia, como plano de consulta.
 
-Two `SELECT`s that do not grow with the number of devices, instead of a
-filter per device. Listed here rather than derived inline so that
-`test_describe_devices.py` can assert this tuple *is*
-`{status for status in JobStatus if status.is_active}` -- the set is
-shared with the partial unique index of RFC-029 §9, and a state added to
-one and not the other is drift nothing else would catch.
+Dois `SELECT`s que não crescem com o número de dispositivos, em vez de um filtro
+por dispositivo. Listados aqui, e não derivados no lugar, para que
+`test_describe_devices.py` possa afirmar que esta tupla *é*
+`{status for status in JobStatus if status.is_active}` -- o conjunto é
+compartilhado com o índice único parcial do RFC-029 §9, e um estado acrescentado
+a um e não ao outro é uma divergência que nada mais pegaria.
 
-Running first. The index allows at most one active job per device, so the
-order cannot matter today; it is written down as the honest tie-break
-rather than left to whichever query happened to run first.
+Em execução primeiro. O índice permite no máximo um job ativo por dispositivo,
+então a ordem não pode importar hoje; ela fica escrita como o desempate honesto,
+em vez de ficar a cargo de qual consulta rodou primeiro.
 """
 
 
 @dataclass(frozen=True)
 class DeviceSummary:
-    """One disk, and everything about it that was true when we asked."""
+    """Um disco, e tudo o que era verdade sobre ele quando perguntamos."""
 
     device: Device
 
     mount_point: Path | None
-    """Where the disk is attached right now, or `None` for one in a drawer.
+    """Onde o disco está conectado agora, ou `None` para um que está na gaveta.
 
-    Resolved per request and never stored -- the distinction RFC-027 §4
-    draws, and the reason `Device` has no such field.
+    Resolvido a cada requisição e nunca guardado -- a distinção que o RFC-027
+    §4 faz, e o motivo de `Device` não ter esse campo.
     """
 
     indexed_images: int
-    """How many rows `images` holds for this device.
+    """Quantas linhas `images` tem para este dispositivo.
 
-    Since RFC-046 only the **visible** ones: a row the last scan did not
-    find is not counted, so the numerator of the percentage is what the
-    search can find (section 5.8). The marked ones are `missing_images`.
+    Desde o RFC-046, só as **visíveis**: uma linha que o último scan não achou
+    não é contada, então o numerador da porcentagem é o que a busca consegue
+    achar (§5.8). As marcadas são `missing_images`.
 
-    One of the three parts of "% indexed". The API returns the parts and
-    never the percentage: a `percent_indexed` field would be consumable
-    without `last_scan_at` beside it, and the first client to render it
-    alone would put back the confidently wrong number ARCHITECTURE.md §15
-    forbids (RFC-031 §4.2).
+    Uma das três partes do "% indexado". A API devolve as partes e nunca a
+    porcentagem: um campo `percent_indexed` poderia ser consumido sem
+    `last_scan_at` ao lado, e o primeiro cliente a exibi-lo sozinho traria de
+    volta o número confiantemente errado que o ARCHITECTURE.md §15 proíbe
+    (RFC-031 §4.2).
     """
 
     active_job: IndexingJob | None
-    """The `pending` or `running` job holding this disk, if any."""
+    """O job `pending` ou `running` que segura este disco, se houver."""
 
     missing_images: int = 0
-    """How many rows the last scans of the whole disk did not find (RFC-046)."""
+    """Quantas linhas os últimos scans do disco inteiro não acharam (RFC-046)."""
 
     missing_since: datetime.datetime | None = None
-    """The oldest of their marks: the scan the card names. `None` with none."""
+    """A mais antiga das marcas: o scan que o cartão nomeia. `None` sem marcas."""
 
     @property
     def connected(self) -> bool:
-        """Whether the disk was mounted when this summary was built.
+        """Se o disco estava montado quando este resumo foi montado.
 
-        Derived from `mount_point` rather than stored beside it, so the
-        two cannot disagree: "connected with nowhere to be" is not a
-        state this type can represent.
+        Derivado de `mount_point` em vez de guardado ao lado dele, para que os
+        dois não possam discordar: "conectado sem estar em lugar nenhum" não é
+        um estado que este tipo consegue representar.
         """
         return self.mount_point is not None
 
 
 class DescribeDevicesUseCase:
-    """Resolve, for a set of devices, everything that is only true now."""
+    """Resolve, para um conjunto de dispositivos, tudo o que só é verdade agora."""
 
     def __init__(
         self,
@@ -116,27 +116,28 @@ class DescribeDevicesUseCase:
         self._catalog = volume_catalog
 
     def execute(self, devices: Sequence[Device]) -> list[DeviceSummary]:
-        """Return one summary per device, in the order given.
+        """Devolve um resumo por dispositivo, na ordem recebida.
 
-        **The filesystem is enumerated exactly once, whatever N is**, and
-        so is each of the queries. That bound is the design rather than a
-        tuning choice (RFC-031 §4.1): a device list has N *distinct*
-        devices by definition, so the grouping RFC-030 blessed one layer
-        over -- `ResolveImageLocationUseCase` asking the locator once per
-        distinct disk on a search page -- degenerates into N enumerations
-        of the same filesystem here. `DeviceLocator` is therefore not
-        used at all: every method on it takes one `Device`.
+        **O sistema de arquivos é enumerado exatamente uma vez, seja qual for
+        N**, e cada uma das consultas também. Esse limite é o desenho, não uma
+        escolha de ajuste (RFC-031 §4.1): uma lista de dispositivos tem, por
+        definição, N dispositivos *distintos*, então o agrupamento que o
+        RFC-030 abençoou uma camada acima -- `ResolveImageLocationUseCase`
+        perguntando ao localizador uma vez por disco distinto numa página de
+        busca -- degenera aqui em N enumerações do mesmo sistema de arquivos.
+        Por isso `DeviceLocator` nem é usado: todo método dele recebe um
+        `Device`.
 
-        The same trap sits under the other columns and is easier to miss.
-        A `COUNT(*)` per device is N queries, and
-        `IndexingJobRepository.list(device_id=...)` per device is N more.
-        Both are answered by asking for everything once and grouping in
-        memory -- and so are the missing photos of RFC-046, one more
-        grouped read, with their count and their oldest mark together.
+        A mesma armadilha está sob as outras colunas, e é mais fácil de não
+        ver. Um `COUNT(*)` por dispositivo são N consultas, e
+        `IndexingJobRepository.list(device_id=...)` por dispositivo são mais N.
+        As duas são respondidas pedindo tudo uma vez e agrupando em memória --
+        e assim também as fotos ausentes do RFC-046, mais uma leitura agrupada,
+        com a contagem e a marca mais antiga juntas.
 
-        The order and length of `devices` are preserved exactly, so a
-        caller that sorted them keeps its order -- and so that a caller
-        holding one device gets one summary back.
+        A ordem e o tamanho de `devices` são preservados exatamente, para que
+        quem os ordenou mantenha a sua ordem -- e para que quem tem um
+        dispositivo receba um resumo de volta.
         """
         mounted = self._catalog.mount_points()
         indexed = self._images.count_by_device()
@@ -159,23 +160,23 @@ class DescribeDevicesUseCase:
         return summaries
 
     def execute_one(self, device: Device) -> DeviceSummary:
-        """Describe a single device; the one-element case of `execute()`."""
+        """Descreve um único dispositivo; o caso de um elemento de `execute()`."""
         (summary,) = self.execute([device])
         return summary
 
     def _active_jobs(self) -> dict[DeviceId, IndexingJob]:
-        """Map each busy device to the job holding it, in two queries.
+        """Mapeia cada dispositivo ocupado ao job que o segura, em duas consultas.
 
-        The partial unique index of RFC-029 §9 allows at most one active
-        job per device, so grouping in memory has no ambiguity to resolve
-        and `setdefault()` never actually discards anything -- it is
-        there so that a state added to `is_active` later degrades to "the
-        first one found" instead of to a crash.
+        O índice único parcial do RFC-029 §9 permite no máximo um job ativo por
+        dispositivo, então agrupar em memória não tem ambiguidade a resolver, e
+        `setdefault()` nunca chega a descartar nada -- ele está ali para que um
+        estado acrescentado a `is_active` no futuro degrade para "o primeiro
+        encontrado", e não para uma queda.
 
-        **No method was added to `IndexingJobRepository` for this.** The
-        status filter it already publishes answers the question; a port
-        grows for a question it cannot answer, not for one that could be
-        phrased more neatly.
+        **Nenhum método foi acrescentado a `IndexingJobRepository` para isto.**
+        O filtro de status que ele já publica responde à pergunta; uma porta
+        cresce por uma pergunta que não consegue responder, não por uma que
+        poderia ser formulada de um jeito mais elegante.
         """
         active: dict[DeviceId, IndexingJob] = {}
         for status in ACTIVE_STATUSES:

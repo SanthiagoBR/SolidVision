@@ -1,4 +1,4 @@
-"""Indexing-job identifier for the domain layer (RFC-029)."""
+"""Identificador de job de indexação para a camada de domínio (RFC-029)."""
 
 from __future__ import annotations
 
@@ -11,19 +11,18 @@ from app.domain.exceptions import InvalidJobIdentifierError
 
 @dataclass(frozen=True)
 class JobId:
-    """Strongly typed identifier for one indexing job.
+    """Identificador fortemente tipado de um job de indexação.
 
-    Modelled on `DeviceId` and `ImageId` so that a bare `uuid.UUID` cannot
-    be passed where a job was meant. That is the whole of its job: three
-    id-shaped tables now exist, and every repository method below takes
-    one of them.
+    Modelado em `DeviceId` e `ImageId`, para que um `uuid.UUID` solto não
+    possa ser passado onde se queria um job. Esse é todo o trabalho dele:
+    agora existem três tabelas com cara de id, e todo método de repositório
+    abaixo recebe uma delas.
 
-    **Allocated with `uuid4`, not derived.** `ImageId` and `DeviceId` are
-    `uuid5` over something durable, because the same file and the same
-    disk have to land on the same row every time they are seen. A job is
-    the opposite kind of thing: it is an *event*, and asking to index the
-    same folder twice is two jobs rather than one row written twice
-    (RFC-029 section 5.1).
+    **Criado com `uuid4`, e não derivado.** `ImageId` e `DeviceId` são
+    `uuid5` sobre algo durável, porque o mesmo arquivo e o mesmo disco
+    precisam cair na mesma linha toda vez que são vistos. Um job é o tipo
+    oposto de coisa: é um *evento*, e pedir para indexar a mesma pasta duas
+    vezes são dois jobs, e não uma linha escrita duas vezes (RFC-029 §5.1).
     """
 
     value: UUID
@@ -33,7 +32,7 @@ class JobId:
 
     @staticmethod
     def new() -> JobId:
-        """Mint an identifier for a job that is being created right now."""
+        """Cria um identificador para um job que está sendo criado agora."""
         return JobId(uuid.uuid4())
 
     @staticmethod

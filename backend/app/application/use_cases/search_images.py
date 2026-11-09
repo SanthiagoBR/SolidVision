@@ -1,29 +1,30 @@
-"""Application use case for semantic image search (RFC-025).
+"""Caso de uso da Application para a busca semântica de imagens (RFC-025).
 
-The full query path, and the layer that owns none of its mechanics:
+O caminho inteiro da consulta, e a camada que não detém nenhuma das mecânicas
+dele:
 
     query text -> EmbeddingModelPort.encode_text()
                -> ImageRepository.search_similar()
                -> ranked SearchHit list
 
-or, with a picture as the query (`execute_similar_to()`):
+ou, com uma imagem como consulta (`execute_similar_to()`):
 
     query image -> EmbeddingModelPort.encode_image() -> the same two steps
 
-or, with a photo that is already indexed (`FindSimilarImagesUseCase`, RFC-038):
+ou, com uma foto que já está indexada (`FindSimilarImagesUseCase`, RFC-038):
 
     image id -> ImageRepository.get_embedding() -> the same ranking, no model
 
-Language detection, translation, and the prompt template live inside the
-embedding adapter; cosine distance, ordering, and top-K live inside the
-repository. What is left here is the part that belongs to neither: deciding
-what counts as a usable request, and handing the resulting vector to the
-place that can rank against it.
+A detecção de idioma, a tradução e o template do prompt vivem dentro do
+adaptador de embedding; a distância de cosseno, a ordenação e o top-K vivem
+dentro do repositório. O que sobra aqui é a parte que não pertence a nenhum
+dos dois: decidir o que conta como um pedido utilizável, e entregar o vetor
+resultante ao lugar que consegue ranquear contra ele.
 
-**The request policy is functions of this module, and both use cases call
-them** (RFC-038 section 4.1): the page size, the radius floor and the two
-counts of excluded photos are one policy, and two copies of it would be two
-answers to the same question.
+**A política do pedido são funções deste módulo, e os dois casos de uso as
+chamam** (RFC-038 §4.1): o tamanho da página, o piso do raio e as duas
+contagens de fotos excluídas são uma política só, e duas cópias dela seriam
+duas respostas para a mesma pergunta.
 """
 
 from __future__ import annotations
@@ -48,32 +49,31 @@ from app.domain.value_objects.image_path import ImagePath
 from app.domain.value_objects.search_filters import SearchFilters
 from app.domain.value_objects.search_hit import SearchHit
 
-# The largest page any caller may ask for. Application policy rather than
-# a repository or database limit: it exists so that one request cannot ask
-# a future HTTP layer to serialize an unbounded result set, and it is
-# enforced by raising (see `InvalidSearchLimitError`) rather than by
-# clamping, so a caller asking for more finds out.
+# A maior página que qualquer chamador pode pedir. Política da Application, e
+# não limite do repositório ou do banco: existe para que um pedido não possa
+# exigir de uma futura camada HTTP a serialização de um conjunto de resultados
+# sem limite, e é imposta levantando um erro (ver `InvalidSearchLimitError`),
+# e não cortando, para que um chamador que pede mais fique sabendo.
 MAX_SEARCH_LIMIT = 100
 
 
 class SearchImagesUseCase:
-    """Turn a text query into a ranked list of images.
+    """Transforma uma consulta de texto numa lista ranqueada de imagens.
 
-    `default_limit` is injected rather than read from configuration,
-    following `IndexOrUpdateImagesUseCase`'s `batch_size`: the Application
-    layer must not import `settings` (it would be a dependency on
-    Infrastructure, which `test_application_architecture.py` enforces), so
-    the composition root passes `settings.top_k_results` in.
+    `default_limit` é injetado em vez de lido da configuração, seguindo o
+    `batch_size` do `IndexOrUpdateImagesUseCase`: a camada Application não
+    pode importar `settings` (seria uma dependência da Infrastructure, que o
+    `test_application_architecture.py` impede), então a composition root
+    passa `settings.top_k_results`.
 
-    `min_radius_m` arrives the same way, from `settings.min_radius_m`
-    (RFC-032 section 6). It is policy rather than a property of circles --
-    `GeoCircle` accepts any positive radius -- and the policy is about
-    aircraft: the GPS records where the drone was, and an oblique shot
-    shows ground tens to hundreds of metres away (section 2.2). A circle
-    smaller than that offset hides, with complete confidence and no error,
-    exactly the photo being looked for. Defaulted to `0.0` -- no floor --
-    so the compositions written before RFC-032 keep behaving as they did;
-    the API passes the configured one.
+    `min_radius_m` chega do mesmo jeito, de `settings.min_radius_m` (RFC-032
+    §6). É política, e não propriedade dos círculos -- `GeoCircle` aceita
+    qualquer raio positivo -- e a política é sobre aeronaves: o GPS registra
+    onde o drone estava, e uma foto oblíqua mostra um chão a dezenas ou
+    centenas de metros (§2.2). Um círculo menor que esse deslocamento
+    esconde, com toda a confiança e sem erro, exatamente a foto procurada.
+    Com padrão `0.0` -- sem piso -- para que as composições escritas antes do
+    RFC-032 continuem se comportando como antes; a API passa o configurado.
     """
 
     def __init__(
@@ -96,33 +96,32 @@ class SearchImagesUseCase:
         limit: int | None = None,
         filters: SearchFilters | None = None,
     ) -> list[SearchHit]:
-        """Return the images best matching `query`, most similar first.
+        """Devolve as imagens que melhor casam com `query`, da mais parecida.
 
-        The returned order is the repository's, passed through untouched.
-        Re-sorting here would be both redundant and wrong: the repository
-        ranked against the embeddings it stores, and this layer has no
-        access to them -- sorting by `SearchHit.similarity` would at best
-        reproduce that order and at worst quietly disagree with it about
-        ties.
+        A ordem devolvida é a do repositório, repassada intocada. Reordenar
+        aqui seria redundante e errado: o repositório ranqueou contra os
+        embeddings que guarda, e esta camada não tem acesso a eles -- ordenar
+        por `SearchHit.similarity` na melhor hipótese reproduziria essa ordem
+        e, na pior, discordaria dela em silêncio sobre os empates.
 
-        `limit` defaults to the injected `default_limit` when omitted.
-        `None` means "unspecified", never "unlimited": there is no way to
-        ask for every image, because `MAX_SEARCH_LIMIT` would have to
-        stop it anyway.
+        `limit` assume o `default_limit` injetado quando omitido. `None`
+        quer dizer "não especificado", nunca "sem limite": não há como pedir
+        todas as imagens, porque o `MAX_SEARCH_LIMIT` teria de impedir isso
+        de qualquer jeito.
 
-        `filters` is passed straight through, unvalidated, and that is
-        deliberate rather than an omission. This layer owns policy about
-        what counts as a usable *request* -- an empty query, an absurd
-        page size -- and a device that does not exist is not one: the
-        filter is a restriction on the candidate set, so naming an unknown
-        device is a search that legitimately matches nothing (RFC-027
-        section 9). Checking would also mean this use case acquiring a
-        `DeviceRepository` it otherwise has no reason to hold, to reject
-        the one case that already answers correctly.
+        `filters` é repassado direto, sem validação, e isso é deliberado, e
+        não uma omissão. Esta camada detém a política sobre o que conta como
+        um *pedido* utilizável -- uma consulta vazia, um tamanho de página
+        absurdo -- e um dispositivo que não existe não é um deles: o filtro é
+        uma restrição sobre o conjunto de candidatos, então nomear um
+        dispositivo desconhecido é uma busca que legitimamente não casa com
+        nada (RFC-027 §9). Checar também faria este caso de uso adquirir um
+        `DeviceRepository` que, fora isso, não tem razão para ter, para
+        rejeitar o único caso que já responde corretamente.
 
-        The one exception is a circle's radius (RFC-032 section 6): a
-        radius below `min_radius_m` *is* an unusable request, in the way an
-        absurd page size is, and it is refused before the query is encoded.
+        A única exceção é o raio de um círculo (RFC-032 §6): um raio abaixo
+        de `min_radius_m` *é* um pedido inutilizável, como um tamanho de
+        página absurdo, e é recusado antes de a consulta ser codificada.
         """
         if not query.strip():
             raise EmptySearchQueryError(
@@ -141,23 +140,23 @@ class SearchImagesUseCase:
         limit: int | None = None,
         filters: SearchFilters | None = None,
     ) -> list[SearchHit]:
-        """Return the indexed images that look most like `image`, most similar first.
+        """Devolve as imagens indexadas mais parecidas com `image`, da mais parecida.
 
-        The same search with a picture in place of words: CLIP puts images
-        and text in one space, so the image's own embedding is ranked against
-        the index exactly as a text embedding is. It is the stronger query
-        whenever the user *has* a picture -- a photo of a print, a copy
-        someone sent -- because no description carries as much of the image
-        as the image does.
+        A mesma busca com uma imagem no lugar das palavras: o CLIP põe
+        imagens e texto num espaço só, então o embedding da própria imagem é
+        ranqueado contra o índice exatamente como um embedding de texto. É a
+        consulta mais forte sempre que o usuário *tem* uma imagem -- a foto de
+        uma cópia impressa, uma cópia que alguém mandou -- porque nenhuma
+        descrição carrega tanto da imagem quanto a própria imagem.
 
-        `image` need not be indexed; it only has to be readable at its
-        `absolute_path`, which is where the embedding adapter opens it --
-        `query_image()` builds one for a file that is not. The same request
-        policy as `execute()` applies -- page size, and the radius floor of
-        a circle -- and the order is the repository's, untouched. If `image`
-        *is* indexed, it comes back first, with a similarity of ~1: an
-        honest answer, not one this layer hides. For a photo the index
-        already holds, `FindSimilarImagesUseCase` is the cheaper door.
+        `image` não precisa estar indexada; só precisa ser legível no seu
+        `absolute_path`, que é onde o adaptador de embedding a abre --
+        `query_image()` monta uma para um arquivo que não está. Vale a mesma
+        política de pedido de `execute()` -- tamanho de página e o piso do
+        raio de um círculo -- e a ordem é a do repositório, intocada. Se
+        `image` *está* indexada, ela volta primeiro, com similaridade ~1: uma
+        resposta honesta, não uma que esta camada esconde. Para uma foto que o
+        índice já tem, `FindSimilarImagesUseCase` é a porta mais barata.
         """
         effective_limit = validated_request(
             limit, filters, self._default_limit, self._min_radius_m
@@ -166,64 +165,63 @@ class SearchImagesUseCase:
         return self._repository.search_similar(embedding, effective_limit, filters)
 
     def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
-        """How many searchable images a date range left out for having no date.
+        """Quantas imagens buscáveis um intervalo de datas deixou de fora sem data.
 
-        RFC-028 section 4.1 requires the UI to be able to say it: an empty
-        result for "2018" must be distinguishable from "the 2018 photo is
-        indexed but has no EXIF", or the product repeats the silent wrong
-        answer RFC-028 section 2.1 exists to remove.
+        O RFC-028 §4.1 exige que a UI possa dizer isso: um resultado vazio
+        para "2018" tem de ser distinguível de "a foto de 2018 está indexada,
+        mas não tem EXIF", ou o produto repete a resposta errada e silenciosa
+        que o RFC-028 §2.1 existe para eliminar.
 
-        `None` -- not 0 -- when there is no date range, and in that case the
-        repository is not asked at all. The two answers mean different
-        things to a client: 0 says "the date filter hid nothing", `None`
-        says "there was no date filter to hide anything", and an unfiltered
-        search must not pay for a second query to learn a number nobody
-        requested (RFC-028 section 8).
+        `None` -- e não 0 -- quando não há intervalo de datas, e nesse caso o
+        repositório nem é consultado. As duas respostas significam coisas
+        diferentes para um cliente: 0 diz "o filtro de data não escondeu
+        nada", `None` diz "não havia filtro de data para esconder nada", e
+        uma busca sem filtro não pode pagar uma segunda consulta para saber
+        um número que ninguém pediu (RFC-028 §8).
 
-        A separate call rather than a second return value of `execute()`:
-        the count is a second query with its own cost, over a different
-        universe than the ranking -- the whole table under the filters, not
-        the neighbourhood an approximate index explored -- and the page
-        `execute()` returns stays exactly what it was.
+        Uma chamada separada, e não um segundo valor de retorno de
+        `execute()`: a contagem é uma segunda consulta com custo próprio,
+        sobre um universo diferente do ranking -- a tabela inteira sob os
+        filtros, e não a vizinhança que um índice aproximado explorou -- e a
+        página que `execute()` devolve continua exatamente a mesma.
         """
         return count_hidden_by_unknown_date(self._repository, filters)
 
     def count_hidden_by_unknown_position(
         self, filters: SearchFilters | None
     ) -> int | None:
-        """How many searchable images a circle left out for having no position.
+        """Quantas imagens buscáveis um círculo deixou de fora por não terem posição.
 
-        RFC-032 section 6.2, in the exact mould of
-        `count_hidden_by_unknown_date()`. Without it the spatial filter
-        answers *"there is no photo of this place"* when the truth is
-        *"1,200 photos have no coordinates and none of them was looked
-        at"* -- and with the ~4% of smartphone photos, every export that
-        strips EXIF, and everything indexed before RFC-032, that number
-        starts out large.
+        O RFC-032 §6.2, no molde exato de `count_hidden_by_unknown_date()`.
+        Sem ele, o filtro espacial responde *"não há foto deste lugar"* quando
+        a verdade é *"1.200 fotos não têm coordenadas e nenhuma delas foi
+        olhada"* -- e, com os ~4% das fotos de smartphone, toda exportação que
+        remove o EXIF e tudo o que foi indexado antes do RFC-032, esse número
+        começa grande.
 
-        `None` -- not 0 -- when there is no circle, and then **the
-        repository is not called at all**. That rule lives here and not in
-        the repository, because `count_unknown_position()` answers the same
-        question for the map with no circle (RFC-032 section 7) and must not
-        short-circuit there.
+        `None` -- e não 0 -- quando não há círculo, e aí **o repositório nem é
+        chamado**. Essa regra mora aqui, e não no repositório, porque
+        `count_unknown_position()` responde à mesma pergunta para o mapa sem
+        círculo (RFC-032 §7) e lá não pode tomar o atalho.
         """
         return count_hidden_by_unknown_position(self._repository, filters)
 
 
 class FindSimilarImagesUseCase:
-    """Rank the index against a photo it already holds (RFC-038 section 4.1).
+    """Ranqueia o índice contra uma foto que ele já tem (RFC-038 §4.1).
 
-    *"Parecidas com esta"*, from the detail of a photo. **No model**: the
-    photo's vector is the one indexing stored, read back with
-    `get_embedding()` and handed to the same `search_similar()` a text query
-    uses. So it works with the photo's disk in a drawer -- which is the case
-    the product exists for -- with search `loading` or `unavailable`, and
-    without decoding anything. `execute_similar_to()` reopens the file
-    instead, and needs the disk, the decoder and a forward pass of CLIP to
-    produce this same vector; it stays for the file that is *not* indexed.
+    *"Parecidas com esta"*, a partir do detalhe de uma foto. **Sem modelo**: o
+    vetor da foto é o que a indexação guardou, lido de volta com
+    `get_embedding()` e entregue ao mesmo `search_similar()` que uma consulta
+    de texto usa. Então funciona com o disco da foto na gaveta -- que é o caso
+    para o qual o produto existe --, com a busca `loading` ou `unavailable`, e
+    sem decodificar nada. `execute_similar_to()`, em vez disso, reabre o
+    arquivo, e precisa do disco, do decodificador e de uma passada do CLIP para
+    produzir este mesmo vetor; ele fica para o arquivo que *não* está
+    indexado.
 
-    `default_limit` and `min_radius_m` arrive as for `SearchImagesUseCase`,
-    from the composition root, and the request policy is the same functions.
+    `default_limit` e `min_radius_m` chegam como no `SearchImagesUseCase`, da
+    composition root, e a política do pedido são as mesmas funções.
     """
 
     def __init__(
@@ -244,22 +242,23 @@ class FindSimilarImagesUseCase:
         limit: int | None = None,
         filters: SearchFilters | None = None,
     ) -> list[SearchHit]:
-        """The images most like `image_id`, most similar first, without it.
+        """As imagens mais parecidas com `image_id`, da mais parecida, sem ela.
 
-        The request is checked first, as `SearchImagesUseCase.execute()`
-        checks it before encoding: an unusable page or circle costs no read.
+        O pedido é checado primeiro, como `SearchImagesUseCase.execute()` o
+        checa antes de codificar: uma página ou um círculo inutilizável não
+        custa leitura.
 
-        **The photo itself is taken out, and its copies stay.** It would come
-        back first, with a similarity of 1, and take one of the page's places
-        with the photo the user was just looking at. A copy -- the same bytes
-        on another disk or in another folder -- has the same vector and
-        another id, comes back near the top, and answers *"where else is this
-        photo"*. One more row is asked for, so a page with the source removed
-        is still full; the order is the repository's, untouched.
+        **A própria foto sai, e as cópias dela ficam.** Ela voltaria primeiro,
+        com similaridade 1, e ocuparia um dos lugares da página com a foto que
+        o usuário acabou de olhar. Uma cópia -- os mesmos bytes em outro disco
+        ou em outra pasta -- tem o mesmo vetor e outro id, volta perto do
+        topo, e responde *"onde mais está esta foto"*. Uma linha a mais é
+        pedida, para que uma página sem a origem continue cheia; a ordem é a
+        do repositório, intocada.
 
-        No vector is `ImageNotFoundError` without a row (404), and
-        `ImageNotIndexedError` with one (409): the second request succeeds
-        once the photo is indexed.
+        Sem vetor, é `ImageNotFoundError` sem linha (404), e
+        `ImageNotIndexedError` com uma (409): o segundo pedido dá certo assim
+        que a foto for indexada.
         """
         effective_limit = validated_request(
             limit, filters, self._default_limit, self._min_radius_m
@@ -276,27 +275,28 @@ class FindSimilarImagesUseCase:
         return [hit for hit in hits if hit.image.id != image_id][:effective_limit]
 
     def count_hidden_by_unknown_date(self, filters: SearchFilters | None) -> int | None:
-        """`SearchImagesUseCase.count_hidden_by_unknown_date()`, the same function."""
+        """`SearchImagesUseCase.count_hidden_by_unknown_date()`, a mesma função."""
         return count_hidden_by_unknown_date(self._repository, filters)
 
     def count_hidden_by_unknown_position(
         self, filters: SearchFilters | None
     ) -> int | None:
-        """`SearchImagesUseCase.count_hidden_by_unknown_position()`, likewise."""
+        """`SearchImagesUseCase.count_hidden_by_unknown_position()`, idem."""
         return count_hidden_by_unknown_position(self._repository, filters)
 
 
 def query_image(path: Path) -> Image:
-    """Wrap a file on disk as the transient `Image` an image query needs.
+    """Embrulha um arquivo do disco como o `Image` transitório de uma consulta.
 
-    The embedding adapter reads pixels from an `Image`'s `absolute_path`,
-    and an `Image` needs an id and a device. This one is never persisted:
-    its device is the nil UUID -- no device -- and its id is derived from
-    the path only so that two runs over the same file build the same value.
+    O adaptador de embedding lê os pixels do `absolute_path` de um `Image`, e
+    um `Image` precisa de um id e de um dispositivo. Este nunca é persistido:
+    o dispositivo dele é o UUID nulo -- nenhum dispositivo -- e o id é
+    derivado do caminho só para que duas execuções sobre o mesmo arquivo
+    montem o mesmo valor.
 
-    Here since RFC-038, out of `app.cli.search`: the CLI's `--image` and the
-    API's `POST /images/search/by-image` build the same value, and a second
-    copy would be a second idea of what a query picture is.
+    Aqui desde o RFC-038, fora de `app.cli.search`: o `--image` da CLI e o
+    `POST /images/search/by-image` da API montam o mesmo valor, e uma segunda
+    cópia seria uma segunda ideia do que é uma imagem de consulta.
     """
     resolved = path.resolve()
     return Image(
@@ -315,7 +315,7 @@ def validated_request(
     default_limit: int,
     min_radius_m: float,
 ) -> int:
-    """The page size to use, after the checks every kind of query shares."""
+    """O tamanho de página a usar, depois das checagens comuns a toda consulta."""
     effective_limit = default_limit if limit is None else limit
     validate_limit(effective_limit)
     if filters is not None and filters.taken_within is not None:
@@ -324,11 +324,11 @@ def validated_request(
 
 
 def validate_limit(limit: int) -> None:
-    """Reject an unusable page size, at construction and at call time.
+    """Rejeita um tamanho de página inutilizável, na construção e na chamada.
 
-    Applied to the injected default as well as to the per-call value,
-    so a misconfigured `top_k_results` fails when the use case is
-    wired rather than on whichever search first omits `limit`.
+    Aplicado ao padrão injetado tanto quanto ao valor de cada chamada, para
+    que um `top_k_results` mal configurado falhe quando o caso de uso é
+    montado, e não na primeira busca que omitir `limit`.
     """
     if limit <= 0:
         raise InvalidSearchLimitError(f"Search limit must be at least 1, got {limit}.")
@@ -339,17 +339,17 @@ def validate_limit(limit: int) -> None:
 
 
 def validate_min_radius(min_radius_m: float) -> None:
-    """A floor below zero is a wiring mistake, refused when the use case is built."""
+    """Um piso negativo é erro de montagem, recusado ao construir o caso de uso."""
     if min_radius_m < 0:
         raise ValueError(f"min_radius_m must not be negative, got {min_radius_m}")
 
 
 def validate_radius(circle: GeoCircle, min_radius_m: float) -> None:
-    """Refuse a circle smaller than what the aircraft's offset can hide.
+    """Recusa um círculo menor do que o deslocamento da aeronave pode esconder.
 
-    The message explains the offset rather than just quoting a number,
-    because the person reading it chose the radius on a map and needs
-    to know why a precise-looking one is the wrong one.
+    A mensagem explica o deslocamento, em vez de só citar um número, porque
+    quem a lê escolheu o raio num mapa e precisa saber por que um raio de
+    aparência precisa é o errado.
     """
     if circle.radius_m < min_radius_m:
         raise InvalidGeoCircleError(
@@ -364,9 +364,9 @@ def validate_radius(circle: GeoCircle, min_radius_m: float) -> None:
 def count_hidden_by_unknown_date(
     repository: ImageRepository, filters: SearchFilters | None
 ) -> int | None:
-    """How many searchable images a date range left out for having no date.
+    """Quantas imagens buscáveis um intervalo de datas deixou de fora sem data.
 
-    `None`, and no query, without a date range; see
+    `None`, e nenhuma consulta, sem intervalo de datas; ver
     `SearchImagesUseCase.count_hidden_by_unknown_date()`.
     """
     if filters is None or filters.captured_between is None:
@@ -377,9 +377,9 @@ def count_hidden_by_unknown_date(
 def count_hidden_by_unknown_position(
     repository: ImageRepository, filters: SearchFilters | None
 ) -> int | None:
-    """How many searchable images a circle left out for having no position.
+    """Quantas imagens buscáveis um círculo deixou de fora por não terem posição.
 
-    `None`, and no query, without a circle; see
+    `None`, e nenhuma consulta, sem círculo; ver
     `SearchImagesUseCase.count_hidden_by_unknown_position()`.
     """
     if filters is None or filters.taken_within is None:

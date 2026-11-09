@@ -1,44 +1,42 @@
-"""The end of the Windows session: a hidden window, and the stop in it (RFC-036 7.5).
+"""O fim da sessão do Windows: uma janela oculta, e a parada nela (RFC-036 §7.5).
 
-At logoff Windows ends whatever is left. A job runner ended in the middle of a
-job leaves it to the reaper, one attempt the poorer (section 6.3): someone who
-signs out every night with an indexing running would see the job fail on the
-third night.
+No logoff, o Windows encerra o que tiver sobrado. Um job runner encerrado no meio
+de um job o deixa para o reaper, com uma tentativa a menos (§6.3): quem sai da
+sessão toda noite com uma indexação rodando veria o job falhar na terceira noite.
 
-Console control events do not help. According to the documentation of
-`SetConsoleCtrlHandler`, a console process that loads `user32.dll` or
-`gdi32.dll` -- Python with `ctypes` does, and so does `torch` -- receives
-neither `CTRL_LOGOFF_EVENT` nor `CTRL_SHUTDOWN_EVENT`: it is treated as a
-windowed application. What is documented for those is a window. A top-level
-one, never shown, and not a message-only window, which the same documentation
-says receives no broadcast messages.
+Os eventos de controle do console não ajudam. Segundo a documentação de
+`SetConsoleCtrlHandler`, um processo de console que carrega `user32.dll` ou
+`gdi32.dll` -- o Python com `ctypes` carrega, e o `torch` também -- não recebe
+nem `CTRL_LOGOFF_EVENT` nem `CTRL_SHUTDOWN_EVENT`: é tratado como aplicação com
+janela. O que está documentado para essas é uma janela. Uma de nível superior,
+nunca mostrada, e não uma janela só de mensagens, que segundo a mesma
+documentação não recebe mensagens de broadcast.
 
-    message                  what this window does
-    WM_QUERYENDSESSION       registers the reason (`ShutdownBlockReasonCreate`)
-                             and answers yes: the launcher never vetoes the
-                             end of a session
-    WM_ENDSESSION, ending    asks for the stop of section 7.2, with its shorter
-                             deadlines, and waits for it in this thread -- the
-                             process may be ended as soon as this returns --
-                             then withdraws the reason
-    WM_ENDSESSION, not       withdraws the reason: somebody cancelled
+    mensagem                 o que esta janela faz
+    WM_QUERYENDSESSION       registra o motivo (`ShutdownBlockReasonCreate`)
+                             e responde sim: o launcher nunca veta o fim de
+                             uma sessão
+    WM_ENDSESSION, ending    pede a parada de §7.2, com os prazos mais curtos,
+                             e a espera nesta thread -- o processo pode ser
+                             encerrado assim que isto retornar -- e depois
+                             retira o motivo
+    WM_ENDSESSION, not       retira o motivo: alguém cancelou
 
-**The window is not enough: the launcher must also come first.** Two real
-logoffs on 2026-10-19 disagreed. In the first, the children were alive when
-the stop began, and stopped in 0.3 s; in the second, the children and the
-postmaster were already dead -- within one tick of the supervisor -- and the
-job went to the reaper with an attempt spent. Windows ends the processes of a
-session from the highest shutdown level down, and every process starts at the
-same one, 0x280, where the order is not defined. `end_before_the_children()`
-puts the launcher above it, so that its `WM_ENDSESSION` comes, and is waited
-for, while the others still live: so it did in the six logoffs that followed
-(section 16, by hand). If it ever does not, the cost is the first paragraph's,
-and the next session's reaper recovers the job.
+**A janela não basta: o launcher também precisa vir primeiro.** Dois logoffs
+reais em 19/10/2026 discordaram. No primeiro, os filhos estavam vivos quando a
+parada começou, e pararam em 0,3 s; no segundo, os filhos e o postmaster já
+estavam mortos -- dentro de um tick do supervisor -- e o job foi para o reaper
+com uma tentativa gasta. O Windows encerra os processos de uma sessão do nível de
+shutdown mais alto para baixo, e todo processo começa no mesmo, 0x280, onde a
+ordem não é definida. `end_before_the_children()` põe o launcher acima dele, para
+que o seu `WM_ENDSESSION` venha, e seja esperado, enquanto os outros ainda vivem:
+assim foi nos seis logoffs que se seguiram (§16, à mão). Se algum dia não for, o
+custo é o do primeiro parágrafo, e o reaper da próxima sessão recupera o job.
 
-**And the stop it runs creates no process**, because none starts during a
-logoff (`0xC000026B`): the job runner defers an interrupt that lands in a
-database call (`app.infrastructure.process.interrupts`), and the cluster is
-stopped through its signal pipe (section 17.1).
+**E a parada que ela roda não cria processo nenhum**, porque nenhum inicia durante
+um logoff (`0xC000026B`): o job runner adia uma interrupção que cai numa chamada
+ao banco (`app.infrastructure.process.interrupts`), e o cluster é parado pelo
+seu pipe de sinal (§17.1).
 """
 
 from __future__ import annotations
@@ -59,17 +57,17 @@ WM_QUERYENDSESSION = 0x0011
 WM_ENDSESSION = 0x0016
 
 REASON = "SolidVision está devolvendo a indexação à fila"
-"""What the shutdown screen shows while the stop runs (section 7.5)."""
+"""O que a tela de desligamento mostra enquanto a parada roda (§7.5)."""
 
 READY_SECONDS = 10.0
 
 DEFAULT_SHUTDOWN_LEVEL = 0x280
-"""Where every process starts, according to `SetProcessShutdownParameters`:
-the children, the postmaster, and whatever else the session runs."""
+"""Onde todo processo começa, segundo `SetProcessShutdownParameters`: os
+filhos, o postmaster e o que mais a sessão rodar."""
 
 SHUTDOWN_LEVEL = 0x300
-"""Where the launcher asks to be ended: the start of the applications' first
-range (0x300-0x3FF), above the default."""
+"""Onde o launcher pede para ser encerrado: o início da primeira faixa das
+aplicações (0x300-0x3FF), acima do padrão."""
 
 LRESULT = wintypes.LPARAM
 WNDPROC = ctypes.WINFUNCTYPE(
@@ -78,7 +76,7 @@ WNDPROC = ctypes.WINFUNCTYPE(
 
 
 class _WindowClass(ctypes.Structure):
-    """`WNDCLASSW`, as `winuser.h` declares it."""
+    """`WNDCLASSW`, como o `winuser.h` a declara."""
 
     _fields_ = [
         ("style", wintypes.UINT),
@@ -95,17 +93,18 @@ class _WindowClass(ctypes.Structure):
 
 
 class SessionEndWindow:
-    """The hidden window, in a thread of its own that pumps its messages.
+    """A janela oculta, numa thread só dela que bombeia as suas mensagens.
 
-    `on_session_end` is called in that thread when the session is really
-    ending, and should return when the stop has ended or given up: Windows may
-    end the process the moment the window procedure returns.
+    `on_session_end` é chamado nessa thread quando a sessão está de fato
+    terminando, e deve retornar quando a parada tiver terminado ou desistido: o
+    Windows pode encerrar o processo no momento em que o procedimento da janela
+    retornar.
     """
 
     def __init__(self, on_session_end: Callable[[], None]) -> None:
         self._on_session_end = on_session_end
-        # One class per window, so that a second window in the same process --
-        # the tests make several -- never runs the procedure of the first.
+        # Uma classe por janela, para que uma segunda janela no mesmo processo
+        # -- os testes criam várias -- nunca rode o procedimento da primeira.
         self._class_name = f"SolidVisionLauncher-{os.getpid()}-{id(self):x}"
         self._procedure = WNDPROC(self._handle)
         self._hwnd: int | None = None
@@ -118,7 +117,7 @@ class SessionEndWindow:
         return self._hwnd
 
     def start(self) -> bool:
-        """Create the window and start its loop; `False` if Windows refused."""
+        """Cria a janela e inicia o seu loop; `False` se o Windows recusou."""
         self._thread = threading.Thread(
             target=self._run, name="session-end-window", daemon=True
         )
@@ -135,7 +134,7 @@ class SessionEndWindow:
         return True
 
     def close(self) -> None:
-        """End the loop and destroy the window."""
+        """Encerra o loop e destrói a janela."""
         if self._hwnd is not None:
             _user32().PostMessageW(self._hwnd, WM_CLOSE, 0, 0)
         if self._thread is not None:
@@ -185,8 +184,8 @@ class SessionEndWindow:
     def _handle(self, hwnd: int, message: int, wparam: int, lparam: int) -> int:
         user32 = _user32()
         if message == WM_QUERYENDSESSION:
-            # The moment Windows began with this process: beside the deaths of
-            # the children in the log, it says who went first.
+            # O momento em que o Windows começou por este processo: ao lado das
+            # mortes dos filhos no log, diz quem foi primeiro.
             logger.info("Windows asked whether the session may end")
             user32.ShutdownBlockReasonCreate(hwnd, REASON)
             return 1
@@ -207,12 +206,12 @@ class SessionEndWindow:
 
 
 def end_before_the_children() -> bool:
-    """Ask Windows to end this process before the rest of the session.
+    """Pede ao Windows que encerre este processo antes do resto da sessão.
 
-    `SetProcessShutdownParameters`: the system ends processes from the highest
-    level down. Not inherited -- a child created afterwards is at the default
-    (tested) -- so the children and the postmaster stay below the launcher.
-    `False`, with a line in the log, if Windows refused.
+    `SetProcessShutdownParameters`: o sistema encerra os processos do nível mais
+    alto para baixo. Não é herdado -- um filho criado depois fica no padrão
+    (testado) -- então os filhos e o postmaster ficam abaixo do launcher.
+    `False`, com uma linha no log, se o Windows recusou.
     """
     kernel32 = _kernel32()
     if not kernel32.SetProcessShutdownParameters(SHUTDOWN_LEVEL, 0):
@@ -226,7 +225,7 @@ def end_before_the_children() -> bool:
 
 
 def shutdown_level() -> int:
-    """This process's shutdown level, as Windows has it."""
+    """O nível de shutdown deste processo, como o Windows o tem."""
     level = wintypes.DWORD()
     flags = wintypes.DWORD()
     if not _kernel32().GetProcessShutdownParameters(
@@ -237,7 +236,7 @@ def shutdown_level() -> int:
 
 
 def _user32() -> Any:
-    """`user32` with the signatures this module calls; 64-bit handles whole."""
+    """`user32` com as assinaturas que o módulo chama; handles de 64 bits inteiros."""
     user32: Any = ctypes.WinDLL("user32", use_last_error=True)
     user32.RegisterClassW.argtypes = [ctypes.POINTER(_WindowClass)]
     user32.RegisterClassW.restype = wintypes.ATOM
