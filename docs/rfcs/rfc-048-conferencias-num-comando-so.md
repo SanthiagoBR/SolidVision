@@ -475,3 +475,11 @@ Nenhum é `slow`, e os três trocam o modelo por um dublê: o `test_search.py` d
 A correção é só nos testes: onde o modelo já é um dublê, a conferência de presença também é (`ModelRuntime.check_presence` trocada por uma função que não faz nada). Nenhum dos três arquivos tinha teste que dependesse da conferência de verdade. No mesmo clone sem modelos, os três arquivos deram 13 falhas e 58 passagens na versão original, e 71 passagens na corrigida; na cópia de trabalho, com os modelos, 71 passagens.
 
 É o tipo de teste que o roadmap esperava achar no RFC-050 ("algum teste pode presumir algo desta máquina"). Ele apareceu aqui porque §10 já mede num clone sem modelos, e foi corrigido aqui porque o critério de §10 pede o comando passando.
+
+### 17.12 O `run --` acha o programa no `PATH`
+
+Depois do commit, o comando de §4.4, digitado como o README ensina, num venv ativado (`python -m app.infrastructure.database.embedded run -- python scripts/check.py`), parou na etapa `env`: o `python` que rodou era o 3.12.9 base, fora de qualquer venv e sem nenhum pacote dos lockfiles. A medição de §16 não viu isso porque dava ao `run --` o caminho absoluto do Python do venv.
+
+A causa é do `run --` ([RFC-033 §11](rfc-033-postgres-embarcado.md)), e não do `check.py`. Dado um nome sem caminho, o Windows procura o programa primeiro na pasta do executável que está rodando, e só depois no `PATH`. Num venv, o `python.exe` é um lançador que inicia o Python base, e a pasta do executável que roda o `run` é a do Python base. Um processo do venv que chama `python` pelo nome recebe o base, e o mesmo processo, com `shutil.which("python")`, acha o do venv.
+
+O `run --` agora procura o programa no `PATH` do ambiente que passa ao comando, como o terminal procura, inclusive pelas extensões do `PATHEXT` (um `npm` é o `npm.cmd`). Um nome que o `PATH` não tem fica como foi digitado. Dois testes novos no `test_embedded_cli.py`: um `python` pelo nome, com o `Scripts` do venv à frente do `PATH`, é o do venv, e um `.cmd` é achado sem a extensão. Com a busca desligada, os dois falham (o filho sai como o Python base, e o `.cmd` não é achado). Com ela, o comando de §4.4, num venv ativado, passa o grupo `python` com a etapa `env` verde.

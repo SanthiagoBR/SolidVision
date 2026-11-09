@@ -27,9 +27,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from app.infrastructure.config.settings import settings
 
@@ -85,6 +86,21 @@ def _start_and_prepare(cluster: EmbeddedPostgres) -> StartedCluster:
     return started
 
 
+def _found_on_path(command: Sequence[str], environment: Mapping[str, str]) -> list[str]:
+    """The command with its program found on the `PATH`, as a terminal finds it.
+
+    Given a bare name, Windows looks first in the folder of the running
+    executable. In a venv, that is the base interpreter's folder: the venv's
+    `python.exe` is a launcher that starts the base one. So `run -- python
+    scripts/check.py`, typed in an activated venv, ran a Python with none of
+    the venv's packages (RFC-048 section 17.12). A name the `PATH` does not
+    have is left as it was typed.
+    """
+    found = shutil.which(command[0], path=environment.get("PATH"))
+    program = os.path.abspath(found) if found is not None else command[0]
+    return [program, *command[1:]]
+
+
 def _run_command(command: Sequence[str], environment: dict[str, str]) -> int:
     """Run the command to its end, through a Ctrl+C if one comes.
 
@@ -92,7 +108,7 @@ def _run_command(command: Sequence[str], environment: dict[str, str]) -> int:
     console -- so the first one is the command's to handle, and this waits
     for it. A second one ends the command.
     """
-    process = subprocess.Popen(list(command), env=environment)
+    process = subprocess.Popen(_found_on_path(command, environment), env=environment)
     interrupted = False
     while True:
         try:
