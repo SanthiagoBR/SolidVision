@@ -181,6 +181,8 @@ python -m app.infrastructure.database.embedded run -- python scripts/check.py
 ```
 O `pytest` roda com `WARM_UP_MODELS=false`, por cima do `.env`. Ele confere que o `frontend/src/api/openapi.json` é o que a API produz, e o `npm test` confere que os tipos são os que esse arquivo gera: quem muda uma rota roda `npm run api:types`.
 
+No GitHub, cada push e cada PR rodam o mesmo comando ([`.github/workflows/ci.yml`](.github/workflows/ci.yml), [RFC-049](docs/rfcs/rfc-049-primeiro-workflow.md)): o `check.py frontend` no Ubuntu 24.04 e o `check.py python` no Windows Server 2025, com o Python 3.12.9 e o ambiente virtual montado dos dois lockfiles. A suíte do backend, o `pytest`, só vai rodar no CI com o RFC-050.
+
 ---
 
 ## Métricas de avaliação
