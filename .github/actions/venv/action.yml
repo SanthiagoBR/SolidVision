@@ -1,0 +1,57 @@
+# The base Python and the venv, for every Windows job (RFC-050 section 4.2).
+# The base Python is the python.org build that the PSF publishes on
+# nuget.org: a zip, pinned by its SHA-256, extracted to the same folder on
+# every run and never put on PATH. The venv is restored, or made by
+# make_venv.py and saved right after it, as in RFC-049 section 4.3.
+#
+# Every action is pinned by its commit, with the tag beside it, like the
+# workflow's (backend/tests/test_ci_workflow.py reads this file too).
+
+name: venv
+description: >-
+  The base Python from nuget.org and the venv of the two lockfiles
+  (RFC-049 section 4.3, RFC-050 section 4.2).
+inputs:
+  python-version:
+    description: check.py's PYTHON_VERSION
+    required: true
+  nuget-sha256:
+    description: The SHA-256 of python.<version>.nupkg
+    required: true
+runs:
+  using: composite
+  steps:
+    # Every run, before the venv: a restored venv finds its base Python by
+    # the path in pyvenv.cfg. Windows' own tar.exe reads the .nupkg, a zip;
+    # a tar found on PATH may be Git's GNU tar, which does not.
+    - shell: pwsh
+      env:
+        VERSION: ${{ inputs.python-version }}
+        SHA256: ${{ inputs.nuget-sha256 }}
+      run: |
+        $folder = Join-Path $env:RUNNER_TOOL_CACHE "python-nuget\$env:VERSION"
+        $package = Join-Path $env:RUNNER_TEMP "python.$env:VERSION.nupkg"
+        Invoke-WebRequest -OutFile $package `
+          "https://api.nuget.org/v3-flatcontainer/python/$env:VERSION/python.$env:VERSION.nupkg"
+        $found = (Get-FileHash -Algorithm SHA256 $package).Hash
+        if ($found -ne $env:SHA256) { throw "python.$env:VERSION.nupkg is $found, not $env:SHA256" }
+        New-Item -ItemType Directory -Force $folder | Out-Null
+        & "$env:SystemRoot\System32\tar.exe" -xf $package -C $folder
+        "BASE_PYTHON=$folder\tools\python.exe" >> $env:GITHUB_ENV
+    # The whole venv, keyed also on this file: a venv made on another base
+    # Python, or in another folder, does not open.
+    - id: venv
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: .venv
+        key: venv-${{ inputs.python-version }}-${{ hashFiles('scripts/python-win-64.lock', 'scripts/python-dev-win-64.lock', 'scripts/make_venv.py', '.github/actions/venv/action.yml') }}
+    - if: steps.venv.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: '& $env:BASE_PYTHON scripts/make_venv.py'
+    # Saved apart, right after make_venv.py has held the venv against the
+    # lockfiles, so a run whose checks fail still keeps it.
+    - if: steps.venv.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: .venv
+        key: ${{ steps.venv.outputs.cache-primary-key }}

@@ -1,0 +1,24 @@
+{
+  "commit": "9dbfcf663f1e654936285804baccfb82e41dbe37",
+  "temp": {
+    "long": "C:\\Users\\sandr\\AppData\\Local\\Temp\\rfc050-suite-91qv86i7\\runneradmin-temporary",
+    "short": "C:\\Users\\sandr\\AppData\\Local\\Temp\\RFC050~1\\RUNNER~1",
+    "is_short": true
+  },
+  "clone_seconds": 4.8,
+  "copy_runtime_seconds": 7.4,
+  "exit_code": 0,
+  "wall_seconds": 237.0,
+  "marks_seconds": {
+    "creating": 3.5,
+    "starting": 23.2,
+    "ready": 25.3,
+    "migrating": 26.9,
+    "database": 27.7,
+    "pytest_begins": 31.0,
+    "pytest_ends": 234.9
+  },
+  "pytest_summary": "3554 passed, 686 deselected, 45 warnings",
+  "pytest_seconds": 196.76,
+  "short_summary": []
+}

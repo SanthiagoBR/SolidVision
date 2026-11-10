@@ -181,7 +181,9 @@ python -m app.infrastructure.database.embedded run -- python scripts/check.py
 ```
 O `pytest` roda com `WARM_UP_MODELS=false`, por cima do `.env`. Ele confere que o `frontend/src/api/openapi.json` é o que a API produz, e o `npm test` confere que os tipos são os que esse arquivo gera: quem muda uma rota roda `npm run api:types`.
 
-No GitHub, cada push e cada PR rodam o mesmo comando ([`.github/workflows/ci.yml`](.github/workflows/ci.yml), [RFC-049](docs/rfcs/rfc-049-primeiro-workflow.md)): o `check.py frontend` no Ubuntu 24.04 e o `check.py python` no Windows Server 2025, com o Python 3.12.9 e o ambiente virtual montado dos dois lockfiles. A suíte do backend, o `pytest`, só vai rodar no CI com o RFC-050.
+No GitHub, cada push e cada PR rodam o mesmo comando ([`.github/workflows/ci.yml`](.github/workflows/ci.yml), [RFC-049](docs/rfcs/rfc-049-primeiro-workflow.md), [RFC-050](docs/rfcs/rfc-050-suite-do-backend-no-windows.md)), em três jobs: o `check.py frontend` no Ubuntu 24.04, e o `check.py python` e o `check.py pytest` no Windows Server 2025, com o Python 3.12.9 do pacote do nuget.org e o ambiente virtual montado dos dois lockfiles. A suíte do backend roda com o Postgres embarcado, dentro do `run --`: o runtime vem do `postgres-win-64.lock`, e o cluster nasce a cada execução, sem `.env` e sem os modelos. Os testes `embedded` e `slow` não rodam no CI.
+
+Os três checks, `frontend`, `estatico` e `backend`, são obrigatórios na branch padrão, pelo *ruleset* de [`.github/rulesets/ci.json`](.github/rulesets/ci.json): um merge nela só passa com os três verdes, e ninguém fica de fora da regra. O GitHub não lê o arquivo sozinho. Quem administra o repositório o importa uma vez, em *Settings → Rules → Rulesets → New ruleset → Import a ruleset*, ou com `gh api -X POST repos/SanthiagoBR/SolidVision/rulesets --input .github/rulesets/ci.json`. Renomear um job é mudar o `ci.json` no mesmo commit e importá-lo de novo: o `test_ci_workflow.py` recusa um sem o outro.
 
 ---
 

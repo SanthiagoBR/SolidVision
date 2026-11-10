@@ -1,10 +1,14 @@
-# The checks of every push and pull request (RFC-049). Each job calls one
-# group of scripts/check.py, and nothing else: the list of checks lives only
-# there (RFC-048). The backend suite joins in RFC-050.
+# The checks of every push and pull request (RFC-049, RFC-050). Each job
+# calls one group of scripts/check.py, and nothing else: the list of checks
+# lives only there (RFC-048).
 #
 # Every action is pinned by its commit, with the tag beside it, and comes from
 # the `actions` organization (RFC-049 section 4.5). Updating one is changing
 # the commit by hand. backend/tests/test_ci_workflow.py refuses a tag.
+#
+# The three jobs are required by name on the default branch, by the ruleset
+# in .github/rulesets/ci.json (RFC-050 section 6). Renaming a job is changing
+# that file in the same commit, and importing it again.
 
 name: ci
 
@@ -19,6 +23,12 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  # Also check.py's PYTHON_VERSION: the env step fails if the two disagree.
+  PYTHON_VERSION: "3.12.9"
+  # python.3.12.9.nupkg on nuget.org (RFC-050 section 2.5).
+  PYTHON_NUGET_SHA256: "b7240e3117d94dc2446c4b1250e31306adc817934706937d0992c78f937487ba"
 
 jobs:
   frontend:
@@ -40,29 +50,13 @@ jobs:
   estatico:
     runs-on: windows-2025
     timeout-minutes: 30
-    env:
-      # Also check.py's PYTHON_VERSION: the env step fails if the two disagree.
-      PYTHON_VERSION: "3.12.9"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      # The base Python from nuget.org and the whole venv (RFC-050 section 4.2).
+      - uses: ./.github/actions/venv
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      # The whole venv, not pip's cache (RFC-049 section 2.4). Saved apart,
-      # right after make_venv.py has held it against the lockfiles, so a run
-      # whose checks fail still keeps it (section 4.4).
-      - id: venv
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: .venv
-          key: venv-${{ env.PYTHON_VERSION }}-${{ hashFiles('scripts/python-win-64.lock', 'scripts/python-dev-win-64.lock', 'scripts/make_venv.py') }}
-      - if: steps.venv.outputs.cache-hit != 'true'
-        run: python scripts/make_venv.py
-      - if: steps.venv.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: .venv
-          key: ${{ steps.venv.outputs.cache-primary-key }}
+          nuget-sha256: ${{ env.PYTHON_NUGET_SHA256 }}
       # One entry per commit; each run restores the newest with the same
       # lockfiles. Saved whether mypy passed or not.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
@@ -78,3 +72,36 @@ jobs:
         with:
           path: .mypy_cache
           key: mypy-${{ hashFiles('scripts/python-win-64.lock', 'scripts/python-dev-win-64.lock') }}-${{ github.sha }}
+
+  backend:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: ./.github/actions/venv
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          nuget-sha256: ${{ env.PYTHON_NUGET_SHA256 }}
+      # The embedded PostgreSQL runtime, keyed on its lockfile and on the
+      # script that materializes it, and saved right after it, like the venv
+      # (RFC-050 section 4.4). The script puts the runtime in place only
+      # when it is whole.
+      - id: postgres
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: runtime/postgres
+          key: postgres-${{ hashFiles('scripts/postgres-win-64.lock', 'scripts/vendor_postgres.py') }}
+      - if: steps.postgres.outputs.cache-hit != 'true'
+        run: .\.venv\Scripts\python.exe scripts/vendor_postgres.py
+      - if: steps.postgres.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: runtime/postgres
+          key: ${{ steps.postgres.outputs.cache-primary-key }}
+      # A new cluster on every run, never cached: `run --` makes it (initdb),
+      # starts it, applies the migrations, runs the command with
+      # DATABASE_SOURCE=embedded and stops it. No .env, no runtime\models:
+      # the `slow` and `embedded` tests are RFC-051's.
+      - run: .\.venv\Scripts\python.exe -m app.infrastructure.database.embedded run -- .\.venv\Scripts\python.exe scripts/check.py pytest
+        env:
+          PYTHONPATH: backend

@@ -42,6 +42,10 @@ RECORD = InstanceRecord(
     last_ready_port=51234,
 )
 
+DEADLINE = 30.0
+"""What the state-file test waits for its reads and writes, at most: it ends
+as soon as it has seen enough of both (RFC-050 section 5.2)."""
+
 
 class TestTheRecord:
     def test_it_goes_to_json_and_back(self) -> None:
@@ -102,9 +106,16 @@ class TestTheStateFile:
         thread = threading.Thread(target=writer)
         thread.start()
         reads = 0
-        deadline = time.monotonic() + 1.0
+        deadline = time.monotonic() + DEADLINE
         try:
-            while time.monotonic() < deadline:
+            # Until more than ten of each, not for a fixed second: a reader
+            # that reopens the file leaves the rename few instants, and how
+            # many writes fit in a second is the machine's speed (RFC-050
+            # section 2.3).
+            while reads <= 10 or len(written) <= 10:
+                assert (
+                    time.monotonic() < deadline
+                ), f"{reads} reads and {len(written)} writes in {DEADLINE:.0f} s"
                 try:
                     text = (tmp_path / "launcher.json").read_text(encoding="utf-8")
                 except PermissionError:
@@ -117,9 +128,6 @@ class TestTheStateFile:
         finally:
             stop.set()
             thread.join(10)
-
-        assert reads > 10
-        assert len(written) > 10
 
 
 class TestTheLock:

@@ -1,0 +1,93 @@
+{
+  "machine": {
+    "cpus": 8,
+    "python": "3.12.9"
+  },
+  "series": {
+    "antes": {
+      "when": "2026-11-10 17:21",
+      "commit": "9dbfcf6",
+      "suite_files_changed": false,
+      "suite_files_sha256": {
+        "test_launcher_children.py": "a5e90e2550324cd4",
+        "test_launcher_instance.py": "bf02c9282dc53402"
+      },
+      "conditions": {
+        "idle": {
+          "runs": 300,
+          "busy_processes": 0,
+          "wall_seconds": 619.8,
+          "tests": {
+            "test_last_fifty": {
+              "runs": 300,
+              "failures": 2,
+              "max_seconds": 1.17,
+              "assertions": {
+                "AssertionError: assert 'a warning on stderr' == 'stdin ended'": 2
+              }
+            },
+            "test_half_a_file": {
+              "runs": 300,
+              "failures": 2,
+              "max_seconds": 1.07,
+              "assertions": {
+                "assert 10 > 10": 2
+              }
+            },
+            "test_last_fifty_fixed": {
+              "runs": 300,
+              "failures": 0,
+              "max_seconds": 0.66,
+              "assertions": {}
+            },
+            "test_half_a_file_fixed": {
+              "runs": 300,
+              "failures": 0,
+              "max_seconds": 1.1,
+              "assertions": {}
+            }
+          }
+        },
+        "busy": {
+          "runs": 40,
+          "busy_processes": 8,
+          "wall_seconds": 190.1,
+          "tests": {
+            "test_last_fifty": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 1.94,
+              "assertions": {}
+            },
+            "test_half_a_file": {
+              "runs": 40,
+              "failures": 31,
+              "max_seconds": 1.41,
+              "assertions": {
+                "assert 6 > 10": 10,
+                "assert 9 > 10": 5,
+                "assert 5 > 10": 6,
+                "assert 8 > 10": 3,
+                "assert 4 > 10": 3,
+                "assert 7 > 10": 3,
+                "assert 3 > 10": 1
+              }
+            },
+            "test_last_fifty_fixed": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 1.0,
+              "assertions": {}
+            },
+            "test_half_a_file_fixed": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 3.96,
+              "assertions": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

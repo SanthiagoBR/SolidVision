@@ -6,6 +6,8 @@ __pycache__/
 .env
 .venv/
 venv/
+# The composite action that makes the CI's venv, not a venv (RFC-050 4.2).
+!/.github/actions/venv/
 .pytest_cache/
 .mypy_cache/
 .idea/

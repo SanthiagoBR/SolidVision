@@ -1,0 +1,30 @@
+{
+  "postgres": {
+    "vendor_seconds": 32.5,
+    "files": 2650,
+    "megabytes": 129.3,
+    "pack_seconds": 32.4,
+    "archive_megabytes": 40.1,
+    "remove_seconds": 1.9,
+    "unpack_seconds": 4.1
+  },
+  "nuget": {
+    "download_seconds": 0.7,
+    "package_megabytes": 14.5,
+    "sha512_matches_nuget_org": true,
+    "sha256": "b7240e3117d94dc2446c4b1250e31306adc817934706937d0992c78f937487ba",
+    "unpack_seconds": 2.6,
+    "tools_files": 1321,
+    "tools_megabytes": 39.3,
+    "version": "3.12.9",
+    "venv_seconds": 27.4,
+    "tools": {
+      "files": 1484,
+      "megabytes": 43.4,
+      "pack_seconds": 29.6,
+      "archive_megabytes": 15.0,
+      "remove_seconds": 0.8,
+      "unpack_seconds": 1.9
+    }
+  }
+}
