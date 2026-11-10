@@ -38,6 +38,16 @@ sys.stdin.buffer.read()
 print("stdin ended", flush=True)
 """
 
+ONLY_STDOUT = f"""
+import sys
+for number in range({TAIL_LINES + 10}):
+    print("line", number, flush=True)
+sys.stdin.buffer.read()
+print("stdin ended", flush=True)
+"""
+"""Only stdout: across two pipes the tail keeps the order in which the two
+readers ran, not the order the child wrote (RFC-050 section 2.2)."""
+
 DEADLINE = 30.0
 
 
@@ -102,10 +112,10 @@ def test_a_path_outside_the_code_page_crosses_the_pipe_intact() -> None:
 
 
 def test_the_last_fifty_lines_are_kept() -> None:
-    child, _ = start(UNTIL_STDIN_ENDS)
+    child, _ = start(ONLY_STDOUT)
     child.request_stop()
     wait_for_exit(child)
-    child.drain()
+    assert child.drain()
 
     lines = child.last_lines()
     assert len(lines) == TAIL_LINES
