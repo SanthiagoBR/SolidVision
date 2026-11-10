@@ -1,0 +1,884 @@
+{
+  "machine": {
+    "cpus": 8,
+    "python": "3.12.9"
+  },
+  "conditions": {
+    "idle": {
+      "busy_processes": 0,
+      "lines": {
+        "runs": 100,
+        "failures": 0,
+        "seconds": 25.1,
+        "failure_records": [],
+        "drained_false": 0,
+        "last_lines": {
+          "stdin ended": 100
+        },
+        "max_drain_seconds": 0.002
+      },
+      "state": {
+        "runs": 60,
+        "failures": 50,
+        "seconds": 62.9,
+        "failure_records": [
+          {
+            "passed": false,
+            "reads": 470,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1265,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1382,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 18,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 757,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 18,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 947,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 15,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1063,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 16,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 712,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 11,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 923,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 12,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1397,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 18,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 718,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 16,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 754,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 12,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 870,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 650,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 16,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 678,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 663,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 721,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 11,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 573,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 8,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 674,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 521,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 6,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1261,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1413,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 928,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1238,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1688,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1741,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 9,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1393,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1304,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1308,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 15,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1331,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 16,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1559,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1986,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1438,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 4,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1181,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 12,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1125,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 11,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 810,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1119,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 17,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1100,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 522,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 40,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 621,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 11,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 629,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 12,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 975,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 12,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1012,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 9,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1047,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 12,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1022,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 704,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1386,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 13,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1401,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 11,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1632,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 10,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 1335,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 14,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 601,
+            "written": 9,
+            "refused_writes": 0,
+            "denied_opens": 7,
+            "error": null
+          }
+        ],
+        "min_reads": 470,
+        "min_written": 7,
+        "errors": {
+          "None": 60
+        }
+      }
+    },
+    "busy": {
+      "busy_processes": 8,
+      "lines": {
+        "runs": 100,
+        "failures": 0,
+        "seconds": 81.2,
+        "failure_records": [],
+        "drained_false": 0,
+        "last_lines": {
+          "stdin ended": 100
+        },
+        "max_drain_seconds": 0.0
+      },
+      "state": {
+        "runs": 60,
+        "failures": 53,
+        "seconds": 72.9,
+        "failure_records": [
+          {
+            "passed": false,
+            "reads": 151,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 4,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 178,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 21,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 158,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 89,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 92,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 125,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 9,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 263,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 174,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 6,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 175,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 15,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 98,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 52,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 295,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 60,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 161,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 21,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 236,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 65,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 62,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 235,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 175,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 207,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 40,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 344,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 442,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 330,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 232,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 9,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 178,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 4,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 377,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 192,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 885,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 1,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 564,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 1,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 33,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 25,
+            "written": 3,
+            "refused_writes": 0,
+            "denied_opens": 0,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 63,
+            "written": 3,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 901,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 127,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 223,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 85,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 119,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 1,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 178,
+            "written": 8,
+            "refused_writes": 0,
+            "denied_opens": 9,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 133,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 5,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 178,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 125,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 90,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 244,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 94,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 55,
+            "written": 2,
+            "refused_writes": 0,
+            "denied_opens": 0,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 22,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 0,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 55,
+            "written": 3,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 61,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 1,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 423,
+            "written": 10,
+            "refused_writes": 0,
+            "denied_opens": 1,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 165,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 150,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 5,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 69,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 56,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 192,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 5,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 599,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 109,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 4,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 142,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 2,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 330,
+            "written": 5,
+            "refused_writes": 0,
+            "denied_opens": 3,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 174,
+            "written": 4,
+            "refused_writes": 0,
+            "denied_opens": 4,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 142,
+            "written": 7,
+            "refused_writes": 0,
+            "denied_opens": 6,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 435,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 453,
+            "error": null
+          },
+          {
+            "passed": false,
+            "reads": 563,
+            "written": 6,
+            "refused_writes": 0,
+            "denied_opens": 6,
+            "error": null
+          }
+        ],
+        "min_reads": 22,
+        "min_written": 2,
+        "errors": {
+          "None": 60
+        }
+      }
+    }
+  }
+}
