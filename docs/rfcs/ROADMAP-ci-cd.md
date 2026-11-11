@@ -132,15 +132,17 @@ As conferências que levam segundos, a cada push. É o primeiro sinal verde no G
 - Tornar os três jobs obrigatórios na branch padrão, por um *ruleset* do GitHub. É uma configuração do repositório, e quem a liga é o usuário.
 
 **Critérios de pronto**
-- A suíte passa no runner com o mesmo número de testes que passam e que pulam no mesmo commit numa máquina de desenvolvimento. Cada diferença é explicada.
-- Dez execuções seguidas sem nenhuma falha, sem *re-run*: `TBM` de 10.
-- Tempo do job, com o cache do runtime frio e quente: `TBM` e `TBM` min.
+- A suíte passa no runner com o mesmo número de testes que passam e que pulam no mesmo commit numa máquina de desenvolvimento. Cada diferença é explicada. → **3 563 passados e nenhum pulado, nos dois**, no mesmo commit. Antes, 3 falhas só no runner, que acharam um defeito do produto, corrigido ([RFC-050 §15.3 e §16.1](rfc-050-suite-do-backend-no-windows.md#161-três-testes-falharam-no-runner-no-build-26100-o-icacls-inheritancer-não-tira-a-herança)).
+- Dez execuções seguidas sem nenhuma falha, sem *re-run*: `TBM` de 10 → **10 de 10** (RFC-050 §15.4).
+- Tempo do job, com o cache do runtime frio e quente: `TBM` e `TBM` min → **3,9 e 2,2 min**; do push ao resultado dos três jobs, quente, **2,3 min** (RFC-050 §15.5).
 
 **Riscos**
-- A primeira subida do cluster no runner inclui o `initdb`: 24,7 s num HDD e 9,8 s num NVMe. Num runner, `TBM`.
-- Algum teste pode presumir algo desta máquina (um drive `D:`, um usuário com acento, um volume com GUID real). Cada caso entra no RFC.
+- A primeira subida do cluster no runner inclui o `initdb`: 24,7 s num HDD e 9,8 s num NVMe. Num runner, `TBM` → **de 2,1 a 5,5 s**, e o cluster nasce em toda execução (RFC-050 §15.5).
+- Algum teste pode presumir algo desta máquina (um drive `D:`, um usuário com acento, um volume com GUID real). Cada caso entra no RFC. → **Um caso**: o usuário do runner é a conta Administrator embutida, que o SDDL escreve como `LA`, e não pelo SID. O teste foi corrigido (RFC-050 §16.1).
 
 **Tamanho estimado:** um a dois dias.
+
+**Implementado em 11/11/2026.** O que o RFC mudou neste escopo está no [§14 dele](rfc-050-suite-do-backend-no-windows.md#14-o-que-isto-muda-no-roadmap-e-o-que-passa-adiante). A causa conhecida de um dos testes instáveis não era a que falhava: o que falhava era a ordem dos dois pipes na cauda, e o outro teste falhava pela contagem de escritas, nunca por meio arquivo. Os dois foram corrigidos só nos testes. O `setup-python` saiu: o Python base vem do pacote do nuget.org, por uma *composite action* que também monta o venv. O ruleset vai na `~DEFAULT_BRANCH` e fica no git, como `.github/rulesets/ci.json`. A medição achou um defeito do produto que nenhum RFC previa: no Windows do build 26100, o `icacls /inheritance:r` não tira as entradas herdadas, e a pasta do cluster e a trava do staging passaram a ser escritas pela API do Windows ([§16.1](rfc-050-suite-do-backend-no-windows.md#161-três-testes-falharam-no-runner-no-build-26100-o-icacls-inheritancer-não-tira-a-herança)).
 
 ---
 
@@ -251,7 +253,7 @@ A entrega foi antecipada para 11/11/2026, e os seis a nove dias não cabem. O co
 | 053 | O teste de fumaça numa máquina nova | O teste à mão acima, numa máquina que não é limpa. A desinstalação não é testada |
 | 054 | Tag → rascunho de release | A tag e o rascunho são criados à mão |
 
-O item 2 de [Pronto](#pronto) depende de importar o `.github/rulesets/ci.json`, o que é um ato do usuário. Os itens 3 e 4 ficam para quando o roadmap voltar, a partir do RFC-051.
+O item 2 de [Pronto](#pronto) depende de importar o `.github/rulesets/ci.json`, o que é um ato do usuário. → **Importado em 11/11/2026**, com a autorização do usuário: o ruleset vale na `main`, e um PR com o `backend` vermelho ficou bloqueado ([RFC-050 §15.6](rfc-050-suite-do-backend-no-windows.md#156-o-ruleset)). Os itens 3 e 4 ficam para quando o roadmap voltar, a partir do RFC-051.
 
 **Os números da `v0.1.0`:**
 
@@ -266,7 +268,7 @@ O item 2 de [Pronto](#pronto) depende de importar o `.github/rulesets/ci.json`, 
 
 O roadmap termina quando:
 
-1. Todo push mostra, em `TBM` min, se o lint, os tipos, a suíte padrão e o frontend passam, num ambiente montado só dos lockfiles.
+1. Todo push mostra, em `TBM` min, se o lint, os tipos, a suíte padrão e o frontend passam, num ambiente montado só dos lockfiles. → **Em 2,3 min**, a mediana com os caches quentes ([RFC-050 §15.5](rfc-050-suite-do-backend-no-windows.md#155-os-tempos-o-critério-3)).
 2. A branch padrão não aceita merge com um desses checks vermelho.
 3. Os testes `embedded` e `slow` rodam sem ninguém pedir, e uma falha avisa alguém.
 4. Uma tag produz, sem nenhum passo à mão, um rascunho de release com um instalador que foi instalado, aberto, fechado e desinstalado numa máquina nova.

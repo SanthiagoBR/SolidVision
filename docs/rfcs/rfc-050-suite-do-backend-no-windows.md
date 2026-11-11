@@ -1,6 +1,6 @@
 # RFC-050 — A Suíte Padrão do Backend no Windows, com o Postgres Embarcado
 
-**Status:** Proposto
+**Status:** Implementado, com as correções de §16. A medição de §15, no GitHub Actions, em 10 e 11/11/2026. A primeira execução do `backend` achou 3 testes que só passavam nesta máquina, e eles acharam um defeito do produto: no Windows do build 26100, o `icacls /inheritance:r` não tira as entradas herdadas, e os Administradores ficavam com controle total na pasta do cluster (§16.1). A DACL passou a ser escrita pela API do Windows. Depois disso, a suíte no runner deu os números desta máquina no mesmo commit, **3 563 passados, nenhum pulado, nenhuma falha**, e as **dez execuções seguidas foram verdes**, sem *re-run*. O job `backend` levou **3,9 min frio e 2,2 min quente**, e do push ao resultado dos três jobs, com os caches quentes, **2,3 min** (alvo: 10 min). O `initdb` levou de 2,1 a 5,5 s no runner, e o Python base do nuget.org, de 2 a 6 s, contra os 49,5 s do `setup-python`. Os dois testes do launcher, corrigidos, deram zero falhas nas quatro séries de §10. O ruleset foi importado, e um PR com o `backend` vermelho ficou bloqueado. As seções 1 a 14 são o rascunho como foi aprovado
 **Depende de:** RFC-048 (o `check.py pytest`, a conexão de teste e o `make_venv.py`), RFC-049 (o `ci.yml`, o passo do venv e o `test_ci_workflow.py`), RFC-033 §5.1 e §11 (o `vendor_postgres.py` e o `embedded run --`), RFC-036 §5.5 e §8 (os dois testes do launcher), [roadmap de CI/CD](ROADMAP-ci-cd.md) (D2, D4, D5, D6 e D7)
 **Bloqueia:** RFC-051, que guarda o `runtime\postgres` pela mesma chave e monta o venv pela mesma action; RFC-052, que monta o venv do build pela action deste RFC
 **Migration:** nenhuma
@@ -419,14 +419,14 @@ O `backend/tests/test_ci_workflow.py` passa a ler também a action e o ruleset. 
 
 | critério | o número |
 |---|---|
-| **A suíte no runner dá os números de uma máquina de desenvolvimento** | No mesmo commit, o pytest do job `backend` e o do `pilot_suite.py` nesta máquina: passados `TBM` e `TBM`, pulados `TBM` e `TBM`, falhas 0 e 0. No piloto, em `9dbfcf6`, esta máquina deu 3 554 passados, nenhum pulado e nenhuma falha (§2.1). Cada diferença é explicada, uma por uma. Um teste que presume esta máquina sem precisar dela é corrigido no teste, a regra do RFC-049 §5 |
-| **Dez execuções seguidas sem falha** | Dez commits vazios numa branch de medição, cada um depois de a execução anterior terminar, para que um não cancele o outro: os três jobs verdes em `TBM` de 10, sem nenhum *re-run*. Uma falha não é repetida. Ela é explicada e corrigida, e a contagem recomeça do zero |
-| **O tempo, frio e quente** | O job `backend`, do começo ao fim: frio, sem venv e sem runtime, `TBM` min; quente, a mediana das dez execuções do critério 2, `TBM` min. Vêm junto o tempo de cada passo: o Python do nuget.org, o venv, o runtime, o `initdb` e o pytest. **Do push ao resultado dos três jobs, com os caches quentes:** `TBM` min. O alvo, escrito antes do número, é **10 min**, e esse número é o do item 1 do *Pronto* do roadmap. Sem ser critério, vem o Python base no `estatico`, contra os 49,5 s do `setup-python` (RFC-049 §15.2) |
+| **A suíte no runner dá os números de uma máquina de desenvolvimento** | No mesmo commit, o pytest do job `backend` e o do `pilot_suite.py` nesta máquina: passados `TBM` e `TBM`, pulados `TBM` e `TBM`, falhas 0 e 0 → **3 563 e 3 563 passados, 0 e 0 pulados, 0 e 0 falhas**, em `37dab90` (§15.3). Em `0da3fbe`, o runner deu 3 falhas que esta máquina não dá, explicadas e corrigidas em §16.1. No piloto, em `9dbfcf6`, esta máquina deu 3 554 passados, nenhum pulado e nenhuma falha (§2.1). Cada diferença é explicada, uma por uma. Um teste que presume esta máquina sem precisar dela é corrigido no teste, a regra do RFC-049 §5 |
+| **Dez execuções seguidas sem falha** | Dez commits vazios numa branch de medição, cada um depois de a execução anterior terminar, para que um não cancele o outro: os três jobs verdes em `TBM` de 10 → **10 de 10** (§15.4), sem nenhum *re-run*. Uma falha não é repetida. Ela é explicada e corrigida, e a contagem recomeça do zero |
+| **O tempo, frio e quente** | O job `backend`, do começo ao fim: frio, sem venv e sem runtime, `TBM` min → **3,9 min** (235 s); quente, a mediana das dez execuções do critério 2, `TBM` min → **2,2 min** (131,5 s; de 92 a 134 s). Vêm junto o tempo de cada passo: o Python do nuget.org, o venv, o runtime, o `initdb` e o pytest (§15.5). **Do push ao resultado dos três jobs, com os caches quentes:** `TBM` min → **2,3 min** (135 s, a mediana das dez; de 94 a 146 s). O alvo, escrito antes do número, é **10 min**, e esse número é o do item 1 do *Pronto* do roadmap. Sem ser critério, vem o Python base no `estatico`, contra os 49,5 s do `setup-python` (RFC-049 §15.2) → **2,6 s** (mediana; de 1,8 a 6,1 s) |
 
 ## 10. Testes
 
 - **`test_launcher_children.py` e `test_launcher_instance.py`**: as correções de §5.
-- **`experiments/rfc-050-suite-do-backend/repeat_launcher_tests.py`**: os dois testes de hoje e os dois protótipos de §5, nas condições de §2.2 e §2.3: 300 vezes sem carga e 40 com as CPUs ocupadas. Antes das correções, os números de §2.2 e §2.3 são o controle. Depois, o esperado é zero falhas nas quatro séries: `TBM`.
+- **`experiments/rfc-050-suite-do-backend/repeat_launcher_tests.py`**: os dois testes de hoje e os dois protótipos de §5, nas condições de §2.2 e §2.3: 300 vezes sem carga e 40 com as CPUs ocupadas. Antes das correções, os números de §2.2 e §2.3 são o controle. Depois, o esperado é zero falhas nas quatro séries: `TBM` → **zero nas quatro** (§15.2). Antes, nas mesmas séries, 2 de 300 e 0 de 40 no primeiro teste, e 2 de 300 e 31 de 40 no segundo.
 - **`test_ci_workflow.py`**: as conferências de §7, cada uma com o seu defeito plantado. Os defeitos são um job renomeado, um check a menos no `ci.json`, um ator na lista de *bypass*, um `uses:` pela tag dentro da action, um `PYTHON_NUGET_SHA256` que não é hexadecimal e um `python-version:` com uma versão própria.
 - **O ruleset**, depois de importado. Pela API, sem token: `GET /repos/SanthiagoBR/SolidVision/rules/branches/main` devolve a regra com os três nomes, comparada com o `ci.json`. E um PR de uma branch de medição com um teste vermelho plantado, aberto contra a `main`, mostra o merge bloqueado (`mergeable_state: blocked`) e é fechado sem merge. O PR é uma ação para fora: quem o abre é o usuário, ou alguém com a autorização dele.
 - **O workflow** é testado pelos critérios de §9, no runner.
@@ -477,3 +477,149 @@ O `backend/tests/test_ci_workflow.py` passa a ler também a action e o ruleset. 
 **Para quem renomear um job.** Muda-se o `ci.json` no mesmo commit, e o usuário importa o ruleset de novo. O teste de §7 recusa um sem o outro.
 
 **Tamanho estimado:** um a dois dias, como no roadmap, mais a espera das execuções de §9.
+
+## 15. Validação
+
+### 15.1 Onde e como
+
+No GitHub Actions do `SanthiagoBR/SolidVision`, em 10 e 11/11/2026, e nesta máquina. O commit da implementação, `0da3fbe`, foi para a branch de medição `medicao/rfc-050-quente`, e a primeira execução reprovou o `backend` com três falhas que esta máquina não dá (§16.1). Uma sonda, numa branch própria (`medicao/rfc-050-sonda-acl`), achou a causa no runner, e a correção é o commit `37dab90`. Ele foi para a `quente`, que já tinha os caches, e para uma branch nova, `medicao/rfc-050-fria`, para o caso frio. Depois vieram os dez commits vazios na `quente`, cada um depois de a execução anterior terminar. O PR de §10 saiu de uma terceira branch, `medicao/rfc-050-pr-vermelho`. As quatro branches foram apagadas no fim.
+
+O `measure_ci.py` leu as execuções pela API, e os logs com o token do usuário, autorizado para esta sessão. Os passos de dentro da action, que a API reporta como um passo só, vêm da hora de cada `##[group]` do log. As referências desta máquina são o `pilot_suite.py` e o `repeat_launcher_tests.py`, nos mesmos commits.
+
+Em 11/11, depois das medições, os commits desde este RFC foram reescritos só na mensagem, sem o trailer `Co-Authored-By`. A implementação, `0da3fbe`, virou `3a24cb5`, e a correção, `37dab90`, virou `2878133`, com as mesmas árvores. Este RFC cita os SHAs que rodaram no runner.
+
+### 15.2 Os dois testes do launcher
+
+Pelo `repeat_launcher_tests.py`, cada série num pytest próprio, gravada no `.json`. A série de antes rodou com os testes de `9dbfcf6`. A de depois rodou em `0da3fbe`, com as correções de §5.
+
+| teste | série | antes | depois |
+|---|---|---|---|
+| `test_the_last_fifty_lines_are_kept` | 300 sem carga | **2 falhas**, as duas `'a warning on stderr' == 'stdin ended'` | **0** |
+| | 40 com as 8 CPUs ocupadas | 0 | **0** |
+| `test_a_reader_never_sees_half_a_file` | 300 sem carga | **2 falhas**, as duas na contagem (`10 > 10`) | **0**, no máximo 1,1 s |
+| | 40 com as 8 CPUs ocupadas | **31 falhas**, todas na contagem, com 3 a 9 escritas | **0**, no máximo 5,2 s |
+
+Na série de antes, os dois protótipos de §5 rodaram ao lado dos testes de hoje, nas mesmas condições, e deram 0 falhas em 300 e 0 em 40, cada um. A série de antes repete o que §2.2 e §2.3 descreveram, com outra taxa: o teste do arquivo de estado falhou 2 vezes em 300 sem carga, e não 13 em 40. A asserção é a mesma, e com carga ele falhou 31 vezes em 40. No runner, os dois testes corrigidos passaram em todas as execuções de §15.4.
+
+### 15.3 A suíte no runner: o critério 1
+
+| commit | o job `backend` no runner | o `pilot_suite.py` nesta máquina |
+|---|---|---|
+| `0da3fbe`, a implementação | **3 falhas** e 3 560 passados, nenhum pulado | 3 563 passados, nenhum pulado, nenhuma falha |
+| `37dab90`, com a correção de §16.1 | **3 563 passados, nenhum pulado, nenhuma falha**, na execução fria e em todas as quentes | **3 563 passados, nenhum pulado, nenhuma falha** |
+
+Nos dois lados, 686 testes ficaram fora da seleção (`slow` e `embedded`). Os 3 563 são os 3 554 de §2.1 mais os 9 testes novos do `test_ci_workflow.py`, que foi de 12 para 21 (§16.3).
+
+As três falhas de `0da3fbe` foram a única diferença, e §16.1 a explica. Nenhum risco de §11 apareceu. O `TEMP` curto do runner (`C:\Users\RUNNER~1\...`) não mudou nada. O teste do `icacls` que nega a leitura (`test_a_folder_denied_for_real_is_reported`) passou, e não pulou. Os testes de página de código e de nomes curtos também passaram. A diferença que apareceu não estava em §11.
+
+### 15.4 Dez execuções seguidas: o critério 2
+
+Dez commits vazios na `quente`, de `2bfa886` a `d015435`, em 11/11, das 09h57 às 10h24 (horário de Brasília), cada push depois de a execução anterior terminar. **10 de 10 verdes**, com os três jobs verdes em cada uma, todas na primeira tentativa, sem nenhum *re-run*. Em todas, o pytest deu 3 563 passados e nenhum pulado. Do push ao resultado, levaram 117, 135, 94, 111, 136, 137, 146, 135, 115 e 137 s.
+
+A contagem começou depois da correção de §16.1, como §9 manda. Antes dela, a primeira execução, em `0da3fbe`, teve as três falhas daquela seção. Depois dela, a execução do `37dab90` na `quente` e a da `fria` também foram verdes. Durante a quinta execução, o script que esperava cada uma esbarrou no limite da API pública, de 60 chamadas por hora. Ele foi retomado com o token, sem um push novo, e a quinta execução não foi tocada.
+
+### 15.5 Os tempos: o critério 3
+
+O frio é a execução da `fria`, sem venv e sem runtime na branch. O quente são as dez de §15.4: a faixa, e a mediana entre parênteses. Os passos de dentro da action vêm dos grupos do log.
+
+| passo | frio | quente |
+|---|---|---|
+| O Python base do nuget.org | 3,8 s | 2,1 a 5,1 s (2,9 s) |
+| Restaurar o venv | 0,6 s, sem achar | 10,0 a 16,7 s (15,1 s) |
+| `make_venv.py` | 86,0 s | pulado |
+| Salvar o venv | 13,4 s | pulado |
+| A action inteira | 104 s | 13 a 22 s (18 s) |
+| Restaurar o `runtime\postgres` | menos de 1 s, sem achar | 1 a 2 s (2 s) |
+| `vendor_postgres.py` | 12,2 s | pulado |
+| Salvar o runtime | 3,8 s | pulado |
+| O `initdb` | 5,5 s | 2,1 a 3,0 s (2,6 s) |
+| A etapa `pytest` do `check.py` | 93,3 s (o pytest, 89,0 s) | 63,0 a 95,3 s (91,0 s); o pytest, 59,5 a 91,3 s |
+| O passo do `run --` inteiro | 103 s | 69 a 102 s (98 s) |
+| **O job `backend`** | **235 s, 3,9 min** | **92 a 134 s (131,5 s, 2,2 min)** |
+| O job `estatico` | 195 s | 31 a 53 s (44 s) |
+| O job `frontend` | 55 s | 67 a 82 s (76 s) |
+| **Do push ao resultado** | **238 s** | **94 a 146 s. A mediana: 135 s, 2,3 min** |
+
+**O alvo era 10 min.** O `backend` é o job mais lento nos dois casos, e o pytest é dois terços dele quente.
+
+**O Python base no `estatico`** levou de 1,8 a 6,1 s (mediana 2,6 s), contra 40 a 58 s do `setup-python` (mediana 49,5 s, RFC-049 §15.2). O `estatico` quente passou de 83 a 96 s (RFC-049 §14.2) para 31 a 53 s.
+
+**O `initdb`**, o número que §4.4 deixou para o runner, levou 5,5 s na execução fria e de 2,1 a 3,0 s nas quentes, e 3,1 s na primeira, em `0da3fbe`. O cluster nasce em toda execução, então cada um desses é um `initdb` inteiro. Nesta máquina, foram 19,7 s no piloto (§2.1) e 33,5 s no `pilot_suite.py` do `37dab90`. O roadmap dava 24,7 s num HDD e 9,8 s num NVMe. O pytest levou de 59,5 a 91,3 s no runner, contra 196,8 s no piloto desta máquina.
+
+**Dois jobs montando o venv numa branch fria** (§4.5). Na `fria`, o `backend` salvou o venv, e o `cache/save` do `estatico` avisou *"Unable to reserve cache … another job may be creating this cache"*, sem falhar o job. O mesmo aconteceu na primeira execução da `quente`. O risco de §11 não se confirmou.
+
+**O `frontend` quente levou mais que o frio.** O `npm ci`, com o cache do npm restaurado, levou de 43 a 57 s, e não os 5 a 8 s do RFC-049 §14.2. No log aparece um aviso que o npm da imagem não dava antes, *"install-scripts … not yet covered by allowScripts"*. O RFC-050 não muda o job `frontend`, e ele não é o mais lento. Fica registrado, sem ser investigado.
+
+### 15.6 O ruleset
+
+**A importação.** Pela API, com o token do usuário e a autorização dele, depois de o `backend` passar na `quente`: `POST /repos/SanthiagoBR/SolidVision/rulesets` com o `ci.json` respondeu `201`. O ruleset 27032119 voltou com o app 15368 em cada check e `current_user_can_bypass: never`. Isso responde à pergunta de §2.6: uma conta pessoal no plano Free cria um ruleset num repositório público, e a saída de §6 pela proteção clássica não foi preciso. Pela API pública, sem token, `GET /rules/branches/main` devolve uma regra só, `required_status_checks`, com os parâmetros iguais aos do `ci.json`.
+
+**O PR.** O PR #1, da `medicao/rfc-050-pr-vermelho` para a `main`, com um `assert 1 + 1 == 3` plantado num teste novo. O `backend` ficou vermelho nas duas execuções, a do `push` e a do `pull_request`, e o `frontend` e o `estatico` passaram. Pelo GraphQL, `mergeStateStatus: BLOCKED`, os seis checks com `isRequired: true` e `viewerCanMergeAsAdmin: false`: nem o admin passa por cima. O PR foi fechado sem merge, e a branch, apagada. O `read_pr.py` e o `.json` dele guardam as leituras. O campo da REST que §10 citava mudou de valor durante a leitura (§16.4).
+
+### 15.7 Os caches no runner
+
+| cache | por entrada, no runner | §4.5 |
+|---|---|---|
+| O venv | 240,6 MB | 240,5 MB |
+| O `.mypy_cache` | 13,0 a 13,4 MB | 13,0 MB |
+| Os pacotes do npm | 69,8 MB | 69,8 MB |
+| O `runtime\postgres` | **38,1 MB** | 40,1 MB nesta máquina |
+
+Uma branch nova soma 375 MB, perto dos 360 MB de §4.5. Na leitura de 11/11, o repositório tinha 4,9 GB em 53 entradas, com as das branches de medição dos RFC-049 e 050 dentro.
+
+## 16. Correções feitas durante a implementação
+
+### 16.1 Três testes falharam no runner: no build 26100, o `icacls /inheritance:r` não tira a herança
+
+A primeira execução do `backend`, em `0da3fbe`, deu 3 falhas em 3 563:
+
+- `test_icacls_leaves_only_the_user_and_system_and_cuts_inheritance` e `test_a_file_created_below_inherits_the_same_two_entries`, do `test_embedded_cluster_home.py`: a DACL da pasta do cluster tinha, além do usuário e do SYSTEM, os Administradores (`BA`) e os *Owner Rights* (`OW`);
+- `test_a_locked_staging_cannot_be_written_and_can_be_given_back`, do `test_stage_installation.py`: *"was locked, and 8 of 8 attempts to write in it still succeeded"*.
+
+Nesta máquina, as três passam. O `probe_acl.py` rodou no runner o que os dois lugares fazem: o `icacls <pasta> /inheritance:r /grant:r *<usuário>:... *S-1-5-18:...`, numa pasta feita como o `tmp_path` do pytest e noutra feita como o app faz sob o `%LOCALAPPDATA%`. Ele rodou duas vezes: pela conta do runner e por um usuário comum, criado na hora, sem privilégio de administrador.
+
+| | nesta máquina (Windows 11, build 26300) | no runner, conta `runneradmin` | no runner, usuário comum |
+|---|---|---|---|
+| A conta | o usuário, com os Administradores só para negar, nível médio | o Administrator embutido (RID 500), elevado, nível alto, e tudo o que ela cria tem os Administradores como dono | um usuário do grupo Usuários, nível médio |
+| Depois do `/inheritance:r` | `D:PAI`, vazia | `D:PAI(SY)(BA)(OW)` | `D:PAI(SY)(BA)(OW)` |
+| A pasta do cluster, como o produto a faz | o usuário e o SYSTEM | o usuário, o SYSTEM e os Administradores | o usuário, o SYSTEM e os Administradores |
+| A trava do staging | recusa a escrita | **escreve** | recusa a escrita sob o `%LOCALAPPDATA%`; **escreve** sob uma pasta com `OW` |
+
+**A causa é o Windows, e não a conta.** No Windows Server 2025 (10.0.26100, com o `icacls` 10.0.26100.1882), o `/inheritance:r` não remove as entradas herdadas: ele as torna explícitas, como a documentação diz que o `/inheritance:d` faz. Nesta máquina, o mesmo comando as remove. As consequências no produto são duas. A pasta do cluster ficava com os Administradores em controle total, e não "só o usuário e o SYSTEM" do RFC-033 §6. Outros usuários comuns continuavam sem acesso, porque o `%LOCALAPPDATA%` não os tem. E a trava do staging (RFC-041) não trancava para um administrador elevado. Os testes estavam certos: foram eles que acharam isto.
+
+**A correção, decidida pelo usuário: o produto deixa de depender do `icacls` para tirar a herança.** O `cluster_home.set_protected_dacl` troca a DACL inteira por uma protegida, com as entradas dadas em SDDL, pelo `SetNamedSecurityInfoW`, e o Windows recalcula pelas entradas herdáveis tudo o que está abaixo, como o `icacls` fazia. O `WindowsDirectoryAcl` toma o lugar do `IcaclsDirectoryAcl`, e o `lock()` do `stage_installation.py` usa a mesma função, com o `RX` do usuário escrito como a máscara que o `icacls` gravava (`0x1200a9`). O `unlock()` continua no `icacls /reset`. A mesma sonda, com a correção, no runner:
+
+| | `runneradmin` | usuário comum | nesta máquina |
+|---|---|---|---|
+| A pasta do cluster | o usuário (`LA`) e o SYSTEM | o usuário e o SYSTEM | o usuário e o SYSTEM |
+| Um arquivo criado abaixo | os mesmos dois, herdados | os mesmos dois, herdados | os mesmos dois, herdados |
+| A trava, na pasta e numa abaixo | recusa as duas | recusa as duas | recusa as duas |
+| Depois do `icacls /reset` | escreve | escreve | escreve |
+
+Nos testes, as asserções não mudaram. Mudaram os nomes que citavam o `icacls` e um auxiliar. O SDDL escreve a conta Administrator embutida, a do runner, como `LA`, e não pelo SID. Os dois testes da DACL comparavam com o SID por extenso, e isso presumia o usuário desta máquina sem precisar dele, a regra do RFC-049 §5. O auxiliar `_sddl_name` pergunta ao Windows como o SDDL escreve o SID do usuário. Aqui, ele devolve o SID por extenso para o usuário e `LA` para o Administrator desta máquina.
+
+**Fica assim.** A decisão 6 dizia que o código do launcher não muda, e ele não mudou. Mas §3 não previa mudar código do produto, e este é o código do RFC-033 e do RFC-041. Não foi medido num Windows 11 24H2, que é do mesmo build 26100 do runner. O `secure()` só roda quando o cluster é criado. Um cluster criado antes desta correção num build 26100 manteria os Administradores, mas nenhuma das duas máquinas de desenvolvimento é 26100 (esta é 26300, a outra é Windows 10), e a correção entra antes da primeira release. Não há cluster para migrar.
+
+### 16.2 A linha `venv/` do `.gitignore` ignorava a pasta da action
+
+O `.gitignore` tem `venv/`, que vale para qualquer pasta com esse nome, e a action de §4.2 mora em `.github/actions/venv`. O primeiro `git add` não a levou. Sem ela, os dois jobs Windows parariam no passo da action. A correção é uma exceção só para essa pasta, `!/.github/actions/venv/`, e o nome do RFC fica. O teste de §7 não pegaria isso nesta máquina, porque ele lê o arquivo do disco. No runner, o job pararia antes da suíte.
+
+### 16.3 O teste do YAML confere um pouco mais que §7
+
+As conferências de §7 estão todas lá, com os seis defeitos de §10. Algumas ficaram um pouco maiores, cada acréscimo com o defeito dele testado:
+
+- uma action local cuja pasta não existe é recusada, e não só aceita quando existe;
+- uma versão do Python dentro da action é recusada (um `PYTHON_VERSION` no `env` de um passo dela);
+- cada `nuget-sha256:` do `ci.yml` tem de ler `${{ env.PYTHON_NUGET_SHA256 }}`, como o `python-version:` lê o `PYTHON_VERSION`;
+- o `PYTHON_VERSION` e o `PYTHON_NUGET_SHA256` são declarados uma vez cada, no `env` do workflow, e não no de um job;
+- um check exigido de outro app que não o GitHub Actions é recusado, porque §6 o fixa no 15368.
+
+O `test_ci_workflow.py` tem 21 testes: cinco conferências no arquivo de verdade e dezesseis defeitos plantados.
+
+### 16.4 O `mergeable_state` de §10 muda depois que os checks terminam
+
+§10 esperava ver o merge bloqueado pelo `mergeable_state: blocked` da REST. Lido logo depois de os seis checks do PR terminarem, ele disse `unstable`, que é o estado de um merge permitido com um check não obrigatório falhando. Na mesma hora, o GraphQL disse `BLOCKED`, com cada check marcado `isRequired: true`. Minutos depois, a REST também disse `blocked`. O GitHub calcula o campo da REST depois dos checks, e a leitura veio antes do cálculo. O `read_pr.py` lê os dois, e o `.json` guarda as quatro leituras, cada uma com a origem. Daqui em diante, o que vale é o GraphQL, ou a REST lida depois de assentar.
+
+### 16.5 Quem importou o ruleset
+
+§6 dizia que quem importa o ruleset é o usuário, e o corte do roadmap de 11/11 repetiu isso. O usuário autorizou que esta sessão o importasse pela API, e abrisse e fechasse o PR de §10. O `ci.json` continua sendo o registro, e o GitHub não o lê sozinho. Renomear um job continua pedindo uma nova importação (§14).

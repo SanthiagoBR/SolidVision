@@ -1,0 +1,83 @@
+[
+  {
+    "read_at": "2026-11-11, between 09:58 (the ruleset created) and 10:05; first of three",
+    "source": "the REST field, read by the scratch watcher as soon as the six checks of 4c979bf had finished, before read_pr.py existed",
+    "pr": 1,
+    "state": "open",
+    "merged": false,
+    "rest_mergeable_state": "unstable",
+    "checks": "frontend, estatico: success; backend: failure; each from the push run and from the pull_request run, app 15368"
+  },
+  {
+    "read_at": "2026-11-11, between 09:58 and 10:05; second of three",
+    "source": "the same GraphQL query as read_pr.py, after the first, before read_pr.py existed",
+    "pr": 1,
+    "state": "OPEN",
+    "graphql_merge_state_status": "BLOCKED",
+    "viewer_can_merge_as_admin": false,
+    "checks": "the six, each with isRequired: true"
+  },
+  {
+    "read_at": "2026-11-11, between 09:58 and 10:05; third of three",
+    "source": "the REST field again, right before closing the PR; then closed without merge",
+    "pr": 1,
+    "state": "open",
+    "merged": false,
+    "rest_mergeable_state": "blocked"
+  },
+  {
+    "read_at": "2026-11-11 10:05:10",
+    "pr": 1,
+    "state": "closed",
+    "merged": false,
+    "rest_mergeable_state": "blocked",
+    "graphql_merge_state_status": "BLOCKED",
+    "viewer_can_merge_as_admin": false,
+    "base": "main",
+    "head": "4c979bf",
+    "checks": [
+      {
+        "name": "frontend",
+        "conclusion": "SUCCESS",
+        "event": "pull_request",
+        "app": 15368,
+        "required": true
+      },
+      {
+        "name": "frontend",
+        "conclusion": "SUCCESS",
+        "event": "push",
+        "app": 15368,
+        "required": true
+      },
+      {
+        "name": "estatico",
+        "conclusion": "SUCCESS",
+        "event": "pull_request",
+        "app": 15368,
+        "required": true
+      },
+      {
+        "name": "estatico",
+        "conclusion": "SUCCESS",
+        "event": "push",
+        "app": 15368,
+        "required": true
+      },
+      {
+        "name": "backend",
+        "conclusion": "FAILURE",
+        "event": "pull_request",
+        "app": 15368,
+        "required": true
+      },
+      {
+        "name": "backend",
+        "conclusion": "FAILURE",
+        "event": "push",
+        "app": 15368,
+        "required": true
+      }
+    ]
+  }
+]
