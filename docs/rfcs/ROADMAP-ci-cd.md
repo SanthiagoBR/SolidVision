@@ -6,6 +6,8 @@ São sete RFCs curtos, do 048 ao 054, no formato do [roadmap do frontend](ROADMA
 
 Escrito em 2026-11-08, sobre o commit `21e0af5` da branch `frontend`.
 
+**Cortado em 2026-11-11:** o roadmap para no RFC-050, e a primeira release sai à mão ([O corte de 11/11/2026](#o-corte-de-11112026)).
+
 ---
 
 ## Por que agora
@@ -72,7 +74,7 @@ Um item que **não** atrapalha: o teste que falha com `WARM_UP_MODELS=true` no `
 | D4 | O banco no CI | **O Postgres embarcado**, materializado do `postgres-win-64.lock` e guardado em cache pelo hash do lockfile | No GitHub Actions, *service containers* só existem em runner Linux. E o embarcado é a versão que vai no instalador. O Docker continua sendo o banco do dia a dia |
 | D5 | As versões do Python no CI | **Python 3.12.9**, o venv montado do `python-win-64.lock`, mais um lockfile novo para as ferramentas de desenvolvimento | O CI confere as versões que vão para o usuário, e não as de um venv que derivou. O 3.12.9 é o do pacote ([RFC-041 §2.8](rfc-041-empacotamento-e-instalador.md)), e o black roda nele |
 | D6 | O que roda quando | **A cada push e PR:** análise estática, suíte padrão, frontend. **À noite e sob demanda:** `embedded` e `slow`. **Numa tag:** instalador, teste de fumaça e rascunho de release | O que leva minutos roda sempre. O que baixa 1 GB ou leva 40 min roda quando vale a pena |
-| D7 | A branch padrão | **A decidir pelo usuário.** Recomendação: levar a `frontend` para a `main` antes do RFC-051 | O `schedule` só roda na branch padrão, e a `main` está 70 commits atrás (72 no piloto do RFC-049). E, sem o workflow na `main`, toda branch nova começa com os caches frios ([RFC-049 §4.4](rfc-049-primeiro-workflow.md#44-o-que-fica-guardado-entre-execuções)). A outra saída é trocar a branch padrão do repositório |
+| D7 | A branch padrão | **A decidir pelo usuário.** Recomendação: levar a `frontend` para a `main` antes do RFC-051 | O `schedule` só roda na branch padrão, e a `main` está 70 commits atrás (72 no piloto do RFC-049). E, sem o workflow na `main`, toda branch nova começa com os caches frios ([RFC-049 §4.4](rfc-049-primeiro-workflow.md#44-o-que-fica-guardado-entre-execuções)). A outra saída é trocar a branch padrão do repositório → **Decidida em 11/11/2026: a `frontend` vai para a `main`**, por fast-forward ([O corte de 11/11/2026](#o-corte-de-11112026)) |
 | D8 | Quem publica a release | **Uma pessoa.** O CI cria o rascunho | O instalador não é assinado ([RFC-041 §7.5](rfc-041-empacotamento-e-instalador.md#75-sem-assinatura-o-smartscreen)), e publicar é uma ação para fora que não se desfaz por completo |
 
 ---
@@ -225,6 +227,40 @@ O [RFC-041](rfc-041-empacotamento-e-instalador.md) deixou pendente o teste numa 
 O 051 não bloqueia ninguém e pode andar em paralelo com o 052. O total estimado é de **seis a nove dias de trabalho**, e esse número também é uma estimativa.
 
 **Se o tempo apertar**, o corte já decidido é: o 051 fica só com `workflow_dispatch`, sem `schedule` (o que tira a dependência de D7), e o 053 fica só com instalar, `/health` e desinstalar, sem busca.
+
+## O corte de 11/11/2026
+
+A entrega foi antecipada para 11/11/2026, e os seis a nove dias não cabem. O corte de "Se o tempo apertar" não basta, porque ainda pede o 051, o 052 e o 054. **O roadmap para no RFC-050, e a primeira release sai à mão.**
+
+**Entra**
+
+- **O RFC-050**, com o job `backend` verde no runner. É ele que faz valer o item 1 de [Pronto](#pronto).
+- **D7, decidida:** a `frontend` vai para a `main` por fast-forward, porque a `main` não tem nenhum commit que a `frontend` não tenha. O workflow passa a existir na branch padrão.
+- **A release `v0.1.0`, feita à mão**, com a D8 mantida:
+  - o `npm run dist` numa máquina de desenvolvimento, com as seis conferências do `check_package.py`;
+  - um teste à mão, na mesma máquina: instalar por cima da instalação que já existe, abrir com uma raiz de dados temporária, conferir o `/health` com a busca `ready`, fechar e ver que nenhum processo ficou rodando;
+  - a tag `v0.1.0` no commit da `main`;
+  - um **rascunho** de GitHub Release com o instalador e o `SHA-256`, criado pela API. Quem publica é uma pessoa.
+
+**Fica adiado**, sem data:
+
+| RFC | O que cobria | O que fica no lugar até ele voltar |
+|---|---|---|
+| 051 | `embedded` e `slow` à noite | Os dois rodam à mão. Os vetores bit a bit são conferidos pelo `check_package.py` a cada `npm run dist` |
+| 052 | O instalador gerado no runner | O instalador é gerado numa máquina de desenvolvimento |
+| 053 | O teste de fumaça numa máquina nova | O teste à mão acima, numa máquina que não é limpa. A desinstalação não é testada |
+| 054 | Tag → rascunho de release | A tag e o rascunho são criados à mão |
+
+O item 2 de [Pronto](#pronto) depende de importar o `.github/rulesets/ci.json`, o que é um ato do usuário. Os itens 3 e 4 ficam para quando o roadmap voltar, a partir do RFC-051.
+
+**Os números da `v0.1.0`:**
+
+| Número | Valor |
+|---|---|
+| Commit | `TBM` |
+| Tempo do `npm run dist` nesta máquina | `TBM` min (37 min na máquina do RFC-036) |
+| Tamanho do instalador | `TBM` GB |
+| `SHA-256` | `TBM` |
 
 ## Pronto
 
