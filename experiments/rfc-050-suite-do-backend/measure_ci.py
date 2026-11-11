@@ -344,11 +344,12 @@ def read_caches() -> list[dict[str, Any]]:
 
 
 def read_rules() -> dict[str, Any]:
-    """What GitHub enforces on `main`, read without a token (section 10)."""
+    """What GitHub enforces on `main` (section 10). The endpoints are public;
+    the token, when there is one, only spares the limit of 60 calls an hour."""
     try:
         return {
-            "rules_on_main": api("rules/branches/main", authorized=False),
-            "rulesets": api("rulesets", authorized=False),
+            "rules_on_main": api("rules/branches/main"),
+            "rulesets": api("rulesets"),
         }
     except urllib.error.HTTPError as error:
         return {"error": f"HTTP {error.code}"}
