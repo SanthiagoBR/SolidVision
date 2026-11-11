@@ -500,8 +500,18 @@ def check_vectors_here(reference: Path, images: Path) -> int:
         f"{compare_rows(batched, data['image_vectors_batched'], exact)}"
     )
     queries = [str(query) for query in data["queries"]]
+    # RFC-047 changed on purpose what 14 of the Portuguese queries send to the
+    # translator, and the reference is not rewritten (RFC-047 section 8): those
+    # are compared with the prompt the lexicon gives now, from the list
+    # test_reference_embeddings_slow.py reads too.
+    changed: dict[str, str] = json.loads(
+        reference.with_name("rfc047_changed_prompts.json").read_text(encoding="utf-8")
+    )
     prompts = [model.build_prompt(query) for query in queries]
-    expected_prompts = [str(prompt) for prompt in data["prompts"]]
+    expected_prompts = [
+        changed.get(query, str(prompt))
+        for query, prompt in zip(queries, data["prompts"], strict=True)
+    ]
     if prompts != expected_prompts:
         first = next(
             i for i, (a, b) in enumerate(zip(prompts, expected_prompts)) if a != b
@@ -514,15 +524,21 @@ def check_vectors_here(reference: Path, images: Path) -> int:
 
     from app.infrastructure.ai.query_adapter import QueryAdapter
 
+    # A changed prompt has no recorded vector to land on: the whole path is
+    # compared where RFC-047 changed nothing.
+    rows = [index for index, query in enumerate(queries) if query not in changed]
     adapter = QueryAdapter.load()
     expected = np.concatenate(
         [
             adapter.apply(torch.from_numpy(data["query_vectors"][[index]])).numpy()
-            for index in range(len(queries))
+            for index in rows
         ]
     )
-    found = vectors(model.encode_text(query) for query in queries)
-    print(f"the queries: {compare_rows(found, expected, exact)}")
+    found = vectors(model.encode_text(queries[index]) for index in rows)
+    print(
+        f"the queries: {compare_rows(found, expected, exact)}; "
+        f"{len(changed)} changed by RFC-047 left out"
+    )
     return 0
 
 

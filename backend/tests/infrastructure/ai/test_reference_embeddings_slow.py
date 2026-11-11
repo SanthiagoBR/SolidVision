@@ -80,55 +80,12 @@ changed, or another checkpoint, moves a vector by whole hundredths.
 """
 
 
-CHANGED_BY_RFC_047 = {
-    "propriedade em encosta com piscina": ("a photo of property on hillside with pool"),
-    "piscina em uma casa rural, nao um corpo d'agua natural ou artificial": (
-        "a photo of swimming pool in a rural house,"
-        " not a natural or artificial body of water"
-    ),
-    "tanques artificiais de piscicultura em um vale": (
-        "a photo of artificial fish tanks in a mountain valley"
-    ),
-    "galpao industrial ao lado de terras agricolas": (
-        "a photo of Industrial shed next to agricultural land"
-    ),
-    "galpao ao lado de uma rodovia, nao um galpao dentro de uma cidade": (
-        "a photo of shed next to a highway, not a shed inside a city"
-    ),
-    "terreno de obra limpo com terra vermelha exposta": (
-        "a photo of clean construction land with exposed red land"
-    ),
-    "terreno de construcao recem limpo com terra vermelha em terracos": (
-        "a photo of land of construction clean reme with red land on terracotta"
-    ),
-    "cruzamento na cidade com uma concessionaria de carros": (
-        "a photo of crossing in the city with a car dealership"
-    ),
-    "cobertura de concessionaria com carros a venda,"
-    " nao um estacionamento em uma rua comum": (
-        "a photo of dealership coverage with cars for sale,"
-        " not a parking lot on a common street"
-    ),
-    "oficinas e pequenos comercios ao longo de uma rua comercial": (
-        "a photo of workshops and small shops along a shopping street"
-    ),
-    "rua residencial ladeada por casas": (
-        "a photo of residential street flanked by houses"
-    ),
-    "vista geral de uma cidade em encosta com casas densas": (
-        "a photo of overview of a city on hillside with dense houses"
-    ),
-    "vista ampla de drone de uma cidade em encosta"
-    " com um grande complexo de predios": (
-        "a photo of wide drone view of a city on hillside"
-        " with a large complex of buildings"
-    ),
-    "uma xicara de cafe de ceramica com pires": (
-        "a photo of a cup of ceramic coffee with pyres"
-    ),
-}
+CHANGED_BY_RFC_047: dict[str, str] = json.loads(
+    REFERENCE.with_name("rfc047_changed_prompts.json").read_text(encoding="utf-8")
+)
 """The recorded queries whose text to the translator RFC-047 changed, and
-the prompt each gives now (RFC-047 section 8): 14 of the 25 Portuguese, of
+the prompt each gives now (RFC-047 section 8), kept beside the reference so
+that `scripts/check_package.py` reads the same list: 14 of the 25 Portuguese, of
 which 9 change prompt. One of them for the worse -- "construcao" goes
 accented next to an unaccented "recem" (RFC-047 section 15)."""
 
