@@ -250,7 +250,7 @@ Entities
 ```
 domain/entities/image.py
 
-domain/entities/collection.py
+domain/entities/device.py
 ```
 
 One entity per file.
