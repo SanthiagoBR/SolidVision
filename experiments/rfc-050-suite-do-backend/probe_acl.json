@@ -1,0 +1,190 @@
+{
+  "runner": {
+    "image": "windows-2025",
+    "windows": "Microsoft Windows Server 2025, 10.0.26100.33674",
+    "icacls": "10.0.26100.1882",
+    "run": "43022261912"
+  },
+  "this_machine": {
+    "windows": "Windows 11 Home, 10.0.26300"
+  },
+  "accounts": {
+    "runner runneradmin": {
+      "python": "3.12.10",
+      "whoami_user": "exit 0: \"runnervmm7ud1\\runneradmin\",\"S-1-5-21-3289802278-1561746829-1498425070-500\"",
+      "user_sid": "S-1-5-21-3289802278-1561746829-1498425070-500",
+      "whoami_groups": [
+        "\"NT AUTHORITY\\Local account and member of Administrators group\",\"Well-known group\",\"S-1-5-114\",\"Mandatory group, Enabled by default, Enabled group\"",
+        "\"BUILTIN\\Administrators\",\"Alias\",\"S-1-5-32-544\",\"Mandatory group, Enabled by default, Enabled group, Group owner\"",
+        "\"Mandatory Label\\High Mandatory Level\",\"Label\",\"S-1-16-12288\",\"\""
+      ],
+      "cases": {
+        "pytest": {
+          "parent": "O:BAD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "child": "O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;OW)",
+          "one_call_icacls": "exit 0: processed file: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\rfc050-probe-7718srqi\\parent\\one-call\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "one_call": "O:BAD:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "one_call_file_below": "O:BAD:AI(A;ID;FA;;;LA)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;OW)",
+          "two_calls_inheritance": "exit 0: processed file: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\rfc050-probe-7718srqi\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_inheritance_r": "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "two_calls_grant": "exit 0: processed file: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\rfc050-probe-7718srqi\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_grant_r": "O:BAD:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "lock_icacls": "exit 0: processed file: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\rfc050-probe-7718srqi\\parent\\locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "locked": "O:BAD:PAI(A;OICI;0x1200a9;;;LA)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "locked_write": "written",
+          "api_call": "set",
+          "api": "O:BAD:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)",
+          "api_file_below": "O:BAD:AI(A;ID;FA;;;LA)(A;ID;FA;;;SY)",
+          "api_lock_call": "set",
+          "api_locked": "O:BAD:PAI(A;OICI;0x1200a9;;;LA)(A;OICI;FA;;;SY)",
+          "api_locked_inside": "O:BAD:AI(A;OICIID;0x1200a9;;;LA)(A;OICIID;FA;;;SY)",
+          "api_locked_write": "denied (None)",
+          "api_locked_write_inside": "denied (None)",
+          "api_unlock": "exit 0: processed file: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\rfc050-probe-7718srqi\\parent\\api-locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "api_unlocked_write_inside": "written"
+        },
+        "product": {
+          "parent": "O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;LA)",
+          "child": "O:BAD:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;LA)",
+          "one_call_icacls": "exit 0: processed file: C:\\Users\\runneradmin\\AppData\\Local\\rfc050-probe-c913690f\\parent\\one-call\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "one_call": "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;LA)",
+          "one_call_file_below": "O:BAD:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;LA)",
+          "two_calls_inheritance": "exit 0: processed file: C:\\Users\\runneradmin\\AppData\\Local\\rfc050-probe-c913690f\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_inheritance_r": "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;LA)",
+          "two_calls_grant": "exit 0: processed file: C:\\Users\\runneradmin\\AppData\\Local\\rfc050-probe-c913690f\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_grant_r": "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;LA)",
+          "lock_icacls": "exit 0: processed file: C:\\Users\\runneradmin\\AppData\\Local\\rfc050-probe-c913690f\\parent\\locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "locked": "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;LA)",
+          "locked_write": "written",
+          "api_call": "set",
+          "api": "O:BAD:PAI(A;OICI;FA;;;LA)(A;OICI;FA;;;SY)",
+          "api_file_below": "O:BAD:AI(A;ID;FA;;;LA)(A;ID;FA;;;SY)",
+          "api_lock_call": "set",
+          "api_locked": "O:BAD:PAI(A;OICI;0x1200a9;;;LA)(A;OICI;FA;;;SY)",
+          "api_locked_inside": "O:BAD:AI(A;OICIID;0x1200a9;;;LA)(A;OICIID;FA;;;SY)",
+          "api_locked_write": "denied (None)",
+          "api_locked_write_inside": "denied (None)",
+          "api_unlock": "exit 0: processed file: C:\\Users\\runneradmin\\AppData\\Local\\rfc050-probe-c913690f\\parent\\api-locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "api_unlocked_write_inside": "written"
+        }
+      }
+    },
+    "runner probeuser": {
+      "python": "3.12.10",
+      "whoami_user": "exit 0: \"runnervmm7ud1\\probeuser\",\"S-1-5-21-3289802278-1561746829-1498425070-1003\"",
+      "user_sid": "S-1-5-21-3289802278-1561746829-1498425070-1003",
+      "whoami_groups": [
+        "\"Mandatory Label\\Medium Mandatory Level\",\"Label\",\"S-1-16-8192\",\"\""
+      ],
+      "cases": {
+        "pytest": {
+          "parent": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "child": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;OW)",
+          "one_call_icacls": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\Temp\\rfc050-probe-pts6muep\\parent\\one-call\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "one_call": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "one_call_file_below": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:AI(A;ID;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;OW)",
+          "two_calls_inheritance": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\Temp\\rfc050-probe-pts6muep\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_inheritance_r": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "two_calls_grant": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\Temp\\rfc050-probe-pts6muep\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_grant_r": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "lock_icacls": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\Temp\\rfc050-probe-pts6muep\\parent\\locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "locked": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;0x1200a9;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "locked_write": "written",
+          "api_call": "set",
+          "api": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)",
+          "api_file_below": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:AI(A;ID;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;ID;FA;;;SY)",
+          "api_lock_call": "set",
+          "api_locked": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;0x1200a9;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)",
+          "api_locked_inside": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:AI(A;OICIID;0x1200a9;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICIID;FA;;;SY)",
+          "api_locked_write": "denied (None)",
+          "api_locked_write_inside": "denied (None)",
+          "api_unlock": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\Temp\\rfc050-probe-pts6muep\\parent\\api-locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "api_unlocked_write_inside": "written"
+        },
+        "product": {
+          "parent": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "child": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "one_call_icacls": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\rfc050-probe-79f14f60\\parent\\one-call\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "one_call": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "one_call_file_below": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "two_calls_inheritance": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\rfc050-probe-79f14f60\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_inheritance_r": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "two_calls_grant": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\rfc050-probe-79f14f60\\parent\\two-calls\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "after_grant_r": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "lock_icacls": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\rfc050-probe-79f14f60\\parent\\locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "locked": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;S-1-5-21-3289802278-1561746829-1498425070-1003)",
+          "locked_write": "denied (None)",
+          "api_call": "set",
+          "api": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)",
+          "api_file_below": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:AI(A;ID;FA;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;ID;FA;;;SY)",
+          "api_lock_call": "set",
+          "api_locked": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:PAI(A;OICI;0x1200a9;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICI;FA;;;SY)",
+          "api_locked_inside": "O:S-1-5-21-3289802278-1561746829-1498425070-1003D:AI(A;OICIID;0x1200a9;;;S-1-5-21-3289802278-1561746829-1498425070-1003)(A;OICIID;FA;;;SY)",
+          "api_locked_write": "denied (None)",
+          "api_locked_write_inside": "denied (None)",
+          "api_unlock": "exit 0: processed file: C:\\Users\\probeuser\\AppData\\Local\\rfc050-probe-79f14f60\\parent\\api-locked\r\nSuccessfully processed 1 files; Failed processing 0 files",
+          "api_unlocked_write_inside": "written"
+        }
+      }
+    },
+    "this machine": {
+      "python": "3.12.9",
+      "whoami_user": "exit 0: \"sangamers\\sandr\",\"S-1-5-21-3645863886-2574687899-407609885-1002\"",
+      "user_sid": "S-1-5-21-3645863886-2574687899-407609885-1002",
+      "whoami_groups": [
+        "exit 0: \"R├│tulo Obrigat├│rio\\N├¡vel Obrigat├│rio M├®dio\",\"R├│tulo\",\"S-1-16-8192\",\"\"",
+        "\"BUILTIN\\Administradores\",\"Alias\",\"S-1-5-32-544\",\"Grupo usado apenas para negar\""
+      ],
+      "cases": {
+        "pytest": {
+          "parent": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+          "child": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;OW)",
+          "one_call_icacls": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\Temp\\rfc050-probe-q2x8qcvu\\parent\\one-call\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "one_call": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "one_call_file_below": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:AI(A;ID;FA;;;SY)(A;ID;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "two_calls_inheritance": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\Temp\\rfc050-probe-q2x8qcvu\\parent\\two-calls\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "after_inheritance_r": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI",
+          "two_calls_grant": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\Temp\\rfc050-probe-q2x8qcvu\\parent\\two-calls\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "after_grant_r": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "lock_icacls": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\Temp\\rfc050-probe-q2x8qcvu\\parent\\locked\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "locked": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "locked_write": "denied (None)",
+          "api_call": "set",
+          "api": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;OICI;FA;;;SY)",
+          "api_file_below": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:AI(A;ID;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;ID;FA;;;SY)",
+          "api_lock_call": "set",
+          "api_locked": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;0x1200a9;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;OICI;FA;;;SY)",
+          "api_locked_inside": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:AI(A;OICIID;0x1200a9;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;OICIID;FA;;;SY)",
+          "api_locked_write": "denied (None)",
+          "api_locked_write_inside": "denied (None)",
+          "api_unlock": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\Temp\\rfc050-probe-q2x8qcvu\\parent\\api-locked\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "api_unlocked_write_inside": "written"
+        },
+        "product": {
+          "parent": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "child": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:(A;OICIID;FA;;;SY)(A;OICIID;FA;;;BA)(A;OICIID;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "one_call_icacls": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\rfc050-probe-4a561e1f\\parent\\one-call\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "one_call": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "one_call_file_below": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:AI(A;ID;FA;;;SY)(A;ID;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "two_calls_inheritance": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\rfc050-probe-4a561e1f\\parent\\two-calls\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "after_inheritance_r": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI",
+          "two_calls_grant": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\rfc050-probe-4a561e1f\\parent\\two-calls\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "after_grant_r": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "lock_icacls": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\rfc050-probe-4a561e1f\\parent\\locked\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "locked": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;SY)(A;OICI;0x1200a9;;;S-1-5-21-3645863886-2574687899-407609885-1002)",
+          "locked_write": "denied (None)",
+          "api_call": "set",
+          "api": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;OICI;FA;;;SY)",
+          "api_file_below": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:AI(A;ID;FA;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;ID;FA;;;SY)",
+          "api_lock_call": "set",
+          "api_locked": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:PAI(A;OICI;0x1200a9;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;OICI;FA;;;SY)",
+          "api_locked_inside": "O:S-1-5-21-3645863886-2574687899-407609885-1002D:AI(A;OICIID;0x1200a9;;;S-1-5-21-3645863886-2574687899-407609885-1002)(A;OICIID;FA;;;SY)",
+          "api_locked_write": "denied (None)",
+          "api_locked_write_inside": "denied (None)",
+          "api_unlock": "exit 0: arquivo processado: C:\\Users\\sandr\\AppData\\Local\\rfc050-probe-4a561e1f\\parent\\api-locked\r\nProcessados com sucesso 1 arquivos; falha no processamento de 0 arquivos",
+          "api_unlocked_write_inside": "written"
+        }
+      }
+    }
+  }
+}
