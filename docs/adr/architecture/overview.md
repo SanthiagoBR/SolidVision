@@ -114,7 +114,7 @@ presentation/
 
 Uma rota de health check já está presente e funcional (`/health`).
 
-Os routers versionados de API estão organizados em `presentation/api/v1/routers/`, mas atualmente contêm apenas placeholders (ex.: `collections.py`) — nenhum endpoint funcional além do `/health` existe ainda.
+Os routers versionados da API ficam em `presentation/api/v1/routers/` (`capabilities`, `devices`, `geocoding`, `images` e `jobs`).
 
 ---
 
@@ -285,7 +285,6 @@ app/
 │
 ├── domain/
 │   ├── entities/
-│   │   ├── collection.py          # placeholder, sem RFC ainda
 │   │   └── image.py
 │   ├── exceptions/
 │   │   ├── domain_error.py
@@ -308,7 +307,7 @@ app/
 │   ├── database/
 │   │   └── models/
 │   │       └── image_model.py
-│   ├── filesystem/                # vazio, placeholder
+│   ├── filesystem/
 │   ├── logging/
 │   ├── persistence/
 │   │   ├── base.py
@@ -316,7 +315,7 @@ app/
 │   │   ├── in_memory_image_repository.py
 │   │   └── session.py
 │   └── workers/
-│       └── indexing_worker.py     # placeholder, não funcional
+│       └── indexing_worker.py
 │
 └── presentation/
     ├── api.py                     # shim → api/__init__.py (funcional)
@@ -326,13 +325,11 @@ app/
     ├── api/
     │   └── v1/
     │       └── routers/
-    │           └── collections.py  # placeholder, sem RFC ainda
     └── schemas/
-        ├── collection_schema.py    # placeholder, sem RFC ainda
-        └── image_schema.py         # placeholder, sem RFC ainda
+        └── image_schema.py
 ```
 
-Os componentes marcados como placeholders existem como scaffolding vindo da estrutura inicial do projeto (RFC-001) e não são considerados código morto — eles aguardam funcionalidade planejada em RFCs futuros.
+Esta árvore é a de 13/08/2026 (RFC-018) e não acompanha os RFCs seguintes. Os placeholders de coleções que ela listava (`collection.py`, `collections.py` e `collection_schema.py`) foram removidos em 11/11/2026: Collections continua sem RFC, e quando tiver um, ele cria os arquivos.
 
 ---
 

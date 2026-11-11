@@ -9,6 +9,7 @@ venv/
 # The composite action that makes the CI's venv, not a venv (RFC-050 4.2).
 !/.github/actions/venv/
 .pytest_cache/
+.coverage
 .mypy_cache/
 .idea/
 .DS_Store

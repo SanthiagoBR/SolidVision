@@ -1,8 +1,8 @@
 # SolidVision Backend
 
-This directory contains the initial backend structure for SolidVision.
-
-It follows the Clean Architecture layout described in the project documentation and contains only placeholder modules and package scaffolding.
+This directory contains the SolidVision backend: the API, the indexing worker,
+the launcher and the embedded PostgreSQL, in the Clean Architecture layout
+described in `ARCHITECTURE.md`.
 
 ## Python version
 Python 3.12.9: the embedded Python of the installer (RFC-041), and the one the
