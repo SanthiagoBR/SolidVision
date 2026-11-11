@@ -36,7 +36,7 @@ UNCHECKED_HASH = 0b01
 """The flags of a `.pyc` header (PEP 552): hash-based, source not checked."""
 
 windows_only = pytest.mark.skipif(
-    sys.platform != "win32", reason="The lock is a Windows DACL, written by icacls"
+    sys.platform != "win32", reason="The lock is a Windows DACL"
 )
 
 
@@ -433,8 +433,8 @@ def writable(directory: Path) -> bool:
 def test_a_locked_staging_cannot_be_written_and_can_be_given_back(
     staging: ModuleType, repository: Path, tmp_path: Path
 ) -> None:
-    """What `C:\\Program Files` is to an ordinary process, by the real
-    `icacls.exe`, and undone by the same user who cannot write to it."""
+    """What `C:\\Program Files` is to an ordinary process, by a real DACL,
+    and undone by the same user who cannot write to it."""
     target = tmp_path / "Program Files" / "SolidVision"
     staged = staging.stage(
         target, source=repository, python=INTERPRETER, read_only=True

@@ -21,10 +21,9 @@ from __future__ import annotations
 import ctypes
 import os
 import secrets
-import subprocess
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -107,8 +106,8 @@ class DirectoryAcl(ABC):
         """Troca a herança por controle total para o SID do usuário e o SYSTEM."""
 
 
-class IcaclsDirectoryAcl(DirectoryAcl):
-    """`icacls.exe` do `System32`, por caminho absoluto, com SIDs, não nomes.
+class WindowsDirectoryAcl(DirectoryAcl):
+    """A DACL pela API do Windows, com SIDs, não nomes.
 
     Num Windows em português o grupo `Everyone` se chama `Todos`: um nome
     traduzido não pode decidir uma permissão, então o usuário é nomeado pelo
@@ -116,28 +115,88 @@ class IcaclsDirectoryAcl(DirectoryAcl):
     """
 
     def restrict_to_current_user(self, directory: Path) -> None:
-        sid = current_user_sid()
-        system_root = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
-        completed = subprocess.run(
-            [
-                str(system_root / "System32" / "icacls.exe"),
-                str(directory),
-                "/inheritance:r",
-                "/grant:r",
-                f"*{sid}:(OI)(CI)F",
-                f"*{SYSTEM_SID}:(OI)(CI)F",
-            ],
-            capture_output=True,
-            stdin=subprocess.DEVNULL,
-            creationflags=CREATE_NO_WINDOW,
-            timeout=60,
-        )
-        if completed.returncode != 0:
-            output = (completed.stdout + completed.stderr).decode("oem", "replace")
+        entries = (f"A;OICI;FA;;;{current_user_sid()}", f"A;OICI;FA;;;{SYSTEM_SID}")
+        try:
+            set_protected_dacl(directory, entries)
+        except OSError as error:
             raise EmbeddedPostgresError(
-                f"icacls could not restrict {directory} "
-                f"(exit {completed.returncode}): {output.strip()}"
-            )
+                f"Could not restrict {directory}: {error}"
+            ) from error
+
+
+SE_FILE_OBJECT = 1
+DACL_SECURITY_INFORMATION = 0x00000004
+PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+SDDL_REVISION_1 = 1
+
+
+def set_protected_dacl(path: Path, entries: Sequence[str]) -> None:
+    """Troca a DACL de `path` por uma protegida, só com `entries`, em SDDL.
+
+    Pelo `SetNamedSecurityInfoW`, e não pelo `icacls /inheritance:r`: no
+    build 26100 do Windows, o `icacls` não tira as entradas herdadas, só as
+    torna explícitas, e os Administradores continuavam com controle total
+    (RFC-050 §16). Aqui a DACL é substituída inteira, sem herança, e o
+    Windows recalcula pelas entradas herdáveis tudo o que está abaixo.
+    Levanta `OSError` com o erro do Windows.
+    """
+    from ctypes import wintypes
+
+    advapi32: Any = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.ULONG),
+    ]
+    advapi32.GetSecurityDescriptorDacl.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.BOOL),
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.BOOL),
+    ]
+    advapi32.SetNamedSecurityInfoW.argtypes = [
+        wintypes.LPWSTR,
+        ctypes.c_int,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    advapi32.SetNamedSecurityInfoW.restype = wintypes.DWORD
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+
+    sddl = "D:P" + "".join(f"({entry})" for entry in entries)
+    descriptor = ctypes.c_void_p()
+    if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        sddl, SDDL_REVISION_1, ctypes.byref(descriptor), None
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        present, defaulted = wintypes.BOOL(), wintypes.BOOL()
+        dacl = ctypes.c_void_p()
+        if not advapi32.GetSecurityDescriptorDacl(
+            descriptor,
+            ctypes.byref(present),
+            ctypes.byref(dacl),
+            ctypes.byref(defaulted),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        error = advapi32.SetNamedSecurityInfoW(
+            str(path),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            dacl,
+            None,
+        )
+        if error:
+            raise ctypes.WinError(error)
+    finally:
+        kernel32.LocalFree(descriptor)
 
 
 def current_user_sid() -> str:
@@ -213,7 +272,7 @@ class ClusterHome:
                 f"The cluster directory must be absolute, not {root}."
             )
         self._root = root
-        self._acl = acl if acl is not None else IcaclsDirectoryAcl()
+        self._acl = acl if acl is not None else WindowsDirectoryAcl()
 
     @property
     def root(self) -> Path:
@@ -245,9 +304,9 @@ class ClusterHome:
 
         Chamado no caminho da primeira execução, antes de a senha ser escrita,
         em vez de só no `mkdir` que cria o diretório: senão, um processo morto
-        entre os dois deixaria o diretório com a DACL herdada para sempre. O
-        `icacls` é idempotente, e isto roda uma vez por cluster, ao lado de um
-        `initdb` que leva dezenas de segundos.
+        entre os dois deixaria o diretório com a DACL herdada para sempre.
+        Trocar a DACL é idempotente, e isto roda uma vez por cluster, ao lado
+        de um `initdb` que leva dezenas de segundos.
         """
         self._root.mkdir(parents=True, exist_ok=True)
         self._acl.restrict_to_current_user(self._root)
