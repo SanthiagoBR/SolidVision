@@ -32,18 +32,19 @@ becomes a `licenses.zip` (RFC-041 section 2.5).
     python scripts/stage_installation.py TARGET --unlock     # give it back
     python scripts/stage_installation.py TARGET --remove     # unlock and delete
 
-`--read-only` leaves the tree read-and-execute for the user, by `icacls` and by
-SID, as RFC-033 did with the cluster's DACL. It is what `C:\\Program Files` is
-to an ordinary process. The `.pyc` files are compiled before the lock, because
-after it Python cannot write them and would recompile the project's modules on
-every start; `--no-compile` is how section 16 measures that cost.
+`--read-only` leaves the tree read-and-execute for the user, by a protected
+DACL and by SID, as RFC-033 does with the cluster's (RFC-050 section 16). It
+is what `C:\\Program Files` is to an ordinary process. The `.pyc` files are
+compiled before the lock, because after it Python cannot write them and would
+recompile the project's modules on every start; `--no-compile` is how section
+16 measures that cost.
 
 The measurements of RFC-034 to 036 ran the copy with the development
 virtualenv's interpreter and `PYTHONPATH` pointing at it
 (`Staged.environment()`), and still can. The installed app never does.
 
 No new dependency: `shutil`, `compileall` and `subprocess` are the standard
-library's, and the SID comes from the adapter of RFC-033.
+library's, and the SID and the DACL come from the adapter of RFC-033.
 """
 
 from __future__ import annotations
@@ -68,7 +69,11 @@ from app.infrastructure.database.embedded.cluster_home import (  # noqa: E402
     CREATE_NO_WINDOW,
     SYSTEM_SID,
     current_user_sid,
+    set_protected_dacl,
 )
+
+READ_AND_EXECUTE = "0x1200a9"
+"""What `icacls` calls `RX`: FILE_GENERIC_READ | FILE_GENERIC_EXECUTE."""
 
 COPIED = (
     "backend/app",
@@ -304,20 +309,25 @@ def fit_the_path_budget(target: Path) -> list[str]:
 def lock(target: Path) -> None:
     """Leave the tree read-and-execute for the user, and check that it is.
 
-    Inheritance is cut at the root and the two entries are inheritable, so
-    Windows recomputes every file and folder below from them. The user is
-    named by the SID of this process's token: in a Portuguese Windows the
-    group names are translated, and a name must not decide a permission.
+    The root's DACL is replaced by a protected one with two inheritable
+    entries, so Windows recomputes every file and folder below from them.
+    Through the Windows API and not `icacls /inheritance:r`, which on build
+    26100 keeps the inherited entries (RFC-050 section 16). The user is named
+    by the SID of this process's token: in a Portuguese Windows the group
+    names are translated, and a name must not decide a permission.
     """
     # Before the lock: after it, this process cannot write the marker either.
     _update_marker(target, read_only=True)
-    _icacls(
-        target,
-        "/inheritance:r",
-        "/grant:r",
-        f"*{current_user_sid()}:(OI)(CI)RX",
-        f"*{SYSTEM_SID}:(OI)(CI)F",
-    )
+    try:
+        set_protected_dacl(
+            target,
+            (
+                f"A;OICI;{READ_AND_EXECUTE};;;{current_user_sid()}",
+                f"A;OICI;FA;;;{SYSTEM_SID}",
+            ),
+        )
+    except OSError as error:
+        raise StagingError(f"Could not lock {target}: {error}") from error
     directories = _probed_directories(target)
     denied = _denied_writes(directories)
     expected = 2 * len(directories)

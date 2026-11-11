@@ -1,7 +1,7 @@
 """The user's cluster directory (RFC-033 sections 6, 7.1 and 7.2).
 
 Two of these tests call Windows for real, on a temporary directory: the DACL
-is applied by the real `icacls.exe` and read back as SDDL through `advapi32`,
+is set through the real `advapi32` and read back as SDDL through it too,
 and the lock is taken by a second process. Everything a double could stand in
 for would be the part that can be wrong.
 """
@@ -24,7 +24,7 @@ from app.infrastructure.database.embedded.cluster_home import (
     SYSTEM_SID,
     ClusterHome,
     DirectoryAcl,
-    IcaclsDirectoryAcl,
+    WindowsDirectoryAcl,
     current_user_sid,
 )
 from app.infrastructure.database.embedded.errors import EmbeddedPostgresError
@@ -192,10 +192,14 @@ def test_the_user_is_named_by_a_sid_read_from_the_token() -> None:
     assert re.fullmatch(r"S-1-\d+(-\d+)+", current_user_sid())
 
 
-def test_icacls_leaves_only_the_user_and_system_and_cuts_inheritance(
+def test_the_acl_leaves_only_the_user_and_system_and_cuts_inheritance(
     tmp_path: Path,
 ) -> None:
-    """The real `icacls.exe`, read back as SDDL rather than as translated names.
+    """The real Windows API, read back as SDDL rather than as translated names.
+
+    Under a parent made like pytest's `tmp_path` (`mkdir(mode=0o700)`), the
+    folder inherits the Administrators and the Owner Rights; on build 26100,
+    `icacls /inheritance:r` kept both (RFC-050 section 16).
 
     `D:P` is a protected DACL -- inheritance removed -- and each `(A;OICI;FA`
     is full control inherited by files and directories below. Two entries
@@ -204,14 +208,14 @@ def test_icacls_leaves_only_the_user_and_system_and_cuts_inheritance(
     directory = tmp_path / "postgres"
     directory.mkdir()
 
-    IcaclsDirectoryAcl().restrict_to_current_user(directory)
+    WindowsDirectoryAcl().restrict_to_current_user(directory)
 
     dacl = _dacl_sddl(directory)
     assert dacl.startswith("D:P")
     entries = set(re.findall(r"\(([^)]*)\)", dacl))
     assert entries == {
         "A;OICI;FA;;;SY",
-        f"A;OICI;FA;;;{current_user_sid()}",
+        f"A;OICI;FA;;;{_sddl_name(current_user_sid())}",
     }
     assert SYSTEM_SID == "S-1-5-18"
 
@@ -220,14 +224,54 @@ def test_a_file_created_below_inherits_the_same_two_entries(tmp_path: Path) -> N
     """The password is written after the DACL, and gets it by inheritance."""
     directory = tmp_path / "postgres"
     directory.mkdir()
-    IcaclsDirectoryAcl().restrict_to_current_user(directory)
+    WindowsDirectoryAcl().restrict_to_current_user(directory)
 
     password = directory / "16" / "password"
     password.parent.mkdir()
     password.write_text("x", encoding="ascii")
 
     entries = set(re.findall(r"\(([^)]*)\)", _dacl_sddl(password)))
-    assert entries == {"A;ID;FA;;;SY", f"A;ID;FA;;;{current_user_sid()}"}
+    assert entries == {"A;ID;FA;;;SY", f"A;ID;FA;;;{_sddl_name(current_user_sid())}"}
+
+
+def _sddl_name(sid: str) -> str:
+    """How SDDL writes `sid`, asked of Windows: the built-in Administrator
+    (RID 500), the account of the CI's runner, is `LA` and not its SID
+    (RFC-050 section 16)."""
+    from ctypes import wintypes
+
+    advapi32: Any = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.ULONG),
+    ]
+    advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = [
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPWSTR),
+        ctypes.POINTER(wintypes.ULONG),
+    ]
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    owner_security_information = 0x00000001
+    descriptor = ctypes.c_void_p()
+    assert advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        f"O:{sid}", 1, ctypes.byref(descriptor), None
+    )
+    try:
+        text = wintypes.LPWSTR()
+        assert advapi32.ConvertSecurityDescriptorToStringSecurityDescriptorW(
+            descriptor, 1, owner_security_information, ctypes.byref(text), None
+        )
+        try:
+            return str(text.value).removeprefix("O:")
+        finally:
+            kernel32.LocalFree(text)
+    finally:
+        kernel32.LocalFree(descriptor)
 
 
 def _dacl_sddl(path: Path) -> str:

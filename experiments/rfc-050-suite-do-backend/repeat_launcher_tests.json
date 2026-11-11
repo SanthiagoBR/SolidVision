@@ -88,6 +88,79 @@
           }
         }
       }
+    },
+    "depois": {
+      "when": "2026-11-10 17:41",
+      "commit": "0da3fbe",
+      "suite_files_changed": false,
+      "suite_files_sha256": {
+        "test_launcher_children.py": "457843115cd21a03",
+        "test_launcher_instance.py": "764113652fd51b2d"
+      },
+      "conditions": {
+        "idle": {
+          "runs": 300,
+          "busy_processes": 0,
+          "wall_seconds": 536.6,
+          "tests": {
+            "test_last_fifty": {
+              "runs": 300,
+              "failures": 0,
+              "max_seconds": 0.91,
+              "assertions": {}
+            },
+            "test_half_a_file": {
+              "runs": 300,
+              "failures": 0,
+              "max_seconds": 1.14,
+              "assertions": {}
+            },
+            "test_last_fifty_fixed": {
+              "runs": 300,
+              "failures": 0,
+              "max_seconds": 0.66,
+              "assertions": {}
+            },
+            "test_half_a_file_fixed": {
+              "runs": 300,
+              "failures": 0,
+              "max_seconds": 1.48,
+              "assertions": {}
+            }
+          }
+        },
+        "busy": {
+          "runs": 40,
+          "busy_processes": 8,
+          "wall_seconds": 255.5,
+          "tests": {
+            "test_last_fifty": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 0.89,
+              "assertions": {}
+            },
+            "test_half_a_file": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 5.18,
+              "assertions": {}
+            },
+            "test_last_fifty_fixed": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 3.41,
+              "assertions": {}
+            },
+            "test_half_a_file_fixed": {
+              "runs": 40,
+              "failures": 0,
+              "max_seconds": 4.4,
+              "assertions": {}
+            }
+          }
+        }
+      }
     }
   }
 }

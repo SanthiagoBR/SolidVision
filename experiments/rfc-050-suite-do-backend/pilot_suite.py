@@ -15,7 +15,9 @@ What the runner will have, as far as this machine can give it:
 
 Then `embedded run -- python scripts/check.py pytest`, by this repository's
 venv (the clone's lockfiles are the same), every line timestamped. Writes
-`pilot_suite.json` beside this file; the `.log` stays out of git.
+`pilot_suite.json` beside this file, or `pilot_suite-<commit>.json` when a
+commit is given (the reference of section 9, criterion 1); the `.log` stays
+out of git.
 """
 
 from __future__ import annotations
@@ -76,6 +78,7 @@ MARKS = {
 def main() -> int:
     commit = sys.argv[1] if len(sys.argv) > 1 else "origin/frontend"
     sha = git("rev-parse", commit, cwd=REPO)
+    name = "pilot_suite" if len(sys.argv) == 1 else f"pilot_suite-{sha[:7]}"
     work = Path(tempfile.mkdtemp(prefix="rfc050-suite-"))
     clone = work / "repo"
     temp_long = work / "runneradmin-temporary"
@@ -112,7 +115,7 @@ def main() -> int:
             str(VENV_PYTHON), "-m", "app.infrastructure.database.embedded",
             "run", "--", str(VENV_PYTHON), "scripts/check.py", "pytest",
         ]
-        log = HERE / "pilot_suite.log"
+        log = HERE / f"{name}.log"
         marks: dict[str, float] = {}
         tail: list[str] = []
         started = time.perf_counter()
@@ -151,7 +154,7 @@ def main() -> int:
         ]
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    out_json = HERE / "pilot_suite.json"
+    out_json = HERE / f"{name}.json"
     out_json.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(results, indent=2, ensure_ascii=False))
     return 0
