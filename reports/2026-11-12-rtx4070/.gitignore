@@ -1,0 +1,4 @@
+# Os originais, com os caminhos reais das fotos do acervo: ficam só na máquina
+# que mediu (tools/anonymize.py). Os *.log já são ignorados pelo .gitignore da raiz,
+# e dois deles (index-sample.log, read-ahead-gpu.log) listam as fotos.
+*.raw.json
