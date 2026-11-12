@@ -1,0 +1,2150 @@
+{
+  "date": "2026-11-12T19:08:07",
+  "device": "cpu",
+  "census": {
+    "images": 1756,
+    "with_embedding": 1756,
+    "devices": 1,
+    "indexes_on_images": [
+      "CREATE UNIQUE INDEX pk_images ON public.images USING btree (id)",
+      "CREATE INDEX ix_images_embedding_hnsw ON public.images USING hnsw (embedding vector_cosine_ops)",
+      "CREATE UNIQUE INDEX uq_images_device_relative_path ON public.images USING btree (device_id, relative_path)"
+    ],
+    "table_mb": 10.3
+  },
+  "clip_load_seconds": 0.36,
+  "translator_load_seconds": 1.11,
+  "summary": {
+    "queries": 25,
+    "warm_total_ms_median": 117.12,
+    "warm_total_ms_p95": 133.86,
+    "warm_db_ms_median": 7.77,
+    "self_retrieval_found": 20,
+    "self_retrieval_checked": 20
+  },
+  "queries": [
+    {
+      "language": "pt",
+      "query": "casamento na igreja",
+      "prompt": "a photo of wedding in church",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 79.86,
+        "encode_ms": 235.34,
+        "db_ms": 25.32,
+        "total_ms": 103.13
+      },
+      "warm_median": {
+        "prompt_ms": 77.35,
+        "encode_ms": 94.87,
+        "db_ms": 8.2,
+        "total_ms": 102.76
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.3169,
+          "relative_path": "foto-06865eeaddc2.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2919,
+          "relative_path": "foto-7afc54c8bd2b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2868,
+          "relative_path": "foto-d6ede4dcfafe.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2804,
+          "relative_path": "foto-f464f81a5fda.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2803,
+          "relative_path": "foto-7892d7bc0914.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.28,
+          "relative_path": "foto-8772219940e8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.279,
+          "relative_path": "foto-e62f0f47dc65.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2765,
+          "relative_path": "foto-9c563bff75a0.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2715,
+          "relative_path": "foto-0c403e67259c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2678,
+          "relative_path": "foto-b0f078e53ac4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "noiva com vestido branco",
+      "prompt": "a photo of bride in white dress",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 95.02,
+        "encode_ms": 110.58,
+        "db_ms": 7.77,
+        "total_ms": 115.8
+      },
+      "warm_median": {
+        "prompt_ms": 91.78,
+        "encode_ms": 110.51,
+        "db_ms": 9.71,
+        "total_ms": 120.28
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2932,
+          "relative_path": "foto-5ad10f62f365.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2879,
+          "relative_path": "foto-b0fafbc07961.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2831,
+          "relative_path": "foto-a500b17ef828.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2825,
+          "relative_path": "foto-19010bec9cf3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2785,
+          "relative_path": "foto-7b174e8cf95a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2739,
+          "relative_path": "foto-7f5694b5ca09.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2729,
+          "relative_path": "foto-f1717b00db01.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2706,
+          "relative_path": "foto-8fdc126e704a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2693,
+          "relative_path": "foto-d6318e21a4b9.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2671,
+          "relative_path": "foto-5c5c164b49df.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "bolo de aniversário com velas",
+      "prompt": "a photo of birthday cake with candles",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 96.92,
+        "encode_ms": 111.24,
+        "db_ms": 7.04,
+        "total_ms": 114.85
+      },
+      "warm_median": {
+        "prompt_ms": 98.59,
+        "encode_ms": 113.11,
+        "db_ms": 7.47,
+        "total_ms": 122.4
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2129,
+          "relative_path": "foto-a35c303d04d6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2012,
+          "relative_path": "foto-241e4f3202dd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.1972,
+          "relative_path": "foto-02d4d851100f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.1882,
+          "relative_path": "foto-b04470b50817.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.1774,
+          "relative_path": "foto-397025f3a486.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.1742,
+          "relative_path": "foto-dde98bd7f69e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1736,
+          "relative_path": "foto-b4bc10e753a1.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1726,
+          "relative_path": "foto-d0ebcd7f86ab.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1697,
+          "relative_path": "foto-fbb0459d291d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.164,
+          "relative_path": "foto-c0dad89fbece.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "crianças brincando no parque",
+      "prompt": "a photo of children playing in the park",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 107.63,
+        "encode_ms": 127.14,
+        "db_ms": 7.57,
+        "total_ms": 130.09
+      },
+      "warm_median": {
+        "prompt_ms": 110.39,
+        "encode_ms": 126.67,
+        "db_ms": 7.02,
+        "total_ms": 134.42
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2263,
+          "relative_path": "foto-db273b08dfe4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2199,
+          "relative_path": "foto-a9647ca86dbd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2141,
+          "relative_path": "foto-d550cd3e80d0.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2134,
+          "relative_path": "foto-ab0bb0547708.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2127,
+          "relative_path": "foto-5ee10563edb4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.21,
+          "relative_path": "foto-e4b47c913f06.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2095,
+          "relative_path": "foto-e3141e6efe36.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2094,
+          "relative_path": "foto-91d85599f246.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2068,
+          "relative_path": "foto-614b559acd30.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2068,
+          "relative_path": "foto-a0c9e547aecf.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "cachorro deitado no sofá",
+      "prompt": "a photo of dog lying on the couch",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 106.92,
+        "encode_ms": 125.78,
+        "db_ms": 7.08,
+        "total_ms": 139.58
+      },
+      "warm_median": {
+        "prompt_ms": 108.87,
+        "encode_ms": 123.36,
+        "db_ms": 7.68,
+        "total_ms": 133.86
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2734,
+          "relative_path": "foto-71bd60943faf.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2185,
+          "relative_path": "foto-bca136092fb8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2077,
+          "relative_path": "foto-2c6c6bbdb86a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2009,
+          "relative_path": "foto-121d92a78fa2.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.1903,
+          "relative_path": "foto-7ec81d7672c8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.1849,
+          "relative_path": "foto-f951c735878c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1784,
+          "relative_path": "foto-05a50ed11f00.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1763,
+          "relative_path": "foto-e7d782bc3614.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1718,
+          "relative_path": "foto-cd155d7a4c42.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1659,
+          "relative_path": "foto-96554d97d6f1.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "pôr do sol na praia",
+      "prompt": "a photo of sunset on the beach",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 92.12,
+        "encode_ms": 110.45,
+        "db_ms": 10.06,
+        "total_ms": 115.82
+      },
+      "warm_median": {
+        "prompt_ms": 89.72,
+        "encode_ms": 108.99,
+        "db_ms": 9.05,
+        "total_ms": 118.43
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.1779,
+          "relative_path": "foto-561cd98ff611.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.1764,
+          "relative_path": "foto-5e803233763f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.1713,
+          "relative_path": "foto-de0ef60fca60.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.1709,
+          "relative_path": "foto-011004e8edd7.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.1691,
+          "relative_path": "foto-d03d1068681d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.1666,
+          "relative_path": "foto-0e3c4b1d29bb.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1651,
+          "relative_path": "foto-b705a9368ab4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.164,
+          "relative_path": "foto-5283df61a4ba.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1618,
+          "relative_path": "foto-32b74aeada16.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1612,
+          "relative_path": "foto-ac43374e2c4b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "vista aérea de uma fazenda",
+      "prompt": "a photo of aerial view of a farm",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 111.12,
+        "encode_ms": 123.75,
+        "db_ms": 9.67,
+        "total_ms": 131.46
+      },
+      "warm_median": {
+        "prompt_ms": 108.47,
+        "encode_ms": 127.36,
+        "db_ms": 7.77,
+        "total_ms": 133.03
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2866,
+          "relative_path": "foto-4398960b060d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2843,
+          "relative_path": "foto-627a091efc19.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2821,
+          "relative_path": "foto-eba8e8e7d581.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2785,
+          "relative_path": "foto-028f0ff1d9a0.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2782,
+          "relative_path": "foto-2d41a179a49e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.278,
+          "relative_path": "foto-af71d30f37cd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2772,
+          "relative_path": "foto-5ffe0f3f061b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2759,
+          "relative_path": "foto-545ea1310da6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2759,
+          "relative_path": "foto-92183a8e71e5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2745,
+          "relative_path": "foto-a5303d3b65a2.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "propriedade rural com lago",
+      "prompt": "a photo of rural property with lake",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 94.66,
+        "encode_ms": 109.48,
+        "db_ms": 7.41,
+        "total_ms": 111.53
+      },
+      "warm_median": {
+        "prompt_ms": 93.07,
+        "encode_ms": 112.72,
+        "db_ms": 7.73,
+        "total_ms": 117.28
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2779,
+          "relative_path": "foto-657dcbd6a84f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2766,
+          "relative_path": "foto-243a3e8588d8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2713,
+          "relative_path": "foto-713cf0f4e3bb.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2663,
+          "relative_path": "foto-e6eca13c2d2b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.265,
+          "relative_path": "foto-bfc10a3e5e2b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.264,
+          "relative_path": "foto-3eb3fad6912b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2632,
+          "relative_path": "foto-9aa0278340ab.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2622,
+          "relative_path": "foto-8c2d4f36533c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2605,
+          "relative_path": "foto-fed1e72949c0.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2564,
+          "relative_path": "foto-9be65673e048.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "casa com piscina",
+      "prompt": "a photo of house with pool",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 80.18,
+        "encode_ms": 96.29,
+        "db_ms": 8.47,
+        "total_ms": 114.51
+      },
+      "warm_median": {
+        "prompt_ms": 80.7,
+        "encode_ms": 103.63,
+        "db_ms": 8.64,
+        "total_ms": 108.4
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2934,
+          "relative_path": "foto-222c2f3a59b7.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2883,
+          "relative_path": "foto-5d4e3917e9d3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2855,
+          "relative_path": "foto-6a4c6ea19ae6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2829,
+          "relative_path": "foto-9a46b0c3e38f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2821,
+          "relative_path": "foto-47573ddcace5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2792,
+          "relative_path": "foto-e2a8358883d7.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.279,
+          "relative_path": "foto-6638aef203e8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2719,
+          "relative_path": "foto-9cba60150591.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2716,
+          "relative_path": "foto-e4b47c913f06.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2695,
+          "relative_path": "foto-51b4fd10990f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "rio com ponte",
+      "prompt": "a photo of river with bridge",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 80.77,
+        "encode_ms": 91.82,
+        "db_ms": 6.92,
+        "total_ms": 108.26
+      },
+      "warm_median": {
+        "prompt_ms": 74.57,
+        "encode_ms": 96.02,
+        "db_ms": 7.81,
+        "total_ms": 101.2
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2579,
+          "relative_path": "foto-a6e487b3aec8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.252,
+          "relative_path": "foto-6f968884185e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2469,
+          "relative_path": "foto-c10c10bbc555.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2461,
+          "relative_path": "foto-6457a747836a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2427,
+          "relative_path": "foto-9e9d832ee288.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2412,
+          "relative_path": "foto-fb7b5fd2e66e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2361,
+          "relative_path": "foto-e47e49fe7fe4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2349,
+          "relative_path": "foto-b2a125ac188a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2338,
+          "relative_path": "foto-657dcbd6a84f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2333,
+          "relative_path": "foto-ccf27b4f0536.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "cachoeira na mata",
+      "prompt": "a photo of waterfall in the forest",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 96.13,
+        "encode_ms": 117.92,
+        "db_ms": 9.7,
+        "total_ms": 116.77
+      },
+      "warm_median": {
+        "prompt_ms": 94.81,
+        "encode_ms": 112.07,
+        "db_ms": 6.89,
+        "total_ms": 117.12
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2114,
+          "relative_path": "foto-d114e5e73689.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2061,
+          "relative_path": "foto-9bf45de82e39.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2044,
+          "relative_path": "foto-9235b23904dc.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2036,
+          "relative_path": "foto-8c2d4f36533c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2022,
+          "relative_path": "foto-623e17a7eb3e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2015,
+          "relative_path": "foto-3e81b3be922c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2015,
+          "relative_path": "foto-b54ae67f8c39.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2008,
+          "relative_path": "foto-0186b6bc6d80.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2007,
+          "relative_path": "foto-4e90e3055fdb.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1964,
+          "relative_path": "foto-b235bf670678.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "árvore de natal com presentes",
+      "prompt": "a photo of Christmas tree with gifts",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 88.71,
+        "encode_ms": 106.03,
+        "db_ms": 6.8,
+        "total_ms": 114.63
+      },
+      "warm_median": {
+        "prompt_ms": 93.11,
+        "encode_ms": 110.84,
+        "db_ms": 8.34,
+        "total_ms": 117.65
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.1935,
+          "relative_path": "foto-02d4d851100f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.1916,
+          "relative_path": "foto-a2355f11e875.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.1787,
+          "relative_path": "foto-ef143379904f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.1727,
+          "relative_path": "foto-b04470b50817.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.1696,
+          "relative_path": "foto-65adc1966cd1.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.1681,
+          "relative_path": "foto-a500b17ef828.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1664,
+          "relative_path": "foto-8fdc126e704a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1643,
+          "relative_path": "foto-67609c5e74e1.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1638,
+          "relative_path": "foto-a35c303d04d6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1626,
+          "relative_path": "foto-80a1ad351826.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "grupo de pessoas posando para foto",
+      "prompt": "a photo of group of people posing for photo",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 129.91,
+        "encode_ms": 147.58,
+        "db_ms": 7.36,
+        "total_ms": 147.36
+      },
+      "warm_median": {
+        "prompt_ms": 126.78,
+        "encode_ms": 139.93,
+        "db_ms": 7.7,
+        "total_ms": 153.07
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2724,
+          "relative_path": "foto-0c403e67259c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.263,
+          "relative_path": "foto-5e4c97385ec4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2626,
+          "relative_path": "foto-34f2cb968ffd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2617,
+          "relative_path": "foto-4e18715db93d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2613,
+          "relative_path": "foto-c86b2a3edaed.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2611,
+          "relative_path": "foto-dbcc33e0d60c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2596,
+          "relative_path": "foto-b6946e3c59e6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2582,
+          "relative_path": "foto-7963d1b1043c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2581,
+          "relative_path": "foto-b73797731b07.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2579,
+          "relative_path": "foto-261fbf90ea51.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "festa junina",
+      "prompt": "a photo of festa junina",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 348.52,
+        "encode_ms": 30.81,
+        "db_ms": 9.52,
+        "total_ms": 43.32
+      },
+      "warm_median": {
+        "prompt_ms": 12.54,
+        "encode_ms": 32.39,
+        "db_ms": 7.35,
+        "total_ms": 41.66
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2756,
+          "relative_path": "foto-b04470b50817.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2673,
+          "relative_path": "foto-ddb68b641b46.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2637,
+          "relative_path": "foto-02d4d851100f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2572,
+          "relative_path": "foto-241e4f3202dd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2509,
+          "relative_path": "foto-5e4c97385ec4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2491,
+          "relative_path": "foto-af6b1f1ea807.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2471,
+          "relative_path": "foto-4e18715db93d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2442,
+          "relative_path": "foto-c54d2f34fece.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2385,
+          "relative_path": "foto-0b34fc4e60f6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2323,
+          "relative_path": "foto-0719ec0d00b3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "comida na mesa",
+      "prompt": "a photo of food on the table",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 95.45,
+        "encode_ms": 113.14,
+        "db_ms": 7.19,
+        "total_ms": 117.58
+      },
+      "warm_median": {
+        "prompt_ms": 93.32,
+        "encode_ms": 109.32,
+        "db_ms": 7.49,
+        "total_ms": 117.46
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2502,
+          "relative_path": "foto-fbb0459d291d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2375,
+          "relative_path": "foto-a2355f11e875.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2212,
+          "relative_path": "foto-02d4d851100f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.221,
+          "relative_path": "foto-be5f10b7afcc.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2165,
+          "relative_path": "foto-6d07af712ecc.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2005,
+          "relative_path": "foto-d0ebcd7f86ab.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1955,
+          "relative_path": "foto-eb935000c85d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1917,
+          "relative_path": "foto-cb8629029c37.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.191,
+          "relative_path": "foto-5119bcd2e5d5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1904,
+          "relative_path": "foto-06865eeaddc2.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "carro estacionado na rua",
+      "prompt": "a photo of car parked on the street",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 108.41,
+        "encode_ms": 127.38,
+        "db_ms": 9.06,
+        "total_ms": 139.02
+      },
+      "warm_median": {
+        "prompt_ms": 106.15,
+        "encode_ms": 127.05,
+        "db_ms": 9.57,
+        "total_ms": 131.33
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2825,
+          "relative_path": "foto-cf1c140bc13a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.258,
+          "relative_path": "foto-64a27bdb1c37.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2547,
+          "relative_path": "foto-ed953ec32136.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2535,
+          "relative_path": "foto-788e35361007.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.253,
+          "relative_path": "foto-0b063cb952ce.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2453,
+          "relative_path": "foto-ee0c299d1e18.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2447,
+          "relative_path": "foto-558bf6175770.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2432,
+          "relative_path": "foto-2a51a64e9090.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2422,
+          "relative_path": "foto-af7898a53538.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2416,
+          "relative_path": "foto-e7a039d893c5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "sala de aula com alunos",
+      "prompt": "a photo of classroom with students",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 74.1,
+        "encode_ms": 94.42,
+        "db_ms": 7.31,
+        "total_ms": 108.35
+      },
+      "warm_median": {
+        "prompt_ms": 74.97,
+        "encode_ms": 98.39,
+        "db_ms": 7.72,
+        "total_ms": 103.24
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2259,
+          "relative_path": "foto-eb935000c85d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2115,
+          "relative_path": "foto-d550cd3e80d0.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2076,
+          "relative_path": "foto-b7942cca7b62.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2028,
+          "relative_path": "foto-261fbf90ea51.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2014,
+          "relative_path": "foto-4c3bec306a6b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.1985,
+          "relative_path": "foto-d37fba724b2a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1973,
+          "relative_path": "foto-06865eeaddc2.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1936,
+          "relative_path": "foto-b6eaf8f9cc78.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1924,
+          "relative_path": "foto-862a42803f73.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1888,
+          "relative_path": "foto-740b629ed0d3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "captura de tela de celular",
+      "prompt": "a photo of cell phone screen capture",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 94.03,
+        "encode_ms": 104.43,
+        "db_ms": 7.2,
+        "total_ms": 114.6
+      },
+      "warm_median": {
+        "prompt_ms": 90.85,
+        "encode_ms": 107.99,
+        "db_ms": 9.35,
+        "total_ms": 118.15
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2788,
+          "relative_path": "foto-f9ec6b7a2310.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2744,
+          "relative_path": "foto-913ec208b8c3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2517,
+          "relative_path": "foto-1160d33b055f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2492,
+          "relative_path": "foto-50925f9cc30a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2358,
+          "relative_path": "foto-c7f1907d543d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2354,
+          "relative_path": "foto-ae41aa27eb54.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2287,
+          "relative_path": "foto-40ca06b0b11e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2255,
+          "relative_path": "foto-71bd60943faf.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2223,
+          "relative_path": "foto-84c0abec027c.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2216,
+          "relative_path": "foto-be5f10b7afcc.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "igreja vista de cima",
+      "prompt": "a photo of church view from above",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 91.92,
+        "encode_ms": 109.85,
+        "db_ms": 7.04,
+        "total_ms": 116.2
+      },
+      "warm_median": {
+        "prompt_ms": 92.79,
+        "encode_ms": 109.19,
+        "db_ms": 7.31,
+        "total_ms": 116.64
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.3005,
+          "relative_path": "foto-2a7b33e77bcb.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2988,
+          "relative_path": "foto-a8be66477ead.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2944,
+          "relative_path": "foto-60852d9ad13b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.29,
+          "relative_path": "foto-f1007269aa24.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2822,
+          "relative_path": "foto-cc2f3d00bc87.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2791,
+          "relative_path": "foto-f4c61e29a097.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2748,
+          "relative_path": "foto-3025e3a5a043.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2727,
+          "relative_path": "foto-de36b7538824.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2726,
+          "relative_path": "foto-c8a2720b6cec.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2722,
+          "relative_path": "foto-807c6ff4beb3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "pt",
+      "query": "plantação de milho",
+      "prompt": "a photo of maize planting",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 63.56,
+        "encode_ms": 77.8,
+        "db_ms": 7.01,
+        "total_ms": 81.94
+      },
+      "warm_median": {
+        "prompt_ms": 61.47,
+        "encode_ms": 76.59,
+        "db_ms": 9.82,
+        "total_ms": 85.4
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2598,
+          "relative_path": "foto-360ba9cdc0e9.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2507,
+          "relative_path": "foto-5eabb4d4ad55.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2507,
+          "relative_path": "foto-17e45f794d49.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2503,
+          "relative_path": "foto-9af6bbcceb25.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2456,
+          "relative_path": "foto-af71d30f37cd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2456,
+          "relative_path": "foto-92183a8e71e5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2446,
+          "relative_path": "foto-eba8e8e7d581.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2435,
+          "relative_path": "foto-2fb4f08dede1.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.243,
+          "relative_path": "foto-a672c1d653e9.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2429,
+          "relative_path": "foto-c51bb11a3bd3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "en",
+      "query": "a dog",
+      "prompt": "a photo of the dog",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 63.39,
+        "encode_ms": 78.29,
+        "db_ms": 7.27,
+        "total_ms": 82.98
+      },
+      "warm_median": {
+        "prompt_ms": 65.36,
+        "encode_ms": 84.91,
+        "db_ms": 8.09,
+        "total_ms": 94.45
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2441,
+          "relative_path": "foto-71bd60943faf.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2157,
+          "relative_path": "foto-72d9d622ef40.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2123,
+          "relative_path": "foto-bca136092fb8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2021,
+          "relative_path": "foto-c51bb11a3bd3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2018,
+          "relative_path": "foto-cf162c310bf9.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2015,
+          "relative_path": "foto-e7a039d893c5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1994,
+          "relative_path": "foto-0b063cb952ce.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1991,
+          "relative_path": "foto-ef81bc5c0f79.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1964,
+          "relative_path": "foto-c1175b7abf05.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1962,
+          "relative_path": "foto-cc2f3d00bc87.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "en",
+      "query": "aerial view of a farm",
+      "prompt": "a photo of aerial view of a farm",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 2.39,
+        "encode_ms": 21.05,
+        "db_ms": 10.4,
+        "total_ms": 32.34
+      },
+      "warm_median": {
+        "prompt_ms": 2.24,
+        "encode_ms": 18.54,
+        "db_ms": 8.1,
+        "total_ms": 27.83
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2866,
+          "relative_path": "foto-4398960b060d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2843,
+          "relative_path": "foto-627a091efc19.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2821,
+          "relative_path": "foto-eba8e8e7d581.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2785,
+          "relative_path": "foto-028f0ff1d9a0.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2782,
+          "relative_path": "foto-2d41a179a49e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.278,
+          "relative_path": "foto-af71d30f37cd.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2772,
+          "relative_path": "foto-5ffe0f3f061b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2759,
+          "relative_path": "foto-545ea1310da6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2759,
+          "relative_path": "foto-92183a8e71e5.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2745,
+          "relative_path": "foto-a5303d3b65a2.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "en",
+      "query": "wedding cake",
+      "prompt": "a photo of wedding cake",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 2.45,
+        "encode_ms": 18.05,
+        "db_ms": 7.29,
+        "total_ms": 26.15
+      },
+      "warm_median": {
+        "prompt_ms": 2.51,
+        "encode_ms": 19.63,
+        "db_ms": 8.06,
+        "total_ms": 28.76
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2559,
+          "relative_path": "foto-b4bc10e753a1.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2492,
+          "relative_path": "foto-02d4d851100f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2398,
+          "relative_path": "foto-397025f3a486.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2396,
+          "relative_path": "foto-7892d7bc0914.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2384,
+          "relative_path": "foto-7b174e8cf95a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2381,
+          "relative_path": "foto-a2355f11e875.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2365,
+          "relative_path": "foto-a500b17ef828.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2342,
+          "relative_path": "foto-b0f078e53ac4.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2337,
+          "relative_path": "foto-e0f8cb0731a7.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2336,
+          "relative_path": "foto-8772219940e8.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "en",
+      "query": "sunset over the sea",
+      "prompt": "a photo of sunset over the sea",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 2.91,
+        "encode_ms": 19.34,
+        "db_ms": 10.01,
+        "total_ms": 30.37
+      },
+      "warm_median": {
+        "prompt_ms": 4.23,
+        "encode_ms": 21.54,
+        "db_ms": 7.16,
+        "total_ms": 31.85
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.1826,
+          "relative_path": "foto-d03d1068681d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.1804,
+          "relative_path": "foto-d6a5c0e96cd6.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.1725,
+          "relative_path": "foto-f109eaaf7c92.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.171,
+          "relative_path": "foto-32b74aeada16.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.1679,
+          "relative_path": "foto-011004e8edd7.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.1673,
+          "relative_path": "foto-50925f9cc30a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.1563,
+          "relative_path": "foto-de0ef60fca60.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.1562,
+          "relative_path": "foto-92786f9dde37.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.1544,
+          "relative_path": "foto-ac43374e2c4b.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.1525,
+          "relative_path": "foto-f3affde50fec.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    },
+    {
+      "language": "en",
+      "query": "screenshot of a phone",
+      "prompt": "a photo of screenshot of a phone",
+      "cold": {
+        "cold": true,
+        "prompt_ms": 1.9,
+        "encode_ms": 18.05,
+        "db_ms": 9.65,
+        "total_ms": 23.01
+      },
+      "warm_median": {
+        "prompt_ms": 1.59,
+        "encode_ms": 17.8,
+        "db_ms": 7.45,
+        "total_ms": 27.94
+      },
+      "top": [
+        {
+          "rank": 1,
+          "similarity": 0.2772,
+          "relative_path": "foto-f9ec6b7a2310.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 2,
+          "similarity": 0.2594,
+          "relative_path": "foto-913ec208b8c3.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 3,
+          "similarity": 0.2419,
+          "relative_path": "foto-1160d33b055f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 4,
+          "similarity": 0.2248,
+          "relative_path": "foto-c7f1907d543d.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 5,
+          "similarity": 0.2212,
+          "relative_path": "foto-71bd60943faf.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 6,
+          "similarity": 0.2205,
+          "relative_path": "foto-50925f9cc30a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 7,
+          "similarity": 0.2176,
+          "relative_path": "foto-ae41aa27eb54.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 8,
+          "similarity": 0.2138,
+          "relative_path": "foto-40ca06b0b11e.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 9,
+          "similarity": 0.2119,
+          "relative_path": "foto-2c6c6bbdb86a.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        },
+        {
+          "rank": 10,
+          "similarity": 0.2091,
+          "relative_path": "foto-7c2eef49cc9f.jpg",
+          "device_id": "6ae4f42b-e2b8-5084-a467-4212da815dca"
+        }
+      ]
+    }
+  ],
+  "self_retrieval": [
+    {
+      "image_id": "3b38899d-6f3f-5720-96c4-2e03da9285ef",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.88
+    },
+    {
+      "image_id": "ebd50f7f-076f-5ad0-a107-8d8db59a0a2b",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 8.86
+    },
+    {
+      "image_id": "92e1664c-9b4b-540c-b3b9-05e042061c7a",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.52
+    },
+    {
+      "image_id": "39c0d5ae-b705-516f-8f24-ba60aaea1744",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.63
+    },
+    {
+      "image_id": "6c80199d-3e07-58a2-815c-154382315933",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.11
+    },
+    {
+      "image_id": "f444ddad-763f-5ce4-9bf1-cbbc396400ed",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.24
+    },
+    {
+      "image_id": "d96642ba-8370-56ed-a09c-e62702f406db",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 8.12
+    },
+    {
+      "image_id": "474899a8-426e-5043-9926-6529ecf88517",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.19
+    },
+    {
+      "image_id": "b11e90e6-9683-55cc-8f6c-f14bd1d71e53",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 9.01
+    },
+    {
+      "image_id": "2227c47e-974c-50f5-9d16-6059b6ce44a8",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 8.83
+    },
+    {
+      "image_id": "e0cc5dcc-3217-5a91-bde1-2f8bd4ace804",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.15
+    },
+    {
+      "image_id": "4584dbfd-fc6d-50d4-b23f-90442f352476",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.04
+    },
+    {
+      "image_id": "7c79a9a4-9f84-5ca5-b448-ae4d07c0eb88",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 7.01
+    },
+    {
+      "image_id": "6479568a-d147-5c41-91e5-0c39eb770d05",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 8.83
+    },
+    {
+      "image_id": "32c65ed1-04d8-5665-9ac8-a30f642ad762",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.93
+    },
+    {
+      "image_id": "ec551f70-dcad-5113-882f-e0efee518647",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 5.99
+    },
+    {
+      "image_id": "8a168738-1e4f-5add-aa41-56ed7843d240",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 7.21
+    },
+    {
+      "image_id": "9eb3af71-18f5-5253-a8d5-57c8c4ce8b25",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.2
+    },
+    {
+      "image_id": "3a1eef35-f1dd-5896-aaf9-30205f78f206",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 6.19
+    },
+    {
+      "image_id": "413a9ac7-e2b6-5a2c-81df-51234bfc9220",
+      "rank_of_itself": 1,
+      "top1_similarity": 1.0,
+      "db_ms": 5.99
+    }
+  ],
+  "anonymized": "relative_path = foto-<sha256(relative_path)[:12]>.<ext>"
+}
