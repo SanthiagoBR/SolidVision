@@ -6,3 +6,7 @@ src/api/openapi.json
 src/api/schema.d.ts
 src/map/brazil-states.json
 release/
+
+# Archives of build output, which Prettier cannot read (over 2 GB).
+*.rar
+*.7z

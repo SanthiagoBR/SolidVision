@@ -32,3 +32,18 @@ frontend/dist-electron/
 # The embedded PostgreSQL runtime, materialized from scripts/postgres-win-64.lock
 # by scripts/vendor_postgres.py (RFC-033 section 5.1)
 /runtime/
+
+# Coverage data (pytest-cov). Two of these were committed before this line
+# existed; `git rm --cached .coverage backend/.coverage` takes them out.
+.coverage
+.coverage.*
+htmlcov/
+
+# Archives of build output: the installer is published as a GitHub release,
+# never committed (GitHub refuses files over 100 MB anyway).
+*.rar
+*.7z
+
+# The visual report of the two test suites, with the tools that write it
+# (scripts/test_report.py)
+/test-report/

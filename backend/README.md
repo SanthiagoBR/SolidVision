@@ -1,8 +1,24 @@
 # SolidVision Backend
 
-This directory contains the SolidVision backend: the API, the indexing worker,
-the launcher and the embedded PostgreSQL, in the Clean Architecture layout
-described in `ARCHITECTURE.md`.
+The backend of SolidVision: the API, the indexing worker, the launcher that
+supervises them, and the embedded PostgreSQL they share. Everything the
+window shows comes from here (RFC-037 to RFC-044).
+
+It follows the Clean Architecture layout of [ARCHITECTURE.md](../ARCHITECTURE.md),
+in four layers under `app/`:
+
+| Layer | What is in it |
+|---|---|
+| `domain/` | Entities (`Image`, `Device`, `IndexingJob`), value objects and the ports: repositories, `EmbeddingModelPort`, the geocoder, the thumbnail store. Pure Python |
+| `application/use_cases/` | One use case per file: indexing, search by text and by image, browse by place, devices, folders, jobs, thumbnails, reveal |
+| `infrastructure/` | The adapters: CLIP and the PT->EN translator (`ai/`), PostgreSQL and pgvector (`persistence/`, `database/`, including the embedded cluster), the file system and EXIF (`filesystem/`), the workers, the configuration and the logs |
+| `presentation/` | The FastAPI app: `/health`, the `/api/v1` routers and the interface built by `frontend/` |
+
+Beside them, `app/launcher/` starts and supervises the cluster, the API and
+the job runner (RFC-036), and `app/cli/` is the command line (`index`,
+`search`, `search-image`). `tests/` mirrors the layers; `alembic/` holds the
+migrations; `dataset/demo/` is the 45-image evaluation corpus with its 25
+queries, in English and in Portuguese (RFC-022).
 
 ## Python version
 Python 3.12.9: the embedded Python of the installer (RFC-041), and the one the

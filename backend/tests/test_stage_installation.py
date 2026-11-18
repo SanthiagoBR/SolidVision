@@ -82,6 +82,9 @@ def repository(tmp_path: Path) -> Path:
         "frontend/src/main.tsx": "export {};\n",
         "frontend/package.json": "{}\n",
         "docs/README.md": "# docs\n",
+        "LICENSE": "CC0 1.0 Universal\n",
+        "THIRD-PARTY-NOTICES.md": "# Avisos de terceiros\n",
+        "README.md": "# SolidVision\n",
     }
     for name, content in files.items():
         path = root / name
@@ -134,6 +137,8 @@ def test_the_staging_is_the_installed_tree_and_nothing_else(
         "runtime/python/Lib/site-packages/six.py",
         "frontend/dist/index.html",
         "frontend/dist/assets/index.js",
+        "LICENSE",
+        "THIRD-PARTY-NOTICES.md",
     }
 
 
@@ -287,6 +292,22 @@ def test_a_source_without_the_models_says_how_to_get_them(
     target = tmp_path / "staged"
 
     with pytest.raises(staging.StagingError, match="runtime/models.*vendor_models"):
+        staging.stage(target, source=repository, python=INTERPRETER)
+
+    assert not target.exists()
+
+
+def test_a_source_without_the_notices_says_how_to_write_them(
+    staging: ModuleType, repository: Path, tmp_path: Path
+) -> None:
+    """The package redistributes Python, PostgreSQL, the models and the
+    interface's libraries; it does not leave without their notices."""
+    (repository / "THIRD-PARTY-NOTICES.md").unlink()
+    target = tmp_path / "staged"
+
+    with pytest.raises(
+        staging.StagingError, match="THIRD-PARTY-NOTICES.md.*third_party_notices"
+    ):
         staging.stage(target, source=repository, python=INTERPRETER)
 
     assert not target.exists()

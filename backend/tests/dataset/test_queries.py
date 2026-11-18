@@ -3,7 +3,8 @@
 What lives here is everything about the ground truth that is true
 regardless of which embedding model is loaded: the referenced paths exist
 in the manifest, relevant and hard-negative sets never overlap, query
-texts are unique, and no aerial image is orphaned from the eval set.
+texts are unique, every query has its Portuguese version (`query_pt`),
+and no aerial image is orphaned from the eval set.
 Those checks depend on nothing but the two JSON files, so they belong in
 the fast offline suite and run on every `pytest`.
 
@@ -72,6 +73,23 @@ class TestQueriesStructuralValidity:
         for entry in _load_queries():
             assert len(entry["relevant"]) >= 1, entry["query"]
             assert len(entry["hard_negatives"]) >= 1, entry["query"]
+
+    def test_every_query_has_its_own_portuguese_version(self) -> None:
+        """`query_pt` is the same question as `query`, as a Brazilian user
+        writes it, against the same ground truth.
+
+        The 25 come from the RFC-023 bake-off, which wrote them by hand and
+        without accents; the dataset spells them with accents. Unique, and
+        never the English text left untranslated, or the Portuguese half of
+        the measurement would be measuring English.
+        """
+        queries = _load_queries()
+        portuguese = [entry.get("query_pt") for entry in queries]
+
+        assert all(isinstance(text, str) and text.strip() for text in portuguese)
+        assert len(portuguese) == len(set(portuguese))
+        for entry in queries:
+            assert entry["query_pt"] != entry["query"], entry["query"]
 
     def test_every_domain_entry_is_relevant_for_at_least_one_query(self) -> None:
         """Nothing in the aerial corpus should be absent from the eval set.

@@ -304,6 +304,45 @@ Uma consulta de fumaça, e é uma frase completa de propósito: o RFC-023 §7.1 
 
 Uma observação que vale registrar para um leitor futuro: o Marian emite esta frase específica com um `". "` inicial, então o prompt de fato entregue ao CLIP é `"a photo of . a rural property with a lake"`. A recuperação ainda funciona e o tradutor é componente do RFC-023, então nada foi mudado aqui — mas é um artefato real, visível no log, e uma coisa plausível de limpar quando o caminho de tradução for tocado da próxima vez.
 
+> **Atualizado em 2026-10-26.** O conjunto em português passou a existir, e foi medido: §11.6.
+
+### 11.6 Português, medido (adendo de 2026-10-26)
+
+O §11.5 não criou um *ground truth* em português. Ele existia: as 25 traduções que o bake-off do RFC-023 escreveu à mão estavam no branch `explore/siglip-bakeoff` (`siglip_bakeoff.py`, `PORTUGUESE_TRANSLATIONS`), e viraram o campo `query_pt` de `queries.json`, com acento, como uma pessoa digita. Tirar os acentos devolve o texto do bake-off, caractere a caractere, e o script que as copiou conferiu isso. O *ground truth* é o mesmo das consultas em inglês: a diferença entre as medições é o caminho da língua — a detecção, a tradução PT→EN depois da errata de 27/09 (RFC-023 §22), o prompt — e nada mais.
+
+**Como foi medido.** Pelo `measure_retrieval.py`, reescrito para a identidade por dispositivo do RFC-027, no caminho de produção: `SearchImagesUseCase` → `ClipEmbeddingModel` com o `QueryTranslator` → `search_similar()` → pgvector, no PostgreSQL 16.15 embarcado, numa transação desfeita no fim. As 45 imagens indexadas em 44,8 s (1,0 imagem/s); os modelos de `runtime\models` (RFC-035). Windows 10 Home, Pentium G4560, 16 GB, HDD. Três rodadas das 25 consultas: em inglês, em português e no português sem acento do bake-off. O log fica ao lado do script, fora do git: `retrieval_run_output_2026-10-26.log`.
+
+| métrica | inglês | português | português sem acento |
+| --- | --- | --- | --- |
+| top-1 estrito (= Recall@1) | 64,0% (16/25) | 56,0% (14/25) | 56,0% (14/25) |
+| — IC 95% (Wilson) | 44,5–79,8% | 37,1–73,3% | 37,1–73,3% |
+| **Recall@5** | **84,0%** (21/25) | **88,0%** (22/25) | 84,0% (21/25) |
+| — IC 95% (Wilson) | 65,3–93,6% | 70,0–95,8% | 65,3–93,6% |
+| Recall@10 | 96,0% | 96,0% | 92,0% |
+| cobertura de relevantes@5 | 70,0% | 69,1% | 65,6% |
+| contaminação por negativos difíceis@5 | 12,8% | 12,0% | 12,8% |
+| pairwise | 80,4% | 77,2% | 74,1% |
+| latência mediana, aquecido, no processo | 111 ms | 451 ms | 381 ms |
+
+**O inglês reproduziu o §11.1 na casa decimal** — 64,0, 84,0, 96,0, 80,4 e 12,8 —, dois meses e quase vinte RFCs depois, noutra versão maior do PostgreSQL (o 16 embarcado, contra o 17 do Docker de agosto) e com a busca exata do RFC-038 §14.1. É a verificação cruzada do §11.3 de novo: nada no caminho mudou o ranking.
+
+**Português contra inglês, consulta a consulta** (McNemar exato, bicaudal, sobre os pares que discordam):
+
+| | só o inglês acerta | só o português acerta | p |
+| --- | --- | --- | --- |
+| top-1 | 3 (8, 11, 19) | 1 (12) | 0,625 |
+| Recall@5 | 1 (16) | 2 (4, 20) | 1,000 |
+
+**Com 25 consultas, a diferença entre as línguas não se distingue do ruído.** O português perde três primeiros lugares e ganha um; no top 5, ganha dois e perde um. A tradução às vezes ajuda: "corpo d'água" virou *"body of water"* e "vista aérea", *"aerial view"*, e as consultas 4 e 20, que o inglês erra no top 5, passaram a acertar.
+
+**O que a medição mostrou sobre o tradutor**, consulta a consulta, no log:
+
+- **A detecção deixou uma frase inteira sem tradução.** "rua residencial ladeada de casas" (16) chegou ao CLIP como *"a photo of rua residencial ladeada de casas"*: o `langdetect` não a deu como português, e é a única consulta que o português perde no top 5. É o risco do RFC-023 §7.1, que o medira em palavras soltas, numa frase de cinco palavras.
+- **Sem acento, a tradução piora.** "terreno recem-desmatado com terraplenagem…" (10) virou *"ground ground ground ground…"*, um laço de repetição da decodificação gulosa, parecido com o que a errata de 27/09 corrigiu por outra causa; e "galpao" (8) ficou sem tradução, enquanto "galpão" virou *"shed"*. Com acento, as duas saem certas. O usuário digita com acento, e o número que vale é o da coluna do meio; a terceira mostra que o caminho depende disso.
+- **Erros de sentido que o CLIP perdoou:** "pires" virou *"pyres"* (24), e "cobertura de concessionária", *"dealership coverage"* (12). As duas acertaram mesmo assim.
+
+**O que isto muda.** Os pisos em português entram em `test_semantic_search_e2e.py` pela regra do §11.4, duas consultas abaixo do medido: Recall@5 ≥ 80% e top-1 estrito ≥ 48%, com o mesmo teto de contaminação. O número responde ao `TBM` da etapa 0 do [roadmap do fine-tuning](ROADMAP-fine-tuning.md) — o português depois da errata —, e o limite é o de sempre: com 25 consultas, uma vale 4 pontos, e o intervalo do Recall@5 tem quase 25 pontos de largura. Um conjunto que decida entre modelos é o do RFC-042 §5. Os dois defeitos do tradutor — a frase que a detecção deixa passar e o laço sem acento — são candidatos a um RFC próprio (o roadmap do fine-tuning já os põe fora dele): mexer na decodificação muda os vetores das consultas, e a referência do RFC-035 com eles.
+
 ## 12. Desempenho contra `ARCHITECTURE.md` §22
 
 | meta | medido | veredito |

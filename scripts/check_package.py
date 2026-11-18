@@ -192,6 +192,8 @@ REQUIRED = (
     "runtime/python/SOLIDVISION-PYTHON.json",
     "runtime/postgres/SOLIDVISION-RUNTIME.json",
     "runtime/models/SOLIDVISION-MODELS.json",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
 )
 
 
@@ -206,8 +208,8 @@ def check_tree(staging: Path, report: Report) -> None:
     if missing:
         raise PackageError(f"{staging} has no {', '.join(missing)}")
     report.add(
-        "tree: no pyproject.toml, .env nor tests; the backend, the interface "
-        "and the three runtimes are there"
+        "tree: no pyproject.toml, .env nor tests; the backend, the interface, "
+        "the three runtimes and the license notices are there"
     )
 
 

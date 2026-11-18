@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="850" viewBox="0 0 1200 850">
+<title>uc Instalação e execução: diagrama de casos de uso do SolidVision</title>
+<rect width="1200" height="850" fill="#FFFFFF"/>
+<rect x="0.5" y="0.5" width="1199" height="849" fill="none" stroke="#2F3442" stroke-width="1"/>
+<path d="M0.5 0.5H176.1V18L168.1 26H0.5Z" fill="#FFFFFF" stroke="#2F3442" stroke-width="1"/>
+<text x="10" y="18" font-family="Arial, Helvetica, sans-serif" font-size="12.5" fill="#2F3442"><tspan font-weight="bold">uc</tspan> Instalação e execução</text>
+<rect x="270" y="56" width="730" height="770" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.4"/>
+<text x="635" y="80" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#2F3442" text-anchor="middle" font-weight="bold">SolidVision</text>
+<path d="M117 420.7L320 130" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 433L320 290" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 450.8L320 520" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M130.8 489.1L320 760" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M1083 636.8L469.3 520" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M1083 643.5L511.6 760" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M444.8 278.5L766.6 214.6" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M756.9 222.1L766.6 214.6L754.7 211.3" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M435 539.8L588.5 614.8" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M576.2 614.9L588.5 614.8L581 605" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M455.7 738.6L591.5 665.9" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M584.4 676L591.5 665.9L579.2 666.3" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M759.2 290L453.4 290" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M464.4 284.5L453.4 290L464.4 295.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M771.8 366.5L444.8 301.5" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M456.7 298.3L444.8 301.5L454.5 309.1" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<ellipse cx="402.1" cy="130" rx="82.1" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="402.1" y="125.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-01</text>
+<text x="402.1" y="139.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Instalar o SolidVision</text>
+<ellipse cx="386.7" cy="290" rx="66.7" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="386.7" y="285.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-02</text>
+<text x="386.7" y="299.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Abrir o aplicativo</text>
+<ellipse cx="840" cy="200" rx="93.6" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="840" y="195.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-05</text>
+<text x="840" y="209.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Iniciar os serviços locais</text>
+<ellipse cx="840" cy="290" rx="80.8" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="840" y="285.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-07</text>
+<text x="840" y="299.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Abrir a pasta de logs</text>
+<ellipse cx="840" cy="380" rx="83.5" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="840" y="375.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-16</text>
+<text x="840" y="389.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Retomar a indexação</text>
+<ellipse cx="394.6" cy="520" rx="74.6" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="394.6" y="515.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-03</text>
+<text x="394.6" y="529.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Fechar o aplicativo</text>
+<ellipse cx="415.8" cy="760" rx="95.8" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="415.8" y="755.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-04</text>
+<text x="415.8" y="769.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Desinstalar o SolidVision</text>
+<ellipse cx="640" cy="640" rx="88.5" ry="31" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="640" y="628" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-06</text>
+<text x="640" y="642" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Encerrar os serviços</text>
+<text x="640" y="657" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">em ordem</text>
+<circle cx="100" cy="421" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M100 430V453M85 438H115M88 473L100 453L112 473" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="100" y="491" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Fotógrafo</text>
+<circle cx="1100" cy="616" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M1100 625V648M1085 633H1115M1088 668L1100 648L1112 668" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="1100" y="686" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#555B6A" text-anchor="middle" font-style="italic">«sistema»</text>
+<text x="1100" y="700" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Windows</text>
+<rect x="578.1" y="238.5" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="605.7" y="249.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="484.2" y="569.3" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="511.8" y="580.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="496.1" y="694.3" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="523.6" y="705.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="561.9" y="275.5" width="88.7" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="606.3" y="286.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="606.3" y="299.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[a subida falhou]</text>
+<rect x="538" y="319.5" width="140.7" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="608.3" y="330.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="608.3" y="343.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[havia um job interrompido]</text>
+</svg>
