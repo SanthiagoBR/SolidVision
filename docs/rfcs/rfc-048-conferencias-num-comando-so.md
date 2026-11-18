@@ -4,7 +4,7 @@
 **Depende de:** RFC-003 (as ferramentas: Ruff, Black, `mypy --strict` e pytest), RFC-033 §11 (o `embedded run --`), RFC-037 §4.2 e §4.3 (os comandos do frontend e a deriva do OpenAPI conferida pelos dois lados), RFC-041 §5.2 e §13 (o lockfile do Python, o `vendor_python.py --lock` e a regra de mudar o venv e o lockfile juntos), [roadmap de CI/CD](ROADMAP-ci-cd.md) (D5 e D6)
 **Bloqueia:** RFC-049 e RFC-050, que chamam este comando em vez de repetir a lista em YAML; RFC-052, que monta o venv do mesmo jeito
 **Migration:** nenhuma
-**Medição:** o piloto de §2, rodado à mão em 08/11/2026 nesta máquina (NVMe, Windows 11, o `.venv` no Python 3.12.5), sobre o commit `21e0af5`. A da implementação, `experiments/rfc-048-conferencias/measure_check.py` (+ `.json`; o `.log`, fora do git), num clone novo (§10), rodada em 08/11/2026 (§16), e o `vectors_by_venv.py` (+ `.json`), que comparou os vetores dos dois venvs desta máquina (§17.7)
+**Medição:** o piloto de §2, rodado à mão em 08/11/2026 nesta máquina (NVMe, Windows 11, o `.venv` no Python 3.12.5), sobre o commit `d360209`. A da implementação, `experiments/rfc-048-conferencias/measure_check.py` (+ `.json`; o `.log`, fora do git), num clone novo (§10), rodada em 08/11/2026 (§16), e o `vectors_by_venv.py` (+ `.json`), que comparou os vetores dos dois venvs desta máquina (§17.7)
 
 > **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir*, e vira número quando a implementação o escrever de volta, ao lado da frase. Os números sem marca vêm do piloto de §2 ou de outros RFCs, e dizem de qual.
 

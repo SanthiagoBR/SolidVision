@@ -3,7 +3,7 @@
 **Para quem é:** a sessão que vai terminar o [RFC-034](rfc-034-configuracao-e-diretorios-do-usuario.md). Este documento diz o que já está no código, o que falta, e o que foi decidido no caminho que o RFC não decidia. Ele não substitui o RFC: as seções citadas (§) são as dele.
 
 **Sessão 1:** 2026-10-13, na máquina do piloto (Windows 10 Home, HDD, Python 3.12.9).
-**Head de partida:** `03445f7` em `develop`.
+**Head de partida:** `c80bf32` em `develop`.
 **Nada foi commitado.** Tudo o que este documento descreve está na árvore de trabalho.
 
 > **Sessão 2: 2026-10-14, na mesma máquina. O RFC está terminado.** Tudo o que §4 abaixo listava como faltando foi feito, e o que a medição achou está no próprio RFC: os números em §16, e o que mudou o código em §17. Este documento ficou como o registro da passagem entre as duas sessões; as seções abaixo descrevem o estado do fim da sessão 1, e as notas como esta dizem o que a sessão 2 fez com cada ponto.

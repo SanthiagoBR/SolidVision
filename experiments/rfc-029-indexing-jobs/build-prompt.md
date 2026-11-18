@@ -621,7 +621,7 @@ aquela ação específica.** Preparar o diff, montar o stage e redigir a mensage
 livre; executar não é. Vale mesmo que um commit anterior da mesma sessão tenha
 sido aprovado.
 
-Mensagem no molde do `60903a5` (RFC-027): título `Implementa RFC-029: ...`, corpo
+Mensagem no molde do `a31379b` (RFC-027): título `Implementa RFC-029: ...`, corpo
 em tópicos com o que mudou e por quê, linha final com contagem de testes, mypy e
 alembic. Encerre com:
 

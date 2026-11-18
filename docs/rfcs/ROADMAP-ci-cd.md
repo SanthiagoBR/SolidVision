@@ -4,7 +4,7 @@ Este roadmap cobre o trabalho entre o projeto de hoje, em que toda conferência 
 
 São sete RFCs curtos, do 048 ao 054, no formato do [roadmap do frontend](ROADMAP-frontend.md#o-prazo-e-o-que-ele-obriga): cada um escrito no começo da etapa, com as decisões, no máximo três critérios `TBM` e o que ficou de fora. Status segue as [convenções](README.md#convenções): todo número é `TBM` até a implementação escrevê-lo de volta.
 
-Escrito em 2026-11-08, sobre o commit `21e0af5` da branch `frontend`.
+Escrito em 2026-11-08, sobre o commit `d360209` da branch `frontend`.
 
 **Cortado em 2026-11-11:** o roadmap para no RFC-050, e a primeira release sai à mão ([O corte de 11/11/2026](#o-corte-de-11112026)).
 
@@ -259,7 +259,7 @@ O item 2 de [Pronto](#pronto) depende de importar o `.github/rulesets/ci.json`, 
 
 | Número | Valor |
 |---|---|
-| Commit | `TBM` → **`34c65c4`**, com a tag `v0.1.0` |
+| Commit | `TBM` → **`a7f2b92`**, com a tag `v0.1.0` |
 | Tempo do `npm run dist` nesta máquina | `TBM` min (37 min na máquina do RFC-036) → **23,0 min**: 1379 s, sendo 9 s do build, 89 s da montagem, 79 s das conferências, 151 s da pasta e 1051 s do NSIS. As conferências deram 14 checagens da montagem e 8 da pasta, todas verdes |
 | Tamanho do instalador | `TBM` GB → **1,03 GB** (1.110.483.497 bytes), o mesmo do RFC-041 |
 | `SHA-256` | `TBM` → `5fca9c2be00e502ab555598313da5b974e920a9ce42bff73d8a44dbeb89e92ef` |
@@ -269,9 +269,9 @@ O item 2 de [Pronto](#pronto) depende de importar o `.github/rulesets/ci.json`, 
 
 **O que o corte achou:**
 
-- **O primeiro `npm run dist` parou na conferência dos vetores.** A consulta de referência "propriedade em encosta com piscina" vira hoje *property on hillside with pool*, e o arquivo do RFC-035 guarda *on the slope*. O [RFC-047 §8](rfc-047-glossario-e-deteccao-na-traducao-das-consultas.md) mudou de propósito o prompt de 14 consultas, e o `test_reference_embeddings_slow.py` ganhou a lista delas; o `check_package.py`, não. Corrigido em `34c65c4`: a lista foi para `backend/tests/fixtures/rfc047_changed_prompts.json`, e o teste e o script leem dela. Ninguém tinha visto porque nenhum instalador tinha sido gerado desde 26/10 e os testes `slow` não rodam no CI. É o defeito que o RFC-051 pegaria.
+- **O primeiro `npm run dist` parou na conferência dos vetores.** A consulta de referência "propriedade em encosta com piscina" vira hoje *property on hillside with pool*, e o arquivo do RFC-035 guarda *on the slope*. O [RFC-047 §8](rfc-047-glossario-e-deteccao-na-traducao-das-consultas.md) mudou de propósito o prompt de 14 consultas, e o `test_reference_embeddings_slow.py` ganhou a lista delas; o `check_package.py`, não. Corrigido em `a7f2b92`: a lista foi para `backend/tests/fixtures/rfc047_changed_prompts.json`, e o teste e o script leem dela. Ninguém tinha visto porque nenhum instalador tinha sido gerado desde 26/10 e os testes `slow` não rodam no CI. É o defeito que o RFC-051 pegaria.
 - **O `node_modules` desta máquina estava sem o `electron-builder`**, que está no `package-lock.json`. O build foi feito numa cópia limpa do commit (um `git worktree`), com `npm ci`, e não sobre a pasta de trabalho.
-- **A `main` foi para o `f35b186` por fast-forward e, a pedido do usuário, foi reescrita.** Os quatro commits desde o RFC-050 perderam a linha `Co-Authored-By` e voltaram à `main` por push forçado. As árvores são as mesmas: `0da3fbe` → `3a24cb5`, `37dab90` → `2878133`, `4c2f16b` → `0470336` e `f35b186` → `c88d905`. O ruleset só aceitou a `main` depois que o CI passou no SHA novo.
+- **A `main` foi para o `f35b186` por fast-forward e, a pedido do usuário, foi reescrita.** Os quatro commits desde o RFC-050 perderam a linha `Co-Authored-By` e voltaram à `main` por push forçado. As árvores são as mesmas: `0da3fbe` → `c6506f8`, `37dab90` → `834459b`, `4c2f16b` → `b1eb47f` e `f35b186` → `538c789`. O ruleset só aceitou a `main` depois que o CI passou no SHA novo.
 
 ## Pronto
 

@@ -260,7 +260,7 @@ O launcher do RFC-036 não precisa passar nada aos filhos pelo ambiente: cada pr
 `%LOCALAPPDATA%\SolidVision\solidvision.env`.
 
 - **Opcional.** Sem ele, o app sobe com os defaults. O app nunca o cria e nunca escreve nele.
-- **Formato dotenv, com as mesmas chaves do `.env.example`.** O projeto já tem um parser, um vocabulário e um tratamento para o campo que não é texto simples (`supported_extensions`, corrigido no commit `322d946`). Um segundo formato seria um segundo caminho de leitura para os mesmos campos (§11).
+- **Formato dotenv, com as mesmas chaves do `.env.example`.** O projeto já tem um parser, um vocabulário e um tratamento para o campo que não é texto simples (`supported_extensions`, corrigido no commit `b12f6da`). Um segundo formato seria um segundo caminho de leitura para os mesmos campos (§11).
 - **UTF-8, com ou sem BOM.** O arquivo é lido como `utf-8-sig`, que aceita os dois (§2.4). O `.env` do desenvolvimento passa a ser lido do mesmo jeito.
 - **Caminhos sem aspas.** O espaço não pede aspas, e as aspas duplas reescrevem o caminho (§2.4). As regras de §6.3 transformam o engano em erro, em vez de em pasta errada.
 
@@ -751,7 +751,7 @@ Tudo `TBM`. A máquina e as condições são declaradas na medição. Os número
 
 | verificação | como | resultado |
 | --- | --- | --- |
-| A suíte no head de partida | `pytest` puro, antes de qualquer mudança | **2254 passed, 79 deselected**, em 2026-10-13, no `03445f7`, com o Docker de pé. É a contagem do RFC-033 §18 |
+| A suíte no head de partida | `pytest` puro, antes de qualquer mudança | **2254 passed, 79 deselected**, em 2026-10-13, no `c80bf32`, com o Docker de pé. É a contagem do RFC-033 §18 |
 | Primeira execução instalada | Instalação simulada só para leitura, diretório de trabalho vazio, `LOCALAPPDATA` temporário; `start`, depois a API e o `job_runner` | **`start` em 49,9 s**, do diretório vazio ao banco migrado (o `initdb` é quase tudo; 27,4 s na execução anterior). **A API respondeu o primeiro `/health` 22,7 s** depois de criada, e **o `job_runner` entrou no laço 37,0 s** depois, já com o modelo carregado (15,5 s e 16,9 s na execução anterior: o disco frio ou quente decide quase tudo). `app.__file__` estava debaixo da cópia, e `settings.environment` era `installed`. O arquivo de configuração esperado, `<dados>\solidvision.env`, não existia, e os três subiram com os defaults |
 | "Grava tudo" | As quatro comparações de §9, antes e depois | **Só a raiz de dados, com uma exceção do RFC-035.** Foi criado `SolidVision\` com `logs\` (`embedded.log`, `uvicorn.log`, `job_runner.log`, `python.log`), `postgres\` (46,3 MB) e `thumbnails\`. O diretório de trabalho continuou vazio; a árvore instalada, com as mesmas 3174 entradas, tamanhos e datas; nada novo no primeiro nível de `%USERPROFILE%` e `%APPDATA%`. No `%TEMP%` dos filhos, que é só deles (§17.2), apareceu `torchinductor_<usuário>`, uma pasta vazia que o `torch` cria quando o `job_runner` carrega o modelo (§17.1) |
 | A miniatura | `get_thumbnail_store()` na instalação simulada grava um arquivo | **Gravada em `<dados>\thumbnails\<2 dígitos>\<id>.jpg`**, e achada de volta pelo `locate()` do mesmo store |
