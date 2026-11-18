@@ -400,7 +400,7 @@ Trabalho futuro: adaptadores Linux/macOS; detecção de disco clonado; deduplica
 | `pytest` | **625 passados**, 58 desmarcados — a partir de 502 (o RFC dizia 471, desatualizado quando foi escrito) |
 | `pytest -m slow` | **58 passados** — a partir de 56 |
 | `black --check .` / `ruff check .` | **limpos** |
-| `mypy` | **0 erros em 141 arquivos.** A linha de base de 5 erros já havia sido zerada em `ed1bdf4`; o critério "0 em código novo" está cumprido, e o projeto inteiro segue limpo |
+| `mypy` | **0 erros em 141 arquivos.** A linha de base de 5 erros já havia sido zerada em `766f4c4`; o critério "0 em código novo" está cumprido, e o projeto inteiro segue limpo |
 | `alembic heads` | **head único**, `b8e4d2a13c75` |
 | `alembic downgrade` até `26058b9e1d9a` e `upgrade` de volta | **exercitado** — ver a ressalva abaixo |
 | Reconciliação sobre o banco de desenvolvimento | **45 linhas casadas, 45 reconciliadas, 0 perdidas**, `md5` do conjunto de embeddings idêntico antes e depois |

@@ -1,6 +1,6 @@
 # Suíte do backend no ambiente da GPU
 
-Máquina e ambiente: [`machine.json`](machine.json). Branch `frontend`, commit `ac4df0a`.
+Máquina e ambiente: [`machine.json`](machine.json). Branch `frontend`, commit `bdcc419`.
 
 ```
 pytest -m "not embedded"        # inclui os `slow`, com os modelos reais na GPU

@@ -1,10 +1,10 @@
 # RFC-049 — O Primeiro Workflow: Frontend e Análise Estática
 
-**Status:** Implementado, como está, com as correções de §15. A medição de §14, no GitHub Actions, em 09/11/2026, em dez branches feitas do commit `7584447`: do push ao resultado dos dois jobs, com os caches quentes, **1,5 min** (88 s, a mediana de 86, 88 e 99 s), contra o alvo de 10 min; com os caches frios, 205 s. Os **oito defeitos plantados** deixaram vermelho o job deles, e só o dele, cada um com a primeira etapa vermelha na etapa do defeito. O frontend no Ubuntu deu **378 testes em 36 arquivos, todos passando**, os mesmos do Windows; sem a correção de §5, **1 falha**, a do `stagingDirectory`, e 377 passando, como §2.3 previa. No runner, restaurar o venv levou de 9 a 15 s, e montá-lo, de 70 a 99 s: a decisão 8 fica. O cache do `mypy` serve ao checkout novo (1,0 a 1,7 s, contra 43 a 69 s frio). O caso frio leva cerca de 4 min no runner, e não os 13 que §4.1 estimou com os tempos desta máquina (§15.1), e o passo mais longo do job quente é o `setup-python`, que baixa o 3.12.9 a cada execução (§15.2). As seções 1 a 13 são o rascunho como foi aprovado
+**Status:** Implementado, como está, com as correções de §15. A medição de §14, no GitHub Actions, em 09/11/2026, em dez branches feitas do commit `ec0bc34`: do push ao resultado dos dois jobs, com os caches quentes, **1,5 min** (88 s, a mediana de 86, 88 e 99 s), contra o alvo de 10 min; com os caches frios, 205 s. Os **oito defeitos plantados** deixaram vermelho o job deles, e só o dele, cada um com a primeira etapa vermelha na etapa do defeito. O frontend no Ubuntu deu **378 testes em 36 arquivos, todos passando**, os mesmos do Windows; sem a correção de §5, **1 falha**, a do `stagingDirectory`, e 377 passando, como §2.3 previa. No runner, restaurar o venv levou de 9 a 15 s, e montá-lo, de 70 a 99 s: a decisão 8 fica. O cache do `mypy` serve ao checkout novo (1,0 a 1,7 s, contra 43 a 69 s frio). O caso frio leva cerca de 4 min no runner, e não os 13 que §4.1 estimou com os tempos desta máquina (§15.1), e o passo mais longo do job quente é o `setup-python`, que baixa o 3.12.9 a cada execução (§15.2). As seções 1 a 13 são o rascunho como foi aprovado
 **Depende de:** RFC-048 (o `check.py` e os grupos dele, o `make_venv.py`, os dois lockfiles e o `frontend/.gitattributes`), [roadmap de CI/CD](ROADMAP-ci-cd.md) (D1, D2, D3, D5 e D6)
 **Bloqueia:** RFC-050, que acrescenta o job `backend` a este workflow e monta o venv pelo mesmo passo; RFC-052, que monta o venv do mesmo jeito para o build
 **Migration:** nenhuma
-**Medição:** o piloto de §2, nesta máquina (NVMe, Windows 11, Intel Model 126, 8 threads), em 09/11/2026, sobre o commit `8556d61`. A parte do venv saiu do `experiments/rfc-049-primeiro-workflow/pilot_venv_cache.py` (+ `.json`). A da implementação, `experiments/rfc-049-primeiro-workflow/measure_ci.py` (+ `.json`; o `.log`, fora do git), que lê as execuções do workflow pela API do GitHub (§8), rodado em 09/11/2026 sobre as dez branches de medição (§14)
+**Medição:** o piloto de §2, nesta máquina (NVMe, Windows 11, Intel Model 126, 8 threads), em 09/11/2026, sobre o commit `af4b9dd`. A parte do venv saiu do `experiments/rfc-049-primeiro-workflow/pilot_venv_cache.py` (+ `.json`). A da implementação, `experiments/rfc-049-primeiro-workflow/measure_ci.py` (+ `.json`; o `.log`, fora do git), que lê as execuções do workflow pela API do GitHub (§8), rodado em 09/11/2026 sobre as dez branches de medição (§14)
 
 > **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir*, e vira número quando a implementação o escrever de volta, ao lado da frase. Os números sem marca vêm do piloto de §2 ou de outros RFCs, e dizem de qual.
 
@@ -24,7 +24,7 @@ Três perguntas ficaram para este RFC:
 
 ## 2. O que o piloto mediu
 
-Nesta máquina, em 09/11/2026, sobre o commit `8556d61`. Nada rodou no GitHub. O piloto leu o código e o lockfile do frontend, montou dois venvs dos lockfiles numa pasta temporária e consultou o repositório pela API pública. O roadmap partiu do que o RFC-048 sabia, e o piloto corrigiu três premissas dele (§13).
+Nesta máquina, em 09/11/2026, sobre o commit `af4b9dd`. Nada rodou no GitHub. O piloto leu o código e o lockfile do frontend, montou dois venvs dos lockfiles numa pasta temporária e consultou o repositório pela API pública. O roadmap partiu do que o RFC-048 sabia, e o piloto corrigiu três premissas dele (§13).
 
 ### 2.1 O `npm ci` não baixa o Electron, com ou sem a variável
 
@@ -53,7 +53,7 @@ O `stagingDirectory()`, de `scripts/staging.cjs`, segue a regra do backend para 
 
 O teste seguinte confere que a montagem nunca fica dentro de uma raiz de dados. No Linux, ele passa pela mesma razão, sem conferir nada: a montagem nunca esteve sob o `C:\...` com que ele compara.
 
-Isso é uma previsão feita pela leitura, e não uma medição: esta máquina não tem um Linux pronto. O critério 3 de §8 a confere. No Windows, o `npm test` dá **378 testes em 36 arquivos, todos passando**, no `8556d61`.
+Isso é uma previsão feita pela leitura, e não uma medição: esta máquina não tem um Linux pronto. O critério 3 de §8 a confere. No Windows, o `npm test` dá **378 testes em 36 arquivos, todos passando**, no `af4b9dd`.
 
 ### 2.4 O venv: o que custa montá-lo, e o que custa guardá-lo
 
@@ -353,7 +353,7 @@ Cada branch nasce do commit da implementação e, como §4.4 explica, começa fr
 
 ### 14.1 Onde e como
 
-No GitHub Actions do `SanthiagoBR/SolidVision`, em 09/11/2026, das 16h43 às 17h01 (horário de Brasília). O commit da implementação, `7584447`, foi para dez branches de medição, `medicao/rfc-049-*`, apagadas no fim. Cada uma começou fria, porque a `main` não tem o workflow (§4.4). O `measure_ci.py` leu as execuções pela API, e os logs dos jobs com o token do usuário: sem token, a API responde 403 aos logs, mesmo num repositório público.
+No GitHub Actions do `SanthiagoBR/SolidVision`, em 09/11/2026, das 16h43 às 17h01 (horário de Brasília). O commit da implementação, `ec0bc34`, foi para dez branches de medição, `medicao/rfc-049-*`, apagadas no fim. Cada uma começou fria, porque a `main` não tem o workflow (§4.4). O `measure_ci.py` leu as execuções pela API, e os logs dos jobs com o token do usuário: sem token, a API responde 403 aos logs, mesmo num repositório público.
 
 A ordem foi esta. Primeiro a branch `quente`, sozinha, com o commit da implementação, para ver o workflow funcionar antes de abrir as outras. Depois as nove de uma vez, o controle e os oito defeitos: 18 jobs juntos, e nenhum esperou mais de 3 s na fila. Depois o segundo push da `env`. Por último, os três commits vazios da `quente`, cada um depois de a execução anterior terminar, para que um não cancelasse o outro (§4.1). Antes do primeiro push, cada defeito foi ensaiado nesta máquina com o `check.py` do grupo dele, e cada um parou na etapa dele.
 
@@ -386,7 +386,7 @@ O alvo era 10 min. O `estatico` é o job mais lento nos dois casos, e o `setup-p
 
 ### 14.3 Os oito defeitos plantados
 
-Cada um numa branch feita de `7584447`, num commit só. O da `env` foi em dois pushes, como §8 descreve. O primeiro tirou o `python-dev-win-64.lock` da chave do venv, e a execução, verde, salvou o venv nessa chave. O segundo pôs no lockfile o `pytest` 9.1.0, com o hash do wheel do 9.1.0, e o venv restaurado tinha o 9.1.1.
+Cada um numa branch feita de `ec0bc34`, num commit só. O da `env` foi em dois pushes, como §8 descreve. O primeiro tirou o `python-dev-win-64.lock` da chave do venv, e a execução, verde, salvou o venv nessa chave. O segundo pôs no lockfile o `pytest` 9.1.0, com o hash do wheel do 9.1.0, e o venv restaurado tinha o 9.1.1.
 
 | etapa | defeito | job vermelho | o outro job | a primeira etapa vermelha | o job vermelho, do início ao fim |
 |---|---|---|---|---|---|
@@ -405,8 +405,8 @@ Cada um numa branch feita de `7584447`, num commit só. O da `env` foi em dois p
 
 | commit | `npm test` nesta máquina (Windows 11, Node 24.15.0) | `check.py frontend` no `ubuntu-24.04` (Node 24.22.2) |
 |---|---|---|
-| `7584447`, com a correção de §5 | 378 passando, em 36 arquivos | **378 passando, em 36 arquivos**, em todas as execuções sem defeito plantado no frontend: as quatro da `quente`, as duas da `env` e as do `ruff`, do `black` e do `mypy` |
-| O controle: `7584447` com o teste de antes de §5 | 378 passando | **1 falha e 377 passando**. A falha: *"is SolidVision-build\resources under LOCALAPPDATA, outside the repository"* |
+| `ec0bc34`, com a correção de §5 | 378 passando, em 36 arquivos | **378 passando, em 36 arquivos**, em todas as execuções sem defeito plantado no frontend: as quatro da `quente`, as duas da `env` e as do `ruff`, do `black` e do `mypy` |
+| O controle: `ec0bc34` com o teste de antes de §5 | 378 passando | **1 falha e 377 passando**. A falha: *"is SolidVision-build\resources under LOCALAPPDATA, outside the repository"* |
 
 As duas linhas são o que §2.3 previu pela leitura. No controle, o teste da raiz de dados passou sem conferir nada, como lá se dizia; com a correção, ele passa conferindo. Nenhuma outra diferença apareceu, e o job do frontend fica no Linux (D3, §5).
 

@@ -32,7 +32,7 @@ número medido escrito de volta no documento.
 ### 0.1 Pré-condição
 
 **Nenhuma.** `git status` na raiz está limpo e a RFC-029 já está commitada
-(`22ab053`). Isto é diferente da RFC-029, que teve que esperar a RFC-028 ser
+(`2b77b1f`). Isto é diferente da RFC-029, que teve que esperar a RFC-028 ser
 commitada primeiro — não há trabalho pendente para este prompt herdar.
 
 Linha de base, verificada nesta sessão:
@@ -653,7 +653,7 @@ aquela ação específica.** Preparar o diff, montar o stage e redigir a
 mensagem é livre; executar não é. Vale mesmo que um commit anterior da mesma
 sessão tenha sido aprovado.
 
-Mensagem no molde do `22ab053` (RFC-029): título `Implementa RFC-030: ...`,
+Mensagem no molde do `2b77b1f` (RFC-029): título `Implementa RFC-030: ...`,
 corpo em tópicos com o que mudou e por quê, linha final com contagem de
 testes, mypy e alembic. Encerre com:
 

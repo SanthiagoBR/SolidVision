@@ -271,7 +271,7 @@ As etapas 0 a 2 não têm corte. Sem elas, não há produto.
 
 ## Sobre o RFC-036
 
-O RFC-036 está implementado (`191bde0`). Dele faltam duas coisas: a verificação manual do logoff (§17.3), que é uma sessão encerrada com um job em andamento, e *"uma janela de verdade"*, que é a Etapa 0. O frontend não espera nenhuma das duas. O que a Etapa 0 consome é o contrato do §14, e ele está pronto.
+O RFC-036 está implementado (`e5f9a52`). Dele faltam duas coisas: a verificação manual do logoff (§17.3), que é uma sessão encerrada com um job em andamento, e *"uma janela de verdade"*, que é a Etapa 0. O frontend não espera nenhuma das duas. O que a Etapa 0 consome é o contrato do §14, e ele está pronto.
 
 ---
 

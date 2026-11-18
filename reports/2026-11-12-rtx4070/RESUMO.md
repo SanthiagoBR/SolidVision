@@ -25,7 +25,7 @@ Gerado por `tools/build_summary.py` a partir dos JSONs desta pasta. Achados e te
 | torch | 2.13.0+cu126 |
 | Python | 3.12.0 |
 | Acervo | HD Seagate Expansion. USB. 112.802 JPEGs |
-| Commit | `frontend` @ `ac4df0a` |
+| Commit | `frontend` @ `bdcc419` |
 
 Desvios do ambiente do projeto: Python 3.12.0, nao o 3.12.9 que o make_venv.py exige (o 3.12.9 nao esta instalado nesta maquina).; torch 2.13.0+cu126 e torchvision 0.28.0+cu126 no lugar dos +cpu do scripts/python-win-64.lock, para usar a GPU; os demais pacotes sao os do lock, com hash, sem resolver.; psutil instalado a parte (o benchmark_indexing.py o importa e nenhum lock o traz).; Ambiente em .venv-gpu, nao em .venv.
 

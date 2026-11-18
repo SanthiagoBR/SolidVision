@@ -848,7 +848,7 @@ sido aprovado.
 
 Não inclua `FRONTEND_SCAFFOLD.md` nem `logs/` no stage (§0.1).
 
-Mensagem no molde do `725617b` (RFC-030): título
+Mensagem no molde do `8f89079` (RFC-030): título
 `Implementa RFC-031: dispositivos, volumes e pastas pela API`, corpo em tópicos
 com o que mudou e por quê, linha final com contagem de testes, mypy e alembic.
 

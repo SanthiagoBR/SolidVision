@@ -4,7 +4,7 @@
 **Depende de:** RFC-048 (o `check.py pytest`, a conexão de teste e o `make_venv.py`), RFC-049 (o `ci.yml`, o passo do venv e o `test_ci_workflow.py`), RFC-033 §5.1 e §11 (o `vendor_postgres.py` e o `embedded run --`), RFC-036 §5.5 e §8 (os dois testes do launcher), [roadmap de CI/CD](ROADMAP-ci-cd.md) (D2, D4, D5, D6 e D7)
 **Bloqueia:** RFC-051, que guarda o `runtime\postgres` pela mesma chave e monta o venv pela mesma action; RFC-052, que monta o venv do build pela action deste RFC
 **Migration:** nenhuma
-**Medição:** o piloto de §2, nesta máquina (NVMe, Windows 11, Intel Model 126, 8 threads), em 10/11/2026, sobre o commit `9dbfcf6`, o da `origin/frontend`. Em `experiments/rfc-050-suite-do-backend/`: `pilot_flaky.py` e `repeat_launcher_tests.py` (os dois testes do launcher), `pilot_suite.py` (a suíte num clone montado como o runner) e `pilot_caches.py` (o `runtime\postgres` e o Python do NuGet), cada um com o `.json`; os `.log` ficam fora do git. A documentação do GitHub sobre *rulesets* e checks obrigatórios e o README da imagem `windows-2025` (versão 20261101.318.1) foram lidos no mesmo dia
+**Medição:** o piloto de §2, nesta máquina (NVMe, Windows 11, Intel Model 126, 8 threads), em 10/11/2026, sobre o commit `a122ed2`, o da `origin/frontend`. Em `experiments/rfc-050-suite-do-backend/`: `pilot_flaky.py` e `repeat_launcher_tests.py` (os dois testes do launcher), `pilot_suite.py` (a suíte num clone montado como o runner) e `pilot_caches.py` (o `runtime\postgres` e o Python do NuGet), cada um com o `.json`; os `.log` ficam fora do git. A documentação do GitHub sobre *rulesets* e checks obrigatórios e o README da imagem `windows-2025` (versão 20261101.318.1) foram lidos no mesmo dia
 
 > **Convenção de rascunho (RFC-026).** Todo número marcado `TBM` é *a medir*, e vira número quando a implementação o escrever de volta, ao lado da frase. Os números sem marca vêm do piloto de §2 ou de outros RFCs, e dizem de qual.
 
@@ -23,13 +23,13 @@ Quatro perguntas ficaram para este RFC:
 
 ## 2. O que o piloto mediu
 
-Nesta máquina, em 10/11/2026, sobre o commit `9dbfcf6`. Nada rodou no GitHub. O piloto rodou os dois testes do launcher centenas de vezes, com a máquina livre e com todas as CPUs ocupadas. Rodou também a suíte padrão num clone montado como o runner, e o `vendor_postgres.py` e o Python do NuGet numa pasta temporária. O roadmap partiu do que se sabia antes, e o piloto corrigiu duas premissas dele (§14).
+Nesta máquina, em 10/11/2026, sobre o commit `a122ed2`. Nada rodou no GitHub. O piloto rodou os dois testes do launcher centenas de vezes, com a máquina livre e com todas as CPUs ocupadas. Rodou também a suíte padrão num clone montado como o runner, e o `vendor_postgres.py` e o Python do NuGet numa pasta temporária. O roadmap partiu do que se sabia antes, e o piloto corrigiu duas premissas dele (§14).
 
 ### 2.1 A suíte num clone montado como o runner
 
 O `pilot_suite.py` dá ao clone o que o runner vai ter, até onde esta máquina consegue imitar:
 
-- um clone do `9dbfcf6` com `core.autocrlf=true`, sem `.env` e sem `runtime\models`;
+- um clone do `a122ed2` com `core.autocrlf=true`, sem `.env` e sem `runtime\models`;
 - o `runtime\postgres` copiado para dentro do clone, onde o cache vai pô-lo;
 - o `TEMP` e o `TMP` num caminho curto 8.3 (`...\RFC050~1\RUNNER~1`), como os do runner, que são `C:\Users\RUNNER~1\...` porque `runneradmin` passa de oito letras;
 - as três variáveis do PostgreSQL da imagem (`PGBIN`, `PGDATA` e `PGROOT`, §2.6);
@@ -118,7 +118,7 @@ Um piloto anterior, nesta mesma sessão, falhou ao resolver o nome `api.nuget.or
 
 **O repositório**, em 10/11/2026:
 
-- a `origin/frontend` está em `9dbfcf6`, e a `main` está **75 commits** atrás dela. A execução do `ci.yml` nesse commit passou os dois jobs em 74 s;
+- a `origin/frontend` está em `a122ed2`, e a `main` está **75 commits** atrás dela. A execução do `ci.yml` nesse commit passou os dois jobs em 74 s;
 - os caches somam **3,39 GB** em 30 entradas. Desses, 3,04 GB são das dez branches de medição do RFC-049, que saem sozinhas depois de 7 dias sem acesso, até 16/11;
 - a API pública responde, sem token, `200` e uma lista vazia para `/rulesets` e para `/rules/branches/main`. Hoje, nenhuma regra vale para branch nenhuma.
 
@@ -419,7 +419,7 @@ O `backend/tests/test_ci_workflow.py` passa a ler também a action e o ruleset. 
 
 | critério | o número |
 |---|---|
-| **A suíte no runner dá os números de uma máquina de desenvolvimento** | No mesmo commit, o pytest do job `backend` e o do `pilot_suite.py` nesta máquina: passados `TBM` e `TBM`, pulados `TBM` e `TBM`, falhas 0 e 0 → **3 563 e 3 563 passados, 0 e 0 pulados, 0 e 0 falhas**, em `37dab90` (§15.3). Em `0da3fbe`, o runner deu 3 falhas que esta máquina não dá, explicadas e corrigidas em §16.1. No piloto, em `9dbfcf6`, esta máquina deu 3 554 passados, nenhum pulado e nenhuma falha (§2.1). Cada diferença é explicada, uma por uma. Um teste que presume esta máquina sem precisar dela é corrigido no teste, a regra do RFC-049 §5 |
+| **A suíte no runner dá os números de uma máquina de desenvolvimento** | No mesmo commit, o pytest do job `backend` e o do `pilot_suite.py` nesta máquina: passados `TBM` e `TBM`, pulados `TBM` e `TBM`, falhas 0 e 0 → **3 563 e 3 563 passados, 0 e 0 pulados, 0 e 0 falhas**, em `37dab90` (§15.3). Em `0da3fbe`, o runner deu 3 falhas que esta máquina não dá, explicadas e corrigidas em §16.1. No piloto, em `a122ed2`, esta máquina deu 3 554 passados, nenhum pulado e nenhuma falha (§2.1). Cada diferença é explicada, uma por uma. Um teste que presume esta máquina sem precisar dela é corrigido no teste, a regra do RFC-049 §5 |
 | **Dez execuções seguidas sem falha** | Dez commits vazios numa branch de medição, cada um depois de a execução anterior terminar, para que um não cancele o outro: os três jobs verdes em `TBM` de 10 → **10 de 10** (§15.4), sem nenhum *re-run*. Uma falha não é repetida. Ela é explicada e corrigida, e a contagem recomeça do zero |
 | **O tempo, frio e quente** | O job `backend`, do começo ao fim: frio, sem venv e sem runtime, `TBM` min → **3,9 min** (235 s); quente, a mediana das dez execuções do critério 2, `TBM` min → **2,2 min** (131,5 s; de 92 a 134 s). Vêm junto o tempo de cada passo: o Python do nuget.org, o venv, o runtime, o `initdb` e o pytest (§15.5). **Do push ao resultado dos três jobs, com os caches quentes:** `TBM` min → **2,3 min** (135 s, a mediana das dez; de 94 a 146 s). O alvo, escrito antes do número, é **10 min**, e esse número é o do item 1 do *Pronto* do roadmap. Sem ser critério, vem o Python base no `estatico`, contra os 49,5 s do `setup-python` (RFC-049 §15.2) → **2,6 s** (mediana; de 1,8 a 6,1 s) |
 
@@ -486,11 +486,11 @@ No GitHub Actions do `SanthiagoBR/SolidVision`, em 10 e 11/11/2026, e nesta máq
 
 O `measure_ci.py` leu as execuções pela API, e os logs com o token do usuário, autorizado para esta sessão. Os passos de dentro da action, que a API reporta como um passo só, vêm da hora de cada `##[group]` do log. As referências desta máquina são o `pilot_suite.py` e o `repeat_launcher_tests.py`, nos mesmos commits.
 
-Em 11/11, depois das medições, os commits desde este RFC foram reescritos só na mensagem, sem o trailer `Co-Authored-By`. A implementação, `0da3fbe`, virou `3a24cb5`, e a correção, `37dab90`, virou `2878133`, com as mesmas árvores. Este RFC cita os SHAs que rodaram no runner.
+Em 11/11, depois das medições, os commits desde este RFC foram reescritos só na mensagem, sem o trailer `Co-Authored-By`. A implementação, `0da3fbe`, virou `c6506f8`, e a correção, `37dab90`, virou `834459b`, com as mesmas árvores. Este RFC cita os SHAs que rodaram no runner.
 
 ### 15.2 Os dois testes do launcher
 
-Pelo `repeat_launcher_tests.py`, cada série num pytest próprio, gravada no `.json`. A série de antes rodou com os testes de `9dbfcf6`. A de depois rodou em `0da3fbe`, com as correções de §5.
+Pelo `repeat_launcher_tests.py`, cada série num pytest próprio, gravada no `.json`. A série de antes rodou com os testes de `a122ed2`. A de depois rodou em `0da3fbe`, com as correções de §5.
 
 | teste | série | antes | depois |
 |---|---|---|---|
