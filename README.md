@@ -41,6 +41,28 @@ Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](do
 
 ---
 
+## Demonstração
+
+### Adicionar um dispositivo e indexar uma pasta
+https://github.com/user-attachments/assets/9842a8e2-5327-4210-8c43-7372f2b1af88
+
+### Busca e buscas subsequentes
+https://github.com/user-attachments/assets/b5c97904-5327-4cef-948d-0255a92d3433
+
+### Busca com filtros de data e localização
+https://github.com/user-attachments/assets/db8f6108-8807-49be-8d9a-b2db11738b63
+
+### Busca pelo mapa
+https://github.com/user-attachments/assets/9cb0700f-055a-406c-9f9f-8610e95cf939
+
+### Busca por imagem
+https://github.com/user-attachments/assets/40751efe-3f3f-4316-8219-9291a701266e
+
+### Da busca ao Explorador de Arquivos
+https://github.com/user-attachments/assets/a97a7659-ab6c-436c-a470-0119b8ee19c4
+
+---
+
 ## Tecnologias
 
 *   **IA:** CLIP LAION ViT-B/32 (embeddings de 512 dimensões), escolhido em uma comparação de quatro modelos (RFC-023).
