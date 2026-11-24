@@ -31,7 +31,7 @@ Os números não mudam: um caso de uso novo recebe o próximo número livre e en
 | Nominatim | Secundário, sistema externo | O serviço de endereços do OpenStreetMap. Converte o endereço digitado numa coordenada, só quando o fotógrafo pede. |
 <!-- END GENERATED: atores -->
 
-**O Fotógrafo e o Mantenedor são papéis, e não pessoas.** O sistema tem um único usuário, sem contas nem perfis ([§1](requisitos.md#1-contexto) e [§7](requisitos.md#7-fora-do-escopo-e-limitações-conhecidas) dos requisitos), e na prática os dois papéis costumam ser a mesma pessoa. Eles aparecem separados porque usam interfaces diferentes: a janela, de um lado; a linha de comando e o arquivo de configuração, do outro. O Mantenedor especializa o Fotógrafo (a seta de generalização entre os dois): herda todos os casos de uso dele e acrescenta os de manutenção.
+**O Fotógrafo e o suporte são papéis, e não pessoas.** O sistema tem um único usuário, sem contas nem perfis ([§1](requisitos.md#1-contexto) e [§7](requisitos.md#7-fora-do-escopo-e-limitações-conhecidas) dos requisitos), e na prática os dois papéis costumam ser a mesma pessoa. Eles aparecem separados porque usam interfaces diferentes: a janela, de um lado; a linha de comando e o arquivo de configuração, do outro. O suporte especializa o Fotógrafo (a seta de generalização entre os dois): herda todos os casos de uso dele e acrescenta os de manutenção.
 
 **Os sistemas externos são secundários.** Nenhum deles inicia um caso de uso, salvo o Windows no logoff (UC-03). O OpenStreetMap e o Nominatim são o único tráfego que sai da máquina, e os dois são opcionais (RNF-19).
 
@@ -97,7 +97,7 @@ Abrir o app inclui subir os serviços locais (o banco embarcado, a API e o execu
 
 ![Diagrama de casos de uso: linha de comando e manutenção](casos-de-uso/uc-07-linha-de-comando.svg)
 
-Os casos de uso só do Mantenedor. A indexação e as buscas pela linha de comando (RF-65) não aparecem como casos próprios: são os mesmos casos de uso da interface, que o Mantenedor herda do Fotógrafo, por outra interface.
+Os casos de uso só do suporte. A indexação e as buscas pela linha de comando (RF-65) não aparecem como casos próprios: são os mesmos casos de uso da interface, que o suporte herda do Fotógrafo, por outra interface.
 
 ## 5. Catálogo dos casos de uso
 

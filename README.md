@@ -82,6 +82,16 @@ https://github.com/user-attachments/assets/a97a7659-ab6c-436c-a470-0119b8ee19c4
 
 ---
 
+## Casos de uso
+
+O sistema tem 41 casos de uso em 7 pacotes, que seguem a ordem de uso do app: instalar e abrir, registrar os discos, indexá-los, buscar, ver o resultado, explorar o mapa e a manutenção pela linha de comando. Os atores primários são o Fotógrafo, que usa a janela, e o suporte, que usa a linha de comando; os secundários são o Windows, os tiles do OpenStreetMap e o Nominatim. Todo requisito funcional, do RF-01 ao RF-72, tem pelo menos um caso de uso.
+
+![Diagrama de casos de uso: visão geral](docs/casos-de-uso/uc-01-visao-geral.svg)
+
+O diagrama mostra os casos de uso que os atores iniciam, por pacote. O [documento dos casos de uso](docs/casos-de-uso.md) traz os diagramas de cada pacote, o catálogo com a descrição de cada caso e a rastreabilidade até os requisitos.
+
+---
+
 ## Como instalar
 
 O SolidVision se instala com um arquivo só, `SolidVision-Setup-0.1.0.exe`, que se gera com `npm run dist` ([abaixo](#7-o-instalador)). Ele traz tudo o que o app usa — o Python, o PostgreSQL e os modelos de IA — e não precisa de rede, de Docker nem de um administrador ([RFC-041](docs/rfcs/rfc-041-empacotamento-e-instalador.md)). O instalador tem 1,03 GB, e o programa instalado ocupa 2,2 GB. Requer Windows 10 ou 11, 64 bits.
