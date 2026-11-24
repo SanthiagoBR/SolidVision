@@ -1,168 +1,192 @@
-# SolidVision Architecture
+# Arquitetura do SolidVision
 
-**Version:** 1.0  
-**Status:** Draft  
-**Last Updated:** July 2026
+**Versão:** 1.1  
+**Status:** Descreve o sistema implementado, até o RFC-046  
+**Última atualização:** novembro de 2026
 
----
-
-# 1. Project Overview
-
-SolidVision is an AI-powered semantic image retrieval system designed to help professional photographers efficiently manage large local image collections. The project was conceived to solve a common problem faced by aerial photographers: locating specific photographs among hundreds of thousands of images stored over many years.
-
-Unlike traditional file explorers that rely on folder structures or manually assigned filenames, SolidVision enables users to search their collections using natural language. A user can describe the desired image (e.g., *"rural property with a lake"*), and the system retrieves the most semantically similar photographs.
-
-The system operates entirely on local storage. Images are never uploaded to external servers, preserving user privacy while minimizing storage costs. Instead, SolidVision indexes local folders, extracts semantic embeddings using a multimodal AI model, and stores only metadata and vector representations in a PostgreSQL database.
-
-The architecture has been designed with long-term maintainability in mind, allowing future replacement of AI models, databases, or user interfaces with minimal impact on the rest of the system.
+> **Como ler este documento.** Ele foi escrito em julho de 2026 como o projeto, antes de qualquer código, e cresceu junto com os RFCs. Desde outubro de 2026 descreve o que foi construído. Onde o projeto e o sistema divergem, a seção diz isso e nomeia o RFC que decidiu; o que foi projetado e nunca construído está marcado *(não construído)*. Os registros de decisão estão em [docs/adr](docs/adr/README.md), e cada mudança, com suas medições, em [docs/rfcs](docs/rfcs/README.md).
 
 ---
 
-# 2. Architectural Goals
+# 1. Visão geral do projeto
 
-The architecture of SolidVision is designed around the following goals:
+O SolidVision é um sistema de recuperação semântica de imagens com IA, feito para ajudar fotógrafos profissionais a gerenciar com eficiência grandes acervos locais de imagens. O projeto nasceu para resolver um problema comum dos fotógrafos aéreos: localizar fotografias específicas entre centenas de milhares de imagens guardadas ao longo de muitos anos.
 
-## Maintainability
+Ao contrário dos exploradores de arquivos tradicionais, que dependem da estrutura de pastas ou de nomes de arquivos dados à mão, o SolidVision permite pesquisar o acervo em linguagem natural. O usuário descreve a imagem desejada (por exemplo, *"propriedade rural com lago"*), e o sistema devolve as fotografias semanticamente mais parecidas.
 
-Business rules must remain independent of frameworks, databases and AI libraries.
+O sistema funciona inteiramente no armazenamento local. As imagens nunca são enviadas para servidores externos, o que preserva a privacidade do usuário e minimiza o custo de armazenamento. Em vez disso, o SolidVision indexa pastas locais, extrai embeddings semânticos com um modelo de IA multimodal e guarda apenas metadados e representações vetoriais em um banco PostgreSQL.
 
-## Scalability
+A arquitetura foi projetada pensando na manutenção a longo prazo, de modo que os modelos de IA, o banco de dados ou a interface possam ser trocados no futuro com impacto mínimo no resto do sistema.
 
-The system should support collections containing at least **100,000 indexed images** while maintaining fast semantic search.
+---
 
-## Extensibility
+# 2. Objetivos arquiteturais
 
-The embedding model should be replaceable without affecting business logic.
+A arquitetura do SolidVision foi projetada em torno dos seguintes objetivos:
 
-Examples:
+## Manutenibilidade
 
-- SigLIP
-- CLIP
-- OpenCLIP
-- Future fine-tuned aerial photography models
+As regras de negócio devem permanecer independentes de frameworks, bancos de dados e bibliotecas de IA.
 
-## Testability
+## Escalabilidade
 
-Core business logic must be fully testable without requiring:
+O sistema deve suportar acervos com pelo menos **100.000 imagens indexadas** mantendo a busca semântica rápida.
+
+## Extensibilidade
+
+O modelo de embedding deve poder ser substituído sem afetar a lógica de negócio.
+
+Exemplos:
+
+- CLIP LAION ViT-B/32: o modelo atual (RFC-023)
+- SigLIP: a escolha original, medida e substituída (ADR-001)
+- Checkpoints do OpenCLIP, ou modelos adaptados a imagens aéreas (RFC-042, proposto)
+
+A substituição já aconteceu uma vez, do SigLIP para o CLIP, e não mudou nenhuma
+linha do Domain nem da Application (RFC-023, seção 5).
+
+## Testabilidade
+
+A lógica de negócio central deve ser totalmente testável sem exigir:
 
 - PostgreSQL
 - PyTorch
 - HuggingFace
 - FastAPI
 
-## Separation of Concerns
+## Separação de responsabilidades
 
-Each layer has a single responsibility.
+Cada camada tem uma única responsabilidade.
 
-Presentation handles HTTP.
+A Presentation trata o HTTP.
 
-Application orchestrates use cases.
+A Application orquestra os casos de uso.
 
-Domain contains business rules.
+O Domain contém as regras de negócio.
 
-Infrastructure communicates with external systems.
+A Infrastructure se comunica com os sistemas externos.
 
-## Local-First Design
+## Local primeiro (local-first)
 
-SolidVision never duplicates image files.
+O SolidVision nunca duplica arquivos de imagem.
 
-The filesystem is considered the single source of truth.
+O sistema de arquivos é considerado a única fonte de verdade.
 
-Only metadata, thumbnails and embeddings are stored in the database.
+Apenas metadados, miniaturas e embeddings são guardados no banco de dados.
 
 ---
 
-# 3. Core Principles
+# 3. Princípios fundamentais
 
-SolidVision follows the following architectural principles.
+O SolidVision segue os seguintes princípios arquiteturais.
 
 - Clean Architecture
 - SOLID
 - Repository Pattern
-- Dependency Injection
-- Separation of Concerns
-- High Cohesion
-- Low Coupling
-- Explicit Dependencies
-- Composition over Inheritance
-- Domain Driven Design (where appropriate)
+- Injeção de dependência
+- Separação de responsabilidades
+- Alta coesão
+- Baixo acoplamento
+- Dependências explícitas
+- Composição em vez de herança
+- Domain-Driven Design (onde fizer sentido)
 
-Business logic must remain framework-independent.
+A lógica de negócio deve permanecer independente de frameworks.
 
-No framework-specific code should exist inside the Domain layer.
+Nenhum código específico de framework deve existir dentro da camada Domain.
 
 ---
 
-# 4. Technology Stack
+# 4. Stack tecnológica
 
 ## Backend
 
 - Python 3.12
-- FastAPI
-- SQLAlchemy
+- FastAPI e Uvicorn
+- SQLAlchemy 2 e psycopg 3
 - Alembic
-- PostgreSQL
-- pgvector
+- PostgreSQL 16 com pgvector 0.8.6
 - Pillow
-- Pydantic
-- Pydantic Settings
+- Pydantic e pydantic-settings
 
-## Artificial Intelligence
+## Inteligência artificial
 
-Default model
+Modelo padrão
 
-- SigLIP
+- CLIP `laion/CLIP-ViT-B-32-laion2B-s34B-b79K`, 512 dimensões, via
+  `transformers` e PyTorch, na CPU (RFC-023)
+- As consultas em português são traduzidas para o inglês antes:
+  `Helsinki-NLP/opus-mt-ROMANCE-en` (MarianMT), com o `langdetect` decidindo
+  o que traduzir
+- Os dois modelos são fixados por revisão e `sha256`, e carregados de
+  `runtime/models` sem rede (RFC-035)
 
-Future supported adapters
+Adaptadores futuros, atrás da mesma porta
 
-- CLIP
-- OpenCLIP
-- Florence
-- Custom fine-tuned models
+- Checkpoints adaptados a imagens aéreas, ou um CLIP com fine-tuning (RFC-042, proposto)
+- OpenCLIP, SigLIP ou outros: um adaptador novo e uma reindexação completa
 
 ## Frontend
 
-- React
-- TypeScript
-- Vite
-- TailwindCSS
+- Electron 44: a janela, que inicia o launcher (RFC-037)
+- React 19, TypeScript e Vite
+- TanStack Query e React Router
+- Leaflet, para o mapa (RFC-040)
+- CSS Modules sobre design tokens tirados do mockup do Figma; nenhum framework de CSS
+- Tipos gerados a partir do schema OpenAPI da API (`openapi-typescript`),
+  conferidos contra divergências pelas duas suítes de teste
 
-## Infrastructure
+## Infraestrutura
 
-- Docker
-- Docker Compose
+- PostgreSQL embarcado no instalador, iniciado pelo app como processo filho
+  (ADR-008, RFC-033)
+- O launcher, que inicia e supervisiona o cluster, a API e o executor de
+  jobs (RFC-036)
+- O instalador: a distribuição *embeddable* do Python 3.12, electron-builder
+  e NSIS, por usuário e sem elevação (RFC-041)
+- Docker Compose, só para desenvolvimento
 
-## Testing
+## Testes
 
-- Pytest
-- pytest-mock
-- React Testing Library
-
----
-
-## Architecture Decision Record — ADR-001
-
-### Decision
-
-Use **SigLIP** as the default embedding model.
-
-### Reason
-
-SigLIP provides stronger semantic alignment between images and natural language than the original CLIP architecture, especially for zero-shot retrieval tasks.
-
-Its integration with the HuggingFace ecosystem also simplifies deployment and future experimentation.
-
-### Tradeoffs
-
-- Slightly slower inference than CLIP
-- Higher memory consumption during embedding generation
-- Requires complete reindexing if replaced by another embedding model
+- pytest, com os marcadores opcionais (opt-in) `slow` (os modelos reais) e
+  `embedded` (servidores PostgreSQL reais)
+- Vitest
+- Ruff, Black e `mypy --strict`; ESLint e Prettier
 
 ---
 
-# 5. High Level Architecture
+## Registro de decisão de arquitetura — ADR-001
 
-SolidVision follows the principles of Clean Architecture.
+> **Substituído pelo RFC-023** (agosto de 2026). Uma comparação de quatro
+> checkpoints no corpus de demonstração escolheu o **CLIP LAION ViT-B/32, 512
+> dimensões**: tão preciso quanto o SigLIP base nesse corpus (60,0% de top-1
+> estrito em inglês, com o template `a photo of {query}`), e cerca de dez vezes
+> mais rápido para indexar na CPU (0,46 a 0,70 s por imagem, contra ~4,96 s). A
+> coluna passou de `vector(1152)` para `vector(512)` e tudo foi reindexado, o
+> custo que o ADR-007 já tinha previsto. A decisão original segue como foi
+> escrita ([ADR-001](docs/adr/adr-001-modelo-de-embedding.md)).
+
+### Decisão
+
+Usar o **SigLIP** como modelo de embedding padrão.
+
+### Justificativa
+
+O SigLIP oferece um alinhamento semântico entre imagens e linguagem natural mais forte que a arquitetura CLIP original, especialmente em tarefas de recuperação zero-shot.
+
+Sua integração com o ecossistema HuggingFace também simplifica a implantação e a experimentação futura.
+
+### Trade-offs
+
+- Inferência um pouco mais lenta que a do CLIP
+- Maior consumo de memória ao gerar os embeddings
+- Exige reindexação completa se for substituído por outro modelo de embedding
+
+---
+
+# 5. Arquitetura de alto nível
+
+O SolidVision segue os princípios da Clean Architecture.
 
 ```text
                 ┌──────────────────────┐
@@ -173,76 +197,127 @@ SolidVision follows the principles of Clean Architecture.
                            ▼
                 ┌──────────────────────┐
                 │     Application      │
-                │     (Use Cases)      │
+                │    (Casos de uso)    │
                 └──────────┬───────────┘
                            │
                            ▼
                 ┌──────────────────────┐
                 │        Domain        │
-                │ Business Rules Only  │
+                │ Só regras de negócio │
                 └──────────────────────┘
                            ▲
                            │
                 ┌──────────┴───────────┐
                 │    Infrastructure    │
-                │ AI • Database • FS   │
+                │  IA • BD • Arquivos  │
                 └──────────────────────┘
 ```
 
-Dependencies always point toward the Domain.
+As dependências sempre apontam para o Domain.
 
-Infrastructure implements interfaces defined by the Domain and Application layers.
+A Infrastructure implementa interfaces definidas pelas camadas Domain e Application.
 
-The Domain never imports external libraries or frameworks.
+O Domain nunca importa bibliotecas ou frameworks externos.
+
+## Processos em tempo de execução
+
+As camadas acima são o código. Em tempo de execução, o app instalado são cinco
+tipos de processo em uma só máquina, e nada escuta além de `127.0.0.1`
+(RFC-036, RFC-037, RFC-041):
+
+```mermaid
+flowchart LR
+    user([Fotógrafo]) --> window
+    subgraph machine["A máquina Windows do usuário"]
+        window["Janela<br/>Electron: SolidVision.exe"]
+        launcher["Launcher<br/>python -m app.launcher"]
+        api["API<br/>FastAPI + Uvicorn<br/>serve a interface"]
+        runner["Executor de jobs<br/>worker de indexação"]
+        db[("PostgreSQL 16<br/>+ pgvector<br/>embarcado")]
+        models[["runtime/models<br/>CLIP + tradutor PT-EN"]]
+        disks[/"Discos com as fotos<br/>internos e externos"/]
+        cache[/"Miniaturas<br/>na pasta de dados do app"/]
+    end
+    window -- "stdin/stdout, eventos JSON" --> launcher
+    launcher -- "inicia e supervisiona" --> api
+    launcher -- "inicia e supervisiona" --> runner
+    launcher -- "initdb, start, migrations" --> db
+    window -- "HTTP, mesma origem" --> api
+    api -- "busca, dispositivos, jobs" --> db
+    api -- "texto e imagem de consulta" --> models
+    runner -- "reivindica jobs, grava linhas" --> db
+    runner -- "imagens" --> models
+    runner -- "lê, nunca grava" --> disks
+    runner --> cache
+    api --> cache
+    window -. "tiles do mapa, quando online" .-> osm[(OpenStreetMap)]
+    api -. "busca de endereço, quando online" .-> nominatim[(Nominatim)]
+```
+
+A janela inicia o launcher com pipes e lê os seus eventos; fechar a janela
+fecha o stdin do launcher, o que para os processos filhos e o cluster em
+ordem. A API serve a interface compilada a partir de `frontend/` na mesma
+origem de `/api/v1`, então não há CORS, e confere `Host` e `Origin` contra DNS
+rebinding (RFC-037). Um job é uma linha: a API a grava, e o executor de jobs a
+reivindica, indexa e informa o progresso na mesma linha (RFC-029). O único
+tráfego que sai da máquina é opcional e visível: os tiles do mapa e a busca de
+endereço, cada um com o User-Agent do projeto (RFC-040, RFC-043).
 
 ---
 
-# 6. Layer Responsibilities
+# 6. Responsabilidades das camadas
 
 ## Presentation
 
-Responsible for:
+Responsável por:
 
-- HTTP endpoints
-- Request validation
-- Response serialization
-- Authentication (future)
-- Dependency injection
+- Endpoints HTTP
+- Validação das requisições
+- Serialização das respostas
+- Autenticação (futuro)
+- Injeção de dependência
 
-Presentation must never contain business rules.
+A Presentation nunca deve conter regras de negócio.
 
 ---
 
 ## Application
 
-Contains the system use cases.
+Contém os casos de uso do sistema.
 
-Examples:
+Como construído (um caso de uso por arquivo, em `application/use_cases/`):
 
-- Create Collection
-- Delete Collection
-- Index Collection
-- Search Images
-- Update Collection
+- Indexar ou atualizar as imagens de um dispositivo, de forma incremental (`IndexOrUpdateImagesUseCase`)
+- Buscar por texto, por uma foto já indexada ou por uma enviada (`SearchImagesUseCase`, `FindSimilarImagesUseCase`)
+- Percorrer as fotos de um lugar por data, sem consulta textual (`BrowseImagesUseCase`)
+- Contar as fotos por célula do mapa (`AggregatePositionsUseCase`)
+- Registrar e renomear dispositivos, listar os volumes montados e as pastas de um dispositivo (`RegisterDeviceUseCase`, `RenameDeviceUseCase`, `ListMountedVolumesUseCase`, `ListDeviceFoldersUseCase`)
+- Criar, acompanhar e cancelar jobs de indexação (`CreateIndexingJobUseCase`, `GetIndexingJobUseCase`, `CancelIndexingJobUseCase`)
+- Servir uma miniatura, descrever uma foto, mostrá-la no Explorer (`GetThumbnailUseCase`, `GetImageDetailsUseCase`, `RevealImageUseCase`)
+- Transformar um endereço em um lugar (`GeocodeAddressUseCase`)
 
-The Application layer orchestrates workflows but does not implement infrastructure details.
+Os exemplos originais eram casos de uso de coleção (criar, excluir, atualizar,
+indexar uma coleção). Nenhum foi construído: o sistema indexa dispositivos e as
+pastas neles, e `Collection` é uma entidade provisória (placeholder) (RFC-027).
+
+A camada Application orquestra os fluxos, mas não implementa detalhes de infraestrutura.
 
 ---
 
 ## Domain
 
-The Domain contains only business concepts.
+O Domain contém apenas conceitos de negócio.
 
-It must remain pure Python.
+Ele deve permanecer Python puro.
 
-Contains:
+Contém:
 
-- Entities
+- Entidades
 - Value Objects
-- Repository interfaces
-- Domain services
+- Interfaces de repositório
+- Serviços de domínio
 
-The Domain knows nothing about:
+O Domain não sabe nada sobre:
 
 - FastAPI
 - SQLAlchemy
@@ -255,26 +330,27 @@ The Domain knows nothing about:
 
 ## Infrastructure
 
-Infrastructure contains concrete implementations.
+A Infrastructure contém as implementações concretas.
 
-Examples:
+Exemplos:
 
-- PostgreSQL repositories
-- SigLIP adapter
-- File scanner
-- Thumbnail generator
-- Metadata extractor
-- Worker implementation
+- Repositórios PostgreSQL, e o adaptador do cluster embarcado
+- O adaptador do CLIP (`ClipEmbeddingModel`) e o tradutor PT→EN (`QueryTranslator`)
+- Varredura de arquivos e identidade de volume (GUIDs de volume do Windows)
+- Gerador de miniaturas
+- Extrator de metadados: data de captura e posição GPS do EXIF
+- O worker de indexação e o executor de jobs
+- O geocodificador Nominatim
 
-Infrastructure implements interfaces defined by higher layers.
+A Infrastructure implementa interfaces definidas pelas camadas superiores.
 
 ---
 
-# 7. Dependency Rules
+# 7. Regras de dependência
 
-The dependency direction follows the Dependency Inversion Principle.
+A direção das dependências segue o Princípio da Inversão de Dependência.
 
-Allowed relationships:
+Relações permitidas:
 
 ```text
 Presentation
@@ -286,11 +362,11 @@ Application
 Domain
 ```
 
-Infrastructure does **not** own business logic.
+A Infrastructure **não** é dona da lógica de negócio.
 
-Instead, it provides implementations for interfaces defined by the Application and Domain layers.
+Em vez disso, ela fornece implementações para interfaces definidas pelas camadas Application e Domain.
 
-Example:
+Exemplo:
 
 ```text
 Application
@@ -298,14 +374,14 @@ Application
         ▼
 EmbeddingModelPort
         ▲
-        │ implements
+        │ implementa
 Infrastructure
         │
         ▼
-SigLIPAdapter
+ClipEmbeddingModel
 ```
 
-The Domain layer must never depend on:
+A camada Domain nunca deve depender de:
 
 - FastAPI
 - SQLAlchemy
@@ -314,48 +390,61 @@ The Domain layer must never depend on:
 - Transformers
 - Pillow
 
-The Application layer must never directly instantiate infrastructure components.
+A camada Application nunca deve instanciar diretamente componentes de infraestrutura.
 
-Dependency Injection should always provide concrete implementations.
+A injeção de dependência deve sempre fornecer as implementações concretas.
 
 ---
 
-# 8. Folder Structure
+# 8. Estrutura de pastas
 
 ```text
 solidvision/
 
 ├── backend/
-│   └── app/
-│       ├── presentation/
-│       ├── application/
-│       ├── domain/
-│       └── infrastructure/
+│   ├── app/
+│   │   ├── presentation/      FastAPI: /health, /api/v1, a interface
+│   │   ├── application/       casos de uso
+│   │   ├── domain/            entidades, value objects, portas
+│   │   ├── infrastructure/    IA, persistência, PostgreSQL embarcado, sistema de arquivos, workers
+│   │   ├── launcher/          inicia e supervisiona tudo (RFC-036)
+│   │   └── cli/               index, search, search-image
+│   ├── tests/                 espelha app/; marcadores `slow` e `embedded`
+│   ├── alembic/               migrations
+│   ├── dataset/demo/          45 imagens, manifesto, 25 consultas em EN e PT
+│   └── dataset_tools/
 │
 ├── frontend/
-│
-├── docker/
+│   ├── electron/              o processo principal da janela
+│   ├── src/                   a interface: React, por tela
+│   └── scripts/               dev, build, instalador (dist)
 │
 ├── docs/
+│   ├── adr/                   registros de decisão de arquitetura
+│   └── rfcs/                  um RFC por mudança, com suas medições
 │
-├── tests/
+├── experiments/               um script de medição por RFC; os logs ficam fora do git
+├── scripts/                   vendoring dos três runtimes, lockfiles, verificações do pacote
+├── runtime/                   python, postgres, models: materializados a partir dos lockfiles, fora do git
+├── docker/                    o init do banco de desenvolvimento
 │
 ├── README.md
 ├── ARCHITECTURE.md
-└── docker-compose.yml
+├── THIRD-PARTY-NOTICES.md
+└── docker-compose.yml         só para desenvolvimento
 ```
 
-Each layer should remain independent and have a clearly defined responsibility.
+Cada camada deve permanecer independente e ter uma responsabilidade claramente definida.
 
 ---
 
-# 9. AI Abstraction
+# 9. Abstração da IA
 
-Artificial Intelligence is treated as an infrastructure concern.
+A Inteligência Artificial é tratada como uma questão de infraestrutura.
 
-The business rules never communicate directly with SigLIP or any other model.
+As regras de negócio nunca se comunicam diretamente com o CLIP nem com qualquer outro modelo.
 
-Instead, all interaction occurs through Ports.
+Em vez disso, toda a interação acontece por meio de portas (Ports).
 
 ```text
 Application
@@ -366,66 +455,73 @@ EmbeddingModelPort
 
 ↑
 
-SigLIPAdapter
+ClipEmbeddingModel     produção: CLIP, com o tradutor PT→EN
 
-CLIPAdapter
-
-OpenCLIPAdapter
+FakeEmbeddingModel     testes: vetores determinísticos, sem IA
 
 FutureAdapter
 ```
 
-Replacing the embedding model should require changing only the Infrastructure layer.
+Trocar o modelo de embedding deve exigir mudanças apenas na camada Infrastructure.
 
-No Application or Domain code should be modified when introducing a new AI model.
+Nenhum código da Application ou do Domain deve ser modificado ao introduzir um novo modelo de IA.
 
 ---
 
 # 10. EmbeddingModelPort
 
-The embedding model interface defines the contract between the Application layer and AI implementations.
+A interface do modelo de embedding define o contrato entre a camada Application e as implementações de IA.
 
-Both image and text embeddings must be generated by the same model family to ensure that vectors occupy the same semantic space.
+Os embeddings de imagem e de texto devem ser gerados pela mesma família de modelos, para garantir que os vetores ocupem o mesmo espaço semântico.
 
-Example interface:
+A interface como construída (`domain/services/embedding_model_port.py`):
 
 ```python
-class EmbeddingModelPort(Protocol):
+class EmbeddingModelPort(ABC):
 
-    def encode_image(
-        self,
-        image: Image
-    ) -> EmbeddingVector:
-        ...
+    @abstractmethod
+    def encode_image(self, image: Image) -> EmbeddingVector: ...
 
-    def encode_text(
-        self,
-        text: str
-    ) -> EmbeddingVector:
-        ...
+    @abstractmethod
+    def encode_text(self, text: str) -> EmbeddingVector: ...
+
+    def encode_images(self, images: Sequence[Image]) -> list[EmbeddingVector]:
+        """Um lote; por padrão, uma imagem por vez (RFC-024)."""
+
+    def warm_up(self) -> None:
+        """Carrega o modelo agora, e não na primeira chamada (RFC-029)."""
 ```
 
-Any future embedding model must implement this interface.
+Qualquer modelo de embedding futuro deve implementar esta interface.
 
 ---
 
-# 11. Versioning Strategy
+# 11. Estratégia de versionamento
 
-Embedding vectors generated by different models are **not compatible**.
+Vetores de embedding gerados por modelos diferentes **não são compatíveis**.
 
-Therefore, every embedding stored in the database must include version metadata.
+Por isso, o modelo que produziu os vetores guardados precisa ser conhecido e fixo.
 
-Required metadata:
+O projeto pedia que cada embedding carregasse os seus metadados:
 
 - model_name
 - model_version
 - embedding_dimension
 - created_at
 
-Example:
+**Como construído** (ADR-005, parcialmente implementado): a dimensão é a da
+coluna, `vector(512)`, verificada em tempo de execução; o modelo é o que
+`backend/app/infrastructure/ai/models.lock.json` fixa, por revisão e `sha256`
+(RFC-035). `model_name` e `model_version` não são guardados por linha nem por
+coleção, porque `Collections` nunca foi construída. Uma troca por outro modelo
+de 512 dimensões seguida de uma reindexação parcial passaria, portanto,
+despercebida, e é por isso que trocar o modelo é um RFC, nunca uma
+configuração.
+
+Exemplo:
 
 ```text
-Image
+Imagem
 
 ↓
 
@@ -433,104 +529,125 @@ Embedding
 
 ↓
 
-Model: siglip-so400m-patch14
+Modelo: laion/CLIP-ViT-B-32-laion2B-s34B-b79K (revisão 1a25a446)
 
 ↓
 
-Dimension: 1152
+Dimensão: 512
 ```
 
-Collections should only contain embeddings generated by a single model version.
+O banco de dados deve conter apenas embeddings gerados por uma única versão de modelo.
 
-When the embedding model changes, the collection must be reindexed.
+Quando o modelo de embedding muda, todos os discos precisam ser reindexados.
 
-Future versions may support multiple collections using different embedding models simultaneously.
-
----
-
-# 12. Worker Architecture
-
-Image indexing is executed by a dedicated worker rather than directly inside FastAPI endpoints.
-
-The worker is responsible for long-running tasks and can be executed through a command-line interface.
-
-Responsibilities:
-
-- Scan folders
-- Detect new images
-- Extract metadata
-- Generate thumbnails
-- Generate embeddings
-- Persist data
-
-Future versions may replace the CLI worker with Celery or another distributed task queue without affecting business logic.
+Versões futuras podem suportar várias coleções usando modelos de embedding diferentes ao mesmo tempo.
 
 ---
 
-# 13. Indexing Pipeline
+# 12. Arquitetura do worker
 
-The indexing process follows a deterministic pipeline.
+A indexação de imagens é executada por um worker dedicado, e não diretamente dentro dos endpoints do FastAPI.
+
+O worker é responsável pelas tarefas de longa duração e pode ser executado por uma interface de linha de comando.
+
+Responsabilidades:
+
+- Varrer pastas
+- Detectar imagens novas
+- Extrair metadados
+- Gerar miniaturas
+- Gerar embeddings
+- Persistir os dados
+
+**Como construído** (RFC-029): um pedido de indexação é uma linha em
+`indexing_jobs`, gravada por `POST /api/v1/jobs`. O executor de jobs
+(`python -m app.infrastructure.workers.job_runner`), iniciado e supervisionado
+pelo launcher, consulta a tabela periodicamente, reivindica um job por vez e o
+executa com heartbeat, checkpoint retomável e cancelamento cooperativo. A CLI
+(`python -m app.cli index`) cria um job e o executa no próprio processo. Antes
+de começar a consultar, o executor aquece o modelo, para que um job reivindicado
+nunca fique parado em silêncio enquanto o modelo carrega.
+
+Versões futuras podem substituir o executor de jobs pelo Celery ou por outra fila de tarefas distribuída sem afetar a lógica de negócio.
+
+---
+
+# 13. Pipeline de indexação
+
+O processo de indexação segue um pipeline determinístico.
 
 ```text
-Filesystem
+Sistema de arquivos
 
 ↓
 
-Folder Scanner
+Varredura de pastas
 
 ↓
 
-Metadata Extraction
+Extração de metadados
 
 ↓
 
-Thumbnail Generation
+Geração de miniaturas
 
 ↓
 
-Image Preprocessing
+Pré-processamento da imagem
 
 ↓
 
-SigLIP Image Encoder
+Encoder de imagem do CLIP (em lotes, RFC-024)
 
 ↓
 
-Embedding Vector
+Vetor de embedding
 
 ↓
 
 PostgreSQL + pgvector
 ```
 
-Each image is processed only once per model version.
+Cada imagem é processada uma única vez por versão do modelo.
 
-Future versions may support incremental indexing based on file timestamps or content hashes.
+A indexação é incremental: um arquivo sem mudança é pulado pelo tamanho e pela
+data de modificação, e um hash do conteúdo confirma a mudança antes que qualquer
+embedding seja gerado de novo (RFC-020, RFC-024; ver "Indexação incremental"
+abaixo). Vazão medida na CPU: 1,0 a 2,2 imagens por segundo, conforme a máquina
+(RFC-024, RFC-025 seção 11.6, RFC-035).
 
 ---
 
-# 14. Search Pipeline
+# 14. Pipeline de busca
 
-The semantic search pipeline mirrors the indexing pipeline.
+O pipeline de busca semântica espelha o de indexação.
 
 ```text
-User Query
+Consulta do usuário
 
 ↓
 
-SigLIP Text Encoder
+Detecção de idioma; o português é traduzido para o inglês (MarianMT)
 
 ↓
 
-Text Embedding
+Prompt: "a photo of {query}"
 
 ↓
 
-Vector Search (pgvector)
+Encoder de texto do CLIP
 
 ↓
 
-Cosine Similarity
+Embedding do texto
+
+↓
+
+Busca vetorial (pgvector)
+
+↓
+
+Similaridade de cosseno
 
 ↓
 
@@ -538,371 +655,465 @@ Ranking
 
 ↓
 
-Top-K Results
+Top-K resultados
 
 ↓
 
 Frontend
 ```
 
-Because both images and text are embedded into the same semantic vector space, users can search collections using natural language without manually tagging images.
+Como imagens e textos são projetados no mesmo espaço vetorial semântico, os usuários podem pesquisar o acervo em linguagem natural sem etiquetar as imagens à mão.
 
-The search process never reloads or reprocesses original image files.
+O processo de busca nunca recarrega nem reprocessa os arquivos de imagem originais.
 
-## Filters
+## Filtros
 
-The ranking can be narrowed by three named axes, held in `SearchFilters`,
-each with its own `WHERE` clause, its own query parameters, and — where it
-can hide photos for lack of data — its own count of what it excluded:
+O ranking pode ser restringido por três eixos nomeados, guardados em
+`SearchFilters`, cada um com a sua própria cláusula `WHERE`, os seus próprios
+parâmetros de consulta e — onde pode esconder fotos por falta de dados — a sua
+própria contagem do que excluiu:
 
-| Axis | Parameters | Clause | Excluded count |
-|------|------------|--------|----------------|
-| Device (RFC-027) | `device_id` (repeatable) | `device_id IN (...)` | — |
-| Capture date (RFC-028) | `captured_from`, `captured_to` | half-open range on `captured_at` | `excluded_unknown_date` |
-| Position (RFC-032) | `near_lat`, `near_lon`, `radius_m` (all or none) | bounding-box pre-filter + exact haversine distance | `excluded_unknown_position` |
+| Eixo | Parâmetros | Cláusula | Contagem de excluídas |
+|------|------------|----------|-----------------------|
+| Dispositivo (RFC-027) | `device_id` (repetível) | `device_id IN (...)` | — |
+| Data de captura (RFC-028) | `captured_from`, `captured_to` | intervalo semiaberto em `captured_at` | `excluded_unknown_date` |
+| Posição (RFC-032) | `near_lat`, `near_lon`, `radius_m` (todos ou nenhum) | pré-filtro por retângulo envolvente + distância exata de haversine | `excluded_unknown_position` |
 
-The axes combine with AND. An empty `SearchFilters()` emits the RFC-025 query
-unchanged, character for character. An image whose date or position is
-unknown never matches that axis's filter, however wide. The position filter
-is a **circle**, never a point: the user knows a place on a map, not
-coordinates, and the GPS recorded the aircraft rather than the subject, so
-the radius — in metres everywhere, with a configured minimum
-(`MIN_RADIUS_M`) — is part of the question. Distance is a haversine
-expression over two plain columns; no PostGIS, no `earthdistance`.
+Os eixos se combinam com AND. Um `SearchFilters()` vazio emite a consulta do
+RFC-025 sem nenhuma mudança, caractere por caractere. Uma imagem cuja data ou
+posição é desconhecida nunca passa no filtro desse eixo, por mais amplo que
+seja. O filtro de posição é um **círculo**, nunca um ponto: o usuário conhece
+um lugar no mapa, não coordenadas, e o GPS registrou a aeronave e não o que foi
+fotografado, então o raio — em metros em todo lugar, com um mínimo configurado
+(`MIN_RADIUS_M`) — faz parte da pergunta. A distância é uma expressão de
+haversine sobre duas colunas comuns; sem PostGIS, sem `earthdistance`.
 
-Any filter can return fewer than `limit` results when PostgreSQL keeps the
-approximate HNSW index and post-filters its candidates. For a circle over
-clustered positions this was measured at 20% selectivity: 13 of 20 queries
-came back short (RFC-032 section 6.1). Every HNSW mitigation measured fixed
-it, but none met the latency criterion RFC-032 declared, so none is applied;
-the `search_similar()` contract still allows a short result.
+Qualquer filtro pode devolver menos que `limit` resultados quando o PostgreSQL
+usa o índice aproximado HNSW e pós-filtra os seus candidatos. Para um círculo
+sobre posições agrupadas, isso foi medido com 20% de seletividade: 13 de 20
+consultas voltaram incompletas (RFC-032, seção 6.1). Todas as mitigações de
+HNSW medidas resolveram o problema, mas nenhuma atendeu ao critério de latência
+que o RFC-032 declarou, então nenhuma foi aplicada; o contrato de
+`search_similar()` continua permitindo um resultado incompleto.
 
-The axes are deliberately named fields rather than a query language sent by
-the client: each one is a readable `WHERE`, a measurable plan, and a contract
-test the three `ImageRepository` implementations must agree on.
+Isso só acontece onde o planejador usa o índice, como no PostgreSQL 17 em que
+a medição rodou. No PostgreSQL 16 embarcado do app instalado, a busca é sempre
+exata (seção 16, RFC-038 seção 14.1), e nunca incompleta.
 
-## Map
+A busca tem mais dois pontos de entrada, ambos respondidos pelo mesmo ranking:
+uma foto já indexada, pelo embedding guardado e sem carregar o modelo
+(`GET /images/{id}/similar`), e uma foto arrastada para a barra de busca,
+codificada pela torre de imagem (`POST /images/search/by-image`, RFC-038).
+Percorrer um lugar por data (`GET /images/browse`, RFC-044) usa os filtros e
+nenhuma consulta.
+
+Os eixos são, de propósito, campos nomeados, e não uma linguagem de consulta
+enviada pelo cliente: cada um é um `WHERE` legível, um plano mensurável e um
+teste de contrato em que as três implementações de `ImageRepository` precisam
+concordar.
+
+## Mapa
 
 `GET /api/v1/images/map?min_lat=&min_lon=&max_lat=&max_lon=&precision=`
-groups the photos inside a viewport into cells (coordinates rounded to
-`precision` decimal places; 3 is ~100 m) and returns each cell's centre and
-count, plus how many photos under the same filters have no position. It
-accepts the device and date filters and **ignores the query text**: the top
-100 of a ranking says nothing about where the photos are, so the map answers
-"where are the photos the filters allow" and search answers "which look like
-this". Above `MAX_MAP_CELLS` the grid coarsens and the response says so in
-`precision_applied`; it never truncates. The route is declared before
-`/images/{image_id}`, or it would be matched as an id.
+agrupa as fotos dentro da área visível (viewport) em células (coordenadas
+arredondadas para `precision` casas decimais; 3 é ~100 m) e devolve o centro e
+a contagem de cada célula, mais quantas fotos, sob os mesmos filtros, não têm
+posição. Ele aceita os filtros de dispositivo e de data e **ignora o texto da
+consulta**: os 100 primeiros de um ranking não dizem nada sobre onde as fotos
+estão, então o mapa responde "onde estão as fotos que os filtros permitem" e a
+busca responde "quais se parecem com isto". Acima de `MAX_MAP_CELLS` a grade
+fica mais grossa e a resposta diz isso em `precision_applied`; ela nunca
+trunca. A rota é declarada antes de `/images/{image_id}`, senão seria
+interpretada como um id.
 
-# 15. Database Design
+# 15. Projeto do banco de dados
 
-SolidVision stores only metadata and semantic representations of images.
+O SolidVision guarda apenas metadados e representações semânticas das imagens.
 
-The original image files always remain in the local filesystem, which is considered the single source of truth.
+Os arquivos de imagem originais permanecem sempre no sistema de arquivos local, que é considerado a única fonte de verdade.
 
-The database acts exclusively as an index.
-
----
-
-## Database Responsibilities
-
-The database is responsible for:
-
-- Managing image collections
-- Storing image metadata
-- Storing semantic embeddings
-- Executing vector similarity searches
-- Maintaining search history
-- Tracking indexing operations
-- Supporting incremental synchronization
+O banco de dados funciona exclusivamente como um índice.
 
 ---
 
-## Main Tables
+## Responsabilidades do banco de dados
+
+O banco de dados é responsável por:
+
+- Registrar os dispositivos (volumes) e o que foi indexado em cada um
+- Guardar os metadados das imagens
+- Guardar os embeddings semânticos
+- Executar buscas por similaridade vetorial
+- Acompanhar as operações de indexação
+- Suportar a indexação incremental e jobs retomáveis
+
+Duas responsabilidades do projeto original não foram construídas: gerenciar
+coleções (um dispositivo é o que o sistema tem, RFC-027) e manter um histórico
+de buscas (o RFC-026, seção 16.1, decidiu que o texto de uma consulta nunca é
+registrado). O schema como construído:
+
+```mermaid
+erDiagram
+    devices ||--o{ images : "contém"
+    devices ||--o{ indexing_jobs : "é indexado por"
+    indexing_jobs ||--o{ indexing_job_scopes : "é limitado a"
+    devices {
+        uuid id PK "uuid5 da identidade do volume"
+        string volume_identity UK
+        string label
+        timestamptz last_scan_at
+        int last_scan_file_count
+    }
+    images {
+        uuid id PK "uuid5 de device_id/relative_path"
+        uuid device_id FK
+        string relative_path
+        vector embedding "vector(512), índice HNSW de cosseno"
+        string content_hash "SHA-256"
+        timestamp captured_at "EXIF, sem fuso horário"
+        double latitude "GPS do EXIF"
+        double longitude
+        string thumbnail_path
+    }
+    indexing_jobs {
+        uuid id PK
+        uuid device_id FK
+        string status
+        int processed_images
+        string last_processed_relative_path "checkpoint"
+        bool cancel_requested
+    }
+    indexing_job_scopes {
+        uuid job_id PK, FK
+        string relative_path PK "sem linhas: o dispositivo inteiro"
+    }
+```
+
+O diagrama mostra as colunas que sustentam o projeto; as tabelas abaixo listam
+todas elas.
+
+---
+
+## Tabelas principais
 
 ### Devices
 
-Represents a physical storage volume - an external disk, a memory card, the
-internal drive (RFC-027).
+Representa um volume físico de armazenamento - um disco externo, um cartão de
+memória, o disco interno (RFC-027).
 
-| Field | Description |
+| Campo | Descrição |
 |--------|-------------|
-| id | Primary Key, `uuid5` over the volume identity |
-| volume_identity | Opaque, platform-stable identifier for the volume |
-| volume_kind | Which platform's scheme produced it (`windows-volume-guid`) |
-| label | The user's name for the disk - "HD2" |
-| filesystem_label | The volume's own label; informative only |
-| total_bytes | Capacity |
-| first_seen_at | When the disk was first registered |
-| last_seen_at | When it was last observed plugged in |
-| last_scan_at | When it was last scanned |
-| last_scan_file_count | How many supported files that scan found |
+| id | Chave primária, `uuid5` sobre a identidade do volume |
+| volume_identity | Identificador opaco do volume, estável na plataforma |
+| volume_kind | Qual esquema de plataforma o produziu (`windows-volume-guid`) |
+| label | O nome que o usuário dá ao disco - "HD2" |
+| filesystem_label | O rótulo do próprio volume; só informativo |
+| total_bytes | Capacidade |
+| first_seen_at | Quando o disco foi registrado pela primeira vez |
+| last_seen_at | Quando foi visto conectado pela última vez |
+| last_scan_at | Quando foi varrido pela última vez |
+| last_scan_file_count | Quantos arquivos suportados essa varredura encontrou |
 
-**There is no `drive_letter`, no `mount_point`, and no `is_connected`
-column, and none may be added.** On Windows a removable volume's drive
-letter is assigned by mount order, so persisting one means a stationary
-file's recorded location changes on its own - which changes the `uuid5`
-identity derived from it and re-runs hours of inference over an untouched
-disk. Where a volume is mounted is resolved when it is needed, by
-enumerating what is mounted at that moment, and never stored. Connection
-state has the same problem in a sharper form: nothing tells this process
-that a disk was unplugged, so the column would be wrong from that moment
-onward with nothing to correct it.
+**Não existe coluna `drive_letter`, `mount_point` nem `is_connected`, e
+nenhuma pode ser adicionada.** No Windows, a letra de unidade de um volume
+removível é atribuída pela ordem de montagem, então persistir uma significa que
+a localização registrada de um arquivo parado muda sozinha - o que muda a
+identidade `uuid5` derivada dela e roda de novo horas de inferência sobre um
+disco intocado. Onde um volume está montado é resolvido quando é preciso,
+enumerando o que está montado naquele momento, e nunca é guardado. O estado de
+conexão tem o mesmo problema numa forma mais aguda: nada avisa este processo de
+que um disco foi desconectado, então a coluna estaria errada a partir desse
+momento, sem nada que a corrigisse.
 
-`last_scan_file_count` is the declared denominator of "% indexed". The
-figure means *"this fraction of the files the scan of 12/03 found have
-embeddings"*, and anything displaying it must show the scan date too - a
-user who copied 10,000 photos onto the disk yesterday deserves
-`50% (scan of 12/03)` rather than a confident wrong number.
+`last_scan_file_count` é o denominador declarado do "% indexado". O número
+significa *"esta fração dos arquivos que a varredura de 12/03 encontrou tem
+embeddings"*, e tudo o que o exibir deve mostrar também a data da varredura -
+um usuário que copiou 10.000 fotos para o disco ontem merece
+`50% (varredura de 12/03)`, e não um número errado dito com confiança.
 
-A device is **not** a collection. One disk holds several indexed folders,
-scanned at different times against different model versions; fusing the two
-would force a whole disk to share one embedding model version, which
-section 21 identifies as the decision that forces a full re-index.
+Um dispositivo **não** é uma coleção. Um disco guarda várias pastas indexadas,
+varridas em momentos diferentes com versões de modelo diferentes; fundir as
+duas coisas obrigaria um disco inteiro a compartilhar uma única versão de
+modelo de embedding, o que a seção 21 identifica como a decisão que força uma
+reindexação completa.
 
 ---
 
-### Collections
+### Collections *(não construído)*
 
-Represents an indexed folder.
+`Collection` existe só como uma entidade provisória, e o router `collections`
+está vazio: o sistema indexa dispositivos e as pastas neles (RFC-027). A tabela
+abaixo é o projeto original.
 
-| Field | Description |
+Representa uma pasta indexada.
+
+| Campo | Descrição |
 |--------|-------------|
-| id | Primary Key |
-| name | Collection name |
-| root_path | Root directory |
-| model_name | Embedding model used |
-| model_version | Model version |
-| created_at | Creation timestamp |
-| updated_at | Last update |
-| last_indexed_at | Last indexing execution |
+| id | Chave primária |
+| name | Nome da coleção |
+| root_path | Diretório raiz |
+| model_name | Modelo de embedding usado |
+| model_version | Versão do modelo |
+| created_at | Data de criação |
+| updated_at | Última atualização |
+| last_indexed_at | Última execução da indexação |
 
 ---
 
 ### Images
 
-Represents a single indexed image.
+Representa uma única imagem indexada.
 
-| Field | Description |
+| Campo | Descrição |
 |--------|-------------|
-| id | Primary Key, `uuid5` over `{device_id}/{relative_path}` |
-| device_id | Foreign Key to `Devices` |
-| relative_path | Path within the device, e.g. `fotos/2018/DJI_0042.JPG` |
-| collection_id | Foreign Key |
-| filename | Original filename |
-| width | Image width |
-| height | Image height |
+| id | Chave primária, `uuid5` sobre `{device_id}/{relative_path}` |
+| device_id | Chave estrangeira para `Devices` |
+| relative_path | Caminho dentro do dispositivo, por exemplo `fotos/2018/DJI_0042.JPG`; único junto com `device_id` |
+| filename | Nome original do arquivo |
+| extension | A extensão do arquivo |
+| embedding | `vector(512)`, com o índice HNSW `ix_images_embedding_hnsw` (`vector_cosine_ops`); NULL até o embedding ser gerado |
 | file_size | Bytes |
-| last_modified | Filesystem timestamp (`TIMESTAMPTZ`, from `st_mtime`) |
-| content_hash | SHA256 hash |
-| captured_at | When the photo was taken, from EXIF (`TIMESTAMP` **without** time zone) |
-| capture_source | Where `captured_at` came from: `exif_original`, `exif_digitized`, `unknown`, or NULL |
-| latitude | Where the photo was taken, decimal degrees (`double precision`), from the EXIF GPS IFD; NULL if unknown |
-| longitude | Paired with `latitude`: both NULL or both set (`ck_images_position_pairing`) |
-| position_source | Where the position came from: `exif_gps`, `unknown`, or NULL (never examined) |
-| thumbnail_path | Thumbnail location, relative to the application's thumbnail cache; NULL if none yet |
-| missing_since | When a scan of the whole disk first did not find the file (`TIMESTAMPTZ`); NULL if present (RFC-046) |
+| file_modified_at | Data do sistema de arquivos (`TIMESTAMPTZ`, de `st_mtime`); `last_modified` no projeto original |
+| content_hash | Hash SHA256 |
+| captured_at | Quando a foto foi tirada, do EXIF (`TIMESTAMP` **sem** fuso horário) |
+| capture_source | De onde veio `captured_at`: `exif_original`, `exif_digitized`, `unknown` ou NULL |
+| latitude | Onde a foto foi tirada, em graus decimais (`double precision`), do IFD de GPS do EXIF; NULL se desconhecida |
+| longitude | Par de `latitude`: as duas NULL ou as duas preenchidas (`ck_images_position_pairing`) |
+| position_source | De onde veio a posição: `exif_gps`, `unknown` ou NULL (nunca examinada) |
+| thumbnail_path | Local da miniatura, relativo ao cache de miniaturas da aplicação; NULL se ainda não houver |
+| missing_since | Quando uma varredura do disco inteiro deixou de achar o arquivo pela primeira vez (`TIMESTAMPTZ`); NULL se presente (RFC-046) |
 
-An image's location is the pair `(device_id, relative_path)`; there is no
-absolute-path column. The absolute path still exists but is *computed*,
-by joining a mount point resolved at the moment of use onto
-`relative_path`. Keeping both forms would invite one of them to go stale,
-and the absolute one is precisely the one that cannot be kept correct
-(RFC-027).
+A localização de uma imagem é o par `(device_id, relative_path)`; não existe
+coluna de caminho absoluto. O caminho absoluto continua existindo, mas é
+*calculado*, juntando a `relative_path` um ponto de montagem resolvido no
+momento do uso. Guardar as duas formas convidaria uma delas a ficar
+desatualizada, e a absoluta é justamente a que não tem como ser mantida
+correta (RFC-027).
 
-Since RFC-030 the API publishes both, for display: `relative_path` always,
-`absolute_path` only when the device is mounted at the moment of the request,
-with the device's label and `connected` flag beside them. A hit on an
-unplugged disk is a full answer — "it is on HD3, in fotos/2018" — not an
-error. The id remains the only identifier: no route accepts a path.
+Desde o RFC-030 a API publica as duas, para exibição: `relative_path` sempre,
+`absolute_path` só quando o dispositivo está montado no momento da requisição,
+com o rótulo do dispositivo e a flag `connected` ao lado. Um resultado num disco
+desconectado é uma resposta completa — "está no HD3, em fotos/2018" — e não um
+erro. O id continua sendo o único identificador: nenhuma rota aceita um
+caminho.
 
-`captured_at` and `last_modified` are both timestamps and deliberately have
-different types (RFC-028). `last_modified` is an absolute instant, so it is
-stored with a zone. `captured_at` is EXIF `DateTimeOriginal` (falling back to
-`DateTimeDigitized`): the camera's local wall-clock time, which records no
-zone, so it is stored without one — inventing a zone would move New Year's
-Eve photos into the next year. The filesystem timestamp is **never** used as
-a capture date: copying between disks, the normal life of a photo archive,
-rewrites it.
+O projeto original também tinha `collection_id`, `width` e `height`; nenhum foi
+construído.
 
-`capture_source` distinguishes a row that was never examined (NULL) from one
-examined and found to have no date (`unknown`). A scan writes the capture
-date only for NULL rows, so re-scanning an unchanged collection costs no
-writes. An image with an unknown capture date never matches a date-range
-filter; the search response reports how many were excluded that way.
+`captured_at` e `file_modified_at` são ambos timestamps e, de propósito, têm
+tipos diferentes (RFC-028). `file_modified_at` é um instante absoluto, por isso
+é guardado com fuso. `captured_at` é o `DateTimeOriginal` do EXIF (com
+`DateTimeDigitized` como alternativa): a hora local do relógio da câmera, que
+não registra fuso, por isso é guardado sem — inventar um fuso jogaria as fotos
+da véspera de Ano-Novo para o ano seguinte. A data do sistema de arquivos
+**nunca** é usada como data de captura: copiar entre discos, a vida normal de
+um acervo de fotos, a reescreve.
 
-`latitude`/`longitude` (RFC-032) are the position the GPS recorded — the
-**aircraft's**, not the photographed ground, which for an oblique drone shot
-can be tens to hundreds of metres away. They come from the GPS IFD (tag
-`0x8825`), read in the **same open of the file** as the capture date: one
-header read, two facts, each with its own source and its own NULL /
-`unknown` / value states. The `0, 0` "no satellite fix" placeholder is
-`unknown`, never a point in the Gulf of Guinea. Three CHECKs refuse half a
-position and coordinates off the planet for every writer, not only the
-Domain. The word is **position**, never *location*, which in this codebase
-is where the *file* is.
+`capture_source` distingue uma linha que nunca foi examinada (NULL) de uma que
+foi examinada e não tinha data (`unknown`). Uma varredura grava a data de
+captura só nas linhas NULL, então varrer de novo um acervo sem mudanças não
+custa nenhuma escrita. Uma imagem com data de captura desconhecida nunca passa
+num filtro de intervalo de datas; a resposta da busca informa quantas foram
+excluídas assim.
 
-Neither fact is a change signal: a new date or position on identical pixels
-never triggers a re-embed. Both are written conditionally — only for rows
-never examined — in both branches that skip inference. `python -m
-app.infrastructure.workers.exif_backfill --root PATH` fills both for an
-indexed disk from one read per file, without loading the embedding model;
-`--force` re-reads `unknown` rows after the extraction improves, never
-replacing a source with a weaker one, and judges the two facts independently.
-It replaced RFC-028's `capture_date_backfill`.
+`latitude`/`longitude` (RFC-032) são a posição que o GPS registrou — a da
+**aeronave**, não a do terreno fotografado, que numa foto oblíqua de drone pode
+estar a dezenas ou centenas de metros. Elas vêm do IFD de GPS (tag `0x8825`),
+lido na **mesma abertura do arquivo** que a data de captura: uma leitura de
+cabeçalho, dois fatos, cada um com a sua própria origem e os seus próprios
+estados NULL / `unknown` / valor. O marcador `0, 0` de "sem sinal de satélite"
+é `unknown`, nunca um ponto no Golfo da Guiné. Três CHECKs recusam meia posição
+e coordenadas fora do planeta para qualquer escritor, não só para o Domain. A
+palavra é **posição** (`position`), nunca *localização* (`location`), que neste
+código é onde o *arquivo* está.
 
-### Thumbnail Serving
+Nenhum dos dois fatos é sinal de mudança: uma data ou posição nova sobre pixels
+idênticos nunca dispara um novo embedding. Os dois são gravados de forma
+condicional — só nas linhas nunca examinadas — nos dois ramos que pulam a
+inferência. `python -m app.infrastructure.workers.exif_backfill --root PATH`
+preenche os dois num disco indexado com uma leitura por arquivo, sem carregar o
+modelo de embedding; `--force` relê as linhas `unknown` depois que a extração
+melhora, nunca substituindo uma origem por outra mais fraca, e julga os dois
+fatos de forma independente. Ele substituiu o `capture_date_backfill` do
+RFC-028.
 
-Thumbnails are generated once during indexing and stored on disk (see `thumbnail_path` in the `Images` table). They are served to the frontend as static files through a dedicated FastAPI endpoint (`StaticFiles` or an equivalent controlled route), never embedded as base64 in API responses. This keeps JSON payloads small for large result sets and allows the browser to cache thumbnails independently.
+### Entrega das miniaturas
 
-RFC-030 built it, and settled what that paragraph left open:
+As miniaturas são geradas uma vez durante a indexação e guardadas em disco (ver `thumbnail_path` na tabela `Images`). Elas são servidas ao frontend como arquivos estáticos por um endpoint dedicado do FastAPI (`StaticFiles` ou uma rota controlada equivalente), nunca embutidas em base64 nas respostas da API. Isso mantém pequenos os payloads JSON de conjuntos grandes de resultados e permite que o navegador guarde as miniaturas em cache de forma independente.
 
-- **Where they live — and where they never do.** In `settings.thumbnail_directory`, an application cache (`%LOCALAPPDATA%\SolidVision\thumbnails` by default), one JPEG per image id, sharded by the id's first two hex digits. **Never inside a photo collection**: the system does not write to the collection, and a thumbnail kept beside its photo would go into the drawer with the disk — which is exactly when it is the only way to see the photo. Every scan skips the cache directory even when it lies under a scanned folder, so indexing a system disk does not index the thumbnails. `thumbnail_path` is stored relative to the cache, for the reason `relative_path` is relative to its device.
-- **When they are generated.** For every image the pipeline embeds, after inference and before the row is written, from a fresh decode of the file — the picture CLIP decodes never leaves its adapter. Since RFC-045 that decode is of the bytes the read-ahead already read for the hash, so the file is not opened a fourth time; it is still a decode of its own. A thumbnail that fails to render is reported and never fails the image, which stays indexed and searchable without one. Skipped files are not rendered, so a re-scan stays a `stat` per file. Images indexed before RFC-030 get theirs from `python -m app.infrastructure.workers.thumbnail_backfill --root PATH`, which never loads the model.
-- **How they are served.** `GET /api/v1/images/{id}/thumbnail`, a controlled route rather than a `StaticFiles` mount: 404 when the image has no thumbnail (the UI shows a placeholder), served whether or not the photo's disk is plugged in.
-- **How they are cached.** `ETag: "<content_hash>"` and `Cache-Control: private, no-cache`. The image id is derived from the *path*, so a photo overwritten in place keeps its id, gets a new content hash and a new thumbnail in the same reprocessing, and must not be served from a client cache that never asks. `no-cache` stores the thumbnail and revalidates every use; a current copy costs a `304` decided from one metadata read, with no file touched. A year of `max-age` beside the `ETag` would have let the browser skip revalidation entirely and reintroduced the stale-thumbnail bug; `immutable` was rejected for the same reason. Rows indexed before RFC-024 have no content hash, and are served `no-store`.
+O RFC-030 construiu isso, e resolveu o que aquele parágrafo deixava em aberto:
 
-### Opening a File
+- **Onde ficam — e onde nunca ficam.** Em `settings.thumbnail_directory`, um cache da aplicação (`%LOCALAPPDATA%\SolidVision\thumbnails` por padrão), um JPEG por id de imagem, distribuído em subpastas pelos dois primeiros dígitos hexadecimais do id. **Nunca dentro de um acervo de fotos**: o sistema não grava no acervo, e uma miniatura guardada ao lado da foto iria para a gaveta junto com o disco — que é justamente quando ela é a única forma de ver a foto. Toda varredura pula o diretório do cache mesmo quando ele fica sob uma pasta varrida, então indexar um disco do sistema não indexa as miniaturas. `thumbnail_path` é guardado relativo ao cache, pelo mesmo motivo que `relative_path` é relativo ao seu dispositivo.
+- **Quando são geradas.** Para cada imagem cujo embedding o pipeline gera, depois da inferência e antes de a linha ser gravada, a partir de uma nova decodificação do arquivo — a imagem que o CLIP decodifica nunca sai do seu adaptador. Desde o RFC-045, essa decodificação é dos bytes que a leitura antecipada já leu para o hash, então o arquivo não é aberto uma quarta vez; ela continua sendo uma decodificação própria. Uma miniatura que falha ao ser gerada é informada e nunca faz a imagem falhar: ela continua indexada e pesquisável sem miniatura. Arquivos pulados não têm miniatura gerada, então uma nova varredura continua custando um `stat` por arquivo. Imagens indexadas antes do RFC-030 recebem as suas de `python -m app.infrastructure.workers.thumbnail_backfill --root PATH`, que nunca carrega o modelo.
+- **Como são servidas.** `GET /api/v1/images/{id}/thumbnail`, uma rota controlada em vez de uma montagem `StaticFiles`: 404 quando a imagem não tem miniatura (a interface mostra um marcador no lugar), servida esteja ou não conectado o disco da foto.
+- **Como ficam em cache.** `ETag: "<content_hash>"` e `Cache-Control: private, no-cache`. O id da imagem é derivado do *caminho*, então uma foto sobrescrita no lugar mantém o id, ganha um novo hash de conteúdo e uma nova miniatura no mesmo reprocessamento, e não pode ser servida de um cache do cliente que nunca pergunta. `no-cache` guarda a miniatura e revalida a cada uso; uma cópia atual custa um `304` decidido a partir de uma leitura de metadados, sem tocar em nenhum arquivo. Um ano de `max-age` ao lado do `ETag` teria deixado o navegador pular a revalidação por completo e trazido de volta o bug da miniatura desatualizada; `immutable` foi rejeitado pelo mesmo motivo. Linhas indexadas antes do RFC-024 não têm hash de conteúdo, e são servidas com `no-store`.
 
-`POST /api/v1/images/{id}/reveal` opens Explorer with the file selected (RFC-030 section 5). The only input is the id — the server builds the path from the row and the mount point resolved now, so no client-supplied path exists to traverse — and the process is started with an argument list, never a shell. Two independent guards stand in front of it: `settings.allow_local_file_actions` (off by default, in which case the route answers 404 as if it did not exist) and a loopback check on the caller's address, which holds however the setting is configured. A disconnected disk is 409; a file missing from a connected disk is 410. Windows is the only implementation; macOS and Linux are declared behind the same port.
+### Abrir um arquivo
+
+`POST /api/v1/images/{id}/reveal` abre o Explorer com o arquivo selecionado (RFC-030, seção 5). A única entrada é o id — o servidor monta o caminho a partir da linha e do ponto de montagem resolvido naquele momento, então não existe caminho enviado pelo cliente que permita atravessar diretórios — e o processo é iniciado com uma lista de argumentos, nunca por um shell. Duas proteções independentes ficam na frente dele: `settings.allow_local_file_actions` (desligada por padrão, caso em que a rota responde 404 como se não existisse) e uma verificação de loopback no endereço de quem chama, que vale qualquer que seja a configuração. Um disco desconectado é 409; um arquivo que sumiu de um disco conectado é 410. O Windows é a única implementação; macOS e Linux estão declarados atrás da mesma porta.
 
 ---
 
-### Embeddings
+### Embeddings *(não construído)*
 
-Stores semantic vectors.
+O vetor é uma coluna de `images`, `embedding vector(512)`, com o seu índice
+HNSW: um modelo, uma coluna (ADR-007). A tabela separada abaixo era o projeto
+para vários modelos por imagem, algo de que nada precisa enquanto houver um só.
 
-| Field | Description |
+Guarda os vetores semânticos.
+
+| Campo | Descrição |
 |--------|-------------|
-| id | Primary Key |
-| image_id | Foreign Key |
+| id | Chave primária |
+| image_id | Chave estrangeira |
 | vector | pgvector |
-| model_name | SigLIP |
-| model_version | Version |
-| embedding_dimension | Vector size |
-| created_at | Timestamp |
+| model_name | O nome do modelo |
+| model_version | Versão |
+| embedding_dimension | Tamanho do vetor |
+| created_at | Data de criação |
 
-Separating embeddings from images allows future support for multiple embedding models per image.
+Separar os embeddings das imagens permite suportar, no futuro, vários modelos de embedding por imagem.
 
 ---
 
-### SearchHistory
+### SearchHistory *(não construído, e não deve ser construído como projetado)*
 
-Stores search analytics.
+O RFC-026, seção 16.1, decidiu que o texto de uma consulta nunca é registrado,
+nem mesmo no log, que guarda só o seu tamanho: ele é o histórico de buscas do
+usuário, num produto cuja premissa é que os dados do usuário continuam sendo
+dele. Um histórico precisaria de um RFC próprio, e de uma configuração desligada
+por padrão. A tabela abaixo é o projeto original.
 
-| Field | Description |
+Guarda estatísticas de busca.
+
+| Campo | Descrição |
 |--------|-------------|
-| id | Primary Key |
-| query | Original search |
-| execution_time_ms | Search latency |
-| result_count | Returned images |
-| searched_at | Timestamp |
+| id | Chave primária |
+| query | Busca original |
+| execution_time_ms | Latência da busca |
+| result_count | Imagens retornadas |
+| searched_at | Data da busca |
 
-Search history exists exclusively for analytics and user convenience.
+O histórico de buscas existe exclusivamente para estatísticas e conveniência do usuário.
 
-It must never influence ranking.
+Ele nunca deve influenciar o ranking.
 
 ---
 
 ### IndexingJobs
 
-Tracks indexing executions (RFC-029). One row is one request to index a
-device, or some folders on it: an *event*, not a description of the disk.
+Acompanha as execuções de indexação (RFC-029). Uma linha é um pedido para
+indexar um dispositivo, ou algumas pastas dele: um *evento*, não uma descrição
+do disco.
 
-| Field | Description |
+| Campo | Descrição |
 |--------|-------------|
-| id | Primary Key, `uuid4` - a job is an event, not derivable content |
+| id | Chave primária, `uuid4` - um job é um evento, não um conteúdo derivável |
 | device_id | FK -> `devices.id` |
 | status | `pending` / `running` / `completed` / `failed` / `cancelled` |
-| created_at | When the job was queued |
-| started_at | When a worker first claimed it; preserved across a resume |
-| finished_at | When it reached a final state |
-| discovered_files | Files the scan has found - a running count, not a total |
-| discovery_complete | Whether the scan finished, making the count a total |
-| processed_images | Counter |
-| skipped_images | Counter - files the incremental check passed over |
-| failed_images | Counter |
-| last_processed_relative_path | The checkpoint, relative to the device |
-| error_message | Why it failed; NULL otherwise |
-| last_heartbeat_at | The evidence that a worker is still alive |
-| cancel_requested | A stop has been asked for; the worker acts on it |
-| attempts | Times a worker was given this job and did not finish it |
+| created_at | Quando o job entrou na fila |
+| started_at | Quando um worker o reivindicou pela primeira vez; preservado numa retomada |
+| finished_at | Quando chegou a um estado final |
+| discovered_files | Arquivos que a varredura já encontrou - uma contagem em andamento, não um total |
+| discovery_complete | Se a varredura terminou, o que torna a contagem um total |
+| processed_images | Contador |
+| skipped_images | Contador - arquivos que a verificação incremental pulou |
+| failed_images | Contador |
+| last_processed_relative_path | O checkpoint, relativo ao dispositivo |
+| error_message | Por que falhou; NULL nos outros casos |
+| last_heartbeat_at | A evidência de que um worker ainda está vivo |
+| cancel_requested | Uma parada foi pedida; o worker age sobre ela |
+| attempts | Vezes em que um worker recebeu este job e não o terminou |
 
-Folders live in a child table, `IndexingJobScopes` (`job_id`,
-`relative_path`), keyed on the pair. **Zero scope rows means the whole
-device.**
+As pastas ficam numa tabela filha, `IndexingJobScopes` (`job_id`,
+`relative_path`), com o par como chave. **Zero linhas de escopo significa o
+dispositivo inteiro.**
 
-Four fields differ from this document's original sketch, and each is a
-decision rather than a rename:
+Quatro campos diferem do esboço original deste documento, e cada um é uma
+decisão, não uma simples troca de nome:
 
-- **`device_id`, not `collection_id`.** `Collection` is still a
-  placeholder (RFC-027); a device is what the system has.
-- **`last_processed_relative_path`, not `last_processed_path`.** RFC-027
-  removed absolute paths from this database because a drive letter is
-  assigned by mount order. An absolute checkpoint would be the same
-  instability again.
-- **`skipped_images` added.** Without it a job that skipped 39,000 of
-  40,000 files reports `processed=1000` against `discovered=40000` and
-  looks stuck. It is the only thing that makes a progress bar honest.
-- **`cancel_requested` and `attempts` added.** The first lets a route ask
-  for a stop without racing the worker for the `status` column; the second
-  bounds how many times an abandoned job may be requeued.
+- **`device_id`, não `collection_id`.** `Collection` continua sendo um
+  placeholder (RFC-027); um dispositivo é o que o sistema tem.
+- **`last_processed_relative_path`, não `last_processed_path`.** O RFC-027
+  removeu os caminhos absolutos deste banco porque a letra de unidade é
+  atribuída pela ordem de montagem. Um checkpoint absoluto seria a mesma
+  instabilidade de novo.
+- **`skipped_images` adicionado.** Sem ele, um job que pulou 39.000 de 40.000
+  arquivos informa `processed=1000` contra `discovered=40000` e parece
+  travado. É a única coisa que torna honesta uma barra de progresso.
+- **`cancel_requested` e `attempts` adicionados.** O primeiro deixa uma rota
+  pedir uma parada sem disputar a coluna `status` com o worker; o segundo
+  limita quantas vezes um job abandonado pode voltar para a fila.
 
-**One active job per device, enforced by a partial unique index** on
-`device_id WHERE status IN ('pending', 'running')` - never by a `SELECT`
-before the `INSERT`, which two concurrent requests would both pass.
+**Um job ativo por dispositivo, garantido por um índice único parcial** em
+`device_id WHERE status IN ('pending', 'running')` - nunca por um `SELECT`
+antes do `INSERT`, que duas requisições concorrentes passariam ao mesmo tempo.
 
-**There is no foreign key to `images`, and none may be added.** A job
-refers to a device and to folders; its counters are aggregates and its
-checkpoint is a path. That keeps the image-identity rewrite of RFC-027
-cheap, and RFC-030 is what deliberately closes that window.
+**Não existe chave estrangeira para `images`, e nenhuma pode ser adicionada.**
+Um job se refere a um dispositivo e a pastas; os seus contadores são agregados
+e o seu checkpoint é um caminho. Isso mantém barata a reescrita da identidade
+das imagens do RFC-027, e é o RFC-030 que fecha essa janela de propósito.
 
-`last_processed_relative_path` acts as a checkpoint: a job that is
-interrupted resumes the scan from this reference instead of restarting the
-whole scope. Two rules govern it, and both are correctness rather than
-tuning - see section 16.
-
----
-
-# 16. Vector Search Strategy
-
-Semantic search uses PostgreSQL with pgvector.
-
-The project adopts Approximate Nearest Neighbor (ANN) search.
-
-## Distance Metric
-
-Cosine Similarity.
-
-Reason:
-
-SigLIP embeddings are optimized for cosine distance.
+`last_processed_relative_path` funciona como checkpoint: um job interrompido
+retoma a varredura a partir dessa referência em vez de recomeçar o escopo
+inteiro. Duas regras o governam, e as duas são de correção, não de ajuste
+fino - ver a seção 16.
 
 ---
 
-## Index Type
+# 16. Estratégia de busca vetorial
+
+A busca semântica usa o PostgreSQL com pgvector.
+
+O projeto adotou a busca aproximada de vizinhos mais próximos (ANN,
+*Approximate Nearest Neighbor*). **Como construído, isso depende do
+servidor.** A consulta ordena pela distância e depois pelo `id`, para que os
+empates tenham uma única ordem em qualquer lugar (RFC-025, seção 6). O
+PostgreSQL 17 serve a primeira chave a partir do índice HNSW e ordena os
+empates com uma ordenação incremental; o PostgreSQL 16, o que o instalador
+embarca (ADR-008), não consegue fazer isso com um operador de ordenação e varre
+a tabela. A busca do app instalado é, portanto, exata: todo vetor que passa nos
+filtros é comparado. O índice existe, e um teste avisa quando o servidor passa
+a usá-lo (`test_which_plan_answers_the_search_depends_on_the_server`, RFC-038
+seção 14.1). Com 100.000 fotos, a varredura exata leva cerca de 0,7 s, a maior
+parte buscando os vetores no TOAST (seção 22, RFC-038 seção 14.4).
+
+## Métrica de distância
+
+Similaridade de cosseno.
+
+Justificativa:
+
+O CLIP foi treinado com um objetivo de cosseno, e os seus vetores são
+normalizados em L2. O `<=>` do pgvector é a distância de cosseno, em [0, 2]; a
+API informa `1 - distance`, a similaridade de cosseno em [-1, 1], sem truncar
+nem reescalar (RFC-025, seção 9).
+
+---
+
+## Tipo de índice
 
 HNSW (Hierarchical Navigable Small Worlds)
 
-Reasons:
+Motivos:
 
-- Excellent recall
-- Very low latency
-- Incremental insertions
-- Native pgvector support
+- Recall excelente
+- Latência muito baixa
+- Inserções incrementais
+- Suporte nativo no pgvector
 
-IVFFlat may be evaluated in future benchmarks but is not the default.
+O IVFFlat pode ser avaliado em benchmarks futuros, mas não é o padrão.
 
 ---
 
-## Search Flow
+## Fluxo da busca
 
 ```
-User Query
+Consulta do usuário
 
 ↓
 
-Text Encoder
+Encoder de texto
 
 ↓
 
@@ -910,188 +1121,199 @@ Embedding
 
 ↓
 
-HNSW Index
+PostgreSQL 17: índice HNSW → K melhores candidatos → ranking por cosseno
+PostgreSQL 16 (instalado): todo vetor que passa nos filtros → ranking por cosseno
 
 ↓
 
-Top K Candidates
+ORDER BY distance, id  LIMIT k
 
 ↓
 
-Cosine Similarity Ranking
-
-↓
-
-Results
+Resultados
 ```
 
 ---
 
-## Incremental Indexing
+## Indexação incremental
 
-Collections should support incremental updates.
+As coleções devem suportar atualizações incrementais.
 
-Checking file changes must follow a cost-ascending order, since content hashing requires reading the full file from disk while timestamp and size checks only read filesystem metadata.
+A verificação de mudanças nos arquivos deve seguir uma ordem crescente de custo, já que o hash do conteúdo exige ler o arquivo inteiro do disco, enquanto as verificações de data e de tamanho só leem metadados do sistema de arquivos.
 
-For every discovered file:
+Para cada arquivo encontrado:
 
-1. File exists in the database?
+1. O arquivo existe no banco de dados?
 
-2. `last_modified` or `file_size` changed compared to the stored record?
+2. `last_modified` ou `file_size` mudou em relação ao registro guardado?
 
-3. If step 2 indicates a possible change, compute `content_hash` (SHA256) to confirm whether the content actually changed.
+3. Se o passo 2 indicar uma possível mudança, calcular o `content_hash` (SHA256) para confirmar se o conteúdo mudou de fato.
 
-If the file is unchanged after step 2 (or confirmed unchanged after step 3):
+Se o arquivo não mudou depois do passo 2 (ou se foi confirmado que não mudou depois do passo 3):
 
-Skip processing.
+Pular o processamento.
 
-Otherwise:
+Caso contrário:
 
-Generate new embedding.
+Gerar um novo embedding.
 
-This ordering keeps incremental indexing inexpensive for the common case (most files unchanged) and reserves hashing for files that are actually candidates for reprocessing. This dramatically reduces indexing time for large collections.
+Essa ordem mantém a indexação incremental barata no caso comum (a maioria dos arquivos sem mudança) e reserva o hash para os arquivos que são de fato candidatos a reprocessamento. Isso reduz drasticamente o tempo de indexação de acervos grandes.
 
-The EXIF capture date (RFC-028) is read during the same scan, but it is **not** a step in this ladder and never triggers re-embedding: a different capture date on identical pixels is a metadata change. For files the ladder skips (unchanged, or mtime changed with identical content), the capture date is written only if the row has never been examined (`capture_source` NULL), in one bulk write per metadata-prefetch window. Files that are re-embedded have their capture date written with the rest of the row. The scan-time extraction can be switched off with `EXTRACT_CAPTURE_DATE=false`; rows then stay unexamined rather than being marked as having no date.
+A data de captura do EXIF (RFC-028) é lida na mesma varredura, mas **não** é um degrau desta escada e nunca dispara um novo embedding: uma data de captura diferente sobre pixels idênticos é uma mudança de metadados. Para os arquivos que a escada pula (sem mudança, ou com o mtime alterado e o conteúdo idêntico), a data de captura só é gravada se a linha nunca foi examinada (`capture_source` NULL), numa escrita em lote por janela de prefetch de metadados. Os arquivos que recebem um novo embedding têm a data de captura gravada junto com o resto da linha. A extração durante a varredura pode ser desligada com `EXTRACT_CAPTURE_DATE=false`; as linhas então ficam não examinadas, em vez de marcadas como sem data.
 
-## Reading Ahead (RFC-045)
+## Leitura antecipada (RFC-045)
 
-On an external hard disk the reads are half of a first indexing, and in the
-pipeline of RFC-024 they ran in series with the model. A job therefore reads
-its files in **one thread of its own**, ahead of the pipeline: discovery, the
-whole file in one read, and its SHA-256, in discovery order, at most
-`READ_AHEAD_FILES` ahead and `READ_AHEAD_BYTES` held. The bytes travel with the
-candidate (`IndexCandidate.content`); step 3 above takes its hash from them,
-and the model and the thumbnail decode them instead of opening the file again.
-Each consumer still decodes for itself.
+Num HD externo, as leituras são metade de uma primeira indexação, e no
+pipeline do RFC-024 elas corriam em série com o modelo. Por isso um job lê
+seus arquivos em **uma thread própria**, à frente do pipeline: a descoberta,
+o arquivo inteiro numa só leitura e o seu SHA-256, na ordem da descoberta, no
+máximo `READ_AHEAD_FILES` à frente e `READ_AHEAD_BYTES` retidos. Os bytes
+viajam com o candidato (`IndexCandidate.content`); o passo 3 acima tira deles
+o hash, e o modelo e a miniatura os decodificam em vez de abrir o arquivo de
+novo. Cada consumidor ainda decodifica por conta própria.
 
-Four rules keep it from changing anything but the time:
+Quatro regras impedem que ela mude qualquer coisa além do tempo:
 
-* **The ladder above still decides, on the pipeline's thread.** The reading
-  thread only *predicts* which files step 3 will hash, from a snapshot of the
-  device's stored size and mtime loaded once, on the main thread, before it
-  starts (`ImageRepository.list_change_signals()`). It reads nothing else, so
-  a re-scan of an indexed disk stays a `stat` per file; a wrong prediction
-  costs a read, never a wrong decision.
-* **The thread never touches the database.** The scan's progress events are
-  queued between the candidates and handed to the job's observer by the
-  pipeline's thread, which owns the session.
-* **Order is discovery order**, so the checkpoint rules below hold unchanged.
-* **The bytes are released** as soon as a file needs them no more (skipped,
-  refreshed, written), and a forgotten one is given back when it is
-  collected.
+* **A escada acima continua decidindo, na thread do pipeline.** A thread de
+  leitura só *prevê* quais arquivos o passo 3 vai hashear, a partir de um
+  retrato do tamanho e do mtime guardados do dispositivo, carregado uma vez,
+  na thread principal, antes de ela começar
+  (`ImageRepository.list_change_signals()`). Ela não lê mais nada, então uma
+  nova varredura de um disco indexado continua custando um `stat` por
+  arquivo; uma previsão errada custa uma leitura, nunca uma decisão errada.
+* **A thread nunca toca o banco.** Os eventos de progresso da varredura são
+  enfileirados entre os candidatos e entregues ao observador do job pela
+  thread do pipeline, que é a dona da sessão.
+* **A ordem é a da descoberta**, então as regras de checkpoint abaixo valem
+  sem mudança.
+* **Os bytes são liberados** assim que um arquivo não precisa mais deles
+  (pulado, atualizado, gravado), e um esquecido é devolvido quando é
+  coletado.
 
-While it is on, the job's metadata window is `READ_AHEAD_FILES` (32), not
-`METADATA_PREFETCH_SIZE`: a window holds the bytes of every file in it.
-`INDEXING_READ_AHEAD=false` is the pipeline of RFC-024, whole.
+Enquanto ela está ligada, a janela de metadados do job é `READ_AHEAD_FILES`
+(32), não `METADATA_PREFETCH_SIZE`: uma janela retém os bytes de todos os
+arquivos dentro dela. `INDEXING_READ_AHEAD=false` é o pipeline do RFC-024,
+inteiro.
 
-**CLIP decodes JPEGs with `draft("RGB", (1000, 1000))`** (RFC-045): the
-largest DCT reduction that keeps both sides at least 1,000 px, none under
-2,000 px. It changes the vectors of large photos -- so, by the rule of the
-product, the migration that introduced it restarted the index from zero,
-keeping the devices. Any later change to the vectors needs the same.
+**O CLIP decodifica JPEGs com `draft("RGB", (1000, 1000))`** (RFC-045): a
+maior redução por DCT que mantém os dois lados com pelo menos 1 000 px,
+nenhuma abaixo de 2 000 px. Ela muda os vetores das fotos grandes — então,
+pela regra do produto, a migration que a introduziu recomeçou o índice do
+zero, mantendo os dispositivos. Qualquer mudança futura nos vetores pede o
+mesmo.
 
-## Photos No Longer on the Disk (RFC-046)
+## Fotos que não estão mais no disco (RFC-046)
 
-The filesystem is the source of truth (ADR-003), so a photo deleted, moved or
-renamed on the disk has to leave the index. It does, in two steps, and the
-first one never deletes:
+O sistema de arquivos é a fonte da verdade (ADR-003), então uma foto apagada,
+movida ou renomeada no disco precisa sair do índice. Ela sai, em dois passos,
+e o primeiro nunca apaga:
 
-* **A job of the whole disk marks.** When it ends -- completed, not
-  cancelled, not failed, not taken over, and with the disk still at the mount
-  point it was listed at -- the job compares the device's rows with the ids
-  of every file its listing found, minted by the one function that mints them
-  during indexing. A visible row not listed gets `missing_since`; a marked row
-  listed again loses it. A job of some folders marks nothing.
-* **A marked row is hidden** from every read that serves the interface: the
-  search, the listing, the map and the counts all require `embedding IS NOT
-  NULL AND missing_since IS NULL`, written once (`_searchable()`). The row,
-  its vector and its thumbnail stay, so a file that comes back -- a folder
-  moved back, a photo restored from the bin -- is unmarked by the next scan
-  without inference. `GET /images/{id}` still answers for it.
-* **Only a button deletes**: `DELETE /devices/{id}/missing-images`, per disk,
-  with the number in the confirmation, refused while the disk has a job. The
-  rows go in one transaction, then their thumbnails.
+* **Um job do disco inteiro marca.** Quando ele termina — concluído, não
+  cancelado, não falho, não tomado por outro executor, e com o disco ainda no
+  ponto de montagem em que foi listado —, o job compara as linhas do
+  dispositivo com os ids de todos os arquivos que a listagem achou, gerados
+  pela mesma função que os gera durante a indexação. Uma linha visível não
+  listada recebe `missing_since`; uma linha marcada listada de novo o perde.
+  Um job de algumas pastas não marca nada.
+* **Uma linha marcada fica oculta** de toda leitura que serve a interface: a
+  busca, a listagem, o mapa e as contagens exigem `embedding IS NOT NULL AND
+  missing_since IS NULL`, escrito num só lugar (`_searchable()`). A linha, o
+  vetor e a miniatura ficam, então um arquivo que volta — uma pasta movida de
+  volta, uma foto restaurada da lixeira — é desmarcado pela próxima varredura
+  sem inferência. `GET /images/{id}` continua respondendo por ela.
+* **Só um botão apaga**: `DELETE /devices/{id}/missing-images`, por disco,
+  com o número na confirmação, recusado enquanto o disco tem um job. As
+  linhas saem numa transação, depois as miniaturas.
 
-The listing is `Path.walk(on_error=...)`, not `rglob`, because `rglob`
-swallows a folder it cannot read along with everything in it; a row inside a
-folder the walk could not read is never marked, and the folder is a WARNING
-in the job's log. The recycle bin and `System Volume Information` at a
-volume's root are excluded from every scan, so a photo deleted by the
-Explorer leaves the search like one deleted for good.
+A listagem é `Path.walk(on_error=...)`, e não `rglob`, porque o `rglob` engole
+uma pasta que não consegue ler junto com tudo o que há nela; uma linha dentro
+de uma pasta que o walk não conseguiu ler nunca é marcada, e a pasta vira um
+WARNING no log do job. A lixeira e a `System Volume Information` na raiz de um
+volume ficam fora de toda varredura, então uma foto apagada pelo Explorer sai
+da busca como uma apagada de vez.
 
-## Resuming an Interrupted Job
+## Retomada de um job interrompido
 
-The checkpoint of section 15 only means something under the conditions
-below, and RFC-029 made all of them explicit because every one of them is
-silent when broken.
+O checkpoint da seção 15 só tem sentido nas condições abaixo, e o RFC-029
+tornou todas explícitas porque cada uma delas falha em silêncio quando é
+quebrada.
 
-**Discovery order has to be stable between runs.** "Continue after X" is a
-position in a sequence, so a second scan that visits the files in a
-different order skips arbitrary ones. `FilesystemImageProvider.discover()`
-sorts, and since RFC-029 that `sorted()` is a correctness requirement
-rather than a convenience for deterministic tests - removing it in the
-name of performance would pass every existing test and break resumption in
-a filesystem-dependent way.
+**A ordem da descoberta precisa ser estável entre execuções.** "Continuar
+depois de X" é uma posição numa sequência, então uma segunda varredura que
+visita os arquivos em outra ordem pula arquivos arbitrários.
+`FilesystemImageProvider.discover()` ordena, e desde o RFC-029 esse `sorted()`
+é um requisito de correção, e não uma conveniência para testes determinísticos -
+removê-lo em nome do desempenho passaria em todos os testes existentes e
+quebraria a retomada de um jeito que depende do sistema de arquivos.
 
-**And the order is path order, which is not string order.** On Windows,
-sorting paths compares part by part and case-insensitively:
+**E a ordem é a de caminhos, que não é a de strings.** No Windows, ordenar
+caminhos compara parte por parte e sem diferenciar maiúsculas de minúsculas:
 
 ```
 sorted(Path)  ->  a/x.jpg, a/Z.jpg, a b/x.jpg, B/y.jpg
 sorted(str)   ->  B/y.jpg, a b/x.jpg, a/Z.jpg, a/x.jpg
 ```
 
-PostgreSQL's collation gives a third answer. A resume written as
-`relative_path > :checkpoint`, in SQL or in Python, therefore skips and
-repeats files - and passes any test whose fixtures are lowercase and
-space-free. The comparison is made on reconstructed `Path` values, with
-the same key that ordered the scan.
+A collation do PostgreSQL dá uma terceira resposta. Uma retomada escrita como
+`relative_path > :checkpoint`, em SQL ou em Python, portanto pula e repete
+arquivos - e passa em qualquer teste cujas fixtures sejam minúsculas e sem
+espaços. A comparação é feita sobre valores `Path` reconstruídos, com a mesma
+chave que ordenou a varredura.
 
-**The checkpoint may never run ahead of what is durable.** The batch
-buffer survives across prefetch windows, so a file decided `EMBED` in one
-window can still be unwritten while later files have already been skipped
-and accounted for. The checkpoint is therefore the greatest path `P` such
-that *every* file up to and including `P` has been written, skipped, or
-recorded as a failure - in practice, the file immediately before the
-oldest plan still buffered.
+**O checkpoint nunca pode passar à frente do que já é durável.** O buffer do
+lote sobrevive entre janelas de prefetch, então um arquivo decidido como
+`EMBED` numa janela ainda pode não ter sido gravado enquanto arquivos
+posteriores já foram pulados e contabilizados. O checkpoint é, portanto, o
+maior caminho `P` tal que *todo* arquivo até `P`, inclusive, foi gravado,
+pulado ou registrado como falha - na prática, o arquivo imediatamente anterior
+ao plano mais antigo ainda no buffer.
 
-Erring is asymmetric, and this errs the safe way: a checkpoint that lags
-costs a re-scan of a few files the incremental check then skips for
-nothing, while one that leads loses photographs.
+O erro é assimétrico, e aqui se erra para o lado seguro: um checkpoint atrasado
+custa varrer de novo alguns arquivos que a verificação incremental então pula à
+toa, enquanto um adiantado perde fotografias.
 
 
 ---
 
-# 17. Configuration
+# 17. Configuração
 
-Configuration must never be hardcoded.
+A configuração nunca deve ficar fixa no código.
 
-The project uses **pydantic-settings**.
+O projeto usa o **pydantic-settings**.
 
-Configuration belongs exclusively to Infrastructure.
+A configuração pertence exclusivamente à Infrastructure.
 
-Example:
+Exemplos, do `.env.example`:
 
 ```python
-DATABASE_URL
+DATABASE_SOURCE            # external (Docker, no desenvolvimento) ou embedded (RFC-034)
 
-MODEL_NAME
+DATABASE_HOST, DATABASE_PORT, DATABASE_NAME
 
-MODEL_VERSION
+BATCH_SIZE                 # imagens por lote de inferência (RFC-024)
 
-COLLECTION_ROOT
+TOP_K_RESULTS
 
-THUMBNAIL_SIZE
+MIN_RADIUS_M, MAX_MAP_CELLS
 
-EMBEDDING_BATCH_SIZE
+WARM_UP_MODELS             # carrega os modelos quando o app inicia (RFC-035)
+
+ALLOW_LOCAL_FILE_ACTIONS   # "Mostrar no Explorer" (RFC-030)
+
+ALLOW_ADDRESS_SEARCH       # a busca de endereço online (RFC-043)
+
+THUMBNAIL_MAX_EDGE
 
 LOG_LEVEL
 ```
 
-Settings are loaded from:
+O modelo não é uma configuração: ele é fixado pelo lockfile (RFC-035), e uma
+chave desconhecida no arquivo é apontada num aviso, nunca usada em silêncio.
+
+As configurações são carregadas de:
 
 ```
-.env
+.env numa cópia do repositório, ou %LOCALAPPDATA%\SolidVision\solidvision.env depois de instalado (opcional)
 
 ↓
 
@@ -1099,76 +1321,80 @@ Settings()
 
 ↓
 
-Dependency Injection
+Injeção de dependência
 ```
 
-No environment variable should be accessed directly outside the configuration module.
+Qual dos dois vale é lido do disco, não configurado: uma árvore com
+`pyproject.toml` na raiz é uma cópia do repositório (RFC-034).
+
+Nenhuma variável de ambiente deve ser acessada diretamente fora do módulo de configuração.
 
 ---
 
-# 18. Error Handling
+# 18. Tratamento de erros
 
-Errors should be explicit.
+Os erros devem ser explícitos.
 
-The project must never expose internal exceptions.
+O projeto nunca deve expor exceções internas.
 
-Domain-specific exceptions include:
+As exceções específicas do domínio incluem (`domain/exceptions/`, um módulo por assunto):
 
 ```
-CollectionNotFound
+DomainError                          a raiz
 
-ImageNotFound
+NotFoundError, ConflictError, GoneError
+                                     as famílias que a API mapeia para 404, 409 e 410
 
-FolderNotFound
+ImageNotFoundError, DeviceNotFoundError, JobNotFoundError
 
-EmbeddingGenerationError
+DeviceNotConnectedError, DeviceBusyError, FileGoneError
 
-UnsupportedImageFormat
+UnsupportedImageExtensionError, UnreadableQueryImageError
 
-DatabaseConnectionError
+EmptySearchQueryError, InvalidSearchLimitError, InvalidGeoCircleError
 
-InvalidQueryError
+EmbeddingDimensionMismatchError
 ```
 
-Presentation converts exceptions into HTTP responses.
+A Presentation converte as exceções em respostas HTTP.
 
-Application never returns HTTP codes.
+A Application nunca retorna códigos HTTP.
 
-Infrastructure never decides business behavior.
+A Infrastructure nunca decide comportamento de negócio.
 
 ---
 
 # 19. Logging
 
-Every important operation must be logged.
+Toda operação importante deve ser registrada no log.
 
-Examples:
+Exemplos:
 
 ```
-Collection created
+Coleção criada
 
-Collection indexed
+Coleção indexada
 
-Image processed
+Imagem processada
 
-Embedding generated
+Embedding gerado
 
-Embedding skipped
+Embedding pulado
 
-Search executed
+Busca executada
 
-Worker started
+Worker iniciado
 
-Worker stopped
+Worker parado
 
-Database connection
+Conexão com o banco de dados
 
-Unexpected exception
+Exceção inesperada
 ```
 
-Structured logging is preferred.
+Prefere-se logging estruturado.
 
-Log levels:
+Níveis de log:
 
 - DEBUG
 - INFO
@@ -1176,46 +1402,46 @@ Log levels:
 - ERROR
 - CRITICAL
 
-Long-running indexing operations should periodically report progress.
+Operações de indexação demoradas devem informar o progresso periodicamente.
 
 ---
 
-# 20. Testing Strategy
+# 20. Estratégia de testes
 
-Testing is considered a first-class architectural concern.
+Os testes são tratados como uma preocupação arquitetural de primeira classe.
 
 ---
 
-## Unit Tests
+## Testes unitários
 
-Focus:
+Foco:
 
-Business rules.
+Regras de negócio.
 
-Should not require:
+Não devem exigir:
 
 - PostgreSQL
 - FastAPI
-- SigLIP
+- O modelo CLIP real
 - Torch
 
 ---
 
-## Integration Tests
+## Testes de integração
 
-Focus:
+Foco:
 
 - PostgreSQL
 - pgvector
-- API endpoints
+- Endpoints da API
 
 ---
 
-## End-to-End Tests
+## Testes ponta a ponta
 
-Validate:
+Validam:
 
-Filesystem
+Sistema de arquivos
 
 ↓
 
@@ -1223,305 +1449,348 @@ Worker
 
 ↓
 
-Database
+Banco de dados
 
 ↓
 
-Search
+Busca
 
 ↓
 
 Frontend
 
+**Como construído.** A suíte padrão (`pytest`) não carrega nenhum modelo e não
+baixa nada; ela precisa de um banco de dados, o de desenvolvimento ou o cluster
+embarcado. Os modelos reais rodam sob o marcador `slow`: as 45 imagens do
+corpus de demonstração indexadas com o CLIP no PostgreSQL, e as 25 consultas
+com gabarito pontuadas em inglês e em português contra pisos medidos (RFC-025,
+seção 11). Servidores PostgreSQL reais, em diretórios temporários, rodam sob
+`embedded`. A interface tem a sua própria suíte (Vitest), e os tipos gerados da
+API são conferidos contra o schema OpenAPI pelas duas. O que um teste não
+consegue ver — a janela, o instalador, um disco externo — é medido pelo script
+de cada RFC, em `experiments/`. Em 26 de outubro de 2026: 3.158 testes de
+backend na suíte padrão, mais 96 sob os dois marcadores, e 369 testes de
+frontend, todos passando.
+
 ---
 
-## Test Doubles
+## Dublês de teste
 
-The AI layer must be replaceable during tests.
+A camada de IA deve ser substituível durante os testes.
 
-Example:
+Exemplo:
 
 ```
 FakeEmbeddingModel
 ```
 
-Implements
+Implementa
 
 ```
 EmbeddingModelPort
 ```
 
-Returns deterministic vectors.
+Retorna vetores determinísticos.
 
-Example:
+Exemplo:
 
 ```
-"house"
+"casa"
 
 ↓
 
 [1,2,3]
 ```
 
-No AI model should be loaded during unit tests.
+Nenhum modelo de IA deve ser carregado durante os testes unitários.
 
-This guarantees:
+Isso garante:
 
-- fast execution
-- deterministic behavior
-- isolated business validation
+- execução rápida
+- comportamento determinístico
+- validação isolada das regras de negócio
 
 ---
 
-# 21. Architecture Decision Records (ADR)
+# 21. Registros de decisão de arquitetura (ADR)
+
+Os registros completos e atuais estão em [docs/adr](docs/adr/README.md), do
+ADR-001 ao ADR-008; esta seção mantém as formas curtas como foram escritas da
+primeira vez, com uma nota onde o sistema se afastou delas. O ADR-008, o
+PostgreSQL embarcado no instalador, não tem forma curta aqui.
 
 ## ADR-002
 
-### Decision
+### Decisão
 
-Use PostgreSQL instead of a dedicated vector database.
+Usar o PostgreSQL em vez de um banco de dados vetorial dedicado.
 
-### Reason
+### Justificativa
 
-Simpler deployment.
+Implantação mais simples.
 
-Single database.
+Um único banco de dados.
 
-Enough performance for medium-sized collections.
+Desempenho suficiente para acervos de tamanho médio.
 
-### Tradeoffs
+### Trade-offs
 
-Lower scalability than Milvus or Qdrant.
+Escalabilidade menor que a do Milvus ou do Qdrant.
 
 ---
 
 ## ADR-003
 
-### Decision
+### Decisão
 
-Images remain in the local filesystem.
+As imagens permanecem no sistema de arquivos local.
 
-### Reason
+### Justificativa
 
-Avoid duplication.
+Evitar duplicação.
 
-Reduce storage.
+Reduzir o armazenamento.
 
-Respect user privacy.
+Respeitar a privacidade do usuário.
 
-### Tradeoffs
+### Trade-offs
 
-Filesystem changes must be monitored. Since RFC-046 a removed or moved file
-leaves the search at the next scan of the whole disk, and the database by
-the purge.
+As mudanças no sistema de arquivos precisam ser monitoradas. Desde o RFC-046,
+um arquivo removido ou movido sai da busca na próxima varredura do disco
+inteiro, e do banco pela limpeza.
 
 ---
 
 ## ADR-004
 
-### Decision
+### Decisão
 
-Separate indexing from HTTP requests.
+Separar a indexação das requisições HTTP.
 
-### Reason
+### Justificativa
 
-Indexing is long-running.
+A indexação é demorada.
 
-Can fail independently.
+Pode falhar de forma independente.
 
-Can resume later.
+Pode ser retomada depois.
 
-Improves API responsiveness.
+Melhora a capacidade de resposta da API.
 
 ---
 
 ## ADR-005
 
-### Decision
+### Decisão
 
-Store embedding metadata.
+Guardar os metadados dos embeddings.
 
-### Reason
+### Justificativa
 
-Different embedding models generate incompatible vector spaces.
+Modelos de embedding diferentes geram espaços vetoriais incompatíveis.
 
-Each embedding stores:
+Cada embedding guarda:
 
-- model name
-- version
-- dimension
+- nome do modelo
+- versão
+- dimensão
 
-Collections are internally consistent.
+As coleções são internamente consistentes.
+
+*Parcialmente implementado:* a dimensão é garantida pela coluna e o modelo é
+fixado pelo lockfile, mas nada é guardado por linha (seção 11).
 
 ---
 
 ## ADR-006
 
-### Decision
+### Decisão
 
-Use Repository Pattern.
+Usar o Repository Pattern.
 
-### Reason
+### Justificativa
 
-Business logic becomes database-independent.
+A lógica de negócio fica independente do banco de dados.
 
-Future migrations become easier.
+Migrações futuras ficam mais fáceis.
 
 ## ADR-007
 
-### Decision
+### Decisão
 
-Each embedding model uses a dedicated, fixed-dimension vector column. The system does not support storing embeddings of different dimensions in a single `vector` column.
+Cada modelo de embedding usa uma coluna vetorial dedicada, de dimensão fixa. O sistema não suporta guardar embeddings de dimensões diferentes numa mesma coluna `vector`.
 
-### Reason
+### Justificativa
 
-pgvector requires a fixed dimension per column (e.g. `vector(1152)`). SigLIP, CLIP and future models produce embeddings of different sizes, so a single generic column cannot hold them without padding or truncation, both of which distort cosine similarity.
+O pgvector exige uma dimensão fixa por coluna (por exemplo, `vector(512)`). SigLIP, CLIP e os modelos futuros produzem embeddings de tamanhos diferentes, então uma única coluna genérica não consegue guardá-los sem preenchimento (padding) ou truncamento, e os dois distorcem a similaridade de cosseno.
 
-### Consequence
+### Consequência
 
-Supporting multiple embedding models simultaneously (see Section 23, Future Roadmap) requires either:
+Suportar vários modelos de embedding ao mesmo tempo (ver a seção 23, Roadmap futuro) exige uma de duas coisas:
 
-- One `Embeddings` table per model/dimension, or
-- A `collection_id`-scoped constraint ensuring all embeddings in a collection share the same `model_name`, `model_version` and `embedding_dimension`.
+- Uma tabela `Embeddings` por modelo/dimensão, ou
+- Uma restrição com escopo em `collection_id` que garanta que todos os embeddings de uma coleção compartilhem o mesmo `model_name`, `model_version` e `embedding_dimension`.
 
-The current implementation adopts the second approach, already enforced conceptually in Section 11 (Versioning Strategy) and in the `Collections` table (Section 15), which stores `model_name` and `model_version` at the collection level.
+Como construído, nenhuma das duas é necessária ainda: há um modelo e uma
+coluna, `images.embedding vector(512)`, e `Collections` nunca foi construída
+(seção 15). A decisão foi cobrada exatamente uma vez, como previsto: o RFC-023
+passou das 1152 dimensões do SigLIP para as 512 do CLIP, com uma migration e
+uma reindexação completa.
 
-### Tradeoffs
+### Trade-offs
 
-Cross-model search (comparing a SigLIP embedding to a CLIP embedding) is not possible. Migrating a collection to a new model requires full reindexing, not incremental updates.
+A busca entre modelos (comparar um embedding do SigLIP com um do CLIP) não é possível. Migrar uma coleção para um modelo novo exige reindexação completa, não atualizações incrementais.
 
 
 
 ---
 
-# 22. Performance Targets
+# 22. Metas de desempenho
 
-The following goals define the minimum acceptable performance.
+As metas a seguir definem o desempenho mínimo aceitável. A coluna "Medido" foi
+obtida na máquina dos RFCs (Windows 10 Home, Pentium G4560, 16 GB, HDD), com
+cache quente salvo indicação em contrário; cada RFC informa as condições.
 
-| Metric | Target |
-|----------|----------|
-| Search latency | < 1 second |
-| Index throughput | > 1 image/sec on CPU |
-| Startup time | < 5 seconds |
-| API response | < 100 ms (non-AI endpoints) |
-| Supported collection | 100,000+ images |
+| Métrica | Meta | Medido |
+|----------|----------|----------|
+| Latência da busca | < 1 segundo | ~110 ms em inglês e ~450 ms em português, com a tradução, no corpus de demonstração (RFC-025 §11.6); do Enter à grade na janela, 544 ms (RFC-038) |
+| Vazão da indexação | > 1 imagem/s na CPU | 1,0 a 1,3 imagens/s nessa máquina (RFC-025 §11.6, RFC-035); 2,2 na execução do RFC-024, com o PostgreSQL do Docker |
+| Tempo de inicialização | < 5 segundos | 4,46 s do launcher até pronto (RFC-036); 6,42 s da janela até a tela inicial (RFC-037); cerca de um minuto na primeira execução, com o `initdb` (RFC-041) |
+| Resposta da API | < 100 ms (endpoints sem IA) | `/devices` ~87 ms com 100.000 fotos, na execução do RFC-031; a primeira página de um lugar, 142 ms com 100.000 (RFC-044) |
+| Acervo suportado | 100.000+ imagens | Com 100.000 fotos: a busca exata, 685 a 714 ms no banco (RFC-038 §14.4); o mapa, 1.057 ms na janela (RFC-040); as fotos de um lugar, 142 ms (RFC-044) |
 
-Performance should be continuously measured.
+**A busca não atinge a meta com 100.000 fotos em português**: cerca de 0,7 s
+no banco mais 0,45 s para traduzir e codificar a consulta. O custo é o TOAST:
+um `vector(512)` passa dos ~2 KB a partir dos quais o PostgreSQL tira um valor
+da linha, e cada linha que a varredura exata lê custa uma segunda busca pelo
+seu vetor. Com `STORAGE PLAIN` na coluna, a mesma busca mediu 247 a 263 ms
+(RFC-038 §14.4); a mudança, e a migration que reescreve os vetores guardados,
+ficam para um RFC.
 
-Benchmark scripts belong inside:
+O desempenho deve ser medido continuamente.
+
+Os scripts de medição ficam ao lado do RFC que medem, uma pasta para cada, com
+os seus logs fora do git:
 
 ```
-scripts/
+experiments/rfc-NNN-*/measure_*.py
 
-benchmark.py
+scripts/benchmark_indexing.py
 ```
 
 ---
 
-# 23. Future Roadmap
+# 23. Roadmap futuro
 
-Planned improvements include:
+Entregue desde que esta lista foi escrita:
 
-- Similar image search
-- OCR indexing
-- Face recognition
-- Duplicate detection
-- Automatic folder monitoring
-- Incremental synchronization
-- Batch embedding generation
-- GPU acceleration
-- Fine-tuned aerial model
-- Desktop application (Electron or Tauri) - a packaging choice, **not** a
-  prerequisite for anything above it. Multi-device support in particular
-  does not wait on it: RFC-027 identifies volumes through the operating
-  system from the backend process, so knowing which disks exist, which are
-  connected, and which photo is on which one is available to the web
-  client today.
-- Mobile companion application
-- Multi-user support
-- Cloud synchronization
-- Distributed workers
-- Hybrid metadata + semantic search
+- ✅ Busca por imagens parecidas: por uma foto indexada e por uma enviada (RFC-038)
+- ✅ Geração de embeddings em lote (RFC-024)
+- ✅ Indexação incremental por tamanho, data de modificação e hash do conteúdo
+  (RFC-020, RFC-024), com jobs retomáveis e canceláveis (RFC-029)
+- ✅ Aplicativo desktop: Electron, com um instalador por usuário que traz o
+  Python, o PostgreSQL e os modelos, e roda sem rede (RFC-037 a RFC-041)
+- ✅ Busca híbrida por metadados + semântica: filtros por dispositivo, data de
+  captura e posição (RFC-027, RFC-028, RFC-032), o mapa (RFC-040), a busca de
+  endereço (RFC-043) e as fotos de um lugar por data (RFC-044)
 
----
+Ainda planejado:
 
-# 24. Guidelines for AI Assistants
-
-This project is expected to be developed with assistance from AI coding tools such as GitHub Copilot, Claude Code, Cursor and ChatGPT.
-
-When generating code:
-
-## Always
-
-- Respect Clean Architecture
-- Respect dependency direction
-- Follow SOLID principles
-- Prefer composition over inheritance
-- Use Dependency Injection
-- Reuse existing services
-- Add type hints
-- Write docstrings for public APIs
-- Keep methods small and cohesive
-- Create or update tests when adding functionality
-- Explain architectural changes before implementing them
-
-## Never
-
-- Put business rules inside FastAPI routers
-- Access PostgreSQL directly from Presentation
-- Couple AI models to Domain or Application
-- Bypass Ports with concrete implementations
-- Introduce circular dependencies
-- Rewrite unrelated modules
-- Create "God Classes"
-- Duplicate business logic
-
-Before creating new components, check whether an equivalent abstraction already exists.
-
-Architectural consistency is preferred over short-term convenience.
+- Remover o que não existe mais. Uma foto apagada ou movida no seu disco
+  mantém a sua linha, e continua aparecendo nos resultados (abri-la no Explorer
+  responde 410); mover uma pasta a indexa de novo sob o caminho novo. Um
+  dispositivo não pode ser removido, e não há nova varredura sob demanda
+  (RFC-031, seção 10)
+- Modelo aéreo com fine-tuning (RFC-042, proposto)
+- Aceleração por GPU
+- Indexação por OCR
+- Reconhecimento facial
+- Detecção de duplicatas
+- Monitoramento automático de pastas
+- Aplicativo móvel complementar
+- Suporte a vários usuários
+- Sincronização com a nuvem
+- Workers distribuídos
 
 ---
 
-# 25. Development Philosophy
+# 24. Diretrizes para assistentes de IA
 
-SolidVision is intended to be more than an academic prototype.
+Espera-se que este projeto seja desenvolvido com a ajuda de ferramentas de IA para código, como GitHub Copilot, Claude Code, Cursor e ChatGPT.
 
-The project should demonstrate professional software engineering practices while remaining simple enough for a single developer to maintain.
+Ao gerar código:
 
-Every feature should satisfy three questions:
+## Sempre
 
-1. Is it aligned with the project's architecture?
+- Respeitar a Clean Architecture
+- Respeitar a direção das dependências
+- Seguir os princípios SOLID
+- Preferir composição a herança
+- Usar injeção de dependência
+- Reaproveitar os serviços existentes
+- Adicionar type hints
+- Escrever docstrings para as APIs públicas
+- Manter os métodos pequenos e coesos
+- Criar ou atualizar testes ao adicionar funcionalidades
+- Explicar as mudanças arquiteturais antes de implementá-las
 
-2. Can it be tested independently?
+## Nunca
 
-3. Can it be replaced without affecting the rest of the system?
+- Colocar regras de negócio dentro dos routers do FastAPI
+- Acessar o PostgreSQL diretamente da Presentation
+- Acoplar modelos de IA ao Domain ou à Application
+- Contornar as portas com implementações concretas
+- Introduzir dependências circulares
+- Reescrever módulos não relacionados
+- Criar "God Classes"
+- Duplicar lógica de negócio
 
-When trade-offs arise, prioritize:
+Antes de criar componentes novos, verifique se já existe uma abstração equivalente.
 
-1. Correctness
-2. Maintainability
-3. Simplicity
-4. Performance
-
-Performance optimizations should only be introduced after measurement.
-
-The architecture is intentionally modular to allow future evolution.
-
-The ultimate objective is to create a semantic image retrieval platform that can evolve from a university project into a production-ready application without requiring architectural redesign.
+A consistência arquitetural tem preferência sobre a conveniência de curto prazo.
 
 ---
 
-# Architecture Summary
+# 25. Filosofia de desenvolvimento
 
-SolidVision follows a layered architecture where:
+O SolidVision pretende ser mais do que um protótipo acadêmico.
 
-- Business rules remain independent.
-- Infrastructure provides replaceable implementations.
-- AI is treated as a pluggable component.
-- The filesystem is the source of truth.
-- PostgreSQL indexes semantic information.
-- Long-running indexing is delegated to workers.
-- Search operates through vector similarity.
-- Every major architectural decision is documented and justified.
+O projeto deve demonstrar práticas profissionais de engenharia de software e, ao mesmo tempo, continuar simples o bastante para ser mantido por um único desenvolvedor.
 
-This document serves as the single source of truth for all architectural decisions throughout the project's lifecycle.
+Toda funcionalidade deve responder a três perguntas:
+
+1. Está alinhada com a arquitetura do projeto?
+
+2. Pode ser testada de forma independente?
+
+3. Pode ser substituída sem afetar o resto do sistema?
+
+Quando surgirem trade-offs, priorize:
+
+1. Correção
+2. Manutenibilidade
+3. Simplicidade
+4. Desempenho
+
+Otimizações de desempenho só devem ser introduzidas depois de medir.
+
+A arquitetura é modular de propósito, para permitir a evolução futura.
+
+O objetivo final é criar uma plataforma de recuperação semântica de imagens que possa evoluir de um projeto universitário para uma aplicação pronta para produção sem exigir um redesenho da arquitetura.
+
+---
+
+# Resumo da arquitetura
+
+O SolidVision segue uma arquitetura em camadas em que:
+
+- As regras de negócio permanecem independentes.
+- A Infrastructure fornece implementações substituíveis.
+- A IA é tratada como um componente plugável.
+- O sistema de arquivos é a fonte de verdade.
+- O PostgreSQL indexa a informação semântica.
+- A indexação demorada é delegada a workers.
+- A busca funciona por similaridade vetorial.
+- Toda decisão arquitetural importante é documentada e justificada.
+
+Este documento é a única fonte de verdade para todas as decisões arquiteturais ao longo do ciclo de vida do projeto.

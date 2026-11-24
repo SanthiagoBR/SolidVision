@@ -25,7 +25,7 @@ O backend está implementado até o **RFC-036**, e o frontend do **RFC-037** ao 
 | Frontend: busca, dispositivos e indexação, mapa | 038-040, 043, 044 | Pronto |
 | O instalador | 041 | Pronto; o teste numa conta limpa do Windows, pendente ([roadmap](docs/rfcs/ROADMAP-frontend.md)) |
 
-Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](docs/rfcs/ROADMAP-standalone.md), [roadmap do frontend](docs/rfcs/ROADMAP-frontend.md) e a [arquitetura](ARCHITECTURE.md).
+Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](docs/rfcs/ROADMAP-standalone.md), [roadmap do frontend](docs/rfcs/ROADMAP-frontend.md), [roadmap do fine-tuning](docs/rfcs/ROADMAP-fine-tuning.md), os [requisitos](docs/requisitos.md), os [casos de uso](docs/casos-de-uso.md), a [arquitetura](ARCHITECTURE.md) e os [avisos de terceiros](THIRD-PARTY-NOTICES.md).
 
 ---
 
@@ -36,8 +36,30 @@ Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](do
 *   **Filtros:** por dispositivo, por intervalo de datas de captura (EXIF) e por proximidade geográfica.
 *   **Indexação local:** varredura de diretórios e de HDs externos; os arquivos permanecem onde estão, sem upload.
 *   **Zero-shot:** identifica conceitos visuais sem etiquetas prévias, graças ao modelo CLIP.
-*   **Recuperação no banco:** similaridade de cosseno diretamente no PostgreSQL, com índice HNSW do pgvector.
+*   **Recuperação no banco:** similaridade de cosseno calculada no próprio PostgreSQL, com o pgvector. No PostgreSQL 16 embarcado a busca é exata, comparando todas as fotos que passam nos filtros; o índice HNSW existe e só é usado no PostgreSQL 17 ([RFC-038 §14](docs/rfcs/rfc-038-busca.md#14-correções-feitas-durante-a-implementação)).
 *   **Funciona offline:** com o PostgreSQL embarcado e os modelos locais, não precisa de Docker nem de rede.
+
+---
+
+## Demonstração
+
+### Adicionar um dispositivo e indexar uma pasta
+https://github.com/user-attachments/assets/9842a8e2-5327-4210-8c43-7372f2b1af88
+
+### Busca e buscas subsequentes
+https://github.com/user-attachments/assets/b5c97904-5327-4cef-948d-0255a92d3433
+
+### Busca com filtros de data e localização
+https://github.com/user-attachments/assets/db8f6108-8807-49be-8d9a-b2db11738b63
+
+### Busca pelo mapa
+https://github.com/user-attachments/assets/9cb0700f-055a-406c-9f9f-8610e95cf939
+
+### Busca por imagem
+https://github.com/user-attachments/assets/40751efe-3f3f-4316-8219-9291a701266e
+
+### Da busca ao Explorador de Arquivos
+https://github.com/user-attachments/assets/a97a7659-ab6c-436c-a470-0119b8ee19c4
 
 ---
 
@@ -57,6 +79,16 @@ Documentação: [índice dos RFCs](docs/rfcs/README.md), [roadmap sem Docker](do
 2.  **Extração:** o modelo multimodal converte cada imagem em um vetor (**embedding**).
 3.  **Persistência:** vetores e metadados (caminho, data, posição) vão para o banco vetorial.
 4.  **Recuperação:** a consulta textual vira um vetor e é comparada aos das imagens, gerando um ranking de relevância.
+
+---
+
+## Casos de uso
+
+O sistema tem 41 casos de uso em 7 pacotes, que seguem a ordem de uso do app: instalar e abrir, registrar os discos, indexá-los, buscar, ver o resultado, explorar o mapa e a manutenção pela linha de comando. Os atores primários são o Fotógrafo, que usa a janela, e o suporte, que usa a linha de comando; os secundários são o Windows, os tiles do OpenStreetMap e o Nominatim. Todo requisito funcional, do RF-01 ao RF-72, tem pelo menos um caso de uso.
+
+![Diagrama de casos de uso: visão geral](docs/casos-de-uso/uc-01-visao-geral.svg)
+
+O diagrama mostra os casos de uso que os atores iniciam, por pacote. O [documento dos casos de uso](docs/casos-de-uso.md) traz os diagramas de cada pacote, o catálogo com a descrição de cada caso e a rastreabilidade até os requisitos.
 
 ---
 
@@ -161,6 +193,8 @@ cd frontend
 npm run dist        # o build, a montagem, as conferências e o NSIS: release\SolidVision-Setup-0.1.0.exe
 npm run dist:dir    # o mesmo até a pasta release\win-unpacked, sem o NSIS
 ```
+O `THIRD-PARTY-NOTICES.md` vai no pacote e é conferido antes da montagem: quem muda uma dependência, de um lado ou do outro, roda `python scripts/third_party_notices.py`, que o reescreve a partir dos runtimes e do `frontend/node_modules`.
+
 A montagem fica em `%LOCALAPPDATA%\SolidVision-build\resources`, e as conferências do `scripts/check_package.py` param o build se o pacote não for o que a suíte testou: os vetores do CLIP calculados pelo Python do pacote, bit a bit contra os de referência, as DLLs de cada binário, o orçamento de caminho e o que vai no `app.asar`. O primeiro build precisa de rede, para o electron-builder baixar o NSIS. Mudar uma dependência do Python é mudar o ambiente virtual e os dois lockfiles juntos, no mesmo commit: `python scripts/vendor_python.py --lock` reescreve os dois e recusa uma versão diferente da do ambiente virtual.
 
 ### Verificações de qualidade
@@ -185,12 +219,36 @@ No GitHub, cada push e cada PR rodam o mesmo comando ([`.github/workflows/ci.yml
 
 Os três checks, `frontend`, `estatico` e `backend`, são obrigatórios na branch padrão, pelo *ruleset* de [`.github/rulesets/ci.json`](.github/rulesets/ci.json): um merge nela só passa com os três verdes, e ninguém fica de fora da regra. O GitHub não lê o arquivo sozinho. Quem administra o repositório o importa uma vez, em *Settings → Rules → Rulesets → New ruleset → Import a ruleset*, ou com `gh api -X POST repos/SanthiagoBR/SolidVision/rulesets --input .github/rulesets/ci.json`. Renomear um job é mudar o `ci.json` no mesmo commit e importá-lo de novo: o `test_ci_workflow.py` recusa um sem o outro.
 
+### Relatório visual dos testes
+Um comando roda as duas suítes e mostra o resultado no navegador, num relatório do [Allure](https://allurereport.org/):
+```powershell
+python scripts/test_report.py             # roda, escreve o relatório e abre
+python scripts/test_report.py --no-open   # o mesmo, sem abrir o navegador
+python scripts/test_report.py --coverage  # e também a cobertura do backend
+```
+O relatório é um arquivo só, `test-report/report/index.html`, que abre do disco, sem servidor: cada teste do backend e do frontend numa árvore, com o resultado, a duração e, quando falha, o erro, e os gráficos e a linha do tempo em seções da mesma página. Roda o que o `check.py` roda, o `pytest` e o `npm test`; se nenhum banco responder e o `runtime/postgres` existir, o `pytest` roda dentro do cluster embarcado.
+
+Com `--coverage`, o `pytest-cov` mede quais linhas de `backend/app` a suíte executa e escreve uma segunda página, `test-report/coverage/index.html`: a porcentagem de cada arquivo e cada arquivo com as linhas em verde ou vermelho. É a cobertura por linha dos testes que rodam por padrão; os `slow`, que carregam os modelos reais, ficam de fora. A do frontend ainda não é medida.
+
+As ferramentas do relatório não são dependências do projeto: na primeira vez, o comando as instala em `test-report/tools/`, que o git ignora, e nem o ambiente virtual nem o `frontend/node_modules` mudam. A pasta `test-report/` guarda também o histórico das execuções, de onde saem os gráficos de tendência.
+
 ---
 
 ## Métricas de avaliação
 
-*   **Recall@5:** 84,0% medido sobre o dataset de demonstração (45 imagens, 25 consultas de referência), RFC-025.
-*   **Latência de busca e tempo de indexação:** medidos em cada RFC, com a escala e as condições da medição.
+Sobre o dataset de demonstração: 45 imagens e 25 consultas de referência, as mesmas em inglês e em português, pelo caminho de produção ([RFC-025 §11.1 e §11.6](docs/rfcs/rfc-025-busca-semantica.md)). Entre parênteses, o intervalo de confiança de 95% (Wilson): com 25 consultas, uma vale 4 pontos.
+
+| Métrica | Inglês | Português |
+|---|---|---|
+| **Recall@5** (uma foto certa entre as 5 primeiras) | **84,0%** (65–94%) | **88,0%** (70–96%) |
+| Recall@1 (a primeira foto é certa) | 64,0% (45–80%) | 56,0% (37–73%) |
+| Recall@10 | 96,0% | 96,0% |
+| Latência mediana da busca, com o modelo carregado | 111 ms | 451 ms (com a tradução) |
+
+A diferença entre as línguas não é estatisticamente significativa (McNemar exato, p = 0,63). Onde a busca erra, e por quê — o CLIP não entende negação, e o tradutor deixa passar algumas frases —, está no RFC-025 §11.2 e §11.6.
+
+*   **Latência e tempo de indexação:** medidos em cada RFC, com a escala e as condições da medição. A indexação roda de 1,0 a 2,2 fotos por segundo em CPU, conforme a máquina.
+*   **Com 100 000 fotos:** a busca exata leva ~0,7 s no PostgreSQL 16 embarcado, quase tudo para trazer os vetores do TOAST. Com o vetor dentro da linha da tabela (`STORAGE PLAIN`), ~0,25 s: uma mudança medida e ainda não aplicada ([RFC-038 §14.4](docs/rfcs/rfc-038-busca.md#144-a-varredura-com-100-000-fotos-medida-adendo-de-2026-10-26)).
 
 ---
 
@@ -201,4 +259,9 @@ Os três checks, `frontend`, `estatico` e `backend`, são obrigatórios na branc
 ---
 
 ## Licença
-Este projeto está sob a licença **CC0 1.0 Universal** (domínio público). Veja o arquivo [LICENSE](LICENSE).
+O código e a documentação do SolidVision estão sob a **CC0 1.0 Universal** (domínio público). Veja o arquivo [LICENSE](LICENSE).
+
+Duas coisas no repositório e no instalador **não** são CC0:
+
+*   **As imagens do dataset de demonstração** (`backend/dataset/demo/images`). As 40 aéreas são do fotógrafo do projeto, publicadas aqui com a permissão dele, e as 5 do cotidiano vêm do Wikimedia Commons, sob CC0 ou CC-BY, com a atribuição de cada uma. A licença de cada imagem está no [manifest.json](backend/dataset/demo/manifest.json). Elas não vão no instalador.
+*   **O que o instalador redistribui:** o Python e os pacotes do app, o PostgreSQL com o pgvector, os dois modelos de IA, as bibliotecas da interface e o Electron, cada um sob a sua própria licença. A lista e os textos estão em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), que vai no instalador junto com o `LICENSE`.

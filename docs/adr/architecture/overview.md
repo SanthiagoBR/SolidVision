@@ -1,5 +1,7 @@
 # SolidVision — Status do Projeto
 
+> **Documento histórico, congelado em setembro de 2026.** É o retrato da Sprint 3 (RFC-017c), de antes do modelo de IA real, da busca, dos dispositivos, do PostgreSQL embarcado e da interface, e não é mais atualizado: "nenhum modelo real integrado", a coluna `vector(1152)` e o "próximo a ser executado" abaixo descrevem aquele momento. O estado atual está no [README](../../../README.md), na [arquitetura](../../../ARCHITECTURE.md) e no [índice dos RFCs](../../rfcs/README.md).
+
 **Última atualização:** RFC-017c aplicado (tabela relacional `images` ativa no PostgreSQL) · RFC-018 (embedding + HNSW) pendente de execução · Sprint 3
 
 > Este documento descreve o estado atual, verificado de fato, da implementação. Para decisões arquiteturais normativas e justificativas, ver `ARCHITECTURE.md`. Para convenções operacionais destinadas a assistentes de IA, ver `AI_CONTEXT.md`. Este documento deve ser atualizado sempre que um RFC concluído alterar a estrutura do projeto ou o schema persistido — as afirmações de status aqui devem ser verificadas contra o banco de dados/código real em execução, não presumidas a partir da intenção do RFC.

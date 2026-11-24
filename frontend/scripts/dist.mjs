@@ -3,7 +3,9 @@
 //     1. npm run build, as always.
 //     2. The staged installation, as the `resources` folder: the backend, the
 //        interface and the three runtimes, outside the repository, compiled by
-//        the package's own Python (`scripts/stage_installation.py`).
+//        the package's own Python (`scripts/stage_installation.py`), with the
+//        license notices -- first checked against the runtimes they describe
+//        (`scripts/third_party_notices.py --check`).
 //     3. The checks of section 7.3 on it (`scripts/check_package.py`), the
 //        vectors by the package's Python included. Any failure stops here.
 //     4. electron-builder --dir: the folder, `release/win-unpacked`, and the
@@ -142,6 +144,8 @@ async function main() {
     });
 
   times.stage = await step("2. the montagem", async () => {
+    // The notices go into the package: they must say what the runtimes are.
+    await pythonRun("third_party_notices.py", ["--check"]);
     if (existsSync(join(staging, STAGED_MARKER))) {
       await pythonRun("stage_installation.py", [staging, "--remove"]);
     }

@@ -94,6 +94,14 @@ BAKEOFF_STRICT_TOP_1 = 0.60
 BAKEOFF_PAIRWISE = 0.804
 PAIRWISE_FLOOR = 0.72
 
+# The same 25 questions in Portuguese (`query_pt`), through the translator,
+# measured first on 2026-10-26 (RFC-025 section 11.6): Recall@5 88.0%
+# (22/25), strict top-1 56.0% (14/25), contamination 12.0%, pairwise 77.2%.
+# The English run of that day reproduced section 11.1 to the decimal. The
+# gates sit two queries away, by the rule above.
+PORTUGUESE_RECALL_AT_5_FLOOR = 0.80
+PORTUGUESE_STRICT_TOP_1_FLOOR = 0.48
+
 # One image in the demo corpus is 45 rows, so a search that asks for all
 # of them ranks the entire corpus -- which is what the pairwise metric
 # needs, since it compares the position of specific hard negatives.
@@ -349,12 +357,33 @@ def outcomes(
     five. Every metric below is computed from these rankings, so the
     tests cannot disagree with each other about what search returned.
     """
+    return rank_every_query(indexed_corpus, search_use_case, language="query")
+
+
+@pytest.fixture(scope="module")
+def portuguese_outcomes(
+    indexed_corpus: IndexedCorpus, search_use_case: SearchImagesUseCase
+) -> list[QueryOutcome]:
+    """The same 25 questions as a Brazilian user writes them (`query_pt`).
+
+    Same corpus, same ground truth, same search: the difference from
+    `outcomes` is the language path -- detection, PT->EN translation, the
+    prompt -- and nothing else.
+    """
+    return rank_every_query(indexed_corpus, search_use_case, language="query_pt")
+
+
+def rank_every_query(
+    indexed_corpus: IndexedCorpus,
+    search_use_case: SearchImagesUseCase,
+    language: str,
+) -> list[QueryOutcome]:
     results = []
     for entry in load_queries():
-        hits = search_use_case.execute(entry["query"], limit=CORPUS_SIZE)
+        hits = search_use_case.execute(entry[language], limit=CORPUS_SIZE)
         results.append(
             QueryOutcome(
-                query=entry["query"],
+                query=entry[language],
                 relevant=frozenset(entry["relevant"]),
                 hard_negatives=frozenset(entry["hard_negatives"]),
                 ranked_paths=indexed_corpus.relative_paths(hits),
@@ -497,6 +526,46 @@ def test_pairwise_ordering_reproduces_the_bake_off(
     )
 
 
+def test_recall_at_5_in_portuguese(
+    portuguese_outcomes: list[QueryOutcome],
+) -> None:
+    """The headline metric again, for the language the product is used in.
+
+    One ground truth, two phrasings: a Portuguese query that loses a right
+    answer the English one had is the translator's error, not CLIP's, and
+    this floor catches the translator disappearing from the search path --
+    which would send raw Portuguese to a model that was trained on English.
+    """
+    measured = recall_at_k(portuguese_outcomes, k=5)
+
+    assert measured >= PORTUGUESE_RECALL_AT_5_FLOOR, (
+        f"Recall@5 in Portuguese fell to {measured:.1%}, below the "
+        f"{PORTUGUESE_RECALL_AT_5_FLOOR:.0%} floor measured for RFC-025 11.6"
+    )
+
+
+def test_strict_top_1_in_portuguese(
+    portuguese_outcomes: list[QueryOutcome],
+) -> None:
+    measured = strict_top_1(portuguese_outcomes)
+
+    assert measured >= PORTUGUESE_STRICT_TOP_1_FLOOR, (
+        f"strict top-1 in Portuguese is {measured:.1%}, below the "
+        f"{PORTUGUESE_STRICT_TOP_1_FLOOR:.0%} floor measured for RFC-025 11.6"
+    )
+
+
+def test_hard_negative_contamination_in_portuguese(
+    portuguese_outcomes: list[QueryOutcome],
+) -> None:
+    measured = hard_negative_contamination_at_k(portuguese_outcomes, k=5)
+
+    assert measured <= TOP_5_CONTAMINATION_CEILING, (
+        f"{measured:.1%} of the Portuguese top-5 slots held hard negatives, "
+        f"above the {TOP_5_CONTAMINATION_CEILING:.0%} ceiling"
+    )
+
+
 def test_a_full_sentence_portuguese_query_finds_the_same_images(
     search_use_case: SearchImagesUseCase, indexed_corpus: IndexedCorpus
 ) -> None:
@@ -508,11 +577,12 @@ def test_a_full_sentence_portuguese_query_finds_the_same_images(
     CLIP untranslated and this test would be measuring the raw-Portuguese
     path while claiming to measure translation.
 
-    Only one Portuguese query exists, deliberately. Ground truth in
-    Portuguese would be a second dataset to maintain, and the bake-off
-    already quantified the language gap (56.0% strict-PT(MT) against
-    60.0% strict-EN); what is unproven until something like this runs is
-    that the translator is wired into the *search* path at all.
+    It predates the Portuguese ground truth: until 2026-10-26 this was the
+    only Portuguese query, and the language gap was known only from the
+    bake-off (56.0% strict-PT(MT) against 60.0% strict-EN). The 25
+    `query_pt` of the dataset now measure that gap through this very path
+    (the three tests above); this one stays as the cheapest statement that
+    the translator is wired into the *search* path at all.
     """
     portuguese = "uma propriedade rural com um lago"
     english = "a rural property with a lake"

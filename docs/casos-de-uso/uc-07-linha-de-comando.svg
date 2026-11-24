@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="820" viewBox="0 0 1100 820">
+<title>uc Linha de comando e manutenção: diagrama de casos de uso do SolidVision</title>
+<rect width="1100" height="820" fill="#FFFFFF"/>
+<rect x="0.5" y="0.5" width="1099" height="819" fill="none" stroke="#2F3442" stroke-width="1"/>
+<path d="M0.5 0.5H242V18L234 26H0.5Z" fill="#FFFFFF" stroke="#2F3442" stroke-width="1"/>
+<text x="10" y="18" font-family="Arial, Helvetica, sans-serif" font-size="12.5" fill="#2F3442"><tspan font-weight="bold">uc</tspan> Linha de comando e manutenção</text>
+<rect x="260" y="56" width="760" height="740" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.4"/>
+<text x="640" y="80" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#2F3442" text-anchor="middle" font-weight="bold">SolidVision</text>
+<path d="M117 433.7L330 230" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 441.1L330 330" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 448.5L330 430" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 457.4L330 550" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 466.3L330 670" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M100 414L100 195" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M100 181L108 195L92 195Z" fill="#FFFFFF" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M488.1 230L706.4 230" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M695.4 235.5L706.4 230L695.4 224.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M484.6 430L711.5 430" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M700.5 435.5L711.5 430L700.5 424.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M579.4 539.6L694 529.4" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M683.5 535.8L694 529.4L682.5 524.9" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M563 565L736.1 590.6" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M724.4 594.4L736.1 590.6L726 583.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<ellipse cx="409.1" cy="230" rx="79.1" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="409.1" y="225.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-35</text>
+<text x="409.1" y="239.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Iniciar pelo launcher</text>
+<ellipse cx="404.6" cy="330" rx="74.6" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="404.6" y="325.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-36</text>
+<text x="404.6" y="339.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Consultar o estado</text>
+<ellipse cx="407.3" cy="430" rx="77.3" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="407.3" y="425.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-37</text>
+<text x="407.3" y="439.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Parar pelo launcher</text>
+<ellipse cx="461.6" cy="550" rx="131.6" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="461.6" y="545.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-38</text>
+<text x="461.6" y="559.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Completar miniaturas e metadados</text>
+<ellipse cx="417" cy="670" rx="87" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="417" y="665.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-39</text>
+<text x="417" y="679.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Ajustar a configuração</text>
+<ellipse cx="800" cy="230" rx="93.6" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="800" y="225.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-05</text>
+<text x="800" y="239.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Iniciar os serviços locais</text>
+<ellipse cx="800" cy="430" rx="88.5" ry="31" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="800" y="418" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-06</text>
+<text x="800" y="432" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Encerrar os serviços</text>
+<text x="800" y="447" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">em ordem</text>
+<ellipse cx="800" cy="520" rx="115.7" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="800" y="515.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-17</text>
+<text x="800" y="529.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Extrair data e posição do EXIF</text>
+<ellipse cx="800" cy="600" rx="69.8" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="800" y="595.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-18</text>
+<text x="800" y="609.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Gerar a miniatura</text>
+<circle cx="100" cy="106" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M100 115V138M85 123H115M88 158L100 138L112 158" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="100" y="176" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Fotógrafo</text>
+<circle cx="100" cy="426" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M100 435V458M85 443H115M88 478L100 458L112 478" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="100" y="496" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">suporte</text>
+<path d="M640 660H898.9L908.9 670V736H640Z" fill="#FFFCEB" stroke="#B9A64F" stroke-width="1.1"/>
+<path d="M898.9 660V670H908.9" fill="none" stroke="#B9A64F" stroke-width="1.1"/>
+<text x="652" y="680" font-family="Arial, Helvetica, sans-serif" font-size="11.5" fill="#2F3442" text-anchor="start">Pela linha de comando, o suporte também</text>
+<text x="652" y="695" font-family="Arial, Helvetica, sans-serif" font-size="11.5" fill="#2F3442" text-anchor="start">indexa (UC-12) e busca por texto (UC-21) e por</text>
+<text x="652" y="710" font-family="Arial, Helvetica, sans-serif" font-size="11.5" fill="#2F3442" text-anchor="start">foto de exemplo (UC-23): casos de uso que ele</text>
+<text x="652" y="725" font-family="Arial, Helvetica, sans-serif" font-size="11.5" fill="#2F3442" text-anchor="start">herda do Fotógrafo.</text>
+<rect x="569.7" y="222" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="597.3" y="233" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="570.5" y="422" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="598" y="433" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="609.2" y="526.5" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="636.7" y="537.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="622" y="569.8" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="649.5" y="580.8" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+</svg>

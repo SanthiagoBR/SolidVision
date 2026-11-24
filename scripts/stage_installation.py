@@ -12,6 +12,9 @@ directory outside the repository::
         runtime\\python\\    RFC-041: the embedded interpreter
         runtime\\postgres\\  RFC-033
         runtime\\models\\    RFC-035
+        LICENSE, THIRD-PARTY-NOTICES.md
+                           the project's license, and what the package
+                           redistributes under which license
 
 **without** `pyproject.toml`, `.env` and the tests, which is what makes the
 copy an installation: the mode is read from the tree, and `pyproject.toml` is
@@ -83,10 +86,13 @@ COPIED = (
     "runtime/python",
     "runtime/postgres",
     "runtime/models",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
 )
 """The tree of section 4.1, and nothing else of the repository. Since RFC-035
 that includes the 924 MB of models, copied like any other file; since RFC-041,
-the interpreter and the interface's build."""
+the interpreter and the interface's build; and the two license files, because
+a package that redistributes the runtimes carries their notices."""
 
 WITHOUT_BYTECODE = ("backend/app", "backend/alembic")
 """Copied without their `__pycache__`: a checkout's bytecode is of whatever
@@ -109,6 +115,8 @@ SOURCE_HINTS = {
     "`python scripts/vendor_postgres.py`",
     "runtime/models": "the models are materialized with "
     "`python scripts/vendor_models.py`",
+    "THIRD-PARTY-NOTICES.md": "the notices are written with "
+    "`python scripts/third_party_notices.py`",
 }
 
 NEVER_STAGED = ("pyproject.toml", ".env")

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1390" height="1000" viewBox="0 0 1390 1000">
+<title>uc Dispositivos e indexação: diagrama de casos de uso do SolidVision</title>
+<rect width="1390" height="1000" fill="#FFFFFF"/>
+<rect x="0.5" y="0.5" width="1389" height="999" fill="none" stroke="#2F3442" stroke-width="1"/>
+<path d="M0.5 0.5H193.4V18L185.4 26H0.5Z" fill="#FFFFFF" stroke="#2F3442" stroke-width="1"/>
+<text x="10" y="18" font-family="Arial, Helvetica, sans-serif" font-size="12.5" fill="#2F3442"><tspan font-weight="bold">uc</tspan> Dispositivos e indexação</text>
+<rect x="280" y="56" width="910" height="918" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.4"/>
+<text x="735" y="80" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#2F3442" text-anchor="middle" font-weight="bold">SolidVision</text>
+<rect x="306" y="96" width="91.4" height="22" fill="#F6F7F9" stroke="#9AA3B5" stroke-width="1.1"/>
+<rect x="306" y="118" width="854" height="238" fill="#F6F7F9" stroke="#9AA3B5" stroke-width="1.1"/>
+<text x="316" y="111.5" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#2F3442" text-anchor="start" font-weight="bold">Dispositivos</text>
+<rect x="306" y="376" width="78.7" height="22" fill="#F6F7F9" stroke="#9AA3B5" stroke-width="1.1"/>
+<rect x="306" y="398" width="854" height="558" fill="#F6F7F9" stroke="#9AA3B5" stroke-width="1.1"/>
+<text x="316" y="391.5" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#2F3442" text-anchor="start" font-weight="bold">Indexação</text>
+<path d="M117 462.7L330 146" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 467L330 204" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 471.3L330 262" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 475.6L330 320" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M117 491.8L330 540" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M130.8 533.8L330 830" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M1273 202.8L489 146" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M1273 205.3L543.7 262" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M473.1 532L909.4 481.6" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M899.1 488.3L909.4 481.6L897.9 477.4" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M477.5 540L940.2 540" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M929.2 545.5L940.2 540L929.2 534.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M473.1 548L908 598.2" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M896.4 602.4L908 598.2L897.7 591.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M716.3 895.5L499.2 846.2" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M511.1 843.2L499.2 846.2L508.7 854" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M704.1 455.7L459.1 524.5" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M468.2 516.2L459.1 524.5L471.2 526.8" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M707.8 782.3L507.9 816.4" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M517.9 809.1L507.9 816.4L519.7 820" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M696.9 837.6L525.4 832.8" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M536.6 827.6L525.4 832.8L536.2 838.6" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M711.6 669.6L448.3 558.7" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M460.5 557.9L448.3 558.7L456.3 568.1" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M788.5 306L529.7 273.6" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M541.3 269.5L529.7 273.6L539.9 280.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<ellipse cx="409.5" cy="146" rx="79.5" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="409.5" y="141.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-08</text>
+<text x="409.5" y="155.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Registrar dispositivo</text>
+<ellipse cx="414.3" cy="204" rx="84.3" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="414.3" y="199.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-09</text>
+<text x="414.3" y="213.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Renomear dispositivo</text>
+<ellipse cx="436.9" cy="262" rx="106.9" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="436.9" y="257.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-10</text>
+<text x="436.9" y="271.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Acompanhar os dispositivos</text>
+<ellipse cx="414.8" cy="320" rx="84.8" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="414.8" y="315.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-11</text>
+<text x="414.8" y="329.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Navegar pelas pastas</text>
+<ellipse cx="900" cy="320" rx="138.6" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="900" y="315.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-41</text>
+<text x="900" y="329.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Remover do índice as fotos ausentes</text>
+<ellipse cx="403.8" cy="540" rx="73.8" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="403.8" y="535.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-12</text>
+<text x="403.8" y="549.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Indexar dispositivo</text>
+<ellipse cx="760" cy="440" rx="75.1" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="760" y="435.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-13</text>
+<text x="760" y="449.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Escolher as pastas</text>
+<ellipse cx="1010" cy="470" rx="115.7" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="1010" y="465.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-17</text>
+<text x="1010" y="479.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Extrair data e posição do EXIF</text>
+<ellipse cx="1010" cy="540" rx="69.8" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="1010" y="535.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-18</text>
+<text x="1010" y="549.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Gerar a miniatura</text>
+<ellipse cx="1010" cy="610" rx="117.9" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="1010" y="605.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-19</text>
+<text x="1010" y="619.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Gerar o embedding da imagem</text>
+<ellipse cx="760" cy="690" rx="97.2" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="760" y="685.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-40</text>
+<text x="760" y="699.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Marcar as fotos ausentes</text>
+<ellipse cx="428" cy="830" rx="98" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="428" y="825.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-14</text>
+<text x="428" y="839.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Acompanhar a indexação</text>
+<ellipse cx="780" cy="770" rx="84.8" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="780" y="765.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-15</text>
+<text x="780" y="779.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Cancelar a indexação</text>
+<ellipse cx="780" cy="840" rx="83.5" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="780" y="835.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-16</text>
+<text x="780" y="849.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Retomar a indexação</text>
+<ellipse cx="780" cy="910" rx="80.8" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="780" y="905.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-07</text>
+<text x="780" y="919.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Abrir a pasta de logs</text>
+<circle cx="100" cy="464" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M100 473V496M85 481H115M88 516L100 496L112 516" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="100" y="534" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Fotógrafo</text>
+<circle cx="1290" cy="180" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M1290 189V212M1275 197H1305M1278 232L1290 212L1302 232" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="1290" y="250" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#555B6A" text-anchor="middle" font-style="italic">«sistema»</text>
+<text x="1290" y="264" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Windows</text>
+<rect x="663.7" y="498.8" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="691.3" y="509.8" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="681.3" y="532" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="708.9" y="543" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="663" y="565.1" width="55.1" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="690.5" y="576.1" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«include»</text>
+<rect x="560.6" y="856.3" width="94.2" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="607.8" y="867.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="607.8" y="880.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[o job teve falhas]</text>
+<rect x="528.7" y="475.6" width="105.8" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="581.6" y="486.6" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="581.6" y="499.6" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[só algumas pastas]</text>
+<rect x="531.4" y="784.8" width="152.9" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="607.9" y="795.8" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="607.9" y="808.8" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[job na fila ou em andamento]</text>
+<rect x="543.9" y="820.7" width="134.6" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="611.2" y="831.7" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="611.2" y="844.7" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[job cancelado ou parado]</text>
+<rect x="502.3" y="599.7" width="155.3" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="579.9" y="610.7" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="579.9" y="623.7" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[job do disco inteiro concluído]</text>
+<rect x="586.6" y="275.3" width="145" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="659.1" y="286.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="659.1" y="299.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[o disco tem fotos ausentes]</text>
+</svg>

@@ -481,6 +481,25 @@ Registradas à vista do texto original, como os RFCs 033 a 037 fizeram com as su
 
 ### 14.3 O que ficou sem medição
 
-- **O custo da varredura sequencial num acervo grande** no PostgreSQL 16 (§14.1). É a pergunta que o benchmark de escala precisa responder antes de a instalação ter 100 000 fotos.
+- **O custo da varredura sequencial num acervo grande** no PostgreSQL 16 (§14.1). É a pergunta que o benchmark de escala precisa responder antes de a instalação ter 100 000 fotos. *Medido em 2026-10-26: §14.4.*
 - **O custo do `ef_search` de 100 no índice** (§9, segunda linha), que §13 pedia sobre o corpus de 20 000 vetores do RFC-032: esse corpus foi medido no PostgreSQL 17 do Docker, que estava desligado, e no 16 a busca não usa o índice. Só as buscas acima de 40 pagariam, e só no 17.
 - **Soltar uma foto arrastando**: a medição escolhe a foto pelo seletor (`DOM.setFileInputFiles`); o arraste chama a mesma função depois que o `File` existe.
+
+### 14.4 A varredura com 100 000 fotos, medida (adendo de 2026-10-26)
+
+O §14.3 deixou para o benchmark de escala o custo da busca exata do PostgreSQL 16. As medições do RFC-040 e do RFC-044 já tinham 100 000 linhas, mas com um vetor só, repetido em todas: servem ao mapa e à listagem, e não a uma busca semântica. Esta mede a busca.
+
+**Como.** `experiments/rfc-038-search/measure_search_scale.py`, dentro do `embedded run`, num cluster próprio num diretório temporário (`EMBEDDED_POSTGRES_DIRECTORY`), criado do zero, com as migrations, e apagado no fim; o banco de desenvolvimento não foi tocado. 100 000 imagens num dispositivo, cada uma com o seu vetor aleatório normalizado em L2, como os do CLIP, gerado pelo próprio servidor (`random()`, `l2_normalize`), em 27,3 s. Um vetor aleatório custa à varredura o mesmo que um real: a distância é calculada para toda linha, e nenhum dos dois comprime. O índice HNSW foi apagado antes, como no RFC-040: no 16 ele não serve a busca, e a manutenção dele seria o custo da semeadura. A busca é a do app, `PostgresImageRepository.search_similar()`, sem filtro, para 25 vetores de consulta, em três rodadas, com `limit` 40 (a primeira página) e 100 (o máximo da API). PostgreSQL 16.15 e pgvector 0.8.6 embarcados; Windows 10 Home, Pentium G4560, 16 GB, HDD. O log fica ao lado do script, fora do git.
+
+| 100 000 fotos | `limit` 40, mediana | p95 | `limit` 100, mediana |
+| --- | --- | --- | --- |
+| **O vetor no TOAST, como o app guarda hoje** | **685 a 714 ms** | 919 a 1 409 ms | 728 a 766 ms |
+| O vetor na linha (`STORAGE PLAIN`), a mesma tabela copiada | 247 a 263 ms | 345 a 391 ms | 257 a 261 ms |
+
+As faixas são as três rodadas. A primeira rodada, a mais fria, foi a de p95 mais alto nas duas tabelas.
+
+**Para onde vai o tempo.** Um `vector(512)` tem 2 056 bytes, acima dos ~2 KB a partir dos quais o PostgreSQL tira um valor da linha (TOAST). A tabela tem 11 MB de linhas e 265 MB de vetores no TOAST, e cada linha que a varredura lê custa uma segunda busca, no índice do TOAST, para trazer o vetor. O `EXPLAIN (ANALYZE, BUFFERS)` mostra isso: 401 513 buffers lidos para uma busca, e 660 ms de execução. Com o vetor na linha, a tabela tem 260 MB e nenhum TOAST, a mesma busca lê 33 422 buffers, o planejador põe dois workers em vez de um, e a execução cai para 292 ms. **É a mesma busca exata, com o mesmo resultado, 2,7 vezes mais rápida.**
+
+**O que isto quer dizer para o app.** Com 100 000 fotos, a busca exata cabe em ~0,7 s no banco. Somada à codificação da consulta — cerca de 110 ms em inglês e 450 ms em português, com a tradução (RFC-025 §11.6) —, fica perto de 0,8 s em inglês e de 1,15 s em português, só no backend: acima da meta de 1 s do `ARCHITECTURE.md` §22 para o português. Com o vetor na linha, ~0,25 s no banco, e as duas línguas abaixo da meta.
+
+**O que fica para um RFC.** `ALTER TABLE images ALTER COLUMN embedding SET STORAGE PLAIN` só vale para as linhas escritas depois (a documentação do PostgreSQL: *"SET STORAGE doesn't itself change anything in the table"*): a migration precisa reescrever os vetores que já estão no TOAST, e um `UPDATE` que não muda o valor pode reaproveitar o ponteiro do TOAST — a medição usou uma cópia da tabela, `INSERT … SELECT`, em 12,0 s. A escolha entre reescrever na migration, o tempo disso num acervo grande e o efeito na indexação são do RFC que fizer a troca. Este adendo só mede: o app não mudou.

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="560" viewBox="0 0 1360 560">
+<title>uc Resultados e detalhe da foto: diagrama de casos de uso do SolidVision</title>
+<rect width="1360" height="560" fill="#FFFFFF"/>
+<rect x="0.5" y="0.5" width="1359" height="559" fill="none" stroke="#2F3442" stroke-width="1"/>
+<path d="M0.5 0.5H214.2V18L206.2 26H0.5Z" fill="#FFFFFF" stroke="#2F3442" stroke-width="1"/>
+<text x="10" y="18" font-family="Arial, Helvetica, sans-serif" font-size="12.5" fill="#2F3442"><tspan font-weight="bold">uc</tspan> Resultados e detalhe da foto</text>
+<rect x="200" y="56" width="940" height="480" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.4"/>
+<text x="670" y="80" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#2F3442" text-anchor="middle" font-weight="bold">SolidVision</text>
+<path d="M117 300L268.2 300" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M1243 140L1037.7 140" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M887.6 346.4L708.5 312.8" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M720.3 309.5L708.5 312.8L718.3 320.3" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M918.6 439.3L680.7 320.4" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M693 320.4L680.7 320.4L688.1 330.2" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M558.3 300L391.8 300" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M402.8 294.5L391.8 300L402.8 305.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M919.8 160.1L680.7 279.6" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M688.1 269.8L680.7 279.6L693 279.6" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<path d="M898.7 251.5L708.5 287.2" fill="none" stroke="#3A3F4B" stroke-width="1.2" stroke-dasharray="6 4"/>
+<path d="M718.3 279.7L708.5 287.2L720.3 290.5" fill="none" stroke="#3A3F4B" stroke-width="1.2"/>
+<ellipse cx="330" cy="300" rx="61.8" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="330" y="295.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-20</text>
+<text x="330" y="309.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle" font-style="italic">Encontrar fotos</text>
+<ellipse cx="640" cy="300" rx="81.7" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="640" y="295.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-29</text>
+<text x="640" y="309.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Ver o detalhe da foto</text>
+<ellipse cx="960" cy="140" rx="77.7" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="960" y="135.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-30</text>
+<text x="960" y="149.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Mostrar no Explorer</text>
+<ellipse cx="960" cy="240" rx="70.2" ry="23.5" fill="#EEF1FB" stroke="#3F4C8A" stroke-width="1.3"/>
+<text x="960" y="235.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#56608A" text-anchor="middle">UC-31</text>
+<text x="960" y="249.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Copiar o caminho</text>
+<ellipse cx="960" cy="360" rx="88.8" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="960" y="355.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-24</text>
+<text x="960" y="369.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Buscar fotos parecidas</text>
+<ellipse cx="960" cy="460" rx="87.4" ry="23.5" fill="#F2F2F2" stroke="#A3A3A3" stroke-width="1.3"/>
+<text x="960" y="455.5" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#8C8C8C" text-anchor="middle">UC-28</text>
+<text x="960" y="469.5" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#6A6A6A" text-anchor="middle">Filtrar por proximidade</text>
+<circle cx="100" cy="276" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M100 285V308M85 293H115M88 328L100 308L112 328" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="100" y="346" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Fotógrafo</text>
+<circle cx="1260" cy="116" r="9" fill="#FFFFFF" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<path d="M1260 125V148M1245 133H1275M1248 168L1260 148L1272 168" fill="none" stroke="#2F3442" stroke-width="1.6" stroke-linecap="round"/>
+<text x="1260" y="186" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#555B6A" text-anchor="middle" font-style="italic">«sistema»</text>
+<text x="1260" y="200" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#1F2328" text-anchor="middle">Windows</text>
+<rect x="738.8" y="315.1" width="118.5" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="798" y="326.1" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="798" y="339.1" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">["Parecidas com esta"]</text>
+<rect x="766.3" y="377.2" width="114.2" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="823.5" y="388.2" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="823.5" y="401.2" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">["Buscar perto daqui"]</text>
+<rect x="423.7" y="285.5" width="102.8" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="475.1" y="296.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="475.1" y="309.5" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[abre um resultado]</text>
+<rect x="729.7" y="193.4" width="189" height="29" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="824.2" y="204.4" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+<text x="824.2" y="217.4" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">[disco conectado e função habilitada]</text>
+<rect x="777" y="261.3" width="53.3" height="16" fill="#FFFFFF" fill-opacity="0.92"/>
+<text x="803.6" y="272.3" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#2F3442" text-anchor="middle">«extend»</text>
+</svg>

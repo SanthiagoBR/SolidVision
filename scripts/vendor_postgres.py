@@ -20,9 +20,12 @@ What it does, in order:
    lands in the user's conda caches.
 3. Checks the md5 of every downloaded archive against the lockfile, and the
    versions of `postgresql` and `pgvector` against what the lock says.
-4. Removes the `.pdb` files, as RFC-033a did, and nothing else: further
+4. Keeps each package's license texts, `info/licenses` in the package cache,
+   in `licenses/<package>/`: the installer redistributes these binaries, and
+   their notices go with them (`THIRD-PARTY-NOTICES.md`).
+5. Removes the `.pdb` files, as RFC-033a did, and nothing else: further
    pruning belongs to the installer (RFC-033 5.1).
-5. Writes `SOLIDVISION-RUNTIME.json`, the manifest the adapter refuses to run
+6. Writes `SOLIDVISION-RUNTIME.json`, the manifest the adapter refuses to run
    without, and only then renames the directory into place. A run killed half
    way leaves a `.vendor-tmp` directory, never a runtime that looks complete.
 
@@ -79,6 +82,10 @@ REQUIRED = (
     "Library/lib/vector.dll",
 )
 """What the adapter checks on every start (RFC-033 5.2); checked here first."""
+
+LICENSES = "licenses"
+"""Where each package's license texts go, one folder per package, named after
+its archive: `licenses/postgresql-16.15-he837cf3_0/`."""
 
 
 class VendorError(Exception):
@@ -274,6 +281,35 @@ def materialize(micromamba: Path, work: Path, staging: Path) -> dict[str, str]:
     return lock
 
 
+def keep_licenses(work: Path, prefix: Path, lock: dict[str, str]) -> int:
+    """Copy each package's `info/licenses` to `<prefix>/licenses/<package>/`.
+
+    The environment micromamba creates keeps `conda-meta`, which names a
+    license and carries no text; the texts are in the package cache, which
+    is deleted with `work`. A package whose archive has no `info/licenses`
+    (the `vc` metapackage installs nothing) gets no folder, and
+    `THIRD-PARTY-NOTICES.md` says so. Returns the number of files kept.
+    """
+    kept = 0
+    for url in lock:
+        stem = url.rsplit("/", 1)[1].removesuffix(".conda").removesuffix(".tar.bz2")
+        extracted = [
+            path
+            for path in (work / "pkgs").rglob(stem)
+            if path.is_dir() and (path / "info").is_dir()
+        ]
+        if len(extracted) != 1:
+            raise VendorError(f"{stem}: {len(extracted)} extracted copies in the cache")
+        texts = extracted[0] / "info" / "licenses"
+        if not texts.is_dir():
+            continue
+        destination = prefix / LICENSES / stem
+        shutil.copytree(texts, destination)
+        kept += sum(1 for path in destination.rglob("*") if path.is_file())
+    print(f"licenses: {kept} files, in {LICENSES}/")
+    return kept
+
+
 def installed_version(prefix: Path, name: str) -> str:
     metas = list((prefix / "conda-meta").glob(f"{name}-[0-9]*.json"))
     if len(metas) != 1:
@@ -337,6 +373,7 @@ def main() -> int:
         pgvector = installed_version(staging, "pgvector")
         if (postgresql, pgvector) != (PINNED["postgresql"][0], PINNED["pgvector"][0]):
             raise VendorError(f"the lock gives postgresql {postgresql}, {pgvector}")
+        keep_licenses(work, staging, lock)
         sizes = prune(staging)
         manifest = {
             "format": MANIFEST_FORMAT,

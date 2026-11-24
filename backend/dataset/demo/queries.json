@@ -1,9 +1,10 @@
 {
   "version": 1,
-  "note": "Retrieval ground truth for the demo corpus (RFC-022 5.3). Dormant until a real embedding model implements EmbeddingModelPort -- see backend/tests/dataset/test_queries.py. Every relevant/hard_negative path must exist in manifest.json. Expanded during RFC-023 bake-off (2026-08-16): paraphrase variants test vocabulary robustness, narrower sub-category queries test finer distinctions the manifest captions support, and the everyday/ block tests basic cross-domain separation, none of which the original 9 queries covered.",
+  "note": "Retrieval ground truth for the demo corpus (RFC-022 5.3). Dormant until a real embedding model implements EmbeddingModelPort -- see backend/tests/dataset/test_queries.py. Every relevant/hard_negative path must exist in manifest.json. Expanded during RFC-023 bake-off (2026-08-16): paraphrase variants test vocabulary robustness, narrower sub-category queries test finer distinctions the manifest captions support, and the everyday/ block tests basic cross-domain separation, none of which the original 9 queries covered. Since 2026-10-26 each query also has query_pt, its hand-written Portuguese version: the 25 translations of the RFC-023 bake-off (siglip_bakeoff.py, on the explore/siglip-bakeoff branch), which were written there without accents and are spelled here as a person types them. Stripping the accents gives the bake-off's text back, character for character. The relevant and hard_negatives lists are the same for both languages: one ground truth, two phrasings.",
   "queries": [
     {
       "query": "rural property with a small lake",
+      "query_pt": "propriedade rural com um pequeno lago",
       "relevant": [
         "images/aerial/rural/lake_property_01.jpg"
       ],
@@ -15,6 +16,7 @@
     },
     {
       "query": "small natural lake on a farm, not an artificial pond",
+      "query_pt": "pequeno lago natural em uma fazenda, não um tanque artificial",
       "relevant": [
         "images/aerial/rural/lake_property_01.jpg"
       ],
@@ -27,6 +29,7 @@
     },
     {
       "query": "hillside property with a swimming pool",
+      "query_pt": "propriedade em encosta com piscina",
       "relevant": [
         "images/aerial/rural/hillside_property_pool_01.jpg",
         "images/aerial/rural/hillside_property_pool_02.jpg",
@@ -41,6 +44,7 @@
     },
     {
       "query": "swimming pool at a rural home, not a natural or artificial water body",
+      "query_pt": "piscina em uma casa rural, não um corpo d'água natural ou artificial",
       "relevant": [
         "images/aerial/rural/hillside_property_pool_01.jpg",
         "images/aerial/rural/hillside_property_pool_02.jpg",
@@ -56,6 +60,7 @@
     },
     {
       "query": "artificial fish farming ponds in a valley",
+      "query_pt": "tanques artificiais de piscicultura em um vale",
       "relevant": [
         "images/aerial/rural/fish_ponds_01.jpg",
         "images/aerial/rural/fish_ponds_02.jpg",
@@ -70,6 +75,7 @@
     },
     {
       "query": "aquaculture ponds seen from above, not a swimming pool or lake",
+      "query_pt": "tanques de piscicultura vistos de cima, não uma piscina ou lago",
       "relevant": [
         "images/aerial/rural/fish_ponds_01.jpg",
         "images/aerial/rural/fish_ponds_02.jpg",
@@ -85,6 +91,7 @@
     },
     {
       "query": "industrial warehouse beside farmland",
+      "query_pt": "galpão industrial ao lado de uma área agrícola",
       "relevant": [
         "images/aerial/rural/rural_industrial_warehouse_01.jpg",
         "images/aerial/rural/rural_industrial_warehouse_02.jpg",
@@ -97,6 +104,7 @@
     },
     {
       "query": "warehouse next to a highway, not a warehouse inside a town",
+      "query_pt": "galpão ao lado de uma rodovia, não um galpão dentro de uma cidade",
       "relevant": [
         "images/aerial/rural/rural_industrial_warehouse_01.jpg",
         "images/aerial/rural/rural_industrial_warehouse_02.jpg",
@@ -110,6 +118,7 @@
     },
     {
       "query": "cleared construction lot with exposed red soil",
+      "query_pt": "terreno desmatado com solo vermelho exposto",
       "relevant": [
         "images/aerial/rural/cleared_lot_01.jpg",
         "images/aerial/rural/cleared_lot_02.jpg",
@@ -125,6 +134,7 @@
     },
     {
       "query": "recently cleared building site with terraced red dirt",
+      "query_pt": "terreno recém-desmatado com terraplenagem em solo vermelho",
       "relevant": [
         "images/aerial/rural/cleared_lot_01.jpg",
         "images/aerial/rural/cleared_lot_02.jpg",
@@ -139,6 +149,7 @@
     },
     {
       "query": "town intersection with a car dealership",
+      "query_pt": "cruzamento urbano com uma concessionária de carros",
       "relevant": [
         "images/aerial/urban/urban_intersection_dealership_01.jpg",
         "images/aerial/urban/urban_intersection_dealership_02.jpg",
@@ -153,6 +164,7 @@
     },
     {
       "query": "car dealership canopy with cars for sale, not a parking lot on a plain street",
+      "query_pt": "cobertura de concessionária com carros à venda, não um estacionamento em uma rua comum",
       "relevant": [
         "images/aerial/urban/urban_intersection_dealership_01.jpg",
         "images/aerial/urban/urban_intersection_dealership_02.jpg",
@@ -167,6 +179,7 @@
     },
     {
       "query": "commercial street with shops and storefronts",
+      "query_pt": "rua comercial com lojas e vitrines",
       "relevant": [
         "images/aerial/urban/urban_storefront_street_01.jpg",
         "images/aerial/urban/urban_storefront_street_02.jpg",
@@ -183,6 +196,7 @@
     },
     {
       "query": "workshops and small businesses lining a commercial street",
+      "query_pt": "oficinas e pequenos comércios ao longo de uma rua comercial",
       "relevant": [
         "images/aerial/urban/urban_commercial_street_01.jpg",
         "images/aerial/urban/urban_commercial_street_02.jpg"
@@ -194,6 +208,7 @@
     },
     {
       "query": "low-altitude view of storefronts with pedestrians and parked cars",
+      "query_pt": "vista de baixa altitude de vitrines com pedestres e carros estacionados",
       "relevant": [
         "images/aerial/urban/urban_storefront_street_01.jpg",
         "images/aerial/urban/urban_storefront_street_02.jpg",
@@ -208,6 +223,7 @@
     },
     {
       "query": "residential street lined with houses",
+      "query_pt": "rua residencial ladeada de casas",
       "relevant": [
         "images/aerial/urban/urban_residential_street_01.jpg",
         "images/aerial/urban/urban_residential_street_02.jpg"
@@ -219,6 +235,7 @@
     },
     {
       "query": "quiet neighborhood street with family houses and a workshop",
+      "query_pt": "rua residencial tranquila com casas de família e uma oficina",
       "relevant": [
         "images/aerial/urban/urban_residential_street_01.jpg",
         "images/aerial/urban/urban_residential_street_02.jpg"
@@ -230,6 +247,7 @@
     },
     {
       "query": "hillside town overview with dense houses",
+      "query_pt": "vista geral de uma cidade na encosta com casas densas",
       "relevant": [
         "images/aerial/urban/urban_hillside_town_01.jpg",
         "images/aerial/urban/urban_hillside_town_02.jpg",
@@ -245,6 +263,7 @@
     },
     {
       "query": "suburban town spread across rolling hills in a loose grid",
+      "query_pt": "cidade suburbana espalhada por colinas suaves em uma malha irregular",
       "relevant": [
         "images/aerial/urban/urban_suburban_overview_01.jpg",
         "images/aerial/urban/urban_suburban_overview_02.jpg",
@@ -257,6 +276,7 @@
     },
     {
       "query": "wide drone overview of a hillside town with a large building complex",
+      "query_pt": "vista aérea ampla de uma cidade na encosta com um grande complexo de edifícios",
       "relevant": [
         "images/aerial/urban/urban_hillside_town_01.jpg",
         "images/aerial/urban/urban_hillside_town_02.jpg",
@@ -269,6 +289,7 @@
     },
     {
       "query": "a black cat resting indoors",
+      "query_pt": "um gato preto descansando dentro de casa",
       "relevant": [
         "images/everyday/everyday_cat.jpg"
       ],
@@ -280,6 +301,7 @@
     },
     {
       "query": "a dog looking directly at the camera",
+      "query_pt": "um cachorro olhando diretamente para a câmera",
       "relevant": [
         "images/everyday/everyday_dog.jpg"
       ],
@@ -291,6 +313,7 @@
     },
     {
       "query": "a bicycle parked on a street",
+      "query_pt": "uma bicicleta estacionada em uma rua",
       "relevant": [
         "images/everyday/everyday_bicycle.jpg"
       ],
@@ -302,6 +325,7 @@
     },
     {
       "query": "a ceramic coffee cup and saucer",
+      "query_pt": "uma xícara de café de cerâmica com pires",
       "relevant": [
         "images/everyday/everyday_coffee_cup.jpg"
       ],
@@ -313,6 +337,7 @@
     },
     {
       "query": "a person working on a laptop indoors",
+      "query_pt": "uma pessoa trabalhando em um laptop dentro de casa",
       "relevant": [
         "images/everyday/everyday_laptop.jpg"
       ],

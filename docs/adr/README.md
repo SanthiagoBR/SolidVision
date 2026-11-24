@@ -9,7 +9,7 @@ Estes ADRs foram originalmente escritos em inglês dentro de `ARCHITECTURE.md` �
 | 001 | [Modelo de Embedding](adr-001-modelo-de-embedding.md) | ~~SigLIP~~ → **CLIP LAION ViT-B/32**, 512 dim | ⚠️ Substituído pelo [RFC-023](../rfcs/rfc-023-adaptador-de-embedding-clip.md) |
 | 002 | [PostgreSQL em vez de banco vetorial](adr-002-postgresql-em-vez-de-banco-vetorial.md) | PostgreSQL + pgvector, não Milvus/Qdrant | ✅ Em vigor |
 | 003 | [Imagens no sistema de arquivos](adr-003-imagens-permanecem-no-sistema-de-arquivos.md) | O disco do usuário é a fonte de verdade | ✅ Em vigor |
-| 004 | [Indexação separada do HTTP](adr-004-indexacao-separada-do-http.md) | Worker CLI, nunca FastAPI | ✅ Em vigor |
+| 004 | [Indexação separada do HTTP](adr-004-indexacao-separada-do-http.md) | Um processo à parte indexa, nunca o FastAPI: o worker da CLI e, desde o RFC-029, o `job_runner`, que executa os jobs que a API só registra | ✅ Em vigor |
 | 005 | [Metadados de embedding](adr-005-metadados-de-embedding.md) | Coleções registram modelo, versão e dimensão | ⚠️ Parcial — falta `Collections` |
 | 006 | [Repository Pattern](adr-006-repository-pattern.md) | Todo acesso a persistência passa por uma porta do Domain | ✅ Em vigor |
 | 007 | [Dimensão fixa por coluna](adr-007-dimensao-fixa-por-coluna.md) | Um modelo por coluna `vector(N)`; trocar exige reindexar | ✅ Em vigor |
