@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-12T18:21:36",
+  "git": {
+    "branch": "frontend",
+    "commit": "ac4df0a79179a4b6279fea62a711432a110f8c77",
+    "dirty": false
+  },
+  "platform": "Windows-11-10.0.22621-SP0",
+  "cpu": "AMD Ryzen 7 5700G with Radeon Graphics",
+  "cpu_cores_physical": 8,
+  "cpu_cores_logical": 16,
+  "ram_gb": 27.9,
+  "physical_disks": "[\n    {\n        \"FriendlyName\":  \"ST1000DM010-2EP102\",\n        \"MediaType\":  \"HDD\",\n        \"BusType\":  \"SATA\",\n        \"SizeGB\":  932\n    },\n    {\n        \"FriendlyName\":  \"Seagate Expansion\",\n        \"MediaType\":  \"Unspecified\",\n        \"BusType\":  \"USB\",\n        \"SizeGB\":  932\n    },\n    {\n        \"FriendlyName\":  \"KINGSTON SNV2S500G\",\n        \"MediaType\":  \"SSD\",\n        \"BusType\":  \"NVMe\",\n        \"SizeGB\":  466\n    }\n]",
+  "python": "3.12.0 (tags/v3.12.0:0fb18b0, Oct  2 2023, 13:03:39) [MSC v.1935 64 bit (AMD64)]",
+  "torch": "2.13.0+cu126",
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 4070",
+    "vram_gb": 11.99,
+    "compute_capability": "8.9",
+    "torch_cuda": "12.6",
+    "cudnn": 91002,
+    "nvidia_smi": "driver_version, memory.used [MiB], utilization.gpu [%], power.limit [W], clocks.max.sm [MHz]\n621.01, 1278 MiB, 7 %, 200.00 W, 3105 MHz"
+  },
+  "deviations_from_the_project": [
+    "Python 3.12.0, nao o 3.12.9 que o make_venv.py exige (o 3.12.9 nao esta instalado nesta maquina).",
+    "torch 2.13.0+cu126 e torchvision 0.28.0+cu126 no lugar dos +cpu do scripts/python-win-64.lock, para usar a GPU; os demais pacotes sao os do lock, com hash, sem resolver.",
+    "psutil instalado a parte (o benchmark_indexing.py o importa e nenhum lock o traz).",
+    "Ambiente em .venv-gpu, nao em .venv."
+  ]
+}
